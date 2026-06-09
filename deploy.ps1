@@ -25,7 +25,10 @@ if ($metaProc.ExitCode -ne 0) {
 # 1) Build CSS do Tailwind (produção)
 if (-not $SkipBuildCss) {
   Write-Host "Compilando Tailwind (npm run build:css)..." -ForegroundColor Yellow
-  $npm = Get-Command npm -ErrorAction SilentlyContinue
+  $npm = Get-Command npm.cmd -ErrorAction SilentlyContinue
+  if ($null -eq $npm) {
+    $npm = Get-Command npm -ErrorAction SilentlyContinue
+  }
   if ($null -eq $npm) {
     Write-Warning "npm não encontrado. Pulando build do CSS. Certifique-se de que public/assets/tailwind.css existe."
   } else {
@@ -87,6 +90,34 @@ foreach ($item in $removeItems) {
     Remove-Item $target -Recurse -Force
   }
 }
+
+# 4.1) Sanitizar dados locais sensíveis antes de empacotar
+Write-Host "Sanitizando diretórios de runtime..." -ForegroundColor Yellow
+$sensitiveStorageDirs = @(
+  "storage\logs",
+  "storage\sessions",
+  "storage\ratelimit",
+  "storage\resumes"
+)
+foreach ($dir in $sensitiveStorageDirs) {
+  $target = Join-Path $destApp $dir
+  if (Test-Path $target) {
+    Remove-Item $target -Recurse -Force
+  }
+  New-Item -ItemType Directory -Path $target -Force | Out-Null
+}
+
+$resumeHtaccessSource = Join-Path $repoRoot "storage\resumes\.htaccess"
+$resumeHtaccessTarget = Join-Path $destApp "storage\resumes\.htaccess"
+if (Test-Path $resumeHtaccessSource) {
+  Copy-Item -Path $resumeHtaccessSource -Destination $resumeHtaccessTarget -Force
+}
+
+$publicUploadsTarget = Join-Path $destApp "public\uploads"
+if (Test-Path $publicUploadsTarget) {
+  Remove-Item $publicUploadsTarget -Recurse -Force
+}
+New-Item -ItemType Directory -Path $publicUploadsTarget -Force | Out-Null
 
 # 5) Compactar em ZIP
 $zipPath = Join-Path $destRoot ("$PackageName.zip")

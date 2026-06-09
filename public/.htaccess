@@ -1,0 +1,24 @@
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  # Roteamento para front controller
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^ index.php [QSA,L]
+
+  # Bloqueio de extensões sensíveis
+  RewriteRule ^.*\.(env|ini|log|bak|sql|sh|cmd|bat)$ - [F,L]
+  # Impede acesso direto a outros .php (não index.php, install.php e logs.php)
+  RewriteCond %{REQUEST_URI} !/index\.php$
+  RewriteCond %{REQUEST_URI} !/install\.php$
+  RewriteCond %{REQUEST_URI} !/logs\.php$
+  RewriteRule ^.*\.php$ - [F,L]
+</IfModule>
+
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set X-Frame-Options "SAMEORIGIN"
+  Header always set Referrer-Policy "no-referrer-when-downgrade"
+  Header always set X-XSS-Protection "1; mode=block"
+  Header always set Content-Security-Policy "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self'"
+  Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+</IfModule>

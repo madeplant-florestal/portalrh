@@ -1,0 +1,17 @@
+---
+deployment:
+  tasks:
+    - export DEPLOYPATH=/home/ctpricec/public_html/recrutamento
+    - /bin/mkdir -p $DEPLOYPATH
+    - /usr/bin/php scripts/generate_build_info.php
+    - /bin/find $DEPLOYPATH -mindepth 1 -maxdepth 1 ! -name 'storage' -exec rm -rf {} \;
+    - /bin/cp -R app $DEPLOYPATH
+    - /bin/cp -R assets $DEPLOYPATH
+    - /bin/cp -R database $DEPLOYPATH
+    - /bin/cp -R public $DEPLOYPATH
+    - /bin/cp -R scripts $DEPLOYPATH
+    - /bin/cp -R storage/. $DEPLOYPATH/storage
+    - /bin/cp index.php $DEPLOYPATH
+    - /bin/cp install.php $DEPLOYPATH
+    - /bin/cp logs.php $DEPLOYPATH
+    - /bin/cp .htaccess $DEPLOYPATH

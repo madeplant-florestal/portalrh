@@ -1,0 +1,23 @@
+{
+  "name": "rhmadeplant",
+  "version": "1.0.0",
+  "description": "Sistema PHP (OOP) com MySQL (PDO) para gestão de vagas e currículos.",
+  "main": "index.js",
+  "scripts": {
+    "dev:css": "tailwindcss -i ./assets/tailwind-input.css -o ./assets/tailwind.css --watch",
+    "build:css": "tailwindcss -i ./assets/tailwind-input.css -o ./assets/tailwind.css --minify && node -e \"const fs=require('fs');fs.mkdirSync('./public/assets',{recursive:true});fs.copyFileSync('./assets/tailwind.css','./public/assets/tailwind.css');\"",
+    "test:unit": "node tests/unit/share-utils.test.js && node tests/unit/phone-utils.test.js",
+    "test:visual": "playwright test",
+    "test:integration:share": "playwright test tests/share-menu.spec.js",
+    "test:visual:update": "playwright test --update-snapshots"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "autoprefixer": "^10.4.21",
+    "@playwright/test": "^1.55.0",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.14"
+  }
+}

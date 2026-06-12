@@ -49,8 +49,35 @@ try {
     $router->post('/admin/reset-password/{token}', [PasswordRecoveryController::class, 'performReset']);
     $router->get('/admin', [AdminController::class, 'index']);
     $router->get('/admin/colaboradores', [AdminColaboradoresController::class, 'index']);
+    $router->get('/admin/colaboradores/rh/editar/{id}', [AdminColaboradoresController::class, 'editRh']);
+    $router->post('/admin/colaboradores/rh/editar/{id}', [AdminColaboradoresController::class, 'updateRh']);
+
+    $router->get('/admin/avaliacoes', [AdminAvaliacoesController::class, 'index']);
+    $router->get('/admin/avaliacoes/novo', [AdminAvaliacoesController::class, 'create']);
+    $router->post('/admin/avaliacoes/novo', [AdminAvaliacoesController::class, 'store']);
+    $router->get('/admin/avaliacoes/editar/{id}', [AdminAvaliacoesController::class, 'edit']);
+    $router->post('/admin/avaliacoes/editar/{id}', [AdminAvaliacoesController::class, 'update']);
+    $router->post('/admin/avaliacoes/excluir/{id}', [AdminAvaliacoesController::class, 'delete']);
     $router->get('/admin/manual', [AdminManualController::class, 'index']);
     $router->get('/admin/pipeline', [AdminPipelineController::class, 'index']);
+    $router->get('/admin/empresas', [AdminEmpresasController::class, 'index']);
+    $router->get('/admin/empresas/novo', [AdminEmpresasController::class, 'create']);
+    $router->post('/admin/empresas/novo', [AdminEmpresasController::class, 'store']);
+    $router->get('/admin/empresas/editar/{id}', [AdminEmpresasController::class, 'edit']);
+    $router->post('/admin/empresas/editar/{id}', [AdminEmpresasController::class, 'update']);
+    $router->post('/admin/empresas/excluir/{id}', [AdminEmpresasController::class, 'delete']);
+    $router->get('/admin/setores', [AdminSetoresController::class, 'index']);
+    $router->get('/admin/setores/novo', [AdminSetoresController::class, 'create']);
+    $router->post('/admin/setores/novo', [AdminSetoresController::class, 'store']);
+    $router->get('/admin/setores/editar/{id}', [AdminSetoresController::class, 'edit']);
+    $router->post('/admin/setores/editar/{id}', [AdminSetoresController::class, 'update']);
+    $router->post('/admin/setores/excluir/{id}', [AdminSetoresController::class, 'delete']);
+    $router->get('/admin/cargos', [AdminCargosController::class, 'index']);
+    $router->get('/admin/cargos/novo', [AdminCargosController::class, 'create']);
+    $router->post('/admin/cargos/novo', [AdminCargosController::class, 'store']);
+    $router->get('/admin/cargos/editar/{id}', [AdminCargosController::class, 'edit']);
+    $router->post('/admin/cargos/editar/{id}', [AdminCargosController::class, 'update']);
+    $router->post('/admin/cargos/excluir/{id}', [AdminCargosController::class, 'delete']);
 
     $router->get('/admin/vagas', [AdminVagasController::class, 'index']);
     $router->get('/admin/vagas/novo', [AdminVagasController::class, 'create']);
@@ -58,6 +85,19 @@ try {
     $router->get('/admin/vagas/editar/{id}', [AdminVagasController::class, 'edit']);
     $router->post('/admin/vagas/editar/{id}', [AdminVagasController::class, 'update']);
     $router->post('/admin/vagas/excluir/{id}', [AdminVagasController::class, 'delete']);
+    $router->get('/admin/solicitacoes-vaga', [AdminSolicitacoesVagaController::class, 'index']);
+    $router->get('/admin/solicitacoes-vaga/nova', [AdminSolicitacoesVagaController::class, 'create']);
+    $router->post('/admin/solicitacoes-vaga/nova', [AdminSolicitacoesVagaController::class, 'store']);
+    $router->get('/admin/solicitacoes-vaga/{id}', [AdminSolicitacoesVagaController::class, 'show']);
+    $router->post('/admin/solicitacoes-vaga/{id}/aprovar-lider', [AdminSolicitacoesVagaController::class, 'approveLeader']);
+    $router->post('/admin/solicitacoes-vaga/{id}/aprovar-rh', [AdminSolicitacoesVagaController::class, 'approveRh']);
+    $router->post('/admin/solicitacoes-vaga/{id}/controle-rh', [AdminSolicitacoesVagaController::class, 'updateRh']);
+    $router->get('/admin/movimentacoes-pessoal', [AdminMovimentacoesPessoalController::class, 'index']);
+    $router->get('/admin/movimentacoes-pessoal/nova', [AdminMovimentacoesPessoalController::class, 'create']);
+    $router->post('/admin/movimentacoes-pessoal/nova', [AdminMovimentacoesPessoalController::class, 'store']);
+    $router->get('/admin/movimentacoes-pessoal/{id}', [AdminMovimentacoesPessoalController::class, 'show']);
+    $router->post('/admin/movimentacoes-pessoal/{id}/editar', [AdminMovimentacoesPessoalController::class, 'update']);
+    $router->post('/admin/movimentacoes-pessoal/{id}/assinar-rh', [AdminMovimentacoesPessoalController::class, 'signRh']);
 
     $router->get('/admin/candidaturas', [AdminCandidaturasController::class, 'index']);
     $router->get('/admin/candidaturas/{id}', [AdminCandidaturasController::class, 'show']);

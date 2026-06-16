@@ -30,11 +30,14 @@ require_once __DIR__ . '/SchemaManager.php';
 require_once __DIR__ . '/Mailer.php';
 require_once __DIR__ . '/Installer.php';
 
-foreach (glob(APP_PATH . DIRECTORY_SEPARATOR . 'models' . DIRECTORY_SEPARATOR . '*.php') as $file) {
-    require_once $file;
-}
-foreach (glob(APP_PATH . DIRECTORY_SEPARATOR . 'controllers' . DIRECTORY_SEPARATOR . '*.php') as $file) {
-    require_once $file;
+foreach (['dtos', 'requests', 'validators', 'repositories', 'services', 'models', 'controllers'] as $directory) {
+    $target = APP_PATH . DIRECTORY_SEPARATOR . $directory;
+    if (!is_dir($target)) {
+        continue;
+    }
+    foreach (glob($target . DIRECTORY_SEPARATOR . '*.php') as $file) {
+        require_once $file;
+    }
 }
 
 if (!function_exists('app_base_url')) {

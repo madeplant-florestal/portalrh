@@ -159,7 +159,17 @@ class CadastroOrganizacional
     public static function usageCount(string $table, int $id): int
     {
         self::assertSupportedTable($table);
-        if (!self::tableExists('colaboradores') || $id <= 0) {
+        if ($id <= 0) {
+            return 0;
+        }
+
+        if ($table === 'empresas' && self::tableExists('setores') && self::columnExists('setores', 'empresa_id')) {
+            $stmt = Database::conn()->prepare('SELECT COUNT(*) FROM setores WHERE empresa_id = ?');
+            $stmt->execute([$id]);
+            return (int)$stmt->fetchColumn();
+        }
+
+        if (!self::tableExists('colaboradores')) {
             return 0;
         }
 
@@ -176,6 +186,14 @@ class CadastroOrganizacional
     private static function linkedCount(string $table): int
     {
         self::assertSupportedTable($table);
+        if ($table === 'empresas' && self::tableExists('setores') && self::columnExists('setores', 'empresa_id')) {
+            $stmt = Database::conn()->query(
+                'SELECT COUNT(DISTINCT empresa_id) FROM setores WHERE empresa_id IS NOT NULL'
+            );
+
+            return (int)$stmt->fetchColumn();
+        }
+
         if (!self::tableExists('colaboradores')) {
             return 0;
         }
@@ -248,5 +266,22 @@ class CadastroOrganizacional
         $cache[$table] = (int)$stmt->fetchColumn() > 0;
 
         return $cache[$table];
+    }
+
+    private static function columnExists(string $table, string $column): bool
+    {
+        static $cache = [];
+        $key = $table . '.' . $column;
+        if (array_key_exists($key, $cache)) {
+            return $cache[$key];
+        }
+
+        $stmt = Database::conn()->prepare(
+            'SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?'
+        );
+        $stmt->execute([$table, $column]);
+        $cache[$key] = (int)$stmt->fetchColumn() > 0;
+
+        return $cache[$key];
     }
 }

@@ -67,17 +67,23 @@ try {
     $router->post('/admin/empresas/editar/{id}', [AdminEmpresasController::class, 'update']);
     $router->post('/admin/empresas/excluir/{id}', [AdminEmpresasController::class, 'delete']);
     $router->get('/admin/setores', [AdminSetoresController::class, 'index']);
+    $router->get('/admin/setores/export', [AdminSetoresController::class, 'export']);
     $router->get('/admin/setores/novo', [AdminSetoresController::class, 'create']);
     $router->post('/admin/setores/novo', [AdminSetoresController::class, 'store']);
     $router->get('/admin/setores/editar/{id}', [AdminSetoresController::class, 'edit']);
     $router->post('/admin/setores/editar/{id}', [AdminSetoresController::class, 'update']);
     $router->post('/admin/setores/excluir/{id}', [AdminSetoresController::class, 'delete']);
+    $router->post('/admin/setores/saneamento/empresa', [AdminSetoresController::class, 'sanitizeLegacy']);
+    $router->post('/admin/setores/{setorId}/cargos/vincular', [AdminCargoSetoresController::class, 'storeBySetor']);
+    $router->post('/admin/setores/{setorId}/cargos/{cargoId}/desvincular', [AdminCargoSetoresController::class, 'destroyBySetor']);
     $router->get('/admin/cargos', [AdminCargosController::class, 'index']);
     $router->get('/admin/cargos/novo', [AdminCargosController::class, 'create']);
     $router->post('/admin/cargos/novo', [AdminCargosController::class, 'store']);
     $router->get('/admin/cargos/editar/{id}', [AdminCargosController::class, 'edit']);
     $router->post('/admin/cargos/editar/{id}', [AdminCargosController::class, 'update']);
     $router->post('/admin/cargos/excluir/{id}', [AdminCargosController::class, 'delete']);
+    $router->post('/admin/cargos/{cargoId}/setores/vincular', [AdminCargoSetoresController::class, 'storeByCargo']);
+    $router->post('/admin/cargos/{cargoId}/setores/{setorId}/desvincular', [AdminCargoSetoresController::class, 'destroyByCargo']);
 
     $router->get('/admin/vagas', [AdminVagasController::class, 'index']);
     $router->get('/admin/vagas/novo', [AdminVagasController::class, 'create']);
@@ -131,7 +137,7 @@ try {
 
     $router->dispatch();
 } catch (\Throwable $e) {
-    error_log($e->getMessage());
+    error_log((string)$e);
     http_response_code(500);
     echo "Erro interno do sistema.";
 }

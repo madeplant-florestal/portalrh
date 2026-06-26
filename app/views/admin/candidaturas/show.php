@@ -102,6 +102,44 @@
           <label class="block text-sm font-medium text-gray-700">Observações / Nota do Recrutador</label>
           <textarea name="observacoes" rows="3" class="mt-1 shadow-sm focus:ring-ctgreen focus:border-ctgreen block w-full sm:text-sm border-gray-300 rounded-md border" placeholder="Adicione uma nota sobre esta etapa..."></textarea>
         </div>
+        <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <h4 class="text-sm font-semibold text-slate-800">Dados adicionais da etapa</h4>
+          <p class="mt-1 text-xs text-slate-500">Preencha apenas os campos que se aplicam ao estágio atual para enriquecer o histórico e o payload do webhook.</p>
+          <div class="mt-4 grid gap-4 md:grid-cols-2">
+            <div>
+              <label class="block text-sm font-medium text-gray-700">Data da entrevista</label>
+              <input type="text" name="interview_date" value="<?= Security::e(!empty($c['interview_date']) ? DateHelper::formatBrazilianDate((string)$c['interview_date']) : '') ?>" class="mt-1 w-full rounded border px-3 py-2 text-sm" placeholder="DD/MM/AAAA" data-mask-date="1">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700">Horário da entrevista</label>
+              <input type="time" name="interview_time" value="<?= Security::e(!empty($c['interview_time']) ? substr((string)$c['interview_time'], 0, 5) : '') ?>" class="mt-1 w-full rounded border px-3 py-2 text-sm">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700">Local da entrevista</label>
+              <input type="text" name="interview_location" value="<?= Security::e($c['interview_location'] ?? '') ?>" class="mt-1 w-full rounded border px-3 py-2 text-sm" placeholder="Sala, endereço ou observação">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700">Link da entrevista</label>
+              <input type="url" name="interview_link" value="<?= Security::e($c['interview_link'] ?? '') ?>" class="mt-1 w-full rounded border px-3 py-2 text-sm" placeholder="https://...">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700">Nome do teste</label>
+              <input type="text" name="test_name" value="<?= Security::e($c['test_name'] ?? '') ?>" class="mt-1 w-full rounded border px-3 py-2 text-sm" placeholder="Ex.: Teste comportamental">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700">Prazo do teste</label>
+              <input type="text" name="deadline" value="<?= Security::e(!empty($c['deadline']) ? DateHelper::formatBrazilianDate((string)$c['deadline']) : '') ?>" class="mt-1 w-full rounded border px-3 py-2 text-sm" placeholder="DD/MM/AAAA" data-mask-date="1">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700">Data de admissão</label>
+              <input type="text" name="admission_date" value="<?= Security::e(!empty($c['admission_date']) ? DateHelper::formatBrazilianDate((string)$c['admission_date']) : '') ?>" class="mt-1 w-full rounded border px-3 py-2 text-sm" placeholder="DD/MM/AAAA" data-mask-date="1">
+            </div>
+            <div class="md:col-span-2">
+              <label class="block text-sm font-medium text-gray-700">Observações da admissão</label>
+              <textarea name="admission_notes" rows="3" class="mt-1 w-full rounded border px-3 py-2 text-sm" placeholder="Documentos, pendências ou orientações da admissão"><?= Security::e($c['admission_notes'] ?? '') ?></textarea>
+            </div>
+          </div>
+        </div>
         <div class="responsive-form-actions justify-end">
           <a href="<?= $base ?>/admin/candidaturas" class="text-gray-600 hover:text-gray-900">Voltar</a>
           <button type="submit" class="bg-ctgreen text-white px-4 py-2 rounded hover:bg-ctdark shadow-sm">Salvar Alterações</button>

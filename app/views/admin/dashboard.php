@@ -298,8 +298,10 @@ if (!function_exists('dashboard_donut')) {
         </div>
         <div class="mt-2 flex items-center justify-between gap-2">
           <span class="text-[11px] font-semibold text-emerald-600"><?= Security::e($kpi['change']) ?></span>
-          <?php if (!empty($href)): ?>
+          <?php if (!empty($kpi['is_real'])): ?>
             <span class="text-[11px] font-semibold text-blue-700">Base real</span>
+          <?php elseif (!empty($href)): ?>
+            <span class="text-[11px] font-semibold text-slate-400">Fallback</span>
           <?php endif; ?>
         </div>
       </<?= $tag ?>>
@@ -427,7 +429,7 @@ if (!function_exists('dashboard_donut')) {
       <div class="mb-3 flex items-start justify-between gap-3">
         <div>
           <h2 class="dashboard-title">Colaboradores por Área</h2>
-          <p class="dashboard-subtitle">Distribuição estimada por macroárea</p>
+          <p class="dashboard-subtitle">Distribuição atual por área derivada da base de colaboradores</p>
         </div>
         <a href="<?= $base ?>/admin/colaboradores" class="text-xs font-semibold text-blue-700 hover:text-blue-900">Ver base</a>
       </div>
@@ -452,7 +454,7 @@ if (!function_exists('dashboard_donut')) {
 
     <article class="dashboard-panel dashboard-span-4 ring-1 ring-slate-200">
       <h2 class="dashboard-title">Distribuição por Tempo de Empresa</h2>
-      <p class="dashboard-subtitle">Faixas de permanência estimadas</p>
+      <p class="dashboard-subtitle">Faixas de permanência calculadas a partir da admissão registrada</p>
       <?php $maxTempoEmpresa = max(array_column($dashboard['tempoEmpresa'], 'value')); ?>
       <div class="mt-4 space-y-3.5">
         <?php foreach ($dashboard['tempoEmpresa'] as $item): ?>
@@ -493,8 +495,8 @@ if (!function_exists('dashboard_donut')) {
   <section class="dashboard-panel ring-1 ring-slate-200">
     <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
       <div>
-        <h2 class="dashboard-title">Base real de colaboradores conectada</h2>
-        <p class="dashboard-subtitle">A lista administrativa já consome os registros persistidos no banco e está pronta para receber indicadores reais na próxima etapa.</p>
+        <h2 class="dashboard-title">Base híbrida de indicadores conectada</h2>
+        <p class="dashboard-subtitle">O dashboard usa dados reais da tabela `colaboradores` sempre que há correspondência e mantém fallback genérico apenas nos blocos sem base equivalente.</p>
       </div>
       <div class="flex flex-wrap gap-2">
         <a href="<?= $base ?>/admin/colaboradores" class="inline-flex items-center justify-center rounded-xl bg-blue-950 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-900">
@@ -503,7 +505,20 @@ if (!function_exists('dashboard_donut')) {
         <span class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-600">
           <?= (int)$colaboradoresCadastrados ?> cadastro(s) disponíveis
         </span>
+        <span class="inline-flex items-center justify-center rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700">
+          <?= (int)($dashboard['sourceSummary']['real_metrics'] ?? 0) ?> métrica(s) reais
+        </span>
+        <span class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-500">
+          <?= (int)($dashboard['sourceSummary']['fallback_metrics'] ?? 0) ?> fallback(s)
+        </span>
       </div>
     </div>
+    <?php if (!empty($dashboard['sourceSummary']['notes'])): ?>
+      <div class="mt-3 flex flex-wrap gap-2">
+        <?php foreach ($dashboard['sourceSummary']['notes'] as $note): ?>
+          <span class="inline-flex rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700"><?= Security::e($note) ?></span>
+        <?php endforeach; ?>
+      </div>
+    <?php endif; ?>
   </section>
 </div>

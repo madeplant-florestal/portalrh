@@ -19,13 +19,20 @@ $vagaId = Vaga::create([
     'ativo' => 1
 ]);
 
-$stageStmt = $pdo->prepare('SELECT id FROM pipeline_stages WHERE LOWER(nome) = ? LIMIT 1');
-$stageStmt->execute(['contratado']);
-$contratadoId = (int)$stageStmt->fetchColumn();
+$stageStmt = $pdo->prepare("SELECT id, nome FROM pipeline_stages ORDER BY ordem ASC");
+$stageStmt->execute();
+$contratadoId = 0;
+foreach ($stageStmt->fetchAll(PDO::FETCH_ASSOC) as $stageRow) {
+    $normalized = PipelineStage::normalizeName((string)($stageRow['nome'] ?? ''));
+    if (in_array($normalized, ['contratado', 'admissao'], true)) {
+        $contratadoId = (int)($stageRow['id'] ?? 0);
+        break;
+    }
+}
 if ($contratadoId <= 0) {
     $ordem = (int)$pdo->query('SELECT COALESCE(MAX(ordem),0)+1 FROM pipeline_stages')->fetchColumn();
     $ins = $pdo->prepare('INSERT INTO pipeline_stages (nome, ordem, cor) VALUES (?,?,?)');
-    $ins->execute(['Contratado', $ordem, '#1d2d44']);
+    $ins->execute(['Admissão', $ordem, '#059669']);
     $contratadoId = (int)$pdo->lastInsertId();
 }
 
@@ -45,7 +52,7 @@ $candId = Candidatura::create([
 
 $updated = Candidatura::updateStage($candId, $contratadoId, 1);
 if (!$updated) {
-    fwrite(STDERR, "Falha: não conseguiu mover para Contratado.\n");
+    fwrite(STDERR, "Falha: não conseguiu mover para a etapa de admissão.\n");
     exit(1);
 }
 $pdo->prepare('UPDATE candidaturas SET indicacao_data_contratacao = DATE_SUB(NOW(), INTERVAL 10 DAY), indicacao_data_fim_experiencia = DATE_ADD(CURDATE(), INTERVAL 80 DAY) WHERE id = ?')->execute([$candId]);

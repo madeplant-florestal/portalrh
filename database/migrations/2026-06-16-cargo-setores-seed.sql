@@ -9,15 +9,16 @@
 --    - Variantes sem cargo equivalente exato foram aproximadas pelo cargo base mais proximo ja cadastrado
 
 CREATE TEMPORARY TABLE tmp_cargo_setores_seed (
-    setor_slug VARCHAR(180) NOT NULL,
-    cargo_slug VARCHAR(180) NOT NULL,
-    origem_setor VARCHAR(180) NOT NULL,
-    origem_cargo VARCHAR(180) NOT NULL,
+    setor_slug VARCHAR(180) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+    cargo_slug VARCHAR(180) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+    origem_setor VARCHAR(180) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+    origem_cargo VARCHAR(180) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
     PRIMARY KEY (setor_slug, cargo_slug)
-) ENGINE=Memory;
+) ENGINE=Memory DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 INSERT IGNORE INTO tmp_cargo_setores_seed (setor_slug, cargo_slug, origem_setor, origem_cargo) VALUES
-    ('producao', 'analista-de-pcp', 'ADMINISTRATIVO', 'ANALISTA DE PCP SI'),
+    ('producao', 'analista-de-pcp', 'ADMINISTRATIVO', 'ANALISTA DE PCP SI'),-++
+    
     ('producao', 'assistente-de-pcp', 'ADMINISTRATIVO', 'ASSISTENTE DE PCP'),
     ('producao', 'lider-de-operacao-florestal', 'ADMINISTRATIVO', 'LIDER DE OPERACAO FLORESTAL'),
     ('producao', 'supervisor-de-operacao', 'ADMINISTRATIVO', 'SUPERVISOR DE OPERACAO'),
@@ -78,8 +79,8 @@ INSERT IGNORE INTO cargo_setores (cargo_id, setor_id)
 SELECT c.id, s.id
 FROM tmp_cargo_setores_seed seed
 INNER JOIN setores s
-    ON s.slug = seed.setor_slug
+    ON s.slug COLLATE utf8mb4_unicode_ci = seed.setor_slug COLLATE utf8mb4_unicode_ci
 INNER JOIN cargos c
-    ON c.slug = seed.cargo_slug;
+    ON c.slug COLLATE utf8mb4_unicode_ci = seed.cargo_slug COLLATE utf8mb4_unicode_ci;
 
 DROP TEMPORARY TABLE IF EXISTS tmp_cargo_setores_seed;

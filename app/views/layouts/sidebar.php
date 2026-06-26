@@ -58,6 +58,10 @@ $sidebarLinkClass = static function (array $paths = [], string $extra = '') use 
         <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path d="M15 3v18"/></svg>
         <span class="sidebar-link-label">Pipeline Kanban</span>
       </a>
+      <a href="<?= $base ?>/admin/recruitment-webhooks" class="sidebar-primary-link <?= $sidebarLinkClass(['/admin/recruitment-webhooks']) ?>" data-admin-menu-close="1" title="Webhooks do recrutamento" aria-label="Webhooks do recrutamento">
+        <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 12h6"/><path d="M14 6h6"/><path d="M14 18h6"/><circle cx="10" cy="12" r="2"/><circle cx="14" cy="6" r="2"/><circle cx="14" cy="18" r="2"/><path d="M11.7 10.9l1.6-1.8"/><path d="M11.7 13.1l1.6 1.8"/></svg>
+        <span class="sidebar-link-label">Webhooks do recrutamento</span>
+      </a>
       <details class="sidebar-group rounded-xl border border-white/10 bg-white/5" <?= $isCadastroOpen ? 'open' : '' ?> data-sidebar-group="1">
         <summary class="sidebar-link sidebar-primary-link sidebar-group-summary cursor-pointer list-none" title="Cadastros" aria-label="Cadastros">
           <span class="flex items-center gap-3">

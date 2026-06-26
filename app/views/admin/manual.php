@@ -142,6 +142,7 @@ $releaseDate = trim((string)($app['release_date'] ?? ''));
         <article class="manual-block"><h3 class="manual-h3">Candidaturas</h3><p class="manual-p">Lista e filtra candidatos, permite atualizar etapa e baixar currículo. Acesso em <span style="font-family:monospace">/admin/candidaturas</span>.</p></article>
         <article class="manual-block"><h3 class="manual-h3">Pipeline Kanban</h3><p class="manual-p">Organiza candidaturas por etapa. Acesso em <span style="font-family:monospace">/admin/pipeline</span>. Movimentação com candidatura_id, stage_id e csrf.</p></article>
         <article class="manual-block"><h3 class="manual-h3">Benefícios</h3><p class="manual-p">Gerencia benefícios/parcerias exibidos no público. Acesso em <span style="font-family:monospace">/admin/beneficios</span>. Campos: nome, parceiro, descrição, logo, ativo e csrf.</p></article>
+        <article class="manual-block"><h3 class="manual-h3">Colaboradores</h3><p class="manual-p">Consulta a base cadastral de RH, permite editar dados de vínculo e importar arquivos `.xlsx` ou `.csv` diretamente pela tela <span style="font-family:monospace">/admin/colaboradores</span>.</p></article>
         <article class="manual-block" style="grid-column:1 / -1"><h3 class="manual-h3">Usuários</h3><p class="manual-p">Cria contas administrativas com perfil (Leitor, RH, Admin) e operação de supervisor protegido.</p></article>
       </div>
     </details>
@@ -158,6 +159,7 @@ $releaseDate = trim((string)($app['release_date'] ?? ''));
         <ul class="manual-list">
           <li>Vaga ativa no público → candidatura com currículo PDF → entrada em “Novo”.</li>
           <li>Movimentação no Pipeline (Triagem, Entrevista, Proposta) com histórico.</li>
+          <li>Importação de colaboradores pela tela administrativa com validação do arquivo, processamento transacional e resumo de erros/rejeições.</li>
           <li>Recuperação de senha por token temporário e novo login após redefinição.</li>
         </ul>
       </div>
@@ -174,6 +176,7 @@ $releaseDate = trim((string)($app['release_date'] ?? ''));
       <div class="manual-content manual-grid manual-grid-2">
         <div class="manual-block"><p class="manual-p" style="font-weight:700">Credenciais inválidas</p><p class="manual-muted">Verifique e-mail/senha. Em bloqueio por tentativas, aguarde e tente novamente.</p></div>
         <div class="manual-block"><p class="manual-p" style="font-weight:700">Falha CSRF</p><p class="manual-muted">Atualize a página e reenviar formulário em aba ativa.</p></div>
+        <div class="manual-block"><p class="manual-p" style="font-weight:700">Importação rejeitada</p><p class="manual-muted">Confirme o formato `.xlsx` ou `.csv`, revise os campos obrigatórios e verifique o resumo de inconsistências exibido na tela de colaboradores.</p></div>
         <div class="manual-block"><p class="manual-p" style="font-weight:700">Falha ao atualizar candidatura</p><p class="manual-muted">Confirme etapa selecionada e tente novamente; persistindo, revisar logs.</p></div>
         <div class="manual-block"><p class="manual-p" style="font-weight:700">Token inválido/expirado</p><p class="manual-muted">Solicite novo link em “Esqueci minha senha”.</p></div>
       </div>
@@ -191,6 +194,7 @@ $releaseDate = trim((string)($app['release_date'] ?? ''));
         <div class="manual-block">
           <p class="manual-p"><strong>Quem pode acessar este painel?</strong><br>Usuários autenticados com perfil administrativo (Leitor, RH, Admin e Supervisor).</p>
           <p class="manual-p" style="margin-top:8px"><strong>Posso cadastrar candidatura manualmente no admin?</strong><br>No fluxo atual, candidaturas entram pelo formulário público das vagas.</p>
+          <p class="manual-p" style="margin-top:8px"><strong>Como importo colaboradores pela tela?</strong><br>Acesse <span style="font-family:monospace">/admin/colaboradores</span>, clique em <strong>Importar colaboradores</strong>, selecione um `.xlsx` ou `.csv` e acompanhe o resumo apresentado na própria página.</p>
           <p class="manual-p" style="margin-top:8px"><strong>Como falar com suporte rapidamente?</strong><br><a class="manual-link" href="https://wa.me/5567993256260" target="_blank" rel="noopener noreferrer">WhatsApp (67) 99325-6260</a>.</p>
         </div>
       </div>

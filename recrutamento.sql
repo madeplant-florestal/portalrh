@@ -207,10 +207,19 @@ DROP TABLE IF EXISTS `colaboradores`;
 CREATE TABLE `colaboradores` (
   `id` int NOT NULL AUTO_INCREMENT,
   `nome` varchar(180) COLLATE utf8mb4_general_ci NOT NULL,
+  `matricula` varchar(30) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `codigo` varchar(30) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `cpf` varchar(11) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `slug` varchar(200) COLLATE utf8mb4_general_ci NOT NULL,
   `cargo_id` int NOT NULL,
   `empresa_id` int DEFAULT NULL,
   `setor_id` int DEFAULT NULL,
+  `salario_atual` decimal(12,2) DEFAULT NULL,
+  `data_admissao` date DEFAULT NULL,
+  `data_inicio_cargo` date DEFAULT NULL,
+  `data_nascimento` date DEFAULT NULL,
+  `data_demissao` date DEFAULT NULL,
+  `motivo_rescisao` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `ativo` tinyint(1) NOT NULL DEFAULT '1',
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
@@ -218,6 +227,14 @@ CREATE TABLE `colaboradores` (
   KEY `idx_colaboradores_cargo_id` (`cargo_id`),
   KEY `idx_colaboradores_empresa_id` (`empresa_id`),
   KEY `idx_colaboradores_setor_id` (`setor_id`),
+  KEY `idx_colaboradores_codigo` (`codigo`),
+  KEY `idx_colaboradores_cpf` (`cpf`),
+  KEY `idx_colaboradores_empresa_codigo` (`empresa_id`,`codigo`),
+  KEY `idx_colaboradores_empresa_matricula` (`empresa_id`,`matricula`),
+  KEY `idx_colaboradores_cpf_admissao` (`cpf`,`data_admissao`),
+  KEY `idx_colaboradores_empresa_cpf_ativo` (`empresa_id`,`cpf`,`ativo`,`data_demissao`),
+  KEY `idx_colaboradores_data_admissao` (`data_admissao`),
+  KEY `idx_colaboradores_data_demissao` (`data_demissao`),
   CONSTRAINT `fk_colaboradores_cargo` FOREIGN KEY (`cargo_id`) REFERENCES `cargos` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE,
   CONSTRAINT `fk_colaboradores_empresa` FOREIGN KEY (`empresa_id`) REFERENCES `empresas` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_colaboradores_setor` FOREIGN KEY (`setor_id`) REFERENCES `setores` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
@@ -230,7 +247,7 @@ CREATE TABLE `colaboradores` (
 
 LOCK TABLES `colaboradores` WRITE;
 /*!40000 ALTER TABLE `colaboradores` DISABLE KEYS */;
-INSERT INTO `colaboradores` VALUES (1,'ADAO BOEIRA DE OLIVEIRA','adao-boeira-de-oliveira',52,NULL,NULL,1,'2026-06-03 20:55:13'),(2,'CARLOS JARBAS ARCE VIEIRA','carlos-jarbas-arce-vieira',32,NULL,NULL,1,'2026-06-03 20:55:13'),(3,'CELSO LUIZ MELLO CORREA','celso-luiz-mello-correa',29,NULL,NULL,1,'2026-06-03 20:55:13'),(4,'FABIAN MOLINAS','fabian-molinas',38,NULL,NULL,1,'2026-06-03 20:55:13'),(5,'FABIANE FREITAS MENDONCA','fabiane-freitas-mendonca',26,NULL,NULL,1,'2026-06-03 20:55:13'),(6,'FABIANO MACEDO DE LIMA','fabiano-macedo-de-lima',38,NULL,NULL,1,'2026-06-03 20:55:13'),(7,'FABIO JUNIOR MORENO KUKIEL','fabio-junior-moreno-kukiel',35,NULL,NULL,1,'2026-06-03 20:55:13'),(8,'FABIO OZUNA LIMA','fabio-ozuna-lima',54,NULL,NULL,1,'2026-06-03 20:55:13'),(9,'GUSTAVO COTTA LOBO LEITE','gustavo-cotta-lobo-leite',37,NULL,NULL,1,'2026-06-03 20:55:13'),(10,'HELCIO JOSE DE OLIVEIRA','helcio-jose-de-oliveira',52,NULL,NULL,1,'2026-06-03 20:55:13'),(11,'JOAO MORENO RODRIGUES','joao-moreno-rodrigues',51,NULL,NULL,1,'2026-06-03 20:55:13'),(12,'KARINA SERPA DA SILVA','karina-serpa-da-silva',24,NULL,NULL,1,'2026-06-03 20:55:13'),(13,'LUDIMILA DAIANY CRISTALDO DE LIMA','ludimila-daiany-cristaldo-de-lima',30,NULL,NULL,1,'2026-06-03 20:55:13'),(14,'MARCOS MACIEL SALAU','marcos-maciel-salau',38,NULL,NULL,1,'2026-06-03 20:55:13'),(15,'MARLI RECALCATI','marli-recalcati',55,NULL,NULL,1,'2026-06-03 20:55:13'),(16,'MATHEUS ARANDA MOREIRA','matheus-aranda-moreira',31,NULL,NULL,1,'2026-06-03 20:55:13'),(17,'ODAIR GONCALVES DA SILVA','odair-goncalves-da-silva',38,NULL,NULL,1,'2026-06-03 20:55:13'),(18,'ODAIR PEDRO TONIN','odair-pedro-tonin',36,NULL,NULL,1,'2026-06-03 20:55:13'),(19,'ORLANDO CRUZ CARDOSO','orlando-cruz-cardoso',51,NULL,NULL,1,'2026-06-03 20:55:13'),(20,'PAULO DE SOUZA DANTAS FILHO','paulo-de-souza-dantas-filho',56,NULL,NULL,1,'2026-06-03 20:55:13'),(21,'PAULO ROBERTO CAMPOS CORREA','paulo-roberto-campos-correa',53,NULL,NULL,1,'2026-06-03 20:55:13'),(22,'RENAN GONÇALVES DE MORAES SIMÕES','renan-goncalves-de-moraes-simoes',28,NULL,NULL,1,'2026-06-03 20:55:13'),(23,'ROBSON MASSATO SAHEKI','robson-massato-saheki',38,NULL,NULL,1,'2026-06-03 20:55:13'),(24,'RODRIGO SOARES DE AZEVEDO','rodrigo-soares-de-azevedo',25,NULL,NULL,1,'2026-06-03 20:55:13');
+INSERT INTO `colaboradores` (`id`, `nome`, `slug`, `cargo_id`, `empresa_id`, `setor_id`, `ativo`, `created_at`) VALUES (1,'ADAO BOEIRA DE OLIVEIRA','adao-boeira-de-oliveira',52,NULL,NULL,1,'2026-06-03 20:55:13'),(2,'CARLOS JARBAS ARCE VIEIRA','carlos-jarbas-arce-vieira',32,NULL,NULL,1,'2026-06-03 20:55:13'),(3,'CELSO LUIZ MELLO CORREA','celso-luiz-mello-correa',29,NULL,NULL,1,'2026-06-03 20:55:13'),(4,'FABIAN MOLINAS','fabian-molinas',38,NULL,NULL,1,'2026-06-03 20:55:13'),(5,'FABIANE FREITAS MENDONCA','fabiane-freitas-mendonca',26,NULL,NULL,1,'2026-06-03 20:55:13'),(6,'FABIANO MACEDO DE LIMA','fabiano-macedo-de-lima',38,NULL,NULL,1,'2026-06-03 20:55:13'),(7,'FABIO JUNIOR MORENO KUKIEL','fabio-junior-moreno-kukiel',35,NULL,NULL,1,'2026-06-03 20:55:13'),(8,'FABIO OZUNA LIMA','fabio-ozuna-lima',54,NULL,NULL,1,'2026-06-03 20:55:13'),(9,'GUSTAVO COTTA LOBO LEITE','gustavo-cotta-lobo-leite',37,NULL,NULL,1,'2026-06-03 20:55:13'),(10,'HELCIO JOSE DE OLIVEIRA','helcio-jose-de-oliveira',52,NULL,NULL,1,'2026-06-03 20:55:13'),(11,'JOAO MORENO RODRIGUES','joao-moreno-rodrigues',51,NULL,NULL,1,'2026-06-03 20:55:13'),(12,'KARINA SERPA DA SILVA','karina-serpa-da-silva',24,NULL,NULL,1,'2026-06-03 20:55:13'),(13,'LUDIMILA DAIANY CRISTALDO DE LIMA','ludimila-daiany-cristaldo-de-lima',30,NULL,NULL,1,'2026-06-03 20:55:13'),(14,'MARCOS MACIEL SALAU','marcos-maciel-salau',38,NULL,NULL,1,'2026-06-03 20:55:13'),(15,'MARLI RECALCATI','marli-recalcati',55,NULL,NULL,1,'2026-06-03 20:55:13'),(16,'MATHEUS ARANDA MOREIRA','matheus-aranda-moreira',31,NULL,NULL,1,'2026-06-03 20:55:13'),(17,'ODAIR GONCALVES DA SILVA','odair-goncalves-da-silva',38,NULL,NULL,1,'2026-06-03 20:55:13'),(18,'ODAIR PEDRO TONIN','odair-pedro-tonin',36,NULL,NULL,1,'2026-06-03 20:55:13'),(19,'ORLANDO CRUZ CARDOSO','orlando-cruz-cardoso',51,NULL,NULL,1,'2026-06-03 20:55:13'),(20,'PAULO DE SOUZA DANTAS FILHO','paulo-de-souza-dantas-filho',56,NULL,NULL,1,'2026-06-03 20:55:13'),(21,'PAULO ROBERTO CAMPOS CORREA','paulo-roberto-campos-correa',53,NULL,NULL,1,'2026-06-03 20:55:13'),(22,'RENAN GONÇALVES DE MORAES SIMÕES','renan-goncalves-de-moraes-simoes',28,NULL,NULL,1,'2026-06-03 20:55:13'),(23,'ROBSON MASSATO SAHEKI','robson-massato-saheki',38,NULL,NULL,1,'2026-06-03 20:55:13'),(24,'RODRIGO SOARES DE AZEVEDO','rodrigo-soares-de-azevedo',25,NULL,NULL,1,'2026-06-03 20:55:13');
 /*!40000 ALTER TABLE `colaboradores` ENABLE KEYS */;
 UNLOCK TABLES;
 

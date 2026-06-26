@@ -10,6 +10,7 @@
     <thead>
       <tr class="border-b">
         <th class="text-left p-3">Título</th>
+        <th class="text-left p-3">Empresa</th>
         <th class="text-left p-3">Área</th>
         <th class="text-left p-3">Local</th>
         <th class="text-left p-3">Ativo</th>
@@ -20,6 +21,7 @@
       <?php foreach ($vagas as $v): ?>
         <tr class="border-b hover:bg-gray-50">
           <td class="p-3 font-medium text-ctpblue"><?= Security::e($v['titulo']) ?></td>
+          <td class="p-3"><?= Security::e($v['empresa_nome'] ?? 'Padrão') ?></td>
           <td class="p-3"><?= Security::e($v['area']) ?></td>
           <td class="p-3"><?= Security::e($v['local']) ?></td>
           <td class="p-3">
@@ -45,6 +47,7 @@
     <?php foreach ($vagas as $v): ?>
       <div class="responsive-card">
         <div class="text-base font-semibold text-ctpblue"><?= Security::e($v['titulo']) ?></div>
+        <div class="mt-2 text-sm text-gray-600">Empresa: <?= Security::e($v['empresa_nome'] ?? 'Padrão') ?></div>
         <div class="mt-2 text-sm text-gray-600">Área: <?= Security::e($v['area']) ?></div>
         <div class="mt-1 text-sm text-gray-600">Local: <?= Security::e($v['local']) ?></div>
         <div class="mt-3">

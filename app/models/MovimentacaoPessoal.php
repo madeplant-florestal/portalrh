@@ -14,9 +14,14 @@ class MovimentacaoPessoal
         $pdo = Database::conn();
 
         self::addColumnIfMissing('colaboradores', 'matricula', "ALTER TABLE colaboradores ADD COLUMN matricula VARCHAR(30) NULL AFTER nome");
+        self::addColumnIfMissing('colaboradores', 'codigo', "ALTER TABLE colaboradores ADD COLUMN codigo VARCHAR(30) NULL AFTER matricula");
+        self::addColumnIfMissing('colaboradores', 'cpf', "ALTER TABLE colaboradores ADD COLUMN cpf VARCHAR(11) NULL AFTER codigo");
         self::addColumnIfMissing('colaboradores', 'salario_atual', "ALTER TABLE colaboradores ADD COLUMN salario_atual DECIMAL(12,2) NULL AFTER setor_id");
         self::addColumnIfMissing('colaboradores', 'data_admissao', "ALTER TABLE colaboradores ADD COLUMN data_admissao DATE NULL AFTER salario_atual");
         self::addColumnIfMissing('colaboradores', 'data_inicio_cargo', "ALTER TABLE colaboradores ADD COLUMN data_inicio_cargo DATE NULL AFTER data_admissao");
+        self::addColumnIfMissing('colaboradores', 'data_nascimento', "ALTER TABLE colaboradores ADD COLUMN data_nascimento DATE NULL AFTER data_inicio_cargo");
+        self::addColumnIfMissing('colaboradores', 'data_demissao', "ALTER TABLE colaboradores ADD COLUMN data_demissao DATE NULL AFTER data_nascimento");
+        self::addColumnIfMissing('colaboradores', 'motivo_rescisao', "ALTER TABLE colaboradores ADD COLUMN motivo_rescisao VARCHAR(255) NULL AFTER data_demissao");
 
         $pdo->exec("CREATE TABLE IF NOT EXISTS colaborador_avaliacoes (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -640,6 +645,16 @@ class MovimentacaoPessoal
         $pdo->exec("UPDATE colaboradores
                     SET matricula = CONCAT('MP', LPAD(id, 6, '0'))
                     WHERE (matricula IS NULL OR matricula = '')");
+
+        $pdo->exec("UPDATE colaboradores
+                    SET codigo = NULLIF(TRIM(matricula), '')
+                    WHERE (codigo IS NULL OR codigo = '')
+                      AND matricula IS NOT NULL
+                      AND TRIM(matricula) <> ''");
+
+        $pdo->exec("UPDATE colaboradores
+                    SET codigo = CONCAT('COL', LPAD(id, 6, '0'))
+                    WHERE codigo IS NULL OR codigo = ''");
 
         $pdo->exec("UPDATE colaboradores c
                     LEFT JOIN cargo_faixas_salariais fs ON fs.cargo_id = c.cargo_id AND fs.ativo = 1

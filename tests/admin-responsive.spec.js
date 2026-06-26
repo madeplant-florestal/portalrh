@@ -69,7 +69,7 @@ test.describe('admin responsivo', () => {
       await expect(await hasPageOverflow(page)).toBeFalsy();
 
       await page.goto(`${appBase}/admin/pipeline`, { waitUntil: 'domcontentloaded' });
-      await expect(page.getByRole('heading', { name: 'Pipeline de Seleção' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Kanban de Recrutamento e Seleção' })).toBeVisible();
       await expect(page.locator('[data-kanban-board-column="1"]').first()).toBeVisible();
       await expect(await hasPageOverflow(page)).toBeFalsy();
     });

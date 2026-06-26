@@ -13,6 +13,20 @@ if (!empty($colaborador['data_inicio_cargo'])) {
 if (!empty($colaborador['data_inicio_cargo']) && preg_match('/^\d{2}\/\d{2}\/\d{4}$/', (string)$colaborador['data_inicio_cargo'])) {
     $dataInicioCargo = (string)$colaborador['data_inicio_cargo'];
 }
+$dataNascimento = '';
+if (!empty($colaborador['data_nascimento'])) {
+    $dataNascimento = DateHelper::formatBrazilianDate((string)$colaborador['data_nascimento']);
+}
+if (!empty($colaborador['data_nascimento']) && preg_match('/^\d{2}\/\d{2}\/\d{4}$/', (string)$colaborador['data_nascimento'])) {
+    $dataNascimento = (string)$colaborador['data_nascimento'];
+}
+$dataDemissao = '';
+if (!empty($colaborador['data_demissao'])) {
+    $dataDemissao = DateHelper::formatBrazilianDate((string)$colaborador['data_demissao']);
+}
+if (!empty($colaborador['data_demissao']) && preg_match('/^\d{2}\/\d{2}\/\d{4}$/', (string)$colaborador['data_demissao'])) {
+    $dataDemissao = (string)$colaborador['data_demissao'];
+}
 ?>
 <div class="responsive-panel max-w-3xl">
   <div class="responsive-header">
@@ -37,8 +51,16 @@ if (!empty($colaborador['data_inicio_cargo']) && preg_match('/^\d{2}\/\d{2}\/\d{
 
     <div class="grid gap-4 md:grid-cols-2">
       <div>
+        <label class="block text-sm font-medium text-gray-700">Código *</label>
+        <input type="text" name="codigo" value="<?= Security::e((string)($colaborador['codigo'] ?? '')) ?>" class="mt-1 w-full rounded border px-3 py-2" required>
+      </div>
+      <div>
         <label class="block text-sm font-medium text-gray-700">Matrícula *</label>
         <input type="text" name="matricula" value="<?= Security::e((string)($colaborador['matricula'] ?? '')) ?>" class="mt-1 w-full rounded border px-3 py-2" required>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700">CPF</label>
+        <input type="text" name="cpf" value="<?= Security::e((string)($colaborador['cpf'] ?? '')) ?>" class="mt-1 w-full rounded border px-3 py-2" inputmode="numeric" maxlength="14" placeholder="Somente números ou CPF formatado">
       </div>
       <div>
         <label class="block text-sm font-medium text-gray-700">Salário atual *</label>
@@ -51,6 +73,18 @@ if (!empty($colaborador['data_inicio_cargo']) && preg_match('/^\d{2}\/\d{2}\/\d{
       <div>
         <label class="block text-sm font-medium text-gray-700">Data de início no cargo *</label>
         <input type="text" name="data_inicio_cargo" value="<?= Security::e($dataInicioCargo) ?>" class="mt-1 w-full rounded border px-3 py-2" placeholder="DD/MM/AAAA" data-mask-date="1" required>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700">Data de nascimento</label>
+        <input type="text" name="data_nascimento" value="<?= Security::e($dataNascimento) ?>" class="mt-1 w-full rounded border px-3 py-2" placeholder="DD/MM/AAAA" data-mask-date="1">
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700">Data de demissão</label>
+        <input type="text" name="data_demissao" value="<?= Security::e($dataDemissao) ?>" class="mt-1 w-full rounded border px-3 py-2" placeholder="DD/MM/AAAA" data-mask-date="1">
+      </div>
+      <div class="md:col-span-2">
+        <label class="block text-sm font-medium text-gray-700">Motivo da rescisão</label>
+        <textarea name="motivo_rescisao" class="mt-1 w-full rounded border px-3 py-2" rows="3" placeholder="Informe o motivo quando houver demissão registrada"><?= Security::e((string)($colaborador['motivo_rescisao'] ?? '')) ?></textarea>
       </div>
     </div>
 

@@ -120,6 +120,16 @@ class AdminCandidaturasController extends Controller
         $indicacaoColaborador = isset($_POST['indicacao_colaborador']) && (string)$_POST['indicacao_colaborador'] === '1';
         $indicacaoNomeColaborador = Security::sanitizeString($_POST['indicacao_colaborador_nome'] ?? '');
         $usuarioId = $_SESSION['user_id'] ?? null;
+        $stageMetadata = [
+            'interview_date' => Security::sanitizeString($_POST['interview_date'] ?? ''),
+            'interview_time' => Security::sanitizeString($_POST['interview_time'] ?? ''),
+            'interview_location' => Security::sanitizeString($_POST['interview_location'] ?? ''),
+            'interview_link' => trim((string)($_POST['interview_link'] ?? '')),
+            'admission_date' => Security::sanitizeString($_POST['admission_date'] ?? ''),
+            'admission_notes' => Security::sanitizeString($_POST['admission_notes'] ?? ''),
+            'test_name' => Security::sanitizeString($_POST['test_name'] ?? ''),
+            'deadline' => Security::sanitizeString($_POST['deadline'] ?? ''),
+        ];
         
         try {
             $indicacaoUpdated = Candidatura::updateIndicacaoColaborador((int)$id, $indicacaoColaborador, $indicacaoNomeColaborador);
@@ -127,6 +137,9 @@ class AdminCandidaturasController extends Controller
                 http_response_code(422);
                 echo 'Informe o nome do colaborador que realizou a indicação.';
                 return;
+            }
+            if (!Candidatura::upsertStageMetadata((int)$id, $stageMetadata)) {
+                throw new \RuntimeException('Falha ao salvar metadados da etapa da candidatura.');
             }
             if ($stageId > 0) {
                 $stageUpdated = Candidatura::updateStage((int)$id, $stageId, $usuarioId);

@@ -1,0 +1,510 @@
+{
+    "ok": true,
+    "file_path": "C:\\laragon\\www\\rhmadeplant\\assets\\colaboradores.xlsx",
+    "sheet_name": "Ativos x Desligados",
+    "dry_run": true,
+    "validate_only": false,
+    "generated_at": "2026-06-25T16:11:48+02:00",
+    "summary": {
+        "processed": 403,
+        "ignored_blank_rows": 1,
+        "valid": 399,
+        "rejected": 4,
+        "inserted": 399,
+        "updated": 0,
+        "catalog_companies_created": 5,
+        "catalog_roles_created": 77
+    },
+    "errors": [],
+    "warnings": [
+        "CPF 16473154760 aparece 2 vezes na planilha e sera tratado como historico de recontratacao quando as datas de admissao forem distintas.",
+        "CPF 07526419306 aparece 2 vezes na planilha e sera tratado como historico de recontratacao quando as datas de admissao forem distintas.",
+        "CPF 01207876100 aparece 2 vezes na planilha e sera tratado como historico de recontratacao quando as datas de admissao forem distintas.",
+        "CPF 01277564183 aparece 2 vezes na planilha e sera tratado como historico de recontratacao quando as datas de admissao forem distintas.",
+        "CPF 05299231148 aparece 2 vezes na planilha e sera tratado como historico de recontratacao quando as datas de admissao forem distintas.",
+        "CPF 05740077176 aparece 2 vezes na planilha e sera tratado como historico de recontratacao quando as datas de admissao forem distintas.",
+        "CPF 45821254841 aparece 2 vezes na planilha e sera tratado como historico de recontratacao quando as datas de admissao forem distintas.",
+        "CPF 58294732168 aparece 2 vezes na planilha e sera tratado como historico de recontratacao quando as datas de admissao forem distintas.",
+        "CPF 05752373174 aparece 2 vezes na planilha e sera tratado como historico de recontratacao quando as datas de admissao forem distintas.",
+        "CPF 36454999890 aparece 2 vezes na planilha e sera tratado como historico de recontratacao quando as datas de admissao forem distintas.",
+        "CPF 04915996174 aparece 2 vezes na planilha e sera tratado como historico de recontratacao quando as datas de admissao forem distintas.",
+        "CPF 03976536113 aparece 2 vezes na planilha e sera tratado como historico de recontratacao quando as datas de admissao forem distintas.",
+        "CPF 06216769189 aparece 2 vezes na planilha e sera tratado como historico de recontratacao quando as datas de admissao forem distintas.",
+        "CPF 03276411180 aparece 2 vezes na planilha e sera tratado como historico de recontratacao quando as datas de admissao forem distintas."
+    ],
+    "rejected_records": [
+        {
+            "row_number": 79,
+            "codigo": "361",
+            "nome": "ODAIR GONCALVES DA SILVA",
+            "causes": [
+                "COD duplicado para a mesma empresa na planilha"
+            ]
+        },
+        {
+            "row_number": 82,
+            "codigo": "248",
+            "nome": "PEDRO RAMAO ECHEVERRIA",
+            "causes": [
+                "COD duplicado para a mesma empresa na planilha"
+            ]
+        },
+        {
+            "row_number": 260,
+            "codigo": "361",
+            "nome": "ODAIR GONCALVES DA SILVA",
+            "causes": [
+                "COD duplicado para a mesma empresa na planilha"
+            ]
+        },
+        {
+            "row_number": 261,
+            "codigo": "248",
+            "nome": "PEDRO RAMAO ECHEVERRIA",
+            "causes": [
+                "COD duplicado para a mesma empresa na planilha"
+            ]
+        }
+    ],
+    "created_companies": [
+        {
+            "id": 25,
+            "nome": "FOREST SERVICES LTDA",
+            "slug": "forest-services-ltda"
+        },
+        {
+            "id": 26,
+            "nome": "MADEPLANT TRANSPORTES LTDA",
+            "slug": "madeplant-transportes-ltda"
+        },
+        {
+            "id": 27,
+            "nome": "MADEPLANT CENTRO DE SERV",
+            "slug": "madeplant-centro-de-serv"
+        },
+        {
+            "id": 28,
+            "nome": "PROSPECTA SERVICOS E",
+            "slug": "prospecta-servicos-e"
+        },
+        {
+            "id": 29,
+            "nome": "MC REFLORESTADORA EIRELI",
+            "slug": "mc-reflorestadora-eireli"
+        }
+    ],
+    "created_roles": [
+        {
+            "id": 97,
+            "nome": "LIDER DE PRODUÇAO",
+            "slug": "lider-de-produ-ao"
+        },
+        {
+            "id": 98,
+            "nome": "AUXILIAR MECANICO",
+            "slug": "auxiliar-mecanico"
+        },
+        {
+            "id": 99,
+            "nome": "AUXILIAR DE SOLDADOR J I",
+            "slug": "auxiliar-de-soldador-j-i"
+        },
+        {
+            "id": 100,
+            "nome": "OPERADOR DE MAQUINAS",
+            "slug": "operador-de-maquinas"
+        },
+        {
+            "id": 101,
+            "nome": "OPERADOR DE MAQUINAS J I",
+            "slug": "operador-de-maquinas-j-i"
+        },
+        {
+            "id": 102,
+            "nome": "SERVICOS GERAIS J1",
+            "slug": "servicos-gerais-j1"
+        },
+        {
+            "id": 103,
+            "nome": "OPERADOR DE MÁQUINAS P3",
+            "slug": "operador-de-m-quinas-p3"
+        },
+        {
+            "id": 104,
+            "nome": "OPERADOR DE MÁQUINAS P1",
+            "slug": "operador-de-m-quinas-p1"
+        },
+        {
+            "id": 105,
+            "nome": "LIDER DE OPERAÇÃO FLORESTAL J I",
+            "slug": "lider-de-opera-o-florestal-j-i"
+        },
+        {
+            "id": 106,
+            "nome": "SUPERVISOR DE OPERACAO J1",
+            "slug": "supervisor-de-operacao-j1"
+        },
+        {
+            "id": 107,
+            "nome": "MOTORISTA DE COMBOIO J I",
+            "slug": "motorista-de-comboio-j-i"
+        },
+        {
+            "id": 108,
+            "nome": "ENCARREGADO DE FROTA",
+            "slug": "encarregado-de-frota"
+        },
+        {
+            "id": 109,
+            "nome": "ENCARREGADO DE FROTA J III",
+            "slug": "encarregado-de-frota-j-iii"
+        },
+        {
+            "id": 110,
+            "nome": "ANALISTA DE LOGISTICA J I",
+            "slug": "analista-de-logistica-j-i"
+        },
+        {
+            "id": 111,
+            "nome": "ENCARREGADO FACILITES J II",
+            "slug": "encarregado-facilites-j-ii"
+        },
+        {
+            "id": 112,
+            "nome": "ASSISTENTE FINANCEIRO J I",
+            "slug": "assistente-financeiro-j-i"
+        },
+        {
+            "id": 113,
+            "nome": "ASSSITENTE FISCAL J I",
+            "slug": "asssitente-fiscal-j-i"
+        },
+        {
+            "id": 114,
+            "nome": "ANALISTA DE SUPRIMENTOS J I",
+            "slug": "analista-de-suprimentos-j-i"
+        },
+        {
+            "id": 115,
+            "nome": "TECNICO EM SEGURANCA DO",
+            "slug": "tecnico-em-seguranca-do"
+        },
+        {
+            "id": 116,
+            "nome": "SUPERVISORA DE SUPRIMENTOS P II",
+            "slug": "supervisora-de-suprimentos-p-ii"
+        },
+        {
+            "id": 117,
+            "nome": "ANALISTA FISCAL J I",
+            "slug": "analista-fiscal-j-i"
+        },
+        {
+            "id": 118,
+            "nome": "ASSISTENTE CONTABIL J I",
+            "slug": "assistente-contabil-j-i"
+        },
+        {
+            "id": 119,
+            "nome": "ASSISTENTE DE FATURAMENTO J I",
+            "slug": "assistente-de-faturamento-j-i"
+        },
+        {
+            "id": 120,
+            "nome": "AUXILIAR DE COZINHA J III",
+            "slug": "auxiliar-de-cozinha-j-iii"
+        },
+        {
+            "id": 121,
+            "nome": "ASSISITENTE DE RH J I",
+            "slug": "assisitente-de-rh-j-i"
+        },
+        {
+            "id": 122,
+            "nome": "ANALISTA DE DP J I",
+            "slug": "analista-de-dp-j-i"
+        },
+        {
+            "id": 123,
+            "nome": "ASSISTENTE DE ALMOXARIFADO J I",
+            "slug": "assistente-de-almoxarifado-j-i"
+        },
+        {
+            "id": 124,
+            "nome": "ANALISTA DE TI JR II",
+            "slug": "analista-de-ti-jr-ii"
+        },
+        {
+            "id": 125,
+            "nome": "SUPERVISOR DE MANUTENCAO J I",
+            "slug": "supervisor-de-manutencao-j-i"
+        },
+        {
+            "id": 126,
+            "nome": "MECANICO J I",
+            "slug": "mecanico-j-i"
+        },
+        {
+            "id": 127,
+            "nome": "AUXILIAR DE MECANICO P III",
+            "slug": "auxiliar-de-mecanico-p-iii"
+        },
+        {
+            "id": 128,
+            "nome": "MECANICO JIII",
+            "slug": "mecanico-jiii"
+        },
+        {
+            "id": 129,
+            "nome": "AUXILIAR DE PINTURA J I",
+            "slug": "auxiliar-de-pintura-j-i"
+        },
+        {
+            "id": 130,
+            "nome": "PROGRAMADOR DE MANUTENÇÃO J III",
+            "slug": "programador-de-manuten-o-j-iii"
+        },
+        {
+            "id": 131,
+            "nome": "AUXILIAR SERVICOS GERAIS J I",
+            "slug": "auxiliar-servicos-gerais-j-i"
+        },
+        {
+            "id": 132,
+            "nome": "MECANICO P I",
+            "slug": "mecanico-p-i"
+        },
+        {
+            "id": 133,
+            "nome": "MEIO OFICIAL DE PINTOR J I",
+            "slug": "meio-oficial-de-pintor-j-i"
+        },
+        {
+            "id": 134,
+            "nome": "ASSISTENTE DE PCM J I",
+            "slug": "assistente-de-pcm-j-i"
+        },
+        {
+            "id": 135,
+            "nome": "FRENTISTA J I",
+            "slug": "frentista-j-i"
+        },
+        {
+            "id": 136,
+            "nome": "SOLDADOR J I",
+            "slug": "soldador-j-i"
+        },
+        {
+            "id": 137,
+            "nome": "MOTORISTA DE COMBOIO J II",
+            "slug": "motorista-de-comboio-j-ii"
+        },
+        {
+            "id": 138,
+            "nome": "OPERADOR DE MAQUINAS FLORESTAIS J II",
+            "slug": "operador-de-maquinas-florestais-j-ii"
+        },
+        {
+            "id": 139,
+            "nome": "ANALISTA DE PCP SI",
+            "slug": "analista-de-pcp-si"
+        },
+        {
+            "id": 140,
+            "nome": "MOTORISTA DE COMBOIO J III",
+            "slug": "motorista-de-comboio-j-iii"
+        },
+        {
+            "id": 141,
+            "nome": "LIDER DE OPERACOES FLORESTAIS J III",
+            "slug": "lider-de-operacoes-florestais-j-iii"
+        },
+        {
+            "id": 142,
+            "nome": "ANALISTA DE LOGISTICA P I",
+            "slug": "analista-de-logistica-p-i"
+        },
+        {
+            "id": 143,
+            "nome": "SUPERVISOR DE FROTA J III",
+            "slug": "supervisor-de-frota-j-iii"
+        },
+        {
+            "id": 144,
+            "nome": "ANALISTA DE RH P I",
+            "slug": "analista-de-rh-p-i"
+        },
+        {
+            "id": 145,
+            "nome": "ANALISTA DE DP P I",
+            "slug": "analista-de-dp-p-i"
+        },
+        {
+            "id": 146,
+            "nome": "ASSISTENTE DE FATURAMENTO JII",
+            "slug": "assistente-de-faturamento-jii"
+        },
+        {
+            "id": 147,
+            "nome": "ENCARREGADO FACILITES J III",
+            "slug": "encarregado-facilites-j-iii"
+        },
+        {
+            "id": 148,
+            "nome": "ENCARREGADO CONTABIL",
+            "slug": "encarregado-contabil"
+        },
+        {
+            "id": 149,
+            "nome": "ALMOXARIFE JII",
+            "slug": "almoxarife-jii"
+        },
+        {
+            "id": 150,
+            "nome": "ASSISTENTE ADMINISTRATIVO P II",
+            "slug": "assistente-administrativo-p-ii"
+        },
+        {
+            "id": 151,
+            "nome": "COORDENADOR DE RH J I",
+            "slug": "coordenador-de-rh-j-i"
+        },
+        {
+            "id": 152,
+            "nome": "SUPERVISOR DE TI J I",
+            "slug": "supervisor-de-ti-j-i"
+        },
+        {
+            "id": 153,
+            "nome": "ANALISTA CONTABIL J I",
+            "slug": "analista-contabil-j-i"
+        },
+        {
+            "id": 154,
+            "nome": "COZINHEIRA J III",
+            "slug": "cozinheira-j-iii"
+        },
+        {
+            "id": 155,
+            "nome": "SERVICOS GERAIS S I",
+            "slug": "servicos-gerais-s-i"
+        },
+        {
+            "id": 156,
+            "nome": "ASSISTENTE FISCAL P I",
+            "slug": "assistente-fiscal-p-i"
+        },
+        {
+            "id": 157,
+            "nome": "CONTADOR ( A )",
+            "slug": "contador-a"
+        },
+        {
+            "id": 158,
+            "nome": "ASSISTENTE CONTABIL J III",
+            "slug": "assistente-contabil-j-iii"
+        },
+        {
+            "id": 159,
+            "nome": "ANALISTA FINANCEIRO JI",
+            "slug": "analista-financeiro-ji"
+        },
+        {
+            "id": 160,
+            "nome": "ENCARREGADA FISCAL J III",
+            "slug": "encarregada-fiscal-j-iii"
+        },
+        {
+            "id": 161,
+            "nome": "ANALISTA FINANCEIRO J II",
+            "slug": "analista-financeiro-j-ii"
+        },
+        {
+            "id": 162,
+            "nome": "GERENTE ADMINISTRATIVO",
+            "slug": "gerente-administrativo"
+        },
+        {
+            "id": 163,
+            "nome": "ENCARREGADO DE FATURAMENTO PI",
+            "slug": "encarregado-de-faturamento-pi"
+        },
+        {
+            "id": 164,
+            "nome": "ANALISTA DE COMERCIO EXTERIOR",
+            "slug": "analista-de-comercio-exterior"
+        },
+        {
+            "id": 165,
+            "nome": "ANALISTA DE FATURAMENTO JI",
+            "slug": "analista-de-faturamento-ji"
+        },
+        {
+            "id": 166,
+            "nome": "ANALISTA DE CONTROLADORIA P I",
+            "slug": "analista-de-controladoria-p-i"
+        },
+        {
+            "id": 167,
+            "nome": "TECNICO EM SEGURANÇA DO TRABALHO P I",
+            "slug": "tecnico-em-seguran-a-do-trabalho-p-i"
+        },
+        {
+            "id": 168,
+            "nome": "AUXILIAR DE COZINHA J I",
+            "slug": "auxiliar-de-cozinha-j-i"
+        },
+        {
+            "id": 169,
+            "nome": "MECANICO J II",
+            "slug": "mecanico-j-ii"
+        },
+        {
+            "id": 170,
+            "nome": "PINTOR DE VEICULOS J I",
+            "slug": "pintor-de-veiculos-j-i"
+        },
+        {
+            "id": 171,
+            "nome": "CALDEIREIRO J I",
+            "slug": "caldeireiro-j-i"
+        },
+        {
+            "id": 172,
+            "nome": "TECNICO MEC. EM AUTOMACAO P III",
+            "slug": "tecnico-mec-em-automacao-p-iii"
+        },
+        {
+            "id": 173,
+            "nome": "ANALISTA ADMINISTRATIVO PII",
+            "slug": "analista-administrativo-pii"
+        }
+    ],
+    "validation": {
+        "ok": true,
+        "file_exists": true,
+        "file_path": "C:\\laragon\\www\\rhmadeplant\\assets\\colaboradores.xlsx",
+        "sheet_exists": true,
+        "sheet_name": "Ativos x Desligados",
+        "sheet_names": [
+            "Ativos x Desligados",
+            "Entrevista de Desligamento",
+            "Dashboard Desligamento",
+            "Beneficios",
+            "Permissões"
+        ],
+        "headers": [
+            "COD",
+            "COLABORADOR",
+            "EMPRESA",
+            "CPF",
+            "ADMISSÃO",
+            "NASC.",
+            "CARGO",
+            "DEMISSÃO",
+            "MOTIVO RESCISÃO"
+        ],
+        "row_count": 404,
+        "errors": []
+    }
+}

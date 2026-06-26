@@ -1,0 +1,40 @@
+{
+    "ok": false,
+    "file_path": "C:\\Users\\fabio.ozuna.MADEPLANT\\AppData\\Local\\Temp\\phpB132.tmp",
+    "sheet_name": "Ativos x Desligados",
+    "file_type": "tmp",
+    "dry_run": false,
+    "validate_only": false,
+    "generated_at": "2026-06-25T15:05:08+00:00",
+    "summary": {
+        "processed": 0,
+        "ignored_blank_rows": 0,
+        "valid": 0,
+        "rejected": 0,
+        "inserted": 0,
+        "updated": 0,
+        "catalog_companies_created": 0,
+        "catalog_roles_created": 0
+    },
+    "errors": [
+        "Formato de arquivo nao suportado. Utilize .xlsx ou .csv."
+    ],
+    "warnings": [],
+    "rejected_records": [],
+    "created_companies": [],
+    "created_roles": [],
+    "validation": {
+        "ok": false,
+        "file_exists": true,
+        "file_path": "C:\\Users\\fabio.ozuna.MADEPLANT\\AppData\\Local\\Temp\\phpB132.tmp",
+        "file_type": "tmp",
+        "sheet_exists": false,
+        "sheet_name": "Ativos x Desligados",
+        "sheet_names": [],
+        "headers": [],
+        "row_count": 0,
+        "errors": [
+            "Formato de arquivo nao suportado. Utilize .xlsx ou .csv."
+        ]
+    }
+}

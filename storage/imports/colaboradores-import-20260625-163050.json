@@ -1,0 +1,48 @@
+{
+    "ok": true,
+    "file_path": "C:\\Users\\fabio.ozuna.MADEPLANT\\AppData\\Local\\Temp\\col4ABE.tmp.csv",
+    "sheet_name": "Ativos x Desligados",
+    "file_type": "csv",
+    "dry_run": false,
+    "validate_only": true,
+    "generated_at": "2026-06-25T16:30:50+02:00",
+    "summary": {
+        "processed": 1,
+        "ignored_blank_rows": 0,
+        "valid": 1,
+        "rejected": 0,
+        "inserted": 0,
+        "updated": 0,
+        "catalog_companies_created": 0,
+        "catalog_roles_created": 0
+    },
+    "errors": [],
+    "warnings": [],
+    "rejected_records": [],
+    "created_companies": [],
+    "created_roles": [],
+    "validation": {
+        "ok": true,
+        "file_exists": true,
+        "file_path": "C:\\Users\\fabio.ozuna.MADEPLANT\\AppData\\Local\\Temp\\col4ABE.tmp.csv",
+        "file_type": "csv",
+        "sheet_exists": true,
+        "sheet_name": "CSV",
+        "sheet_names": [
+            "CSV"
+        ],
+        "headers": [
+            "COD",
+            "COLABORADOR",
+            "EMPRESA",
+            "CPF",
+            "ADMISSÃO",
+            "NASC.",
+            "CARGO",
+            "DEMISSÃO",
+            "MOTIVO RESCISÃO"
+        ],
+        "row_count": 1,
+        "errors": []
+    }
+}

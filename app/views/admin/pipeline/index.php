@@ -1,8 +1,8 @@
 <div class="responsive-panel">
   <div class="responsive-header mb-4">
     <div>
-      <h1 class="text-2xl font-bold text-gray-800 sm:text-3xl">Pipeline de Seleção</h1>
-      <p class="mt-1 text-sm text-gray-500">Arraste os cards sem comprometer o layout em telas pequenas.</p>
+      <h1 class="text-2xl font-bold text-gray-800 sm:text-3xl">Kanban de Recrutamento e Seleção</h1>
+      <p class="mt-1 text-sm text-gray-500">Fluxo completo do candidato, da nova inscrição até admissão, banco de talentos ou reprovação.</p>
     </div>
     <form method="GET" action="<?= $base ?>/admin/pipeline" class="w-full max-w-full md:w-auto">
       <label for="vaga_id" class="mb-2 block text-sm font-medium text-gray-700">Filtrar por vaga</label>
@@ -15,6 +15,15 @@
         <?php endforeach; ?>
       </select>
     </form>
+  </div>
+
+  <div class="mb-4 flex flex-wrap items-center gap-3 text-xs text-gray-500">
+    <span class="inline-flex items-center rounded-full bg-white px-3 py-1 shadow-sm ring-1 ring-gray-200">
+      <?= (int)($stageCount ?? count($kanban)) ?> etapas monitoradas
+    </span>
+    <span class="inline-flex items-center rounded-full bg-white px-3 py-1 shadow-sm ring-1 ring-gray-200">
+      Arraste e solte os cards para atualizar a etapa do candidato
+    </span>
   </div>
 
   <div class="kanban-board min-h-[26rem] md:min-h-[36rem]">
@@ -33,7 +42,11 @@
             </div>
             
             <div class="kanban-column flex-1 space-y-3 overflow-y-auto p-2" data-kanban-column="1" data-stage-id="<?= $stageId ?>">
-                 
+                <?php if (empty($col['items'])): ?>
+                    <div class="rounded-lg border border-dashed border-gray-300 bg-white/70 px-4 py-6 text-center text-xs text-gray-400">
+                        Nenhum candidato nesta etapa.
+                    </div>
+                <?php endif; ?>
                 <?php foreach ($col['items'] as $c): ?>
                     <div class="group relative cursor-move rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-shadow hover:shadow-md" data-kanban-card="1" draggable="true" id="cand-<?= $c['id'] ?>" data-cand-id="<?= $c['id'] ?>">
                         
@@ -46,6 +59,10 @@
                         <p class="text-xs text-gray-500 mb-1 flex items-center">
                             <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
                             <?= htmlspecialchars($c['vaga_titulo'] ?? 'Vaga não encontrada') ?>
+                        </p>
+                        <p class="text-xs text-gray-500 mb-1 flex items-center">
+                            <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 12H8m8 0-3-3m3 3-3 3"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 18h10"/></svg>
+                            <?= htmlspecialchars($c['stage_nome'] ?? $col['stage']['nome']) ?>
                         </p>
                         
                         <div class="mt-3 flex items-center justify-between gap-3">

@@ -12,21 +12,34 @@ class Vaga
 
     public static function allActive(): array
     {
-        $sql = 'SELECT id, titulo, requisitos, area, local FROM vagas WHERE ativo = 1 ORDER BY created_at DESC';
+        RecruitmentWebhookSchemaService::ensureSchema();
+        $sql = 'SELECT v.*, e.nome AS empresa_nome
+                FROM vagas v
+                LEFT JOIN empresas e ON e.id = v.empresa_id
+                WHERE v.ativo = 1
+                ORDER BY v.created_at DESC';
         $stmt = Database::conn()->query($sql);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
     public static function all(): array
     {
-        $sql = 'SELECT * FROM vagas ORDER BY created_at DESC';
+        RecruitmentWebhookSchemaService::ensureSchema();
+        $sql = 'SELECT v.*, e.nome AS empresa_nome
+                FROM vagas v
+                LEFT JOIN empresas e ON e.id = v.empresa_id
+                ORDER BY v.created_at DESC';
         $stmt = Database::conn()->query($sql);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
     public static function find(int $id): ?array
     {
-        $sql = 'SELECT * FROM vagas WHERE id = ? LIMIT 1';
+        RecruitmentWebhookSchemaService::ensureSchema();
+        $sql = 'SELECT v.*, e.nome AS empresa_nome
+                FROM vagas v
+                LEFT JOIN empresas e ON e.id = v.empresa_id
+                WHERE v.id = ? LIMIT 1';
         $stmt = Database::conn()->prepare($sql);
         $stmt->execute([$id]);
         $data = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -35,20 +48,35 @@ class Vaga
 
     public static function create(array $data): int
     {
-        $sql = 'INSERT INTO vagas (titulo, descricao, requisitos, area, local, ativo) VALUES (?,?,?,?,?,?)';
+        RecruitmentWebhookSchemaService::ensureSchema();
+        $sql = 'INSERT INTO vagas (titulo, descricao, requisitos, area, local, empresa_id, ativo) VALUES (?,?,?,?,?,?,?)';
         $stmt = Database::conn()->prepare($sql);
         $stmt->execute([
-            $data['titulo'], $data['descricao'], $data['requisitos'], $data['area'], $data['local'], (int)$data['ativo']
+            $data['titulo'],
+            $data['descricao'],
+            $data['requisitos'],
+            $data['area'],
+            $data['local'],
+            self::normalizeEmpresaId($data['empresa_id'] ?? null),
+            (int)$data['ativo']
         ]);
         return (int)Database::conn()->lastInsertId();
     }
 
     public static function update(int $id, array $data): bool
     {
-        $sql = 'UPDATE vagas SET titulo=?, descricao=?, requisitos=?, area=?, local=?, ativo=? WHERE id=?';
+        RecruitmentWebhookSchemaService::ensureSchema();
+        $sql = 'UPDATE vagas SET titulo=?, descricao=?, requisitos=?, area=?, local=?, empresa_id=?, ativo=? WHERE id=?';
         $stmt = Database::conn()->prepare($sql);
         return $stmt->execute([
-            $data['titulo'], $data['descricao'], $data['requisitos'], $data['area'], $data['local'], (int)$data['ativo'], $id
+            $data['titulo'],
+            $data['descricao'],
+            $data['requisitos'],
+            $data['area'],
+            $data['local'],
+            self::normalizeEmpresaId($data['empresa_id'] ?? null),
+            (int)$data['ativo'],
+            $id
         ]);
     }
 
@@ -57,5 +85,14 @@ class Vaga
         $sql = 'DELETE FROM vagas WHERE id = ?';
         $stmt = Database::conn()->prepare($sql);
         return $stmt->execute([$id]);
+    }
+
+    private static function normalizeEmpresaId($value): ?int
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+        $empresaId = (int)$value;
+        return $empresaId > 0 ? $empresaId : null;
     }
 }

@@ -1,4 +1,153 @@
+const filterSolicitacaoCargosBySetor = (cargos, setorId) => {
+  const normalizedSetorId = String(setorId || '');
+  if (!normalizedSetorId) {
+    return [];
+  }
+  return (Array.isArray(cargos) ? cargos : []).filter(
+    (item) => Array.isArray(item.setor_ids) && item.setor_ids.map(String).includes(normalizedSetorId)
+  );
+};
+
+const resolveSolicitacaoCargoState = ({
+  cargos,
+  setorId,
+  selectedCargoId = '',
+  preserveSelection = true,
+  preferredValue = '',
+}) => {
+  const availableCargos = filterSolicitacaoCargosBySetor(cargos, setorId);
+
+  if (!String(setorId || '')) {
+    return {
+      availableCargos: [],
+      selectedCargoId: '',
+      disabled: true,
+      placeholder: 'Selecione uma área/departamento primeiro',
+      message: 'Selecione uma área/departamento para carregar os cargos disponíveis.',
+      invalidMessage: '',
+    };
+  }
+
+  if (availableCargos.length === 0) {
+    return {
+      availableCargos: [],
+      selectedCargoId: '',
+      disabled: true,
+      placeholder: 'Nenhum cargo disponível para este setor',
+      message: 'Nenhum cargo disponível para este setor.',
+      invalidMessage: 'Nenhum cargo disponível para este setor.',
+    };
+  }
+
+  const expectedValue = preserveSelection ? String(preferredValue || selectedCargoId || '') : '';
+  const hasSelection = availableCargos.some((item) => String(item.id) === expectedValue);
+
+  return {
+    availableCargos,
+    selectedCargoId: hasSelection ? expectedValue : '',
+    disabled: false,
+    placeholder: 'Selecione',
+    message: hasSelection
+      ? 'Cargo compatível com a área/departamento selecionado.'
+      : 'Selecione um cargo vinculado à área/departamento escolhido.',
+    invalidMessage: hasSelection ? '' : 'Selecione um cargo válido vinculado à área/departamento informado.',
+  };
+};
+
+const validateCollaboratorImportFile = (file) => {
+  const fileName = String(file?.name || '').trim();
+  if (!fileName) {
+    return {
+      ok: false,
+      extension: '',
+      fileName: '',
+      error: 'Selecione um arquivo .xlsx ou .csv para iniciar a importacao.',
+    };
+  }
+
+  const parts = fileName.split('.');
+  const extension = parts.length > 1 ? parts.pop().toLowerCase() : '';
+  if (!['xlsx', 'csv'].includes(extension)) {
+    return {
+      ok: false,
+      extension,
+      fileName,
+      error: 'Formato invalido. Utilize um arquivo .xlsx ou .csv.',
+    };
+  }
+
+  return {
+    ok: true,
+    extension,
+    fileName,
+    error: '',
+  };
+};
+
+const summarizeCollaboratorImportResult = (payload = {}) => {
+  const summary = payload.summary || {};
+  const processed = Number(summary.processed || 0);
+  const inserted = Number(summary.inserted || 0);
+  const updated = Number(summary.updated || 0);
+  const rejected = Number(summary.rejected || 0);
+  const ignoredBlankRows = Number(summary.ignored_blank_rows || 0);
+  const companyCatalogs = Number(summary.catalog_companies_created || 0);
+  const roleCatalogs = Number(summary.catalog_roles_created || 0);
+  const warnings = Array.isArray(payload.warnings) ? payload.warnings : [];
+  const errors = Array.isArray(payload.errors) ? payload.errors : [];
+  const rejectedRecords = Array.isArray(payload.rejected_records) ? payload.rejected_records : [];
+  const message = String(payload.message || payload.error || '');
+  const ok = !!payload.ok;
+  const tone = ok ? ((rejected > 0 || warnings.length > 0) ? 'warning' : 'success') : 'error';
+  const badge = ok ? 'Processado' : 'Falha';
+  const details = [
+    `Processados: ${processed}`,
+    `Inseridos: ${inserted}`,
+    `Atualizados: ${updated}`,
+    `Rejeitados: ${rejected}`,
+  ];
+
+  if (ignoredBlankRows > 0) {
+    details.push(`Linhas em branco ignoradas: ${ignoredBlankRows}`);
+  }
+  if (companyCatalogs > 0) {
+    details.push(`Empresas criadas automaticamente: ${companyCatalogs}`);
+  }
+  if (roleCatalogs > 0) {
+    details.push(`Cargos criados automaticamente: ${roleCatalogs}`);
+  }
+  warnings.slice(0, 3).forEach((warning) => details.push(`Aviso: ${warning}`));
+  errors.slice(0, 3).forEach((error) => details.push(`Erro: ${error}`));
+  rejectedRecords.slice(0, 3).forEach((item) => {
+    const causes = Array.isArray(item.causes) ? item.causes.join('; ') : 'Registro rejeitado.';
+    details.push(`Linha ${item.row_number || '?'}: ${causes}`);
+  });
+  if (ok) {
+    details.push('Atualize a pagina para refletir os novos totais da listagem.');
+  }
+
+  return {
+    tone,
+    badge,
+    title: 'Importacao de colaboradores',
+    message: message || (ok ? 'Importacao concluida.' : 'Nao foi possivel concluir a importacao.'),
+    details,
+  };
+};
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    filterSolicitacaoCargosBySetor,
+    resolveSolicitacaoCargoState,
+    validateCollaboratorImportFile,
+    summarizeCollaboratorImportResult,
+  };
+}
+
 (() => {
+  if (typeof document === 'undefined') {
+    return;
+  }
   const getMeta = (name) => {
     const el = document.querySelector(`meta[name="${name}"]`);
     return el ? el.getAttribute('content') || '' : '';
@@ -357,13 +506,139 @@
     });
   };
 
+  const initCollaboratorImport = () => {
+    const root = document.querySelector('[data-colaboradores-import="1"]');
+    if (!root) return;
+
+    const trigger = root.querySelector('[data-colaboradores-import-trigger="1"]');
+    const defaultIcon = root.querySelector('[data-colaboradores-import-icon-default="1"]');
+    const loadingIcon = root.querySelector('[data-colaboradores-import-icon-loading="1"]');
+    const input = root.querySelector('[data-colaboradores-import-input="1"]');
+    const csrfInput = root.querySelector('[data-colaboradores-import-csrf="1"]');
+    const feedback = document.querySelector('[data-colaboradores-import-feedback="1"]');
+    const feedbackTitle = feedback?.querySelector('[data-colaboradores-import-feedback-title="1"]');
+    const feedbackMessage = feedback?.querySelector('[data-colaboradores-import-feedback-message="1"]');
+    const feedbackBadge = feedback?.querySelector('[data-colaboradores-import-feedback-badge="1"]');
+    const feedbackList = feedback?.querySelector('[data-colaboradores-import-feedback-list="1"]');
+    const endpoint = root.getAttribute('data-import-endpoint') || buildUrl('/admin/colaboradores/importar');
+
+    if (!trigger || !input || !feedback || !feedbackTitle || !feedbackMessage || !feedbackBadge || !feedbackList) {
+      return;
+    }
+
+    const renderFeedback = (payload) => {
+      const model = summarizeCollaboratorImportResult(payload);
+      feedback.classList.remove('hidden', 'border-green-200', 'bg-green-50', 'text-green-700', 'border-amber-200', 'bg-amber-50', 'text-amber-800', 'border-red-200', 'bg-red-50', 'text-red-700');
+      feedbackBadge.classList.remove('bg-green-100', 'text-green-700', 'bg-amber-100', 'text-amber-800', 'bg-red-100', 'text-red-700');
+
+      if (model.tone === 'success') {
+        feedback.classList.add('border-green-200', 'bg-green-50', 'text-green-700');
+        feedbackBadge.classList.add('bg-green-100', 'text-green-700');
+      } else if (model.tone === 'warning') {
+        feedback.classList.add('border-amber-200', 'bg-amber-50', 'text-amber-800');
+        feedbackBadge.classList.add('bg-amber-100', 'text-amber-800');
+      } else {
+        feedback.classList.add('border-red-200', 'bg-red-50', 'text-red-700');
+        feedbackBadge.classList.add('bg-red-100', 'text-red-700');
+      }
+
+      feedbackTitle.textContent = model.title;
+      feedbackMessage.textContent = model.message;
+      feedbackBadge.textContent = model.badge;
+      feedbackList.innerHTML = '';
+      model.details.forEach((detail) => {
+        const item = document.createElement('li');
+        item.textContent = detail;
+        feedbackList.appendChild(item);
+      });
+    };
+
+    const setLoading = (loading, fileName = '') => {
+      trigger.disabled = loading;
+      input.disabled = loading;
+      trigger.setAttribute('aria-busy', loading ? 'true' : 'false');
+      trigger.setAttribute('aria-label', loading ? `Importando ${fileName || 'arquivo selecionado'}` : 'Importar colaboradores');
+      trigger.setAttribute('title', loading ? `Importando ${fileName || 'arquivo selecionado'}` : 'Importar colaboradores');
+      if (defaultIcon) {
+        defaultIcon.classList.toggle('hidden', loading);
+      }
+      if (loadingIcon) {
+        loadingIcon.classList.toggle('hidden', !loading);
+      }
+    };
+
+    trigger.addEventListener('click', () => {
+      if (!trigger.disabled) {
+        input.click();
+      }
+    });
+
+    input.addEventListener('change', async () => {
+      const file = input.files && input.files[0] ? input.files[0] : null;
+      if (!file) {
+        return;
+      }
+
+      const fileState = validateCollaboratorImportFile(file);
+      if (!fileState.ok) {
+        renderFeedback({ ok: false, error: fileState.error, errors: [fileState.error] });
+        input.value = '';
+        return;
+      }
+
+      setLoading(true, fileState.fileName);
+      const formData = new FormData();
+      formData.append('csrf', csrfInput?.value || csrf || '');
+      formData.append('import_file', file);
+
+      try {
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+          },
+          body: formData,
+        });
+
+        let payload = null;
+        try {
+          payload = await response.json();
+        } catch {
+          payload = null;
+        }
+
+        if (!payload) {
+          renderFeedback({
+            ok: false,
+            error: 'Falha ao comunicar com a API de importacao. Tente novamente.',
+            errors: ['Resposta invalida recebida do servidor.'],
+          });
+          return;
+        }
+
+        renderFeedback(payload);
+      } catch {
+        renderFeedback({
+          ok: false,
+          error: 'Falha ao comunicar com a API de importacao. Tente novamente.',
+          errors: ['Nao foi possivel concluir a requisicao de upload/importacao.'],
+        });
+      } finally {
+        setLoading(false);
+        input.value = '';
+      }
+    });
+  };
+
   const initSolicitacaoVagaForm = () => {
     const root = document.querySelector('[data-solicitacao-vaga-form="1"]');
     const payloadNode = document.querySelector('[data-solicitacao-payload="1"]');
     if (!root) return;
 
+    const form = root.querySelector('form[data-solicitacao-form-element="1"]');
     const setorSelect = root.querySelector('[data-solicitacao-setor="1"]');
     const cargoSelect = root.querySelector('[data-solicitacao-cargo="1"]');
+    const cargoFeedback = root.querySelector('[data-solicitacao-cargo-feedback="1"]');
     const gestorSelect = root.querySelector('[data-solicitacao-gestor="1"]');
     const centroSelect = root.querySelector('[data-solicitacao-centro-custo="1"]');
     const faixaLabel = root.querySelector('[data-solicitacao-faixa-label="1"]');
@@ -391,13 +666,43 @@
     const gestores = Array.isArray(payload.gestores) ? payload.gestores : [];
     const centros = Array.isArray(payload.centros_custo) ? payload.centros_custo : [];
     const beneficiosByCargo = payload.beneficios_by_cargo || {};
+    const initialCargoValue = String(cargoSelect.value || '');
 
-    const renderOptions = (select, items, selectedValue, labelBuilder) => {
+    const setCargoFeedbackState = (message, tone = 'neutral') => {
+      if (!cargoFeedback) return;
+      cargoFeedback.textContent = message;
+      cargoFeedback.classList.remove('text-gray-500', 'text-red-600', 'text-amber-600');
+      if (tone === 'error') {
+        cargoFeedback.classList.add('text-red-600');
+      } else if (tone === 'warning') {
+        cargoFeedback.classList.add('text-amber-600');
+      } else {
+        cargoFeedback.classList.add('text-gray-500');
+      }
+    };
+
+    const resetCargoValidity = () => {
+      cargoSelect.setCustomValidity('');
+      cargoSelect.removeAttribute('aria-invalid');
+    };
+
+    const invalidateCargo = (message) => {
+      cargoSelect.setCustomValidity(message);
+      cargoSelect.setAttribute('aria-invalid', 'true');
+      setCargoFeedbackState(message, 'error');
+    };
+
+    const renderOptions = (select, items, selectedValue, labelBuilder, options = {}) => {
       const previous = String(selectedValue || '');
+      const emptyLabel = options.emptyLabel || 'Selecione';
+      const keepPlaceholderEnabled = !!options.keepPlaceholderEnabled;
       const fragment = document.createDocumentFragment();
       const first = document.createElement('option');
       first.value = '';
-      first.textContent = 'Selecione';
+      first.textContent = emptyLabel;
+      if (!keepPlaceholderEnabled) {
+        first.disabled = !!options.disablePlaceholder;
+      }
       fragment.appendChild(first);
 
       items.forEach((item) => {
@@ -476,14 +781,89 @@
       updateBenefits();
     };
 
-    const updateDependentSelects = () => {
+    const updateCargoOptions = ({ preserveSelection = true, preferredValue = '' } = {}) => {
       const setorId = String(setorSelect.value || '');
-      renderOptions(
-        cargoSelect,
-        cargos.filter((item) => Array.isArray(item.setor_ids) && item.setor_ids.map(String).includes(setorId)),
-        cargoSelect.value,
-        (item) => item.nome
-      );
+      const cargoState = resolveSolicitacaoCargoState({
+        cargos,
+        setorId,
+        selectedCargoId: cargoSelect.value,
+        preserveSelection,
+        preferredValue,
+      });
+
+      if (!setorId) {
+        renderOptions(cargoSelect, [], '', (item) => item.nome, {
+          emptyLabel: cargoState.placeholder,
+          keepPlaceholderEnabled: true,
+        });
+        cargoSelect.disabled = cargoState.disabled;
+        resetCargoValidity();
+        setCargoFeedbackState(cargoState.message);
+        updateMachineRequirement();
+        return;
+      }
+
+      if (cargoState.availableCargos.length === 0) {
+        renderOptions(cargoSelect, [], '', (item) => item.nome, {
+          emptyLabel: cargoState.placeholder,
+          keepPlaceholderEnabled: true,
+        });
+        cargoSelect.disabled = cargoState.disabled;
+        invalidateCargo(cargoState.invalidMessage || cargoState.message);
+        updateMachineRequirement();
+        return;
+      }
+
+      renderOptions(cargoSelect, cargoState.availableCargos, cargoState.selectedCargoId, (item) => item.nome);
+      cargoSelect.disabled = cargoState.disabled;
+      resetCargoValidity();
+      setCargoFeedbackState(cargoState.message);
+      updateMachineRequirement();
+    };
+
+    const validateCargoSelection = ({ report = false } = {}) => {
+      const setorId = String(setorSelect.value || '');
+      const cargoId = String(cargoSelect.value || '');
+      const cargoState = resolveSolicitacaoCargoState({
+        cargos,
+        setorId,
+        selectedCargoId: cargoId,
+        preserveSelection: true,
+      });
+
+      if (!setorId) {
+        resetCargoValidity();
+        setCargoFeedbackState(cargoState.message);
+        if (report) {
+          setorSelect.reportValidity();
+        }
+        return false;
+      }
+
+      if (cargoState.availableCargos.length === 0) {
+        invalidateCargo(cargoState.invalidMessage || cargoState.message);
+        if (report) {
+          cargoSelect.reportValidity();
+        }
+        return false;
+      }
+
+      if (!cargoId || !cargoState.availableCargos.some((item) => String(item.id) === cargoId)) {
+        invalidateCargo('Selecione um cargo válido vinculado à área/departamento informado.');
+        if (report) {
+          cargoSelect.reportValidity();
+        }
+        return false;
+      }
+
+      resetCargoValidity();
+      setCargoFeedbackState('Cargo compatível com a área/departamento selecionado.');
+      return true;
+    };
+
+    const updateDependentSelects = ({ preserveCargoSelection = true, preferredCargoValue = '' } = {}) => {
+      const setorId = String(setorSelect.value || '');
+      updateCargoOptions({ preserveSelection: preserveCargoSelection, preferredValue: preferredCargoValue });
       renderOptions(
         gestorSelect,
         gestores.filter((item) => String(item.setor_id) === setorId),
@@ -496,7 +876,7 @@
         centroSelect.value,
         (item) => `${item.codigo} - ${item.nome}`
       );
-      updateMachineRequirement();
+      validateCargoSelection();
     };
 
     const updateTipoVaga = () => {
@@ -514,13 +894,24 @@
       toggleBooleanSection(motivoOutrosWrap, motivoOutrosInput, selected === 'outros');
     };
 
-    setorSelect.addEventListener('change', updateDependentSelects);
-    cargoSelect.addEventListener('change', updateMachineRequirement);
+    setorSelect.addEventListener('change', () => {
+      updateDependentSelects({ preserveCargoSelection: false });
+    });
+    cargoSelect.addEventListener('change', () => {
+      updateMachineRequirement();
+      validateCargoSelection();
+    });
     root.querySelectorAll('[data-solicitacao-tipo-vaga="1"]').forEach((radio) => radio.addEventListener('change', updateTipoVaga));
     root.querySelectorAll('[data-solicitacao-orcamento="1"]').forEach((radio) => radio.addEventListener('change', updateOrcamento));
     root.querySelectorAll('[data-solicitacao-motivo-saida="1"]').forEach((radio) => radio.addEventListener('change', updateMotivoSaida));
+    form?.addEventListener('submit', (event) => {
+      if (!validateCargoSelection({ report: true })) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    });
 
-    updateDependentSelects();
+    updateDependentSelects({ preserveCargoSelection: true, preferredCargoValue: initialCargoValue });
     updateTipoVaga();
     updateOrcamento();
     updateMotivoSaida();
@@ -712,10 +1103,10 @@
     initConfirmations();
     initAdminSidebar();
     initInputMasks();
+    initCollaboratorImport();
     initSolicitacaoVagaForm();
     initMovimentacaoPessoalForm();
     initAiAnalyze();
     initKanban();
   });
 })();
-

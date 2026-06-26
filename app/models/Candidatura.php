@@ -29,12 +29,19 @@ class Candidatura
 
     public static function all(array $filters = []): array
     {
+        PipelineStage::ensureRecruitmentLifecycle();
+        RecruitmentWebhookSchemaService::ensureSchema();
         self::ensureStageColumn();
         self::ensureIndicacaoColumns();
-        $sql = 'SELECT c.*, v.titulo AS vaga_titulo, s.nome as stage_nome, s.cor as stage_cor 
+        $sql = 'SELECT c.*, v.titulo AS vaga_titulo, v.empresa_id AS vaga_empresa_id, e.nome AS vaga_empresa_nome,
+                       s.nome as stage_nome, s.cor as stage_cor,
+                       m.interview_date, m.interview_time, m.interview_location, m.interview_link,
+                       m.admission_date, m.admission_notes, m.test_name, m.deadline
                 FROM candidaturas c 
                 LEFT JOIN vagas v ON v.id = c.vaga_id 
+                LEFT JOIN empresas e ON e.id = v.empresa_id
                 LEFT JOIN pipeline_stages s ON s.id = c.stage_id
+                LEFT JOIN candidatura_stage_metadata m ON m.candidatura_id = c.id
                 WHERE 1=1';
         $params = [];
         if (!empty($filters['vaga_id'])) { $sql .= ' AND c.vaga_id = ?'; $params[] = (int)$filters['vaga_id']; }
@@ -50,12 +57,19 @@ class Candidatura
 
     public static function find(int $id): ?array
     {
+        PipelineStage::ensureRecruitmentLifecycle();
+        RecruitmentWebhookSchemaService::ensureSchema();
         self::ensureStageColumn();
         self::ensureIndicacaoColumns();
-        $sql = 'SELECT c.*, v.titulo AS vaga_titulo, s.nome as stage_nome, s.cor as stage_cor 
+        $sql = 'SELECT c.*, v.titulo AS vaga_titulo, v.empresa_id AS vaga_empresa_id, e.nome AS vaga_empresa_nome,
+                       s.nome as stage_nome, s.cor as stage_cor,
+                       m.interview_date, m.interview_time, m.interview_location, m.interview_link,
+                       m.admission_date, m.admission_notes, m.test_name, m.deadline
                 FROM candidaturas c 
                 LEFT JOIN vagas v ON v.id = c.vaga_id 
+                LEFT JOIN empresas e ON e.id = v.empresa_id
                 LEFT JOIN pipeline_stages s ON s.id = c.stage_id
+                LEFT JOIN candidatura_stage_metadata m ON m.candidatura_id = c.id
                 WHERE c.id = ? LIMIT 1';
         $stmt = Database::conn()->prepare($sql);
         $stmt->execute([$id]);
@@ -63,54 +77,9 @@ class Candidatura
         return $data ?: null;
     }
 
-    public static function updateStage(int $id, int $newStageId, int $userId): bool
+    public static function updateStage(int $id, int $newStageId, ?int $userId): bool
     {
-        self::ensureStageColumn();
-        self::ensureIndicacaoColumns();
-        $candidatura = self::find($id);
-        if (!$candidatura) return false;
-
-        $oldStageId = $candidatura['stage_id'] ?? null;
-        if ($oldStageId == $newStageId) return true;
-
-        $pdo = Database::conn();
-        try {
-            $pdo->beginTransaction();
-
-            // Update Candidatura
-            $stmt = $pdo->prepare('UPDATE candidaturas SET stage_id = ? WHERE id = ?');
-            $stmt->execute([$newStageId, $id]);
-
-            // Log Movement
-            $stmt = $pdo->prepare('INSERT INTO pipeline_movements (candidatura_id, stage_anterior_id, stage_novo_id, usuario_id) VALUES (?, ?, ?, ?)');
-            $stmt->execute([$id, $oldStageId, $newStageId, $userId]);
-            
-            // Log History (Legacy Table for View Compatibility)
-            // Get stage names
-            $oldStageName = $candidatura['stage_nome'] ?? 'Desconhecido';
-            $stmt = $pdo->prepare('SELECT nome FROM pipeline_stages WHERE id = ?');
-            $stmt->execute([$newStageId]);
-            $newStageName = $stmt->fetchColumn() ?: 'Desconhecido';
-
-            $normalized = function (string $value): string {
-                $clean = trim(mb_strtolower($value, 'UTF-8'));
-                $replace = ['á' => 'a', 'à' => 'a', 'â' => 'a', 'ã' => 'a', 'ä' => 'a', 'é' => 'e', 'è' => 'e', 'ê' => 'e', 'ë' => 'e', 'í' => 'i', 'ì' => 'i', 'î' => 'i', 'ï' => 'i', 'ó' => 'o', 'ò' => 'o', 'ô' => 'o', 'õ' => 'o', 'ö' => 'o', 'ú' => 'u', 'ù' => 'u', 'û' => 'u', 'ü' => 'u', 'ç' => 'c'];
-                return strtr($clean, $replace);
-            };
-            $isContratado = $normalized((string)$newStageName) === 'contratado';
-            if ($isContratado && (int)($candidatura['indicacao_colaborador'] ?? 0) === 1) {
-                $stmt = $pdo->prepare('UPDATE candidaturas SET indicacao_data_contratacao = COALESCE(indicacao_data_contratacao, NOW()), indicacao_data_fim_experiencia = COALESCE(indicacao_data_fim_experiencia, DATE_ADD(CURDATE(), INTERVAL 90 DAY)) WHERE id = ?');
-                $stmt->execute([$id]);
-            }
-            
-            self::addHistorico($id, $oldStageName, $newStageName, "Mudança de etapa via Pipeline", $userId);
-
-            $pdo->commit();
-            return true;
-        } catch (\Exception $e) {
-            $pdo->rollBack();
-            return false;
-        }
+        return (new RecruitmentPipelineService())->moveCandidateToStage($id, $newStageId, $userId);
     }
 
     public static function updateStatusNotes(int $id, string $status, ?string $observacoes = null, ?int $usuarioId = null): bool
@@ -132,6 +101,51 @@ class Candidatura
         }
         
         return $result;
+    }
+
+    public static function upsertStageMetadata(int $id, array $input): bool
+    {
+        RecruitmentWebhookSchemaService::ensureSchema();
+        $candidatura = self::find($id);
+        if (!$candidatura) {
+            return false;
+        }
+
+        $interviewDate = self::normalizeOptionalDate($input['interview_date'] ?? '');
+        $interviewTime = self::normalizeOptionalTime($input['interview_time'] ?? '');
+        $interviewLocation = self::normalizeOptionalText($input['interview_location'] ?? '');
+        $interviewLink = self::normalizeOptionalUrl($input['interview_link'] ?? '');
+        $admissionDate = self::normalizeOptionalDate($input['admission_date'] ?? '');
+        $admissionNotes = self::normalizeOptionalLongText($input['admission_notes'] ?? '');
+        $testName = self::normalizeOptionalText($input['test_name'] ?? '');
+        $deadline = self::normalizeOptionalDate($input['deadline'] ?? '');
+
+        $stmt = Database::conn()->prepare(
+            'INSERT INTO candidatura_stage_metadata
+                (candidatura_id, interview_date, interview_time, interview_location, interview_link, admission_date, admission_notes, test_name, deadline)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE
+                interview_date = VALUES(interview_date),
+                interview_time = VALUES(interview_time),
+                interview_location = VALUES(interview_location),
+                interview_link = VALUES(interview_link),
+                admission_date = VALUES(admission_date),
+                admission_notes = VALUES(admission_notes),
+                test_name = VALUES(test_name),
+                deadline = VALUES(deadline)'
+        );
+
+        return $stmt->execute([
+            $id,
+            $interviewDate,
+            $interviewTime,
+            $interviewLocation,
+            $interviewLink,
+            $admissionDate,
+            $admissionNotes,
+            $testName,
+            $deadline,
+        ]);
     }
 
     public static function getHistorico(int $candidaturaId): array
@@ -274,6 +288,7 @@ class Candidatura
 
     public static function updateIndicacaoColaborador(int $id, bool $indicado, ?string $colaboradorNome = null): bool
     {
+        PipelineStage::ensureRecruitmentLifecycle();
         self::ensureIndicacaoColumns();
         $candidatura = self::find($id);
         if (!$candidatura) {
@@ -308,9 +323,7 @@ class Candidatura
             return false;
         }
         $stageName = (string)($candidatura['stage_nome'] ?? '');
-        $normalized = trim(mb_strtolower($stageName, 'UTF-8'));
-        $normalized = strtr($normalized, ['á' => 'a', 'à' => 'a', 'â' => 'a', 'ã' => 'a', 'ä' => 'a', 'é' => 'e', 'è' => 'e', 'ê' => 'e', 'ë' => 'e', 'í' => 'i', 'ì' => 'i', 'î' => 'i', 'ï' => 'i', 'ó' => 'o', 'ò' => 'o', 'ô' => 'o', 'õ' => 'o', 'ö' => 'o', 'ú' => 'u', 'ù' => 'u', 'û' => 'u', 'ü' => 'u', 'ç' => 'c']);
-        if ($normalized === 'contratado') {
+        if (self::isAdmissionStageName($stageName)) {
             $stmt = $pdo->prepare('UPDATE candidaturas SET indicacao_data_contratacao = COALESCE(indicacao_data_contratacao, NOW()), indicacao_data_fim_experiencia = COALESCE(indicacao_data_fim_experiencia, DATE_ADD(CURDATE(), INTERVAL 90 DAY)) WHERE id = ?');
             $stmt->execute([$id]);
         }
@@ -386,6 +399,7 @@ class Candidatura
 
     public static function paginateIndicacoes(array $filters = [], int $page = 1, int $perPage = 15): array
     {
+        PipelineStage::ensureRecruitmentLifecycle();
         self::ensureStageColumn();
         self::ensureIndicacaoColumns();
         $page = max(1, $page);
@@ -464,6 +478,7 @@ class Candidatura
 
     public static function financialIndicacoesDataset(array $filters = []): array
     {
+        PipelineStage::ensureRecruitmentLifecycle();
         self::ensureStageColumn();
         self::ensureIndicacaoColumns();
         $where = ['c.indicacao_colaborador = 1'];
@@ -483,6 +498,8 @@ class Candidatura
 
     public static function reportIndicacoes(array $filters = []): array
     {
+        PipelineStage::ensureRecruitmentLifecycle();
+        RecruitmentWebhookSchemaService::ensureSchema();
         self::ensureStageColumn();
         self::ensureIndicacaoColumns();
         $where = ['c.indicacao_colaborador = 1'];
@@ -530,7 +547,11 @@ class Candidatura
         }
 
         $whereSql = ' WHERE ' . implode(' AND ', $where);
-        $sql = 'SELECT c.*, v.titulo AS vaga_titulo, s.nome AS stage_nome, s.cor AS stage_cor FROM candidaturas c LEFT JOIN vagas v ON v.id = c.vaga_id LEFT JOIN pipeline_stages s ON s.id = c.stage_id'
+        $sql = 'SELECT c.*, v.titulo AS vaga_titulo, v.empresa_id AS vaga_empresa_id, s.nome AS stage_nome, s.cor AS stage_cor, m.interview_date, m.interview_time, m.interview_location, m.interview_link, m.admission_date, m.admission_notes, m.test_name, m.deadline
+            FROM candidaturas c
+            LEFT JOIN vagas v ON v.id = c.vaga_id
+            LEFT JOIN pipeline_stages s ON s.id = c.stage_id
+            LEFT JOIN candidatura_stage_metadata m ON m.candidatura_id = c.id'
             . $whereSql
             . ' ORDER BY c.created_at DESC';
         $stmt = Database::conn()->prepare($sql);
@@ -553,7 +574,7 @@ class Candidatura
             }
             $status[$s]++;
             $stage = self::normalizePlain((string)($row['stage_nome'] ?? ''));
-            if ($stage === 'contratado') {
+            if (self::isAdmissionStageName($stage)) {
                 $contratados++;
             }
         }
@@ -652,6 +673,53 @@ class Candidatura
         return sprintf('%04d-%02d-%02d', (int)$y, (int)$m, (int)$d);
     }
 
+    private static function normalizeOptionalDate($value): ?string
+    {
+        $raw = trim((string)$value);
+        if ($raw === '') {
+            return null;
+        }
+
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $raw)) {
+            return $raw;
+        }
+
+        return DateHelper::toDatabaseDate($raw);
+    }
+
+    private static function normalizeOptionalTime($value): ?string
+    {
+        $raw = trim((string)$value);
+        if ($raw === '') {
+            return null;
+        }
+        if (!preg_match('/^\d{2}:\d{2}$/', $raw)) {
+            return null;
+        }
+        return $raw . ':00';
+    }
+
+    private static function normalizeOptionalText($value): ?string
+    {
+        $text = trim(Security::sanitizeString((string)$value));
+        return $text !== '' ? $text : null;
+    }
+
+    private static function normalizeOptionalLongText($value): ?string
+    {
+        $text = trim(Security::sanitizeString((string)$value));
+        return $text !== '' ? $text : null;
+    }
+
+    private static function normalizeOptionalUrl($value): ?string
+    {
+        $url = trim((string)$value);
+        if ($url === '') {
+            return null;
+        }
+        return filter_var($url, FILTER_VALIDATE_URL) ? $url : null;
+    }
+
     private static function normalizePaymentStatus(string $value): string
     {
         $status = self::normalizePlain($value);
@@ -666,10 +734,13 @@ class Candidatura
 
     private static function normalizePlain(string $value): string
     {
-        $clean = trim(mb_strtolower($value, 'UTF-8'));
-        $replace = ['á' => 'a', 'à' => 'a', 'â' => 'a', 'ã' => 'a', 'ä' => 'a', 'é' => 'e', 'è' => 'e', 'ê' => 'e', 'ë' => 'e', 'í' => 'i', 'ì' => 'i', 'î' => 'i', 'ï' => 'i', 'ó' => 'o', 'ò' => 'o', 'ô' => 'o', 'õ' => 'o', 'ö' => 'o', 'ú' => 'u', 'ù' => 'u', 'û' => 'u', 'ü' => 'u', 'ç' => 'c'];
-        $clean = strtr($clean, $replace);
-        return preg_replace('/\s+/', ' ', $clean) ?? $clean;
+        return PipelineStage::normalizeName($value);
+    }
+
+    private static function isAdmissionStageName(string $value): bool
+    {
+        $normalized = self::normalizePlain($value);
+        return in_array($normalized, ['contratado', 'admissao'], true);
     }
 
     private static function validatePaymentDate(string $isoDate, array $cand): array

@@ -6,29 +6,15 @@ $empresaId = (int)($filters['empresa_id'] ?? 0);
 $setorId = (int)($filters['setor_id'] ?? 0);
 $status = (string)($filters['status'] ?? '');
 $actionButtonClass = 'inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700';
+$toolbarIconButtonClass = 'group relative inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-500 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:ring-offset-2';
+$toolbarPrimaryIconButtonClass = 'group relative inline-flex h-12 w-12 items-center justify-center rounded-xl bg-blue-900 text-white shadow-sm ring-1 ring-blue-950/10 transition duration-200 hover:-translate-y-0.5 hover:bg-blue-950 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-100 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70';
+$toolbarMenuLinkClass = 'flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 hover:text-slate-900';
 ?>
 <div class="space-y-6">
-  <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+  <div class="flex flex-col gap-3">
     <div>
       <h1 class="text-fluid-title font-bold text-gray-800">Colaboradores</h1>
       <p class="text-fluid-subtitle text-gray-600">Base cadastral proveniente do banco de dados do RH Madeplant.</p>
-    </div>
-    <div class="flex flex-wrap gap-3">
-      <a href="<?= $base ?>/admin/empresas" class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
-        Empresas
-      </a>
-      <a href="<?= $base ?>/admin/setores" class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
-        Setores
-      </a>
-      <a href="<?= $base ?>/admin/cargos" class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
-        Cargos
-      </a>
-      <a href="<?= $base ?>/admin/avaliacoes" class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
-        Avaliações
-      </a>
-      <a href="<?= $base ?>/admin" class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
-        Dashboard
-      </a>
     </div>
   </div>
 
@@ -108,6 +94,71 @@ $actionButtonClass = 'inline-flex h-9 w-9 items-center justify-center rounded-lg
         <a href="<?= $queryBase ?>" class="inline-flex items-center justify-center rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-600 hover:bg-slate-50">Limpar</a>
       </div>
     </form>
+
+    <div class="mt-6 flex items-end justify-between gap-4 border-t border-dashed border-slate-200 pt-6">
+      <div class="flex flex-wrap items-center gap-3" data-colaboradores-toolbar="1">
+        <div data-colaboradores-import="1" data-import-endpoint="<?= $base ?>/admin/colaboradores/importar">
+          <input type="hidden" value="<?= Security::e($csrf ?? '') ?>" data-colaboradores-import-csrf="1">
+          <input type="file" class="hidden" tabindex="-1" aria-hidden="true" accept=".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" data-colaboradores-import-input="1">
+          <button type="button" class="<?= $toolbarPrimaryIconButtonClass ?>" title="Importar colaboradores" aria-label="Importar colaboradores" data-colaboradores-import-trigger="1">
+            <span data-colaboradores-import-icon-default="1" aria-hidden="true">
+              <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V5"/><path d="m8.5 8.5 3.5-3.5 3.5 3.5"/><path d="M4 16.5v2a1.5 1.5 0 0 0 1.5 1.5h13a1.5 1.5 0 0 0 1.5-1.5v-2"/></svg>
+            </span>
+            <span class="hidden" data-colaboradores-import-icon-loading="1" aria-hidden="true">
+              <svg class="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-opacity="0.25" stroke-width="3"></circle><path d="M20.5 12A8.5 8.5 0 0 0 12 3.5" stroke="currentColor" stroke-width="3" stroke-linecap="round"></path></svg>
+            </span>
+          </button>
+        </div>
+        <div class="hidden items-center gap-3 md:flex">
+          <a href="<?= $base ?>/admin/empresas" class="<?= $toolbarIconButtonClass ?>" title="Empresas" aria-label="Empresas">
+            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><path d="M6 21V6l6-3 6 3v15"/><path d="M9 9h.01"/><path d="M15 9h.01"/><path d="M9 13h.01"/><path d="M15 13h.01"/></svg>
+          </a>
+          <a href="<?= $base ?>/admin/setores" class="<?= $toolbarIconButtonClass ?>" title="Setores" aria-label="Setores">
+            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 21V8l8-4 8 4v13"/><path d="M9 21v-7h6v7"/><path d="M9 11h6"/></svg>
+          </a>
+          <a href="<?= $base ?>/admin/cargos" class="<?= $toolbarIconButtonClass ?>" title="Cargos" aria-label="Cargos">
+            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 7V5a4 4 0 0 1 8 0v2"/><path d="M4 9h16v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V9Z"/><path d="M10 13h4"/></svg>
+          </a>
+          <a href="<?= $base ?>/admin/avaliacoes" class="<?= $toolbarIconButtonClass ?>" title="Avaliações" aria-label="Avaliações">
+            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8.5 12.5 2.5 2.5 4.5-5"/><path d="M20 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/></svg>
+          </a>
+        </div>
+        <details class="relative md:hidden">
+          <summary class="<?= $toolbarIconButtonClass ?> list-none cursor-pointer" title="Mais ações" aria-label="Mais ações">
+            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>
+          </summary>
+          <div class="absolute left-0 z-10 mt-2 w-56 rounded-2xl border border-slate-200 bg-white p-2 shadow-lg">
+            <a href="<?= $base ?>/admin/empresas" class="<?= $toolbarMenuLinkClass ?>">
+              <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><path d="M6 21V6l6-3 6 3v15"/></svg>
+              <span>Empresas</span>
+            </a>
+            <a href="<?= $base ?>/admin/setores" class="<?= $toolbarMenuLinkClass ?>">
+              <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 21V8l8-4 8 4v13"/><path d="M9 21v-7h6v7"/></svg>
+              <span>Setores</span>
+            </a>
+            <a href="<?= $base ?>/admin/cargos" class="<?= $toolbarMenuLinkClass ?>">
+              <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 7V5a4 4 0 0 1 8 0v2"/><path d="M4 9h16v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V9Z"/></svg>
+              <span>Cargos</span>
+            </a>
+            <a href="<?= $base ?>/admin/avaliacoes" class="<?= $toolbarMenuLinkClass ?>">
+              <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8.5 12.5 2.5 2.5 4.5-5"/><path d="M20 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/></svg>
+              <span>Avaliações</span>
+            </a>
+          </div>
+        </details>
+      </div>
+    </div>
+  </div>
+
+  <div class="hidden rounded-2xl border px-4 py-4 text-sm shadow-sm" data-colaboradores-import-feedback="1" aria-live="polite">
+    <div class="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+      <div>
+        <p class="font-semibold" data-colaboradores-import-feedback-title="1">Importacao de colaboradores</p>
+        <p class="mt-1 text-sm" data-colaboradores-import-feedback-message="1"></p>
+      </div>
+      <span class="inline-flex rounded-full px-3 py-1 text-xs font-semibold" data-colaboradores-import-feedback-badge="1"></span>
+    </div>
+    <ul class="mt-3 list-disc space-y-1 pl-5" data-colaboradores-import-feedback-list="1"></ul>
   </div>
 
   <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
@@ -123,9 +174,15 @@ $actionButtonClass = 'inline-flex h-9 w-9 items-center justify-center rounded-lg
       <table class="mobile-table-desktop min-w-full text-sm">
         <thead class="bg-slate-50">
           <tr class="border-b border-slate-200">
+            <th class="p-3 text-left font-medium text-slate-500">Código</th>
             <th class="p-3 text-left font-medium text-slate-500">Nome</th>
             <th class="p-3 text-left font-medium text-slate-500">Cargo</th>
             <th class="p-3 text-left font-medium text-slate-500">Empresa</th>
+            <th class="p-3 text-left font-medium text-slate-500">CPF</th>
+            <th class="p-3 text-left font-medium text-slate-500">Admissão</th>
+            <th class="p-3 text-left font-medium text-slate-500">Nascimento</th>
+            <th class="p-3 text-left font-medium text-slate-500">Demissão</th>
+            <th class="p-3 text-left font-medium text-slate-500">Motivo rescisão</th>
             <th class="p-3 text-left font-medium text-slate-500">Setor</th>
             <th class="p-3 text-left font-medium text-slate-500">Matrícula</th>
             <th class="p-3 text-left font-medium text-slate-500">Salário</th>
@@ -136,9 +193,15 @@ $actionButtonClass = 'inline-flex h-9 w-9 items-center justify-center rounded-lg
         <tbody class="divide-y divide-slate-200">
           <?php foreach ($colaboradores as $colaborador): ?>
             <tr class="hover:bg-slate-50">
+              <td class="p-3 text-slate-700"><?= Security::e($colaborador['codigo'] ?: 'Não informado') ?></td>
               <td class="p-3 font-medium text-slate-900"><?= Security::e($colaborador['nome']) ?></td>
               <td class="p-3 text-slate-700"><?= Security::e($colaborador['cargo_nome']) ?></td>
               <td class="p-3 text-slate-700"><?= Security::e($colaborador['empresa_nome'] ?: 'Não vinculado') ?></td>
+              <td class="p-3 text-slate-700"><?= Security::e($colaborador['cpf'] ?: 'Não informado') ?></td>
+              <td class="p-3 text-slate-700"><?= Security::e(!empty($colaborador['data_admissao']) ? DateHelper::formatBrazilianDate((string)$colaborador['data_admissao']) : 'Não informada') ?></td>
+              <td class="p-3 text-slate-700"><?= Security::e(!empty($colaborador['data_nascimento']) ? DateHelper::formatBrazilianDate((string)$colaborador['data_nascimento']) : 'Não informada') ?></td>
+              <td class="p-3 text-slate-700"><?= Security::e(!empty($colaborador['data_demissao']) ? DateHelper::formatBrazilianDate((string)$colaborador['data_demissao']) : 'Não informada') ?></td>
+              <td class="p-3 text-slate-700"><?= Security::e($colaborador['motivo_rescisao'] ?: 'Não informado') ?></td>
               <td class="p-3 text-slate-700"><?= Security::e($colaborador['setor_nome'] ?: 'Não vinculado') ?></td>
               <td class="p-3 text-slate-700"><?= Security::e($colaborador['matricula'] ?: 'Não informada') ?></td>
               <td class="p-3 text-slate-700"><?= !empty($colaborador['salario_atual']) ? 'R$ ' . Security::e(number_format((float)$colaborador['salario_atual'], 2, ',', '.')) : 'Não informado' ?></td>
@@ -177,7 +240,7 @@ $actionButtonClass = 'inline-flex h-9 w-9 items-center justify-center rounded-lg
           <?php endforeach; ?>
           <?php if (empty($colaboradores)): ?>
             <tr>
-              <td colspan="8" class="p-6 text-center text-slate-500">Nenhum colaborador encontrado para os filtros informados.</td>
+              <td colspan="14" class="p-6 text-center text-slate-500">Nenhum colaborador encontrado para os filtros informados.</td>
             </tr>
           <?php endif; ?>
         </tbody>
@@ -189,8 +252,14 @@ $actionButtonClass = 'inline-flex h-9 w-9 items-center justify-center rounded-lg
         <?php $isActive = (int)($colaborador['ativo'] ?? 0) === 1; ?>
         <div class="responsive-card">
           <div class="text-base font-semibold text-slate-900"><?= Security::e($colaborador['nome']) ?></div>
+          <div class="mt-2 text-sm text-slate-600">Código: <?= Security::e($colaborador['codigo'] ?: 'Não informado') ?></div>
           <div class="mt-2 text-sm text-slate-600">Cargo: <?= Security::e($colaborador['cargo_nome']) ?></div>
           <div class="mt-1 text-sm text-slate-600">Empresa: <?= Security::e($colaborador['empresa_nome'] ?: 'Não vinculado') ?></div>
+          <div class="mt-1 text-sm text-slate-600">CPF: <?= Security::e($colaborador['cpf'] ?: 'Não informado') ?></div>
+          <div class="mt-1 text-sm text-slate-600">Admissão: <?= Security::e(!empty($colaborador['data_admissao']) ? DateHelper::formatBrazilianDate((string)$colaborador['data_admissao']) : 'Não informada') ?></div>
+          <div class="mt-1 text-sm text-slate-600">Nascimento: <?= Security::e(!empty($colaborador['data_nascimento']) ? DateHelper::formatBrazilianDate((string)$colaborador['data_nascimento']) : 'Não informada') ?></div>
+          <div class="mt-1 text-sm text-slate-600">Demissão: <?= Security::e(!empty($colaborador['data_demissao']) ? DateHelper::formatBrazilianDate((string)$colaborador['data_demissao']) : 'Não informada') ?></div>
+          <div class="mt-1 text-sm text-slate-600">Motivo rescisão: <?= Security::e($colaborador['motivo_rescisao'] ?: 'Não informado') ?></div>
           <div class="mt-1 text-sm text-slate-600">Setor: <?= Security::e($colaborador['setor_nome'] ?: 'Não vinculado') ?></div>
           <div class="mt-1 text-sm text-slate-600">Matrícula: <?= Security::e($colaborador['matricula'] ?: 'Não informada') ?></div>
           <div class="mt-1 text-sm text-slate-600">Salário: <?= !empty($colaborador['salario_atual']) ? 'R$ ' . Security::e(number_format((float)$colaborador['salario_atual'], 2, ',', '.')) : 'Não informado' ?></div>

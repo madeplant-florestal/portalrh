@@ -1,0 +1,2210 @@
+{
+    "ok": true,
+    "file_path": "C:\\laragon\\www\\rhmadeplant\\assets\\colaboradores.xlsx",
+    "sheet_name": "Ativos x Desligados",
+    "dry_run": true,
+    "validate_only": false,
+    "generated_at": "2026-06-25T16:05:02+02:00",
+    "summary": {
+        "processed": 403,
+        "ignored_blank_rows": 1,
+        "valid": 150,
+        "rejected": 253,
+        "inserted": 150,
+        "updated": 0,
+        "catalog_companies_created": 5,
+        "catalog_roles_created": 18
+    },
+    "errors": [],
+    "warnings": [],
+    "rejected_records": [
+        {
+            "row_number": 2,
+            "codigo": "277",
+            "nome": "ABNER LUIZ MUNHOZ",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 3,
+            "codigo": "300",
+            "nome": "ADRIANO SANTOS PASSOS",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 4,
+            "codigo": "200",
+            "nome": "ALEXANDRE PEREIRA DUARTE",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 5,
+            "codigo": "255",
+            "nome": "ARIEL PERES LOPES",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 6,
+            "codigo": "263",
+            "nome": "CARLOS MAYCON SENA DO CARMO",
+            "causes": [
+                "COD duplicado na planilha",
+                "CPF duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 7,
+            "codigo": "281",
+            "nome": "CLAUDIO DOS REIS FRAGA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 8,
+            "codigo": "276",
+            "nome": "CLEBERSON ALVES PEREIRA",
+            "causes": [
+                "COD duplicado na planilha",
+                "CPF duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 9,
+            "codigo": "266",
+            "nome": "DIEGO DE OLIVEIRA SANTOS",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 10,
+            "codigo": "314",
+            "nome": "ELIVAN NUNES BORGES",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 11,
+            "codigo": "295",
+            "nome": "GABRIEL ANDRADE BRITES",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 12,
+            "codigo": "292",
+            "nome": "GABRIEL FERREIRA DA SILVA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 13,
+            "codigo": "308",
+            "nome": "GELSON NASCIMENTO DA SILVA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 15,
+            "codigo": "260",
+            "nome": "GUSTAVO PALUDO BORTOLINI",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 16,
+            "codigo": "304",
+            "nome": "HEMERSON GONCALVES GOMES",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 18,
+            "codigo": "303",
+            "nome": "JEANERSON ROSSANO GOMES",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 19,
+            "codigo": "290",
+            "nome": "JONAS JORGE VELASQUES",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 20,
+            "codigo": "289",
+            "nome": "JOSE APARECIDO DA SILVA JUNIOR",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 21,
+            "codigo": "183",
+            "nome": "JULIO CEZAR SANABRIA",
+            "causes": [
+                "CPF duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 22,
+            "codigo": "243",
+            "nome": "LENIVALDO DE SOUSA SILVA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 23,
+            "codigo": "302",
+            "nome": "LEONELE ALMEIDA PEROBA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 24,
+            "codigo": "254",
+            "nome": "LUIZ MARCUS DE ALMEIDA FERNANDES",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 25,
+            "codigo": "226",
+            "nome": "MIKAEL CORREIA OLIVEIRA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 26,
+            "codigo": "242",
+            "nome": "ODAIR PAULA GONCALVES",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 27,
+            "codigo": "306",
+            "nome": "PAULO FRANCISCO MARTINS DE SOUSA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 28,
+            "codigo": "58",
+            "nome": "PAULO ROBERTO CAMPOS CORREA",
+            "causes": [
+                "CPF duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 29,
+            "codigo": "258",
+            "nome": "RONALDO RODRIGUES DE SOUZA JUNIOR",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 30,
+            "codigo": "223",
+            "nome": "SAMUEL MORINIGO",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 31,
+            "codigo": "271",
+            "nome": "SANTIAGO SEIVANE BASANTA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 32,
+            "codigo": "285",
+            "nome": "SEBASTIAO DOMINGOS DE SOUZA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 33,
+            "codigo": "293",
+            "nome": "SEBASTIAO FERREIRA BARBOSA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 34,
+            "codigo": "203",
+            "nome": "SIDNEY DE MATOS RODRIGUES",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 35,
+            "codigo": "313",
+            "nome": "VICTOR DIO VIEIRA BELO",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 36,
+            "codigo": "256",
+            "nome": "WELITON SANTOS DA SILVA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 37,
+            "codigo": "301",
+            "nome": "WEVERTON ROCHA SANTOS",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 38,
+            "codigo": "262",
+            "nome": "ADIMIRSON COSTA PEREIRA JUNIOR",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 39,
+            "codigo": "322",
+            "nome": "AERTON FERNANDO SILVA BRITO",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 40,
+            "codigo": "324",
+            "nome": "ALEXANDRE VARGAS MACHADO",
+            "causes": [
+                "COD duplicado na planilha",
+                "CPF duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 43,
+            "codigo": "5",
+            "nome": "BRUNA BEATRIZ BARCELLOS MOREIRA",
+            "causes": [
+                "COD duplicado na planilha",
+                "CPF duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 47,
+            "codigo": "328",
+            "nome": "CLEBERSON ALVES PEREIRA",
+            "causes": [
+                "CPF duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 49,
+            "codigo": "316",
+            "nome": "DAVID PERES LOPES",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 53,
+            "codigo": "321",
+            "nome": "EDUARDO JOSE DE SOUZA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 58,
+            "codigo": "273",
+            "nome": "FERNANDO CHUCARRO DIAS",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 61,
+            "codigo": "279",
+            "nome": "GUILHERME FERREIRA DOS SANTOS",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 62,
+            "codigo": "283",
+            "nome": "IZAIAS MARCZAL",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 65,
+            "codigo": "319",
+            "nome": "JHONATAN DA SILVA ALVES",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 66,
+            "codigo": "267",
+            "nome": "JOAO DONADONI",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 73,
+            "codigo": "317",
+            "nome": "LUIZ DIAS DE LIMA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 74,
+            "codigo": "320",
+            "nome": "MARCELO SOARES DE PAULA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 75,
+            "codigo": "309",
+            "nome": "MATEUS OLIVEIRA MARQUES",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 76,
+            "codigo": "177",
+            "nome": "MATHEUS BENEDITO RUIVO",
+            "causes": [
+                "COD duplicado na planilha",
+                "CPF duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 77,
+            "codigo": "291",
+            "nome": "MATHEUS VIEIRA DA SILVA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 79,
+            "codigo": "361",
+            "nome": "ODAIR GONCALVES DA SILVA",
+            "causes": [
+                "COD duplicado na planilha",
+                "CPF duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 80,
+            "codigo": "236",
+            "nome": "OTAVIO BLANCO BENTO",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 81,
+            "codigo": "222",
+            "nome": "PAULO VINICIUS GONCALVES",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 82,
+            "codigo": "248",
+            "nome": "PEDRO RAMAO ECHEVERRIA",
+            "causes": [
+                "COD duplicado na planilha",
+                "CPF duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 83,
+            "codigo": "315",
+            "nome": "ROBERTO CONCEICAO DE SOUZA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 84,
+            "codigo": "208",
+            "nome": "ROBSON MASSATO SAHEKI",
+            "causes": [
+                "COD duplicado na planilha",
+                "CPF duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 85,
+            "codigo": "307",
+            "nome": "RODOLFO WENDEL SILVA DANTAS",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 86,
+            "codigo": "312",
+            "nome": "RONALDO DE QUEIROZ PEREIRA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 93,
+            "codigo": "282",
+            "nome": "WILLIAM HERNANDES ALVES RODRIGUES",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 94,
+            "codigo": "296",
+            "nome": "WILSON RIBEIRO VASQUES",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 96,
+            "codigo": "177",
+            "nome": "ALDEIR MORAES DOS SANTOS",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 101,
+            "codigo": "250",
+            "nome": "CLAUDEMIR VELASCO BLEY",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 102,
+            "codigo": "260",
+            "nome": "CLAUDINEI ALVES BONFIM",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 104,
+            "codigo": "200",
+            "nome": "CLEBESOM BEZERRA DE SOUZA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 107,
+            "codigo": "204",
+            "nome": "DANIEL ROMEIRO BONIFACIO",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 108,
+            "codigo": "252",
+            "nome": "DANIELE BATISTA DA SILVEIRA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 117,
+            "codigo": "81",
+            "nome": "FELIPE MARQUES DA SILVA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 118,
+            "codigo": "243",
+            "nome": "FELIPE VIDAL DOS ANJOS",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 119,
+            "codigo": "210",
+            "nome": "GERALDO MARCIO DE CARVALHO",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 122,
+            "codigo": "197",
+            "nome": "GIOVANE FORMIGONI PINHO",
+            "causes": [
+                "CPF duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 123,
+            "codigo": "242",
+            "nome": "GIOVANNI ESTEVES",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 124,
+            "codigo": "187",
+            "nome": "GLAUCO CORREA DE QUEIROZ",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 125,
+            "codigo": "254",
+            "nome": "GUSTAVO PEREIRA DA SILVA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 126,
+            "codigo": "249",
+            "nome": "HENRIQUE CARDOZO DE CARVALHO",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 127,
+            "codigo": "240",
+            "nome": "HENRIQUE RODRIGUES AMORIM",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 128,
+            "codigo": "238",
+            "nome": "ISMAR FERNANDO DE OLIVEIRA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 129,
+            "codigo": "248",
+            "nome": "ISTEFANO SILVA DE ARAUJO",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 130,
+            "codigo": "203",
+            "nome": "IVAN ROCHA DOS SANTOS",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 131,
+            "codigo": "179",
+            "nome": "JEFERSON ALVES DOS SANTOS",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 133,
+            "codigo": "209",
+            "nome": "JOSE SOLANO ALVES COSTA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 135,
+            "codigo": "222",
+            "nome": "JUAN SIQUEIRA ARAUJO",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 146,
+            "codigo": "208",
+            "nome": "MAURILHO FERREIRA DA SILVA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 147,
+            "codigo": "202",
+            "nome": "NEI RAMIRES DOS SANTOS",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 151,
+            "codigo": "271",
+            "nome": "ROBSON DO PRADO PIRES",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 154,
+            "codigo": "220",
+            "nome": "ROGERIO DOS SANTOS",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 155,
+            "codigo": "211",
+            "nome": "ROSEMIRO ALVES PEREIRA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 160,
+            "codigo": "225",
+            "nome": "WILIAN CARLOS RIBEIRO BAZAN",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 162,
+            "codigo": "5",
+            "nome": "ALYSON DA SILVA MELO",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 163,
+            "codigo": "3",
+            "nome": "ANA PAULA DA MOTA SILVEIRA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 164,
+            "codigo": "255",
+            "nome": "BARBARA MARQUES ACOSTA PEGORARO",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 165,
+            "codigo": "256",
+            "nome": "CLAUDIA DE OLIVEIRA SIQUEIRA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 166,
+            "codigo": "264",
+            "nome": "CLEITON CARLOS DA SILVA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 167,
+            "codigo": "179",
+            "nome": "DAIANE IARA MODESTO",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 168,
+            "codigo": "189",
+            "nome": "DANIELA DE OLIVEIRA RODRIGUES",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 169,
+            "codigo": "284",
+            "nome": "JAIRO OTERIO DE SOUSA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 170,
+            "codigo": "204",
+            "nome": "JESSICA APARECIDA GONZAGA AMORIM",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 171,
+            "codigo": "210",
+            "nome": "JOSE BARBOSA MORAES FILHO",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 172,
+            "codigo": "262",
+            "nome": "JULIANA GREGUER DE SOUSA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 173,
+            "codigo": "7",
+            "nome": "JULIO AUGUSTO FRETES JUNIOR",
+            "causes": [
+                "CPF duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 174,
+            "codigo": "286",
+            "nome": "KECIA DO NASCIMENTO LIMA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 175,
+            "codigo": "258",
+            "nome": "LAURIANE DA SILVA BRANDAO",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 176,
+            "codigo": "257",
+            "nome": "LEONARDO DE OLIVEIRA RAMOS",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 177,
+            "codigo": "296",
+            "nome": "LUIGI PASCHOAL SISTI",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 178,
+            "codigo": "261",
+            "nome": "MARA LUCIA DOS SANTOS OLIVEIRA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 179,
+            "codigo": "260",
+            "nome": "PAULO HENRIQUE DE SOUZA VENANCIO",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 180,
+            "codigo": "259",
+            "nome": "POLIANE ALEXSANDRA BATISTA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 181,
+            "codigo": "252",
+            "nome": "RAFAEL ROMERO ANTUNES GONCALVES",
+            "causes": [
+                "COD duplicado na planilha",
+                "CPF duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 182,
+            "codigo": "268",
+            "nome": "TAIS SANTOS LOURENCO",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 183,
+            "codigo": "188",
+            "nome": "THALITA LOPES DA SILVA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 184,
+            "codigo": "276",
+            "nome": "THIAGO FABRIZIO BARBOSA GOMES",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 186,
+            "codigo": "315",
+            "nome": "AGUINALDO OLMEDO RODRIGUES",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 187,
+            "codigo": "311",
+            "nome": "APARECIDO GORETE HERNANDEZ",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 188,
+            "codigo": "274",
+            "nome": "CRISTHIAN ACOSTA GUERRERO",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 189,
+            "codigo": "308",
+            "nome": "DIEGO DE JESUS NASCIMENTO",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 190,
+            "codigo": "240",
+            "nome": "DIONAICSON RUIZ BARBOSA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 191,
+            "codigo": "313",
+            "nome": "EDNILSON CORREA MARTINS",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 192,
+            "codigo": "288",
+            "nome": "HENRIQUE ALVES FEITOZA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 193,
+            "codigo": "314",
+            "nome": "HERIBELTON MATHEUS DE SOUZA SEIZER",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 194,
+            "codigo": "268",
+            "nome": "HEVERTON AUGUSTO DE CARVALHO",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 195,
+            "codigo": "299",
+            "nome": "JEFERSON WENDEL SILVA ELOY DE",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 197,
+            "codigo": "284",
+            "nome": "LUIZ ELIEZER DE SOUZA CRUZ",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 198,
+            "codigo": "211",
+            "nome": "LUIZ FERNANDO LOPES SETOYAMA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 199,
+            "codigo": "316",
+            "nome": "MARCIO RODRIGUES PEREIRA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 200,
+            "codigo": "249",
+            "nome": "MAYCON DOUGLAS SILVA ELOY DE",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 201,
+            "codigo": "251",
+            "nome": "PAULO SYLAS FREITAS SILVA GANARANI",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 202,
+            "codigo": "306",
+            "nome": "RENAN LUCAS DA SILVA NEVES",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 203,
+            "codigo": "286",
+            "nome": "RENATO FERNANDO CASTRO",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 204,
+            "codigo": "209",
+            "nome": "ROBSON GABRIEL RODRIGUES DE",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 205,
+            "codigo": "320",
+            "nome": "ROGERIO RIBEIRO DA ROCHA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 206,
+            "codigo": "2",
+            "nome": "SERGIO HENRIQUE CARVALHO TOMAZ",
+            "causes": [
+                "COD duplicado na planilha",
+                "CPF duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 207,
+            "codigo": "312",
+            "nome": "ZENILDO DE ALMEIDA SILVA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 212,
+            "codigo": "263",
+            "nome": "ALEX GALEANO CRISTALDO",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 213,
+            "codigo": "352",
+            "nome": "ALEXANDRE VARGAS MACHADO",
+            "causes": [
+                "CPF duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 214,
+            "codigo": "257",
+            "nome": "ANA PAULA DE SOUZA COELHO",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 215,
+            "codigo": "287",
+            "nome": "ANDRE LUCAS SOARES FERNANDES",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 220,
+            "codigo": "345",
+            "nome": "CARLOS MAYCON SENA DO CARMO",
+            "causes": [
+                "CPF duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 222,
+            "codigo": "275",
+            "nome": "CHARLES FRANCISCO RUIVO",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 224,
+            "codigo": "323",
+            "nome": "CRISTIANO JOSE CAPRONIO SILVA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 225,
+            "codigo": "247",
+            "nome": "DENIS RAMON MARTINEZ BENITEZ",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 231,
+            "codigo": "280",
+            "nome": "EDUARDO SILVA SOUSA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 234,
+            "codigo": "187",
+            "nome": "GABRIEL ALFREDO MAGALHAES",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 235,
+            "codigo": "297",
+            "nome": "GABRIEL LIMA RIBEIRO",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 236,
+            "codigo": "2",
+            "nome": "GEDSON OLIVEIRA DE LIMA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 238,
+            "codigo": "325",
+            "nome": "GLEIBSON RODRIGUES CARVALHO",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 239,
+            "codigo": "269",
+            "nome": "HELCIO JOSE DE OLIVEIRA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 240,
+            "codigo": "311",
+            "nome": "ISRAEL ALMEIDA ALVES",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 247,
+            "codigo": "220",
+            "nome": "JOSE VIEIRA ARAGAO",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 248,
+            "codigo": "331",
+            "nome": "JULIO CEZAR SANABRIA",
+            "causes": [
+                "CPF duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 258,
+            "codigo": "40",
+            "nome": "NELSON DA SILVA VAZ",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 260,
+            "codigo": "361",
+            "nome": "ODAIR GONCALVES DA SILVA",
+            "causes": [
+                "COD duplicado na planilha",
+                "CPF duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 261,
+            "codigo": "248",
+            "nome": "PEDRO RAMAO ECHEVERRIA",
+            "causes": [
+                "COD duplicado na planilha",
+                "CPF duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 266,
+            "codigo": "239",
+            "nome": "REVAIR DE OLIVEIRA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 267,
+            "codigo": "330",
+            "nome": "ROBSON MASSATO SAHEKI",
+            "causes": [
+                "CPF duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 269,
+            "codigo": "172",
+            "nome": "RONALDO MAUSS",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 271,
+            "codigo": "278",
+            "nome": "SIXTO EDUARDO SANABRIA PAREDES",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 274,
+            "codigo": "15",
+            "nome": "WALDIR DE OLIVEIRA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 275,
+            "codigo": "318",
+            "nome": "WELLINGSON DIEGO DA SILVA LIMA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 277,
+            "codigo": "310",
+            "nome": "WILLIAN GONZALES DOS SANTOS",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 283,
+            "codigo": "221",
+            "nome": "ANDRE VAZ RODRIGUES",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 284,
+            "codigo": "217",
+            "nome": "BRUNA BEATRIZ BARCELLOS MOREIRA",
+            "causes": [
+                "CPF duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 285,
+            "codigo": "270",
+            "nome": "BRUNO CONCEICAO CAVALCANTI",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 286,
+            "codigo": "277",
+            "nome": "BRUNO VILELA DIAS",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 288,
+            "codigo": "172",
+            "nome": "CARLOS PEREIRA SEBASTIAO",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 290,
+            "codigo": "223",
+            "nome": "CLARO PEREIRA DE AMORIM NETO",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 293,
+            "codigo": "259",
+            "nome": "DAWID VIEIRA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 295,
+            "codigo": "239",
+            "nome": "EDI CARLOS MOREIRA DE LIMA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 296,
+            "codigo": "247",
+            "nome": "EDUARDO DOS SANTOS DE ARAUJO",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 298,
+            "codigo": "269",
+            "nome": "FRANSCISCO BATISTA DE LIMA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 299,
+            "codigo": "236",
+            "nome": "GIOVANE FORMIGONI PINHO",
+            "causes": [
+                "COD duplicado na planilha",
+                "CPF duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 301,
+            "codigo": "276",
+            "nome": "GLISTONY ROULDINO DE OLIVEIRA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 303,
+            "codigo": "189",
+            "nome": "JOAQUIM ISIDORO DA SILVA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 306,
+            "codigo": "3",
+            "nome": "JOSIMAR MARIANO DOS SANTOS",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 308,
+            "codigo": "257",
+            "nome": "LAUDISON DE SOUZA SANTANA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 309,
+            "codigo": "264",
+            "nome": "LUCAS BITENCOURT MARRA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 310,
+            "codigo": "258",
+            "nome": "LUCIANO DOS SANTOS LIMA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 312,
+            "codigo": "262",
+            "nome": "LUIZ PAULO SILVA PAES",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 313,
+            "codigo": "278",
+            "nome": "LUIZ PAULO SOUZA DOS SANTOS",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 314,
+            "codigo": "275",
+            "nome": "MARCELO FERNANDES DA SILVA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 315,
+            "codigo": "40",
+            "nome": "MARCOS APARECIDO DO NASCIMENTO",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 316,
+            "codigo": "253",
+            "nome": "MATEUS ALVES LOPES",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 317,
+            "codigo": "226",
+            "nome": "MATHEUS BENEDITO RUIVO",
+            "causes": [
+                "COD duplicado na planilha",
+                "CPF duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 320,
+            "codigo": "268",
+            "nome": "MILTON CAVALCENTE DA SILVA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 321,
+            "codigo": "261",
+            "nome": "NILSON OLIVEIRA FLORES",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 323,
+            "codigo": "267",
+            "nome": "ORLANDO CRUZ CARDOSO",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 324,
+            "codigo": "274",
+            "nome": "RAFAEL DE JESUS MONTEIRO",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 325,
+            "codigo": "188",
+            "nome": "RAFAEL DOS SANTOS DE LUNA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 326,
+            "codigo": "272",
+            "nome": "RAFAEL ROMERO ANTUNES GONCALVES",
+            "causes": [
+                "COD duplicado na planilha",
+                "CPF duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 327,
+            "codigo": "15",
+            "nome": "RAMAO JULIAO MEIRELES",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 328,
+            "codigo": "251",
+            "nome": "RAMON OLDECARLOS FERNANDES PEREIRA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 329,
+            "codigo": "256",
+            "nome": "RICARDO DA SILVA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 330,
+            "codigo": "266",
+            "nome": "RODRIGO SOARES DE NORONHA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 331,
+            "codigo": "273",
+            "nome": "RONEY ANDREW SANTOS DA SILVA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 335,
+            "codigo": "255",
+            "nome": "UBIRAJARA SILVA DO AMARAL",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 340,
+            "codigo": "265",
+            "nome": "WESLEY DE BARROS PEREIRA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 341,
+            "codigo": "263",
+            "nome": "WISLLEY FERNANDO DA SILVA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 342,
+            "codigo": "291",
+            "nome": "ANA CLARA APARECIDA DIAS",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 343,
+            "codigo": "297",
+            "nome": "ANA PAULA LUCIANA DOS SANTOS",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 345,
+            "codigo": "270",
+            "nome": "BRUNA MACEDO ANTUNES GUERREIRO",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 346,
+            "codigo": "282",
+            "nome": "CARLOS JARBAS ARCE VIEIRA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 347,
+            "codigo": "304",
+            "nome": "CRISTOPHER MENDONÇA DOS SANTOS",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 348,
+            "codigo": "202",
+            "nome": "DEOCIDES PEREIRA DE SOUZA JUNIOR",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 350,
+            "codigo": "279",
+            "nome": "ELLEN ESPINOZA DOS SANTOS",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 351,
+            "codigo": "290",
+            "nome": "FABIANE FREITAS MENDONCA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 352,
+            "codigo": "267",
+            "nome": "FABIO OZUNA LIMA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 353,
+            "codigo": "287",
+            "nome": "GABRIEL PEREIRA FIGUEIREDO",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 354,
+            "codigo": "221",
+            "nome": "INIVIA OLIVEIRA PEREIRA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 355,
+            "codigo": "274",
+            "nome": "IVONE DO NASCIMENTO",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 356,
+            "codigo": "278",
+            "nome": "JOAO PAULO PAREDES SILVA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 357,
+            "codigo": "81",
+            "nome": "JOSE BRAZ DA SILVA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 358,
+            "codigo": "269",
+            "nome": "JOZIMARA ALVES DE LIMA CALIXTO",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 359,
+            "codigo": "295",
+            "nome": "JULIANA DE ANDRADE DA MOTA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 360,
+            "codigo": "294",
+            "nome": "JULIO AUGUSTO FRETES JUNIOR",
+            "causes": [
+                "COD duplicado na planilha",
+                "CPF duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 361,
+            "codigo": "273",
+            "nome": "KARINA SERPA DA SILVA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 362,
+            "codigo": "299",
+            "nome": "KETHLIN MILLAN GUTIERRE",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 363,
+            "codigo": "293",
+            "nome": "LARISSA GUIMARAES MARQUES MOURA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 364,
+            "codigo": "301",
+            "nome": "LAURIANNE MACHADO CACAO",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 365,
+            "codigo": "275",
+            "nome": "LUDIMILA DAIANY CRISTALDO DE LIMA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 368,
+            "codigo": "250",
+            "nome": "MARLI RECALCATI",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 370,
+            "codigo": "303",
+            "nome": "MATHEUS LUCAS ALVES LOPES",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 371,
+            "codigo": "265",
+            "nome": "MATHEUS RAYMISAN OLIVEIRA FERNANDES",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 372,
+            "codigo": "266",
+            "nome": "MAYNARA PEREIRA DOS SANTOS",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 373,
+            "codigo": "280",
+            "nome": "PAULO ROBERTO CAMPOS CORREA",
+            "causes": [
+                "COD duplicado na planilha",
+                "CPF duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 374,
+            "codigo": "272",
+            "nome": "RAPHAEL MENDES LAZARO CORREA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 375,
+            "codigo": "283",
+            "nome": "REGINALDO CAMILO DE SOUZA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 376,
+            "codigo": "281",
+            "nome": "RODRIGO GOMES DE SOUZA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 377,
+            "codigo": "2",
+            "nome": "RODRIGO SOARES DE AZEVEDO",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 378,
+            "codigo": "292",
+            "nome": "ROGERIO FERREIRA DA SILVA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 379,
+            "codigo": "302",
+            "nome": "SANDRA CARDOSO RODRIGUES",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 380,
+            "codigo": "271",
+            "nome": "THABATA NOARA SANTANA DAVILA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 381,
+            "codigo": "300",
+            "nome": "VANESSA BARROS DOS SANTOS GARCIA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 382,
+            "codigo": "277",
+            "nome": "VANILDE VIEIRA GONCALVES",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 383,
+            "codigo": "285",
+            "nome": "VINICIUS GABRIEL BARROS DA SILVA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 384,
+            "codigo": "289",
+            "nome": "WANDEL RODRIGO RODRIGUES DUTRA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 385,
+            "codigo": "288",
+            "nome": "ZEILA APARECIDA COSTA DE SOUZA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 386,
+            "codigo": "307",
+            "nome": "CLAUDINEY CENA DE ARRUDA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 387,
+            "codigo": "294",
+            "nome": "DANILO RIBEIRO NASCIMENTO",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 388,
+            "codigo": "238",
+            "nome": "FABIO RODRIGUES SANTANA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 389,
+            "codigo": "322",
+            "nome": "HERIQUIS LOPES SIQUEIRA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 390,
+            "codigo": "310",
+            "nome": "JOAO MORENO RODRIGUES",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 391,
+            "codigo": "253",
+            "nome": "JOAO VICTOR DE ALMEIDA ALVES",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 392,
+            "codigo": "319",
+            "nome": "LUCAS GABRIEL MENDES DA CRUZ",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 393,
+            "codigo": "318",
+            "nome": "LUIZ CARLOS SIQUEIRA HIGA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 394,
+            "codigo": "309",
+            "nome": "MARCIO DA SILVA NABOR",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 395,
+            "codigo": "325",
+            "nome": "PABLO BASILIO LOPES",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 396,
+            "codigo": "323",
+            "nome": "RAIALLISON LEANDRO DE SOUZA COSTA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 397,
+            "codigo": "324",
+            "nome": "RENATO LEAO DUARTE",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 398,
+            "codigo": "252",
+            "nome": "RENE DO NASCIMENTO CASTRO",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 399,
+            "codigo": "264",
+            "nome": "RICARDO MACEDO DE SOUZA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 400,
+            "codigo": "265",
+            "nome": "ROGERIO LUIS BARBOSA",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 401,
+            "codigo": "317",
+            "nome": "SERGIO HENRIQUE CARVALHO TOMAZ",
+            "causes": [
+                "COD duplicado na planilha",
+                "CPF duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 402,
+            "codigo": "321",
+            "nome": "VAGNER ANDRADE DOS SANTOS",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        },
+        {
+            "row_number": 404,
+            "codigo": "225",
+            "nome": "WILSON ZOAGA NEGRAO",
+            "causes": [
+                "COD duplicado na planilha"
+            ]
+        }
+    ],
+    "created_companies": [
+        {
+            "id": 20,
+            "nome": "FOREST SERVICES LTDA",
+            "slug": "forest-services-ltda"
+        },
+        {
+            "id": 21,
+            "nome": "MADEPLANT TRANSPORTES LTDA",
+            "slug": "madeplant-transportes-ltda"
+        },
+        {
+            "id": 22,
+            "nome": "MADEPLANT CENTRO DE SERV",
+            "slug": "madeplant-centro-de-serv"
+        },
+        {
+            "id": 23,
+            "nome": "PROSPECTA SERVICOS E",
+            "slug": "prospecta-servicos-e"
+        },
+        {
+            "id": 24,
+            "nome": "MC REFLORESTADORA EIRELI",
+            "slug": "mc-reflorestadora-eireli"
+        }
+    ],
+    "created_roles": [
+        {
+            "id": 79,
+            "nome": "SERVICOS GERAIS J1",
+            "slug": "servicos-gerais-j1"
+        },
+        {
+            "id": 80,
+            "nome": "OPERADOR DE MAQUINAS J I",
+            "slug": "operador-de-maquinas-j-i"
+        },
+        {
+            "id": 81,
+            "nome": "OPERADOR DE MAQUINAS",
+            "slug": "operador-de-maquinas"
+        },
+        {
+            "id": 82,
+            "nome": "OPERADOR DE MÁQUINAS P3",
+            "slug": "operador-de-m-quinas-p3"
+        },
+        {
+            "id": 83,
+            "nome": "LIDER DE PRODUÇAO",
+            "slug": "lider-de-produ-ao"
+        },
+        {
+            "id": 84,
+            "nome": "LIDER DE OPERAÇÃO FLORESTAL J I",
+            "slug": "lider-de-opera-o-florestal-j-i"
+        },
+        {
+            "id": 85,
+            "nome": "SUPERVISOR DE OPERACAO J1",
+            "slug": "supervisor-de-operacao-j1"
+        },
+        {
+            "id": 86,
+            "nome": "OPERADOR DE MÁQUINAS P1",
+            "slug": "operador-de-m-quinas-p1"
+        },
+        {
+            "id": 87,
+            "nome": "MOTORISTA DE COMBOIO J I",
+            "slug": "motorista-de-comboio-j-i"
+        },
+        {
+            "id": 88,
+            "nome": "ASSISTENTE DE FATURAMENTO J I",
+            "slug": "assistente-de-faturamento-j-i"
+        },
+        {
+            "id": 89,
+            "nome": "MECANICO P I",
+            "slug": "mecanico-p-i"
+        },
+        {
+            "id": 90,
+            "nome": "MOTORISTA DE COMBOIO J II",
+            "slug": "motorista-de-comboio-j-ii"
+        },
+        {
+            "id": 91,
+            "nome": "OPERADOR DE MAQUINAS FLORESTAIS J II",
+            "slug": "operador-de-maquinas-florestais-j-ii"
+        },
+        {
+            "id": 92,
+            "nome": "ANALISTA DE DP P I",
+            "slug": "analista-de-dp-p-i"
+        },
+        {
+            "id": 93,
+            "nome": "ASSISTENTE ADMINISTRATIVO P II",
+            "slug": "assistente-administrativo-p-ii"
+        },
+        {
+            "id": 94,
+            "nome": "ANALISTA FINANCEIRO J II",
+            "slug": "analista-financeiro-j-ii"
+        },
+        {
+            "id": 95,
+            "nome": "ENCARREGADO DE FATURAMENTO PI",
+            "slug": "encarregado-de-faturamento-pi"
+        },
+        {
+            "id": 96,
+            "nome": "ANALISTA ADMINISTRATIVO PII",
+            "slug": "analista-administrativo-pii"
+        }
+    ],
+    "validation": {
+        "ok": true,
+        "file_exists": true,
+        "file_path": "C:\\laragon\\www\\rhmadeplant\\assets\\colaboradores.xlsx",
+        "sheet_exists": true,
+        "sheet_name": "Ativos x Desligados",
+        "sheet_names": [
+            "Ativos x Desligados",
+            "Entrevista de Desligamento",
+            "Dashboard Desligamento",
+            "Beneficios",
+            "Permissões"
+        ],
+        "headers": [
+            "COD",
+            "COLABORADOR",
+            "EMPRESA",
+            "CPF",
+            "ADMISSÃO",
+            "NASC.",
+            "CARGO",
+            "DEMISSÃO",
+            "MOTIVO RESCISÃO"
+        ],
+        "row_count": 404,
+        "errors": []
+    }
+}

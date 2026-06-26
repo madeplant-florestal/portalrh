@@ -743,7 +743,10 @@ class SolicitacaoVaga
         }
 
         if (!self::cargoBelongsToSetor($cargoId, $setorId)) {
-            throw new InvalidArgumentException('O cargo selecionado não pertence à área/departamento informado.');
+            if (!self::setorHasAvailableCargos($setorId)) {
+                throw new InvalidArgumentException('Nenhum cargo disponível para este setor. Revise o vínculo entre cargos e área/departamento antes de enviar a solicitação.');
+            }
+            throw new InvalidArgumentException('Selecione um cargo válido vinculado à área/departamento informado.');
         }
         if ((int)$gestor['is_gestor'] !== 1 || (int)$gestor['setor_id'] !== $setorId) {
             throw new InvalidArgumentException('O gestor solicitante informado não pertence à área selecionada ou não possui perfil de gestor.');
@@ -1327,6 +1330,18 @@ class SolicitacaoVaga
             "SELECT COUNT(*) FROM cargo_setores WHERE cargo_id = ? AND setor_id = ?"
         );
         $stmt->execute([$cargoId, $setorId]);
+        return (int)$stmt->fetchColumn() > 0;
+    }
+
+    private static function setorHasAvailableCargos(int $setorId): bool
+    {
+        $stmt = Database::conn()->prepare(
+            "SELECT COUNT(*)
+             FROM cargo_setores cs
+             INNER JOIN cargos c ON c.id = cs.cargo_id
+             WHERE cs.setor_id = ? AND c.ativo = 1"
+        );
+        $stmt->execute([$setorId]);
         return (int)$stmt->fetchColumn() > 0;
     }
 

@@ -49,6 +49,7 @@ try {
     $router->post('/admin/reset-password/{token}', [PasswordRecoveryController::class, 'performReset']);
     $router->get('/admin', [AdminController::class, 'index']);
     $router->get('/admin/colaboradores', [AdminColaboradoresController::class, 'index']);
+    $router->post('/admin/colaboradores/importar', [AdminColaboradoresController::class, 'import']);
     $router->get('/admin/colaboradores/rh/editar/{id}', [AdminColaboradoresController::class, 'editRh']);
     $router->post('/admin/colaboradores/rh/editar/{id}', [AdminColaboradoresController::class, 'updateRh']);
 
@@ -60,6 +61,10 @@ try {
     $router->post('/admin/avaliacoes/excluir/{id}', [AdminAvaliacoesController::class, 'delete']);
     $router->get('/admin/manual', [AdminManualController::class, 'index']);
     $router->get('/admin/pipeline', [AdminPipelineController::class, 'index']);
+    $router->get('/admin/recruitment-webhooks', [AdminRecruitmentWebhooksController::class, 'index']);
+    $router->post('/admin/recruitment-webhooks/settings/save', [AdminRecruitmentWebhooksController::class, 'saveSetting']);
+    $router->post('/admin/recruitment-webhooks/process-pending', [AdminRecruitmentWebhooksController::class, 'processPending']);
+    $router->post('/admin/recruitment-webhooks/events/{id}/retry', [AdminRecruitmentWebhooksController::class, 'retryEvent']);
     $router->get('/admin/empresas', [AdminEmpresasController::class, 'index']);
     $router->get('/admin/empresas/novo', [AdminEmpresasController::class, 'create']);
     $router->post('/admin/empresas/novo', [AdminEmpresasController::class, 'store']);

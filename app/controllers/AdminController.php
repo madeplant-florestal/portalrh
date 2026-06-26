@@ -10,6 +10,12 @@ class AdminController extends Controller
         $vagasAtivas = count(Vaga::allActive());
         $totalCandidaturas = count(Candidatura::all());
         $colaboradoresCadastrados = class_exists('Colaborador') ? Colaborador::countAll() : 0;
+        $dashboardFallback = $this->dashboardDataset();
+        $dashboard = $dashboardFallback;
+
+        if (class_exists('CollaboratorDashboardDataService')) {
+            $dashboard = (new CollaboratorDashboardDataService())->build($dashboardFallback, $period, $area);
+        }
 
         $this->view->render('admin/dashboard', [
             'vagasAtivas' => $vagasAtivas,
@@ -19,7 +25,7 @@ class AdminController extends Controller
             'areaOptions' => $this->areaOptions(),
             'selectedPeriod' => $period,
             'selectedArea' => $area,
-            'dashboard' => $this->dashboardDataset(),
+            'dashboard' => $dashboard,
         ], 'layouts/admin');
     }
 

@@ -124,7 +124,7 @@ $payload = [
   <?php endif; ?>
 
   <?php if (!$isShow): ?>
-    <form class="mt-6 space-y-8" action="<?= $base ?>/admin/solicitacoes-vaga/nova" method="post" novalidate>
+    <form class="mt-6 space-y-8" action="<?= $base ?>/admin/solicitacoes-vaga/nova" method="post" novalidate data-solicitacao-form-element="1">
       <input type="hidden" name="csrf" value="<?= Security::e($csrf) ?>">
       <script type="application/json" data-solicitacao-payload="1"><?= json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?></script>
 
@@ -153,13 +153,14 @@ $payload = [
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700">Cargo *</label>
-            <select name="cargo_id" class="mt-1 w-full rounded border px-3 py-2" data-solicitacao-cargo="1" required>
+            <select name="cargo_id" class="mt-1 w-full rounded border px-3 py-2" data-solicitacao-cargo="1" aria-describedby="solicitacao-cargo-feedback solicitacao-cargo-faixa" required>
               <option value="">Selecione</option>
               <?php foreach ($cargos as $cargo): ?>
                 <option value="<?= (int)$cargo['id'] ?>" <?= (int)($form['cargo_id'] ?? 0) === (int)$cargo['id'] ? 'selected' : '' ?>><?= Security::e($cargo['nome']) ?></option>
               <?php endforeach; ?>
             </select>
-            <p class="mt-1 text-xs text-gray-500" data-solicitacao-faixa-label="1"></p>
+            <p id="solicitacao-cargo-feedback" class="mt-1 text-xs text-gray-500" data-solicitacao-cargo-feedback="1" aria-live="polite"></p>
+            <p id="solicitacao-cargo-faixa" class="mt-1 text-xs text-gray-500" data-solicitacao-faixa-label="1" aria-live="polite"></p>
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700">Gestor solicitante *</label>

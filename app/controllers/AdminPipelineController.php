@@ -4,20 +4,17 @@ class AdminPipelineController extends Controller
     public function index(): void
     {
         Auth::requireRole(['admin', 'rh']);
-        
+
         $vagaId = isset($_GET['vaga_id']) ? (int)$_GET['vaga_id'] : null;
-        
-        // Get all stages
+
         $stages = PipelineStage::all();
-        
-        // Get applications (filtered by vaga if selected)
+
         $filters = [];
         if ($vagaId) {
             $filters['vaga_id'] = $vagaId;
         }
         $candidaturas = Candidatura::all($filters);
-        
-        // Group by stage_id
+
         $kanban = [];
         foreach ($stages as $stage) {
             $kanban[$stage['id']] = [
@@ -25,26 +22,25 @@ class AdminPipelineController extends Controller
                 'items' => []
             ];
         }
-        
-        // If there are candidaturas with unknown stage, put them in the first stage or separate
+
         foreach ($candidaturas as $c) {
             $sid = $c['stage_id'] ?? 1; // Default to first if null
             if (isset($kanban[$sid])) {
                 $kanban[$sid]['items'][] = $c;
             } else {
-                // Fallback for deleted stages? Put in first.
                 $first = array_key_first($kanban);
                 $kanban[$first]['items'][] = $c;
             }
         }
-        
+
         $vagas = Vaga::all();
-        
+
         $this->view->render('admin/pipeline/index', [
             'kanban' => $kanban,
             'vagas' => $vagas,
             'selectedVaga' => $vagaId,
-            'csrf' => Security::csrfToken()
+            'csrf' => Security::csrfToken(),
+            'stageCount' => count($stages),
         ], 'layouts/admin');
     }
 

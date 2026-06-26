@@ -30,6 +30,18 @@ $editing = !empty($vaga);
         <input type="text" name="local" value="<?= Security::e($vaga['local'] ?? '') ?>" class="mt-1 w-full border rounded px-3 py-2" />
       </div>
     </div>
+    <div>
+      <label class="block text-sm">Empresa / Tenant</label>
+      <select name="empresa_id" class="mt-1 w-full border rounded px-3 py-2">
+        <option value="">Usar tenant padrão do recrutamento</option>
+        <?php foreach (($empresas ?? []) as $empresa): ?>
+          <option value="<?= (int)$empresa['id'] ?>" <?= (int)($vaga['empresa_id'] ?? 0) === (int)$empresa['id'] ? 'selected' : '' ?>>
+            <?= Security::e($empresa['nome']) ?><?= (int)($empresa['ativo'] ?? 1) === 1 ? '' : ' (inativa)' ?>
+          </option>
+        <?php endforeach; ?>
+      </select>
+      <p class="mt-1 text-xs text-gray-500">Quando a vaga estiver vinculada a uma empresa, o webhook utiliza esse tenant; caso contrário, utiliza a configuração padrão.</p>
+    </div>
     <label class="inline-flex items-center space-x-2">
       <input type="checkbox" name="ativo" <?= !empty($vaga['ativo']) ? 'checked' : '' ?> />
       <span class="text-sm">Ativo</span>

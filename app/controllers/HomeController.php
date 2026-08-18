@@ -93,15 +93,35 @@ class HomeController extends Controller
             'pdf_path' => $pdfName,
             'status' => 'novo',
         ]);
-        // Notificação RH
-        $sent = Mailer::notifyHR(
-            'Nova candidatura recebida',
-            "Vaga: {$vaga['titulo']}\nNome: {$nome}\nE-mail: {$email}\nTelefone: " . Phone::format($telefone) . "\n"
-        );
+
+        // Notificação RH: responsabilidade exclusiva do evento recrutamento.candidatura.criada,
+        // entregue via webhook (n8n monta e envia o e-mail institucional) — nunca via mail() nativo
+        // nem misturado com recrutamento.candidato.etapa_alterada (ver RecruitmentEventDispatcher).
+        $registro = Candidatura::find($cid);
+        $createdAt = (string)($registro['created_at'] ?? '');
+        $nomeCandidatura = (string)($registro['nome'] ?? $nome);
+
+        $dispatcher = new RecruitmentEventDispatcher();
+        $dispatcher->dispatchCandidaturaCriada([
+            'candidate' => $registro ?? [],
+            'occurred_at' => (new DateTimeImmutable())->format(DATE_ATOM),
+        ]);
+
         $this->view->render('home/confirm', [
             'vaga' => $vaga,
             'cid' => $cid,
-            'emailSent' => $sent,
+            'protocolo' => Candidatura::formatProtocol($cid, $createdAt),
+            'primeiroNome' => self::firstNameOf($nomeCandidatura),
+            'dataHoraCandidatura' => DateHelper::formatBrazilianDateTime($createdAt),
+            'emailSent' => true,
+            'noIndex' => true,
         ]);
+    }
+
+    private static function firstNameOf(string $nome): string
+    {
+        $nome = trim((string)preg_replace('/\s+/', ' ', $nome));
+        $primeiro = $nome !== '' ? explode(' ', $nome)[0] : '';
+        return $primeiro !== '' ? $primeiro : 'Candidato';
     }
 }

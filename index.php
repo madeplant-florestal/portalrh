@@ -63,6 +63,8 @@ try {
     $router->get('/admin/pipeline', [AdminPipelineController::class, 'index']);
     $router->get('/admin/recruitment-webhooks', [AdminRecruitmentWebhooksController::class, 'index']);
     $router->post('/admin/recruitment-webhooks/settings/save', [AdminRecruitmentWebhooksController::class, 'saveSetting']);
+    $router->post('/admin/recruitment-webhooks/settings/regenerate-secret', [AdminRecruitmentWebhooksController::class, 'regenerateSecret']);
+    $router->post('/admin/recruitment-webhooks/test', [AdminRecruitmentWebhooksController::class, 'testWebhook']);
     $router->post('/admin/recruitment-webhooks/process-pending', [AdminRecruitmentWebhooksController::class, 'processPending']);
     $router->post('/admin/recruitment-webhooks/events/{id}/retry', [AdminRecruitmentWebhooksController::class, 'retryEvent']);
     $router->get('/admin/empresas', [AdminEmpresasController::class, 'index']);

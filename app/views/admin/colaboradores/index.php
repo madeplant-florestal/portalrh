@@ -5,10 +5,28 @@ $cargoId = (int)($filters['cargo_id'] ?? 0);
 $empresaId = (int)($filters['empresa_id'] ?? 0);
 $setorId = (int)($filters['setor_id'] ?? 0);
 $status = (string)($filters['status'] ?? '');
+$page = max(1, (int)($page ?? 1));
+$pages = max(1, (int)($pages ?? 1));
+$perPage = in_array((int)($perPage ?? 20), [20, 50, 100], true) ? (int)$perPage : 20;
+$total = (int)($total ?? count($colaboradores));
+$filterParams = [
+  'q' => $q,
+  'cargo_id' => $cargoId ?: '',
+  'empresa_id' => $empresaId ?: '',
+  'setor_id' => $setorId ?: '',
+  'status' => $status,
+  'per_page' => $perPage,
+];
 $actionButtonClass = 'inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700';
 $toolbarIconButtonClass = 'group relative inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-500 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:ring-offset-2';
 $toolbarPrimaryIconButtonClass = 'group relative inline-flex h-12 w-12 items-center justify-center rounded-xl bg-blue-900 text-white shadow-sm ring-1 ring-blue-950/10 transition duration-200 hover:-translate-y-0.5 hover:bg-blue-950 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-100 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70';
 $toolbarMenuLinkClass = 'flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 hover:text-slate-900';
+$pageWindowStart = max(1, $page - 2);
+$pageWindowEnd = min($pages, $page + 2);
+if (($pageWindowEnd - $pageWindowStart) < 4) {
+  $pageWindowStart = max(1, $pageWindowEnd - 4);
+  $pageWindowEnd = min($pages, $pageWindowStart + 4);
+}
 ?>
 <div class="space-y-6">
   <div class="flex flex-col gap-3">
@@ -50,6 +68,7 @@ $toolbarMenuLinkClass = 'flex items-center gap-3 rounded-xl px-3 py-2 text-sm fo
 
   <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
     <form class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5" method="get" action="<?= $queryBase ?>">
+      <input type="hidden" name="page" value="1">
       <div class="xl:col-span-2">
         <label class="mb-2 block text-sm font-medium text-slate-700">Busca</label>
         <input type="text" name="q" value="<?= Security::e($q) ?>" placeholder="Nome, cargo, empresa ou setor" class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100">
@@ -89,7 +108,15 @@ $toolbarMenuLinkClass = 'flex items-center gap-3 rounded-xl px-3 py-2 text-sm fo
           <option value="pendentes" <?= $status === 'pendentes' ? 'selected' : '' ?>>Pendentes de vínculo</option>
         </select>
       </div>
-      <div class="md:col-span-2 xl:col-span-5 flex flex-wrap gap-3">
+      <div>
+        <label class="mb-2 block text-sm font-medium text-slate-700">Registros por página</label>
+        <select name="per_page" class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100" data-colaboradores-per-page="1" onchange="this.form.requestSubmit()">
+          <?php foreach ([20, 50, 100] as $perPageOption): ?>
+            <option value="<?= $perPageOption ?>" <?= $perPage === $perPageOption ? 'selected' : '' ?>><?= $perPageOption ?> registros</option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+      <div class="md:col-span-2 xl:col-span-5 flex flex-wrap items-end gap-3">
         <button class="inline-flex items-center justify-center rounded-xl bg-blue-900 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-950">Filtrar</button>
         <a href="<?= $queryBase ?>" class="inline-flex items-center justify-center rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-600 hover:bg-slate-50">Limpar</a>
       </div>
@@ -162,12 +189,16 @@ $toolbarMenuLinkClass = 'flex items-center gap-3 rounded-xl px-3 py-2 text-sm fo
   </div>
 
   <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-    <div class="mb-4 flex items-center justify-between">
+    <div class="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
       <div>
         <h2 class="text-lg font-semibold text-slate-900">Lista de Colaboradores</h2>
         <p class="text-sm text-slate-500">Informações reais carregadas da tabela `colaboradores`.</p>
       </div>
-      <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600"><?= count($colaboradores) ?> registro(s)</span>
+      <div class="flex flex-wrap items-center gap-2 text-xs font-semibold">
+        <span class="rounded-full bg-slate-100 px-3 py-1 text-slate-600"><?= $total ?> registro(s)</span>
+        <span class="rounded-full bg-blue-50 px-3 py-1 text-blue-700">Página <?= $page ?> de <?= $pages ?></span>
+        <span class="rounded-full bg-slate-50 px-3 py-1 text-slate-500">Exibindo <?= count($colaboradores) ?> nesta página</span>
+      </div>
     </div>
 
     <div class="responsive-table-wrap">
@@ -294,5 +325,29 @@ $toolbarMenuLinkClass = 'flex items-center gap-3 rounded-xl px-3 py-2 text-sm fo
         </div>
       <?php endforeach; ?>
     </div>
+
+    <?php if ($pages > 1): ?>
+      <?php
+      $prevPage = max(1, $page - 1);
+      $nextPage = min($pages, $page + 1);
+      $prevParams = array_merge($filterParams, ['page' => $prevPage]);
+      $nextParams = array_merge($filterParams, ['page' => $nextPage]);
+      ?>
+      <div class="mt-6 flex flex-col gap-3 border-t border-dashed border-slate-200 pt-4 md:flex-row md:items-center md:justify-between">
+        <div class="text-sm text-slate-500">
+          Exibindo página <?= $page ?> de <?= $pages ?> com <?= $perPage ?> registro(s) por página.
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <a href="<?= $queryBase . '?' . http_build_query($prevParams) ?>" class="inline-flex min-h-[42px] items-center justify-center rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 <?= $page <= 1 ? 'pointer-events-none opacity-50' : '' ?>">Anterior</a>
+          <?php for ($pageNumber = $pageWindowStart; $pageNumber <= $pageWindowEnd; $pageNumber++): ?>
+            <?php $numberParams = array_merge($filterParams, ['page' => $pageNumber]); ?>
+            <a href="<?= $queryBase . '?' . http_build_query($numberParams) ?>" class="inline-flex min-h-[42px] min-w-[42px] items-center justify-center rounded-xl border px-3 py-2 text-sm font-semibold transition <?= $pageNumber === $page ? 'border-blue-900 bg-blue-900 text-white' : 'border-slate-200 text-slate-600 hover:bg-slate-50' ?>">
+              <?= $pageNumber ?>
+            </a>
+          <?php endfor; ?>
+          <a href="<?= $queryBase . '?' . http_build_query($nextParams) ?>" class="inline-flex min-h-[42px] items-center justify-center rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 <?= $page >= $pages ? 'pointer-events-none opacity-50' : '' ?>">Próxima</a>
+        </div>
+      </div>
+    <?php endif; ?>
   </div>
 </div>

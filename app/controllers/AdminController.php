@@ -115,8 +115,8 @@ class AdminController extends Controller
                 'highlight' => '8,7%',
             ],
             'turnoverGenero' => [
-                ['label' => 'Feminino', 'value' => 8.1, 'color' => '#7c3aed'],
-                ['label' => 'Masculino', 'value' => 9.3, 'color' => '#2563eb'],
+                ['label' => 'Feminino', 'value' => 8.1, 'color' => '#1d2d44'],
+                ['label' => 'Masculino', 'value' => 9.3, 'color' => '#6f8fa8'],
             ],
             'turnoverFaixaEtaria' => [
                 ['label' => 'Até 25 anos', 'value' => 14.2],
@@ -159,12 +159,12 @@ class AdminController extends Controller
                 ],
             ],
             'colaboradoresArea' => [
-                ['label' => 'Operações', 'value' => 512, 'percent' => '40,2%', 'color' => '#2563eb'],
-                ['label' => 'Comercial', 'value' => 246, 'percent' => '19,3%', 'color' => '#06b6d4'],
-                ['label' => 'Administrativo', 'value' => 198, 'percent' => '15,6%', 'color' => '#a855f7'],
-                ['label' => 'Tecnologia', 'value' => 164, 'percent' => '12,9%', 'color' => '#10b981'],
-                ['label' => 'Financeiro', 'value' => 98, 'percent' => '7,7%', 'color' => '#f97316'],
-                ['label' => 'Outros', 'value' => 56, 'percent' => '4,3%', 'color' => '#94a3b8'],
+                ['label' => 'Operações', 'value' => 512, 'percent' => '40,2%', 'color' => '#0d1321'],
+                ['label' => 'Comercial', 'value' => 246, 'percent' => '19,3%', 'color' => '#1d2d44'],
+                ['label' => 'Administrativo', 'value' => 198, 'percent' => '15,6%', 'color' => '#2f4a68'],
+                ['label' => 'Tecnologia', 'value' => 164, 'percent' => '12,9%', 'color' => '#3e5c76'],
+                ['label' => 'Financeiro', 'value' => 98, 'percent' => '7,7%', 'color' => '#6f8fa8'],
+                ['label' => 'Outros', 'value' => 56, 'percent' => '4,3%', 'color' => '#aebfd0'],
             ],
             'tempoEmpresa' => [
                 ['label' => 'Até 1 ano', 'value' => 18],

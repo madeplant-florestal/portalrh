@@ -50,9 +50,12 @@ $candId = Candidatura::create([
     'indicacao_colaborador_nome' => 'Colaborador Teste ' . $suffix
 ]);
 
-$updated = Candidatura::updateStage($candId, $contratadoId, 1);
-if (!$updated) {
-    fwrite(STDERR, "Falha: não conseguiu mover para a etapa de admissão.\n");
+$updateResult = Candidatura::updateStage($candId, $contratadoId, 1, [
+    'admission_date' => date('d/m/Y'),
+    'admission_notes' => 'Documentação admissional em teste automatizado.',
+]);
+if (!($updateResult['ok'] ?? false)) {
+    fwrite(STDERR, "Falha: não conseguiu mover para a etapa de admissão (" . ($updateResult['message'] ?? '') . ").\n");
     exit(1);
 }
 $pdo->prepare('UPDATE candidaturas SET indicacao_data_contratacao = DATE_SUB(NOW(), INTERVAL 10 DAY), indicacao_data_fim_experiencia = DATE_ADD(CURDATE(), INTERVAL 80 DAY) WHERE id = ?')->execute([$candId]);

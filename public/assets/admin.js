@@ -369,6 +369,28 @@ if (typeof module !== 'undefined' && module.exports) {
 
     const cards = Array.from(document.querySelectorAll('[data-kanban-card="1"]'));
 
+    // Etapas cujo destino exige preenchimento de dados adicionais antes de confirmar a movimentação.
+    // Mantido em sincronia com RecruitmentStageMetadataValidator (fonte de verdade no backend).
+    const STAGE_FIELD_GROUPS = {
+      'entrevista-rh': 'entrevista',
+      'entrevista-gestor': 'entrevista',
+      testes: 'testes',
+      admissao: 'admissao',
+      reprovado: 'reprovado',
+      'banco-de-talentos': 'banco-de-talentos',
+    };
+
+    const FIELD_TO_DATASET_KEY = {
+      interview_date: 'interviewDate',
+      interview_time: 'interviewTime',
+      interview_location: 'interviewLocation',
+      interview_link: 'interviewLink',
+      test_name: 'testName',
+      deadline: 'deadline',
+      admission_date: 'admissionDate',
+      admission_notes: 'admissionNotes',
+    };
+
     let draggedCard = null;
     let sourceColumn = null;
 
@@ -381,7 +403,7 @@ if (typeof module !== 'undefined' && module.exports) {
       });
     };
 
-    const sendMove = async (candidaturaId, stageId) => {
+    const sendMove = async (candidaturaId, stageId, expectedCurrentStageId, metadata) => {
       const res = await fetch(buildUrl('/api/pipeline/move'), {
         method: 'POST',
         headers: {
@@ -392,6 +414,8 @@ if (typeof module !== 'undefined' && module.exports) {
           csrf,
           candidatura_id: candidaturaId,
           stage_id: stageId,
+          expected_current_stage_id: expectedCurrentStageId,
+          metadata: metadata || {},
         }),
       });
 
@@ -405,6 +429,112 @@ if (typeof module !== 'undefined' && module.exports) {
       if (!res.ok || !data || !data.success) {
         throw new Error((data && data.error) || 'Falha ao mover');
       }
+    };
+
+    // Modal de confirmação contextual (uma etapa por vez, campos condicionais).
+    const modal = document.querySelector('[data-stage-modal="1"]');
+    const modalErrorBox = modal ? modal.querySelector('[data-stage-modal-error="1"]') : null;
+    const modalErrorText = modal ? modal.querySelector('[data-stage-modal-error-text="1"]') : null;
+    const modalCandidateName = modal ? modal.querySelector('[data-stage-modal-candidate-name="1"]') : null;
+    const modalTargetName = modal ? modal.querySelector('[data-stage-modal-target-name="1"]') : null;
+    const modalConfirmBtn = modal ? modal.querySelector('[data-stage-modal-confirm="1"]') : null;
+    const modalCancelBtn = modal ? modal.querySelector('[data-stage-modal-cancel="1"]') : null;
+    const modalGroups = modal ? Array.from(modal.querySelectorAll('[data-stage-modal-group]')) : [];
+    let modalBusy = false;
+
+    const setModalBusy = (busy) => {
+      modalBusy = busy;
+      if (modalConfirmBtn) {
+        modalConfirmBtn.disabled = busy;
+        modalConfirmBtn.classList.toggle('opacity-60', busy);
+      }
+    };
+
+    const hideModalError = () => {
+      if (modalErrorBox) modalErrorBox.classList.add('hidden');
+    };
+
+    const showModalError = (message) => {
+      if (!modalErrorBox || !modalErrorText) return;
+      modalErrorText.textContent = message;
+      modalErrorBox.classList.remove('hidden');
+    };
+
+    const collectModalMetadata = (groupKey) => {
+      const metadata = {};
+      const group = modal.querySelector(`[data-stage-modal-group="${groupKey}"]`);
+      if (!group) return metadata;
+      group.querySelectorAll('[data-stage-modal-field]').forEach((field) => {
+        const key = field.getAttribute('data-stage-modal-field');
+        metadata[key] = field.type === 'checkbox' ? (field.checked ? '1' : '') : (field.value || '');
+      });
+      return metadata;
+    };
+
+    const prefillModal = (groupKey, card) => {
+      const group = modal.querySelector(`[data-stage-modal-group="${groupKey}"]`);
+      if (!group) return;
+      group.querySelectorAll('[data-stage-modal-field]').forEach((field) => {
+        const key = field.getAttribute('data-stage-modal-field');
+        if (field.type === 'checkbox') {
+          field.checked = false;
+          return;
+        }
+        const datasetKey = FIELD_TO_DATASET_KEY[key];
+        field.value = datasetKey ? (card.dataset[datasetKey] || '') : '';
+      });
+    };
+
+    const openStageModal = (groupKey, card, col, stageId, candId, expectedCurrentStageId) => {
+      if (!modal) {
+        window.alert('Não foi possível abrir o formulário desta etapa.');
+        return;
+      }
+
+      modalGroups.forEach((g) => g.classList.add('hidden'));
+      const activeGroup = modal.querySelector(`[data-stage-modal-group="${groupKey}"]`);
+      if (activeGroup) activeGroup.classList.remove('hidden');
+      hideModalError();
+      if (modalCandidateName) modalCandidateName.textContent = card.getAttribute('data-cand-name') || '';
+      if (modalTargetName) {
+        // O <h3> com o nome da etapa fica no card do cabeçalho da coluna (elemento irmão de
+        // [data-kanban-column]), não dentro dele — por isso a busca sobe até o container comum.
+        const stageLabel = col.closest('[data-kanban-board-column="1"]')?.querySelector('h3');
+        modalTargetName.textContent = stageLabel ? stageLabel.textContent.trim() : '';
+      }
+      prefillModal(groupKey, card);
+      setModalBusy(false);
+      modal.classList.remove('hidden');
+
+      const onCancel = () => {
+        // O cartão nunca saiu da coluna de origem — não há nada a reverter visualmente.
+        modal.classList.add('hidden');
+        detachHandlers();
+      };
+
+      const onConfirm = async () => {
+        if (modalBusy) return; // trava duplo clique/duplo envio
+        const metadata = collectModalMetadata(groupKey);
+        setModalBusy(true);
+        try {
+          await sendMove(candId, stageId, expectedCurrentStageId, metadata);
+          modal.classList.add('hidden');
+          detachHandlers();
+          col.appendChild(card);
+          updateCounts();
+        } catch (err) {
+          setModalBusy(false);
+          showModalError((err && err.message) || 'Falha ao mover candidato.');
+        }
+      };
+
+      const detachHandlers = () => {
+        if (modalConfirmBtn) modalConfirmBtn.removeEventListener('click', onConfirm);
+        if (modalCancelBtn) modalCancelBtn.removeEventListener('click', onCancel);
+      };
+
+      if (modalConfirmBtn) modalConfirmBtn.addEventListener('click', onConfirm);
+      if (modalCancelBtn) modalCancelBtn.addEventListener('click', onCancel);
     };
 
     cards.forEach((card) => {
@@ -446,25 +576,39 @@ if (typeof module !== 'undefined' && module.exports) {
         col.classList.remove('bg-gray-200');
 
         const stageId = parseInt(col.getAttribute('data-stage-id') || '0', 10);
+        const stageSlug = col.getAttribute('data-stage-slug') || '';
         const candId = (ev.dataTransfer?.getData('text/plain') || '').trim() || (draggedCard?.getAttribute('data-cand-id') || '').trim();
 
-        if (!draggedCard || !stageId || !candId) {
+        // Captura em variáveis locais antes de qualquer await: o navegador dispara "dragend"
+        // (que zera draggedCard/sourceColumn) assim que este handler assíncrono cede o controle,
+        // independentemente de quanto tempo o modal fica aberto aguardando o usuário.
+        const card = draggedCard;
+        const originColumn = sourceColumn;
+
+        if (!card || !stageId || !candId || originColumn === col) {
           return;
         }
 
-        const prevParent = sourceColumn;
-        col.appendChild(draggedCard);
-        updateCounts();
+        const expectedCurrentStageId = parseInt(originColumn?.getAttribute('data-stage-id') || '0', 10) || null;
+        const groupKey = STAGE_FIELD_GROUPS[stageSlug];
 
-        try {
-          await sendMove(candId, stageId);
-        } catch {
-          if (prevParent) {
-            prevParent.appendChild(draggedCard);
-          }
+        if (!groupKey) {
+          // Etapa sem formulário obrigatório: comportamento direto (nova-inscricao, triagem-rh, aprovado...).
+          col.appendChild(card);
           updateCounts();
-          window.location.reload();
+          try {
+            await sendMove(candId, stageId, expectedCurrentStageId, {});
+          } catch (err) {
+            originColumn.appendChild(card);
+            updateCounts();
+            window.alert((err && err.message) || 'Falha ao mover candidato.');
+          }
+          return;
         }
+
+        // Etapa com formulário obrigatório: NÃO move visualmente ainda — abre o modal contextual.
+        // O cartão só entra na coluna de destino após confirmação bem-sucedida do backend.
+        openStageModal(groupKey, card, col, stageId, candId, expectedCurrentStageId);
       });
     });
 

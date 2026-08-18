@@ -4,6 +4,8 @@ class AdminColaboradoresController extends Controller
     public function index(): void
     {
         Auth::requireRole(['admin', 'rh', 'viewer']);
+        $page = max(1, (int)($_GET['page'] ?? 1));
+        $perPage = ctype_digit((string)($_GET['per_page'] ?? '')) ? (int)$_GET['per_page'] : 20;
 
         $filters = [
             'q' => Security::sanitizeString($_GET['q'] ?? ''),
@@ -12,9 +14,14 @@ class AdminColaboradoresController extends Controller
             'setor_id' => ctype_digit((string)($_GET['setor_id'] ?? '')) ? (int)$_GET['setor_id'] : null,
             'status' => Security::sanitizeString($_GET['status'] ?? ''),
         ];
+        $result = Colaborador::paginateAdmin($filters, $page, $perPage);
 
         $this->view->render('admin/colaboradores/index', [
-            'colaboradores' => Colaborador::all($filters),
+            'colaboradores' => $result['items'],
+            'total' => $result['total'],
+            'page' => $result['page'],
+            'pages' => $result['pages'],
+            'perPage' => $result['per_page'],
             'filters' => $filters,
             'summary' => Colaborador::summary(),
             'cargoOptions' => Colaborador::cargoOptions(),

@@ -17,12 +17,15 @@ class WebhookEventRepository
     public function create(array $data, ?PDO $pdo = null): int
     {
         $conn = $pdo ?? $this->pdo;
+        $eventId = trim((string)($data['event_id'] ?? '')) !== '' ? $data['event_id'] : self::generateEventId();
         $stmt = $conn->prepare(
-            'INSERT INTO webhook_events (tenant_id, event_type, payload_json, webhook_url, status, response_code, response_body, last_error, processed_at, retry_count)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            'INSERT INTO webhook_events (event_id, empresa_id, movement_id, event_type, payload_json, webhook_url, status, response_code, response_body, last_error, processed_at, retry_count)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
         $stmt->execute([
-            $data['tenant_id'] ?? null,
+            $eventId,
+            $data['empresa_id'] ?? null,
+            $data['movement_id'] ?? null,
             $data['event_type'],
             $data['payload_json'],
             $data['webhook_url'] ?? null,
@@ -35,6 +38,11 @@ class WebhookEventRepository
         ]);
 
         return (int)$conn->lastInsertId();
+    }
+
+    public static function generateEventId(): string
+    {
+        return 'evt_' . bin2hex(random_bytes(16));
     }
 
     public function find(int $id): ?array
@@ -147,5 +155,24 @@ class WebhookEventRepository
         );
         $stmt->execute([$limit]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    public function countsByStatus(): array
+    {
+        $counts = ['pending' => 0, 'processing' => 0, 'processed' => 0, 'failed' => 0, 'disabled' => 0, 'skipped' => 0];
+        $stmt = $this->pdo->query('SELECT status, COUNT(*) AS total FROM webhook_events GROUP BY status');
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $counts[(string)$row['status']] = (int)$row['total'];
+        }
+
+        return $counts;
+    }
+
+    public function lastProcessedAt(): ?string
+    {
+        $stmt = $this->pdo->query("SELECT MAX(processed_at) FROM webhook_events WHERE status = 'processed'");
+        $value = $stmt->fetchColumn();
+
+        return $value !== false && $value !== null ? (string)$value : null;
     }
 }

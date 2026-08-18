@@ -1,11 +1,15 @@
 <?php
+// Cor deixou de ser decorativa por KPI: todo indicador usa o mesmo tratamento
+// neutro derivado da marca (ctgreen). Cor real (verde/vermelho) fica reservada
+// para os sinais de tendência que já existem no restante da tela.
+$dashboardNeutralScheme = ['bg' => 'dashboard-icon-badge', 'text' => '', 'accent' => '#1d2d44', 'soft' => '#c9d2db'];
 $palette = [
-    'blue' => ['bg' => 'bg-blue-100', 'text' => 'text-blue-700', 'accent' => '#2563eb', 'soft' => '#dbeafe'],
-    'violet' => ['bg' => 'bg-violet-100', 'text' => 'text-violet-700', 'accent' => '#7c3aed', 'soft' => '#ede9fe'],
-    'teal' => ['bg' => 'bg-teal-100', 'text' => 'text-teal-700', 'accent' => '#0f766e', 'soft' => '#ccfbf1'],
-    'green' => ['bg' => 'bg-green-100', 'text' => 'text-green-700', 'accent' => '#16a34a', 'soft' => '#dcfce7'],
-    'amber' => ['bg' => 'bg-amber-100', 'text' => 'text-amber-700', 'accent' => '#f59e0b', 'soft' => '#fef3c7'],
-    'pink' => ['bg' => 'bg-pink-100', 'text' => 'text-pink-700', 'accent' => '#ec4899', 'soft' => '#fce7f3'],
+    'blue' => $dashboardNeutralScheme,
+    'violet' => $dashboardNeutralScheme,
+    'teal' => $dashboardNeutralScheme,
+    'green' => $dashboardNeutralScheme,
+    'amber' => $dashboardNeutralScheme,
+    'pink' => $dashboardNeutralScheme,
 ];
 
 if (!function_exists('dashboard_icon')) {
@@ -26,6 +30,48 @@ if (!function_exists('dashboard_icon')) {
     }
 }
 
+if (!function_exists('dashboard_fmt')) {
+    function dashboard_fmt(float $value): string
+    {
+        return number_format($value, 2, '.', '');
+    }
+}
+
+if (!function_exists('dashboard_smooth_line_path')) {
+    // Converte uma lista de pontos {x,y} em um path SVG suavizado (Catmull-Rom
+    // convertido para Bezier cubico). Mesma curva alimenta tanto a linha quanto
+    // a area abaixo dela, para as duas ficarem sempre alinhadas.
+    function dashboard_smooth_line_path(array $points): string
+    {
+        $points = array_values($points);
+        $count = count($points);
+        if ($count === 0) {
+            return '';
+        }
+        if ($count === 1) {
+            return 'M ' . dashboard_fmt($points[0]['x']) . ',' . dashboard_fmt($points[0]['y']);
+        }
+
+        $d = 'M ' . dashboard_fmt($points[0]['x']) . ',' . dashboard_fmt($points[0]['y']);
+        for ($i = 0; $i < $count - 1; $i++) {
+            $p0 = $points[$i - 1] ?? $points[$i];
+            $p1 = $points[$i];
+            $p2 = $points[$i + 1];
+            $p3 = $points[$i + 2] ?? $p2;
+
+            $cp1x = $p1['x'] + ($p2['x'] - $p0['x']) / 6;
+            $cp1y = $p1['y'] + ($p2['y'] - $p0['y']) / 6;
+            $cp2x = $p2['x'] - ($p3['x'] - $p1['x']) / 6;
+            $cp2y = $p2['y'] - ($p3['y'] - $p1['y']) / 6;
+
+            $d .= ' C ' . dashboard_fmt($cp1x) . ',' . dashboard_fmt($cp1y)
+                . ' ' . dashboard_fmt($cp2x) . ',' . dashboard_fmt($cp2y)
+                . ' ' . dashboard_fmt($p2['x']) . ',' . dashboard_fmt($p2['y']);
+        }
+        return $d;
+    }
+}
+
 if (!function_exists('dashboard_sparkline')) {
     function dashboard_sparkline(array $values, string $stroke, string $fill, string $label): string
     {
@@ -42,16 +88,19 @@ if (!function_exists('dashboard_sparkline')) {
         foreach (array_values($values) as $index => $value) {
             $x = $padding + ($index * $stepX);
             $y = $height - $padding - (($value - $min) / ($max - $min)) * ($height - ($padding * 2));
-            $points[] = number_format($x, 2, '.', '') . ',' . number_format($y, 2, '.', '');
+            $points[] = ['x' => $x, 'y' => $y];
         }
-        $area = $points;
-        $area[] = number_format($width - $padding, 2, '.', '') . ',' . number_format($height - $padding, 2, '.', '');
-        $area[] = number_format($padding, 2, '.', '') . ',' . number_format($height - $padding, 2, '.', '');
+
+        $linePath = dashboard_smooth_line_path($points);
+        $areaPath = $linePath
+            . ' L ' . dashboard_fmt($width - $padding) . ',' . dashboard_fmt($height - $padding)
+            . ' L ' . dashboard_fmt($padding) . ',' . dashboard_fmt($height - $padding)
+            . ' Z';
 
         return '<svg viewBox="0 0 ' . $width . ' ' . $height . '" class="dashboard-sparkline" preserveAspectRatio="none" role="img" aria-label="' . Security::e($label) . '">'
             . '<title>' . Security::e($label) . '</title>'
-            . '<polygon points="' . implode(' ', $area) . '" fill="' . $fill . '" opacity="0.30"></polygon>'
-            . '<polyline points="' . implode(' ', $points) . '" fill="none" stroke="' . $stroke . '" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></polyline>'
+            . '<path d="' . $areaPath . '" fill="' . $fill . '" opacity="0.22"></path>'
+            . '<path d="' . $linePath . '" fill="none" stroke="' . $stroke . '" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="dashboard-chart-draw" style="stroke-dasharray:500;stroke-dashoffset:500;"></path>'
             . '</svg>';
     }
 }
@@ -78,8 +127,12 @@ if (!function_exists('dashboard_line_chart')) {
             $y = $top + ($max - $value) / ($max - $min) * $chartHeight;
             $points[] = ['x' => $x, 'y' => $y, 'value' => $value, 'label' => $labels[$index] ?? ''];
         }
-        $polyline = implode(' ', array_map(static fn(array $point): string => number_format($point['x'], 2, '.', '') . ',' . number_format($point['y'], 2, '.', ''), $points));
-        $area = $polyline . ' ' . number_format($width - $right, 2, '.', '') . ',' . number_format($height - $bottom, 2, '.', '') . ' ' . number_format($left, 2, '.', '') . ',' . number_format($height - $bottom, 2, '.', '');
+
+        $linePath = dashboard_smooth_line_path($points);
+        $areaPath = $linePath
+            . ' L ' . dashboard_fmt($width - $right) . ',' . dashboard_fmt($height - $bottom)
+            . ' L ' . dashboard_fmt($left) . ',' . dashboard_fmt($height - $bottom)
+            . ' Z';
 
         $grid = '';
         $axis = '';
@@ -96,26 +149,39 @@ if (!function_exists('dashboard_line_chart')) {
             $xLabels .= '<text x="' . $x . '" y="' . ($height - 8) . '" text-anchor="middle" font-size="10" fill="#94a3b8">' . Security::e($label) . '</text>';
         }
 
-        $circles = '';
-        foreach ($points as $point) {
-            $circles .= '<circle cx="' . $point['x'] . '" cy="' . $point['y'] . '" r="4" fill="#ffffff" stroke="' . $stroke . '" stroke-width="2" tabindex="0">'
+        // Destaca so o ultimo ponto, o maior e o menor valor da serie; os
+        // demais ficam com uma area de toque/foco invisivel (acessibilidade
+        // preservada) que revela um marcador discreto no hover/foco.
+        $lastIndex = count($points) - 1;
+        $seriesValues = array_column($points, 'value');
+        $maxIndex = array_search(max($seriesValues), $seriesValues, true);
+        $minIndex = array_search(min($seriesValues), $seriesValues, true);
+        $highlightIndexes = array_unique([$lastIndex, $maxIndex, $minIndex]);
+
+        $markers = '';
+        foreach ($points as $index => $point) {
+            $isHighlighted = in_array($index, $highlightIndexes, true);
+            $dotClass = $isHighlighted ? 'dashboard-chart-point-dot dashboard-chart-point-dot--highlight' : 'dashboard-chart-point-dot';
+            $markers .= '<g class="dashboard-chart-point" tabindex="0">'
+                . '<circle cx="' . $point['x'] . '" cy="' . $point['y'] . '" r="10" fill="transparent"></circle>'
+                . '<circle cx="' . $point['x'] . '" cy="' . $point['y'] . '" r="4" fill="#ffffff" stroke="' . $stroke . '" stroke-width="2" class="' . $dotClass . '"></circle>'
                 . '<title>' . Security::e($point['label']) . ': ' . number_format($point['value'], 1, ',', '.') . $suffix . '</title>'
-                . '</circle>';
+                . '</g>';
         }
 
         return '<div class="dashboard-chart-scroll"><svg viewBox="0 0 ' . $width . ' ' . $height . '" class="dashboard-line-chart" preserveAspectRatio="none" role="img" aria-label="Gráfico de linha">'
             . $grid
             . $axis
-            . '<polygon points="' . $area . '" fill="' . $fill . '" opacity="0.25"></polygon>'
-            . '<polyline points="' . $polyline . '" fill="none" stroke="' . $stroke . '" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></polyline>'
-            . $circles
+            . '<path d="' . $areaPath . '" fill="' . $fill . '" opacity="0.14"></path>'
+            . '<path d="' . $linePath . '" fill="none" stroke="' . $stroke . '" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="dashboard-chart-draw" style="stroke-dasharray:2000;stroke-dashoffset:2000;"></path>'
+            . $markers
             . $xLabels
             . '</svg></div>';
     }
 }
 
 if (!function_exists('dashboard_donut')) {
-    function dashboard_donut(array $segments, int $size = 138, int $thickness = 16): string
+    function dashboard_donut(array $segments, int $size = 148, int $thickness = 20): string
     {
         $total = 0.0;
         foreach ($segments as $segment) {
@@ -126,16 +192,22 @@ if (!function_exists('dashboard_donut')) {
         }
         $radius = ($size - $thickness) / 2;
         $circumference = 2 * M_PI * $radius;
+        $segmentCount = count($segments);
+        // Ponta reta (nao arredondada) + um pequeno vao fixo entre segmentos:
+        // com a paleta tonal atual, pontas arredondadas encostadas ficavam
+        // dificeis de distinguir entre si.
+        $gap = $segmentCount > 1 ? min(6.0, $circumference / ($segmentCount * 4)) : 0.0;
         $offset = 0.0;
-        $svg = '<svg viewBox="0 0 ' . $size . ' ' . $size . '" class="dashboard-donut -rotate-90" role="img" aria-label="Gráfico de rosca">';
-        $svg .= '<circle cx="' . ($size / 2) . '" cy="' . ($size / 2) . '" r="' . $radius . '" fill="none" stroke="#e2e8f0" stroke-width="' . $thickness . '"></circle>';
+        $svg = '<svg viewBox="0 0 ' . $size . ' ' . $size . '" class="dashboard-donut dashboard-chart-fade -rotate-90" role="img" aria-label="Gráfico de rosca">';
+        $svg .= '<circle cx="' . ($size / 2) . '" cy="' . ($size / 2) . '" r="' . $radius . '" fill="none" stroke="#e9edf2" stroke-width="' . $thickness . '"></circle>';
         foreach ($segments as $segment) {
             $value = (float)$segment['value'];
-            $length = ($value / $total) * $circumference;
-            $svg .= '<circle cx="' . ($size / 2) . '" cy="' . ($size / 2) . '" r="' . $radius . '" fill="none" stroke="' . $segment['color'] . '" stroke-width="' . $thickness . '" stroke-linecap="round" stroke-dasharray="' . number_format($length, 2, '.', '') . ' ' . number_format($circumference - $length, 2, '.', '') . '" stroke-dashoffset="' . number_format(-$offset, 2, '.', '') . '" tabindex="0">'
+            $rawLength = ($value / $total) * $circumference;
+            $length = max(0.0, $rawLength - $gap);
+            $svg .= '<circle cx="' . ($size / 2) . '" cy="' . ($size / 2) . '" r="' . $radius . '" fill="none" stroke="' . $segment['color'] . '" stroke-width="' . $thickness . '" stroke-linecap="butt" stroke-dasharray="' . dashboard_fmt($length) . ' ' . dashboard_fmt($circumference - $length) . '" stroke-dashoffset="' . dashboard_fmt(-$offset) . '" tabindex="0">'
                 . '<title>' . Security::e($segment['label']) . ': ' . number_format($value, 1, ',', '.') . '%</title>'
                 . '</circle>';
-            $offset += $length;
+            $offset += $rawLength;
         }
         $svg .= '</svg>';
         return $svg;
@@ -168,6 +240,22 @@ if (!function_exists('dashboard_donut')) {
     border: 1px solid rgba(148, 163, 184, 0.16);
     box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
   }
+  .dashboard-icon-badge {
+    background: #e9edf2;
+    color: #1d2d44;
+  }
+  .dashboard-stat-box {
+    background: #e9edf2;
+    color: #1d2d44;
+  }
+  .dashboard-bar-track {
+    background: #eef1f4;
+    max-width: 44px;
+  }
+  .dashboard-legend-swatch {
+    border-radius: 4px;
+    box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.06);
+  }
   .dashboard-title {
     font-size: 1rem;
     font-weight: 700;
@@ -181,9 +269,22 @@ if (!function_exists('dashboard_donut')) {
     color: #64748b;
   }
   .dashboard-chart-scroll {
+    position: relative;
     overflow-x: auto;
     overflow-y: hidden;
     touch-action: pan-x pan-y pinch-zoom;
+  }
+  @media (max-width: 640px) {
+    .dashboard-chart-scroll::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      width: 28px;
+      background: linear-gradient(to right, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.94));
+      pointer-events: none;
+    }
   }
   .dashboard-chart-scroll::-webkit-scrollbar {
     height: 6px;
@@ -194,7 +295,7 @@ if (!function_exists('dashboard_donut')) {
   }
   .dashboard-line-chart {
     width: 100%;
-    min-width: 520px;
+    min-width: 480px;
     height: 188px;
   }
   .dashboard-sparkline {
@@ -203,8 +304,74 @@ if (!function_exists('dashboard_donut')) {
   }
   .dashboard-donut {
     margin: 0 auto;
-    width: 132px;
-    height: 132px;
+    width: 148px;
+    height: 148px;
+  }
+  .dashboard-chart-point-dot {
+    opacity: 0;
+    transition: opacity 0.15s ease;
+  }
+  .dashboard-chart-point:hover .dashboard-chart-point-dot,
+  .dashboard-chart-point:focus .dashboard-chart-point-dot,
+  .dashboard-chart-point:focus-within .dashboard-chart-point-dot {
+    opacity: 1;
+  }
+  .dashboard-chart-point-dot--highlight {
+    opacity: 1;
+  }
+  @keyframes dashboard-draw-line {
+    to { stroke-dashoffset: 0; }
+  }
+  .dashboard-chart-draw {
+    animation: dashboard-draw-line 1.1s ease-out forwards;
+  }
+  @keyframes dashboard-fade-scale {
+    from { opacity: 0; transform: rotate(-90deg) scale(0.92); }
+    to { opacity: 1; transform: rotate(-90deg) scale(1); }
+  }
+  .dashboard-chart-fade {
+    animation: dashboard-fade-scale 0.5s ease-out both;
+  }
+  @keyframes dashboard-panel-fade {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  .dashboard-panel,
+  .dashboard-panel-compact {
+    animation: dashboard-panel-fade 0.45s ease-out;
+  }
+  @keyframes dashboard-grow-x {
+    from { transform: scaleX(0); }
+    to { transform: scaleX(1); }
+  }
+  .dashboard-bar-grow-x {
+    transform-origin: left;
+    animation: dashboard-grow-x 0.6s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  }
+  @keyframes dashboard-grow-y {
+    from { transform: scaleY(0); }
+    to { transform: scaleY(1); }
+  }
+  .dashboard-bar-grow-y {
+    transform-origin: bottom;
+    animation: dashboard-grow-y 0.6s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .dashboard-chart-draw,
+    .dashboard-chart-fade,
+    .dashboard-panel,
+    .dashboard-panel-compact,
+    .dashboard-bar-grow-x,
+    .dashboard-bar-grow-y {
+      animation: none !important;
+    }
+    .dashboard-chart-draw {
+      stroke-dashoffset: 0 !important;
+    }
+    .dashboard-bar-grow-x,
+    .dashboard-bar-grow-y {
+      transform: none !important;
+    }
   }
   @media (min-width: 640px) {
     .dashboard-kpi-grid {
@@ -261,10 +428,10 @@ if (!function_exists('dashboard_donut')) {
             <?php endforeach; ?>
           </select>
         </form>
-        <a href="<?= $base ?>/admin/colaboradores" class="inline-flex items-center justify-center rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-700 shadow-sm hover:bg-blue-100">
+        <a href="<?= $base ?>/admin/colaboradores" class="ct-btn ct-btn-muted">
           Colaboradores
         </a>
-        <button type="button" onclick="window.print()" title="Exportar o dashboard em PDF pela impressão do navegador" class="inline-flex items-center justify-center rounded-xl bg-blue-950 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-900">
+        <button type="button" onclick="window.print()" title="Exportar o dashboard em PDF pela impressão do navegador" class="ct-btn ct-btn-primary">
           Exportar
         </button>
       </div>
@@ -272,13 +439,13 @@ if (!function_exists('dashboard_donut')) {
   </section>
 
   <section class="dashboard-kpi-grid">
-    <?php foreach ($dashboard['kpis'] as $kpi): ?>
+    <?php foreach ($dashboard['kpis'] as $kpiIndex => $kpi): ?>
       <?php
       $scheme = $palette[$kpi['color']] ?? $palette['blue'];
       $href = $kpi['href'] ?? null;
       $tag = $href ? 'a' : 'div';
       ?>
-      <<?= $tag ?><?= $href ? ' href="' . $base . $href . '"' : '' ?> class="dashboard-panel-compact block ring-1 ring-slate-200 transition hover:-translate-y-0.5 hover:shadow-md">
+      <<?= $tag ?><?= $href ? ' href="' . $base . $href . '"' : '' ?> class="dashboard-panel-compact block ring-1 ring-slate-200 transition hover:-translate-y-0.5 hover:shadow-md" style="animation-delay: <?= $kpiIndex * 40 ?>ms">
         <div class="flex items-start justify-between gap-3">
           <div class="min-w-0">
             <p class="truncate text-xs font-semibold uppercase tracking-wide text-slate-500"><?= Security::e($kpi['label']) ?></p>
@@ -296,13 +463,8 @@ if (!function_exists('dashboard_donut')) {
         <div class="mt-3">
           <?= dashboard_sparkline($kpi['trend'], $scheme['accent'], $scheme['soft'], $kpi['label']) ?>
         </div>
-        <div class="mt-2 flex items-center justify-between gap-2">
+        <div class="mt-2">
           <span class="text-[11px] font-semibold text-emerald-600"><?= Security::e($kpi['change']) ?></span>
-          <?php if (!empty($kpi['is_real'])): ?>
-            <span class="text-[11px] font-semibold text-blue-700">Base real</span>
-          <?php elseif (!empty($href)): ?>
-            <span class="text-[11px] font-semibold text-slate-400">Fallback</span>
-          <?php endif; ?>
         </div>
       </<?= $tag ?>>
     <?php endforeach; ?>
@@ -315,27 +477,35 @@ if (!function_exists('dashboard_donut')) {
           <h2 class="dashboard-title">Turnover - últimos 12 meses</h2>
           <p class="dashboard-subtitle">Evolução mensal do indicador</p>
         </div>
-        <span class="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700"><?= Security::e($dashboard['turnoverSeries']['highlight']) ?></span>
+        <span class="dashboard-icon-badge rounded-full px-3 py-1 text-xs font-semibold"><?= Security::e($dashboard['turnoverSeries']['highlight']) ?></span>
       </div>
-      <?= dashboard_line_chart($dashboard['turnoverSeries']['labels'], $dashboard['turnoverSeries']['values'], '#2563eb', '#bfdbfe') ?>
+      <?= dashboard_line_chart($dashboard['turnoverSeries']['labels'], $dashboard['turnoverSeries']['values'], '#1d2d44', '#c9d2db') ?>
     </article>
 
     <article class="dashboard-panel dashboard-span-3 ring-1 ring-slate-200">
       <h2 class="dashboard-title">Turnover por Gênero (12m)</h2>
       <p class="dashboard-subtitle">Comparativo percentual por público</p>
-      <div class="mt-4 flex flex-col items-center gap-4 sm:flex-row sm:items-center sm:justify-between xl:flex-col xl:items-center">
-        <?= dashboard_donut($dashboard['turnoverGenero']) ?>
-        <div class="w-full space-y-3">
-          <?php foreach ($dashboard['turnoverGenero'] as $item): ?>
-            <div class="flex items-center gap-3">
-              <span class="h-3 w-3 rounded-full" style="background-color: <?= $item['color'] ?>"></span>
-              <div class="flex items-center justify-between gap-3 w-full">
-                <span class="text-sm text-slate-600"><?= Security::e($item['label']) ?></span>
-                <span class="text-xl font-bold text-slate-800"><?= number_format($item['value'], 1, ',', '.') ?>%</span>
-              </div>
+      <?php
+      // Duas categorias com valores proximos: barras horizontais comunicam a
+      // diferenca (comprimento/posicao) com muito mais precisao do que um
+      // donut (angulo/area) - ver decisao registrada na conversa da Sprint 002.
+      $maxGenero = max(array_column($dashboard['turnoverGenero'], 'value'));
+      ?>
+      <div class="mt-5 space-y-4">
+        <?php foreach ($dashboard['turnoverGenero'] as $item): ?>
+          <div title="<?= Security::e($item['label']) ?>: <?= number_format($item['value'], 1, ',', '.') ?>%">
+            <div class="mb-1.5 flex items-center justify-between">
+              <span class="flex items-center gap-2 text-sm text-slate-600">
+                <span class="h-2.5 w-2.5 rounded-full" style="background-color: <?= $item['color'] ?>"></span>
+                <?= Security::e($item['label']) ?>
+              </span>
+              <span class="text-lg font-bold text-slate-800"><?= number_format($item['value'], 1, ',', '.') ?>%</span>
             </div>
-          <?php endforeach; ?>
-        </div>
+            <div class="h-3 rounded-full bg-slate-100">
+              <div class="dashboard-bar-grow-x h-3 rounded-full" style="width: <?= ($item['value'] / $maxGenero) * 100 ?>%; background-color: <?= $item['color'] ?>;"></div>
+            </div>
+          </div>
+        <?php endforeach; ?>
       </div>
     </article>
 
@@ -351,7 +521,7 @@ if (!function_exists('dashboard_donut')) {
               <span class="font-semibold text-slate-800"><?= number_format($item['value'], 1, ',', '.') ?>%</span>
             </div>
             <div class="h-2.5 rounded-full bg-slate-100">
-              <div class="h-2.5 rounded-full bg-violet-600" style="width: <?= ($item['value'] / $maxFaixa) * 100 ?>%"></div>
+              <div class="dashboard-bar-grow-x h-2.5 rounded-full bg-ctgreen" style="width: <?= ($item['value'] / $maxFaixa) * 100 ?>%"></div>
             </div>
           </div>
         <?php endforeach; ?>
@@ -366,7 +536,7 @@ if (!function_exists('dashboard_donut')) {
           <h2 class="dashboard-title">Tempo Médio de Fechamento de Vagas</h2>
           <p class="dashboard-subtitle"><?= Security::e($dashboard['tempoFechamento']['meta']) ?></p>
         </div>
-        <div class="rounded-2xl bg-blue-100 px-3 py-2 text-center text-blue-700">
+        <div class="dashboard-stat-box rounded-2xl px-3 py-2 text-center">
           <p class="text-3xl font-bold leading-none"><?= (int)$dashboard['tempoFechamento']['value'] ?></p>
           <p class="mt-1 text-[11px] font-semibold uppercase tracking-wide">dias</p>
         </div>
@@ -375,8 +545,8 @@ if (!function_exists('dashboard_donut')) {
         <?php $maxTempo = max(array_column($dashboard['tempoFechamento']['bars'], 'value')); ?>
         <?php foreach ($dashboard['tempoFechamento']['bars'] as $bar): ?>
           <div class="flex-1 text-center" title="<?= Security::e($bar['label']) ?>: <?= (int)$bar['value'] ?> dias">
-            <div class="mx-auto flex h-24 items-end justify-center rounded-t-2xl bg-blue-50 px-1.5">
-              <div class="w-full rounded-t-xl bg-blue-600" style="height: <?= ($bar['value'] / $maxTempo) * 100 ?>%"></div>
+            <div class="mx-auto flex h-24 items-end justify-center rounded-t-lg dashboard-bar-track px-1.5">
+              <div class="dashboard-bar-grow-y w-full rounded-t-md bg-ctgreen" style="height: <?= ($bar['value'] / $maxTempo) * 100 ?>%"></div>
             </div>
             <p class="mt-2 text-[11px] font-semibold text-slate-600"><?= Security::e($bar['label']) ?></p>
           </div>
@@ -405,7 +575,7 @@ if (!function_exists('dashboard_donut')) {
           <h2 class="dashboard-title">Custo de Contratação</h2>
           <p class="dashboard-subtitle"><?= Security::e($dashboard['custoContratacao']['meta']) ?></p>
         </div>
-        <div class="rounded-2xl bg-amber-100 px-3 py-2 text-center text-amber-700">
+        <div class="dashboard-stat-box rounded-2xl px-3 py-2 text-center">
           <p class="text-2xl font-bold leading-none"><?= Security::e($dashboard['custoContratacao']['value']) ?></p>
         </div>
       </div>
@@ -413,8 +583,8 @@ if (!function_exists('dashboard_donut')) {
         <?php $maxCost = max(array_column($dashboard['custoContratacao']['bars'], 'value')); ?>
         <?php foreach ($dashboard['custoContratacao']['bars'] as $bar): ?>
           <div class="flex-1 text-center" title="<?= Security::e($bar['label']) ?>: R$ <?= number_format((float)$bar['value'], 0, ',', '.') ?>">
-            <div class="mx-auto flex h-24 items-end justify-center rounded-t-2xl bg-amber-50 px-1.5">
-              <div class="w-full rounded-t-xl bg-amber-500" style="height: <?= ($bar['value'] / $maxCost) * 100 ?>%"></div>
+            <div class="mx-auto flex h-24 items-end justify-center rounded-t-lg dashboard-bar-track px-1.5">
+              <div class="dashboard-bar-grow-y w-full rounded-t-md bg-ctlight" style="height: <?= ($bar['value'] / $maxCost) * 100 ?>%"></div>
             </div>
             <p class="mt-2 text-[11px] font-semibold text-slate-600"><?= Security::e($bar['label']) ?></p>
           </div>
@@ -431,7 +601,7 @@ if (!function_exists('dashboard_donut')) {
           <h2 class="dashboard-title">Colaboradores por Área</h2>
           <p class="dashboard-subtitle">Distribuição atual por área derivada da base de colaboradores</p>
         </div>
-        <a href="<?= $base ?>/admin/colaboradores" class="text-xs font-semibold text-blue-700 hover:text-blue-900">Ver base</a>
+        <a href="<?= $base ?>/admin/colaboradores" class="text-xs font-semibold text-ctgreen hover:text-ctdark">Ver base</a>
       </div>
       <div class="flex flex-col items-center gap-4 sm:flex-row sm:items-center xl:flex-row">
         <?= dashboard_donut($dashboard['colaboradoresArea']) ?>
@@ -439,7 +609,7 @@ if (!function_exists('dashboard_donut')) {
           <?php foreach ($dashboard['colaboradoresArea'] as $item): ?>
             <div class="flex items-center justify-between gap-3 text-[13px]" title="<?= Security::e($item['label']) ?>: <?= (int)$item['value'] ?> colaboradores">
               <div class="flex items-center gap-2">
-                <span class="h-3 w-3 rounded-full" style="background-color: <?= $item['color'] ?>"></span>
+                <span class="dashboard-legend-swatch h-3 w-3 shrink-0" style="background-color: <?= $item['color'] ?>"></span>
                 <span class="text-slate-600"><?= Security::e($item['label']) ?></span>
               </div>
               <div class="text-right">
@@ -464,7 +634,7 @@ if (!function_exists('dashboard_donut')) {
               <span class="font-semibold text-slate-800"><?= (int)$item['value'] ?>%</span>
             </div>
             <div class="h-2.5 rounded-full bg-slate-100">
-              <div class="h-2.5 rounded-full bg-blue-700" style="width: <?= ($item['value'] / $maxTempoEmpresa) * 100 ?>%"></div>
+              <div class="dashboard-bar-grow-x h-2.5 rounded-full bg-ctlight" style="width: <?= ($item['value'] / $maxTempoEmpresa) * 100 ?>%"></div>
             </div>
           </div>
         <?php endforeach; ?>
@@ -490,35 +660,5 @@ if (!function_exists('dashboard_donut')) {
         <?php endforeach; ?>
       </div>
     </article>
-  </section>
-
-  <section class="dashboard-panel ring-1 ring-slate-200">
-    <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-      <div>
-        <h2 class="dashboard-title">Base híbrida de indicadores conectada</h2>
-        <p class="dashboard-subtitle">O dashboard usa dados reais da tabela `colaboradores` sempre que há correspondência e mantém fallback genérico apenas nos blocos sem base equivalente.</p>
-      </div>
-      <div class="flex flex-wrap gap-2">
-        <a href="<?= $base ?>/admin/colaboradores" class="inline-flex items-center justify-center rounded-xl bg-blue-950 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-900">
-          Abrir colaboradores
-        </a>
-        <span class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-600">
-          <?= (int)$colaboradoresCadastrados ?> cadastro(s) disponíveis
-        </span>
-        <span class="inline-flex items-center justify-center rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700">
-          <?= (int)($dashboard['sourceSummary']['real_metrics'] ?? 0) ?> métrica(s) reais
-        </span>
-        <span class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-500">
-          <?= (int)($dashboard['sourceSummary']['fallback_metrics'] ?? 0) ?> fallback(s)
-        </span>
-      </div>
-    </div>
-    <?php if (!empty($dashboard['sourceSummary']['notes'])): ?>
-      <div class="mt-3 flex flex-wrap gap-2">
-        <?php foreach ($dashboard['sourceSummary']['notes'] as $note): ?>
-          <span class="inline-flex rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700"><?= Security::e($note) ?></span>
-        <?php endforeach; ?>
-      </div>
-    <?php endif; ?>
   </section>
 </div>

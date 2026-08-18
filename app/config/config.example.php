@@ -21,7 +21,11 @@ return [
         'allowed_upload_mime' => ['application/pdf'],
         'max_upload_bytes' => 5 * 1024 * 1024,
         'allowed_image_mime' => ['image/png', 'image/jpeg', 'image/webp'],
-        'max_image_bytes' => 2 * 1024 * 1024
+        'max_image_bytes' => 2 * 1024 * 1024,
+        // Mantenha "false" em produção. Só ative como "true" em ambiente local para testar
+        // webhooks contra um n8n rodando na própria máquina/rede interna — com "false" (padrão),
+        // URLs de webhook que resolvem para IP privado/loopback/reservado são bloqueadas (SSRF).
+        'webhook_allow_private_targets' => false
     ],
     'mail' => [
         'enabled' => true,

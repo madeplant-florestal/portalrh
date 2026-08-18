@@ -138,23 +138,38 @@ class AdminCandidaturasController extends Controller
                 echo 'Informe o nome do colaborador que realizou a indicação.';
                 return;
             }
-            if (!Candidatura::upsertStageMetadata((int)$id, $stageMetadata)) {
-                throw new \RuntimeException('Falha ao salvar metadados da etapa da candidatura.');
-            }
-            if ($stageId > 0) {
-                $stageUpdated = Candidatura::updateStage((int)$id, $stageId, $usuarioId);
-                if (!$stageUpdated) {
-                    throw new \RuntimeException('Falha ao atualizar etapa da candidatura.');
+
+            $candidaturaAtual = Candidatura::find((int)$id);
+            $currentStageId = (int)($candidaturaAtual['stage_id'] ?? 0);
+            $isTransition = $stageId > 0 && $stageId !== $currentStageId;
+
+            if ($isTransition) {
+                // Movimentação real de etapa: validação, metadados, histórico e evento de webhook são
+                // tratados como uma única operação atômica dentro de RecruitmentPipelineService — mesma
+                // fonte de validação usada pelo Kanban (RecruitmentStageMetadataValidator). O envio
+                // deliberado deste formulário conta como a confirmação explícita exigida por algumas etapas.
+                $metadataForMove = $stageMetadata;
+                $metadataForMove['observacoes'] = $observacoes;
+                $metadataForMove['confirm'] = true;
+
+                $result = Candidatura::updateStage((int)$id, $stageId, $usuarioId, $metadataForMove);
+                if (!($result['ok'] ?? false)) {
+                    $errorType = (string)($result['error'] ?? 'exception');
+                    http_response_code($errorType === 'validation' ? 422 : ($errorType === 'conflict' ? 409 : 500));
+                    echo (string)($result['message'] ?? 'Falha ao atualizar candidatura.');
+                    return;
                 }
-            }
-            
-            // Se houver observações, adiciona nota separada ou atualiza campo legado
-            if (!empty($observacoes)) {
-                // Para manter compatibilidade com historico antigo
-                $c = Candidatura::find((int)$id);
-                $notesUpdated = Candidatura::updateStatusNotes((int)$id, $c['status'] ?? 'custom', $observacoes, $usuarioId);
-                if (!$notesUpdated) {
-                    throw new \RuntimeException('Falha ao salvar observações da candidatura.');
+            } else {
+                // Sem transição de etapa: apenas atualização pontual dos metadados (capacidade já existente
+                // desde a Fase 1, para editar dados da etapa atual sem mover o candidato).
+                if (!Candidatura::upsertStageMetadata((int)$id, $stageMetadata)) {
+                    throw new \RuntimeException('Falha ao salvar metadados da etapa da candidatura.');
+                }
+                if (!empty($observacoes)) {
+                    $notesUpdated = Candidatura::updateStatusNotes((int)$id, $candidaturaAtual['status'] ?? 'custom', $observacoes, $usuarioId);
+                    if (!$notesUpdated) {
+                        throw new \RuntimeException('Falha ao salvar observações da candidatura.');
+                    }
                 }
             }
         } catch (\Throwable $e) {

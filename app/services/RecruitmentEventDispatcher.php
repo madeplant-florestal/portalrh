@@ -1,7 +1,8 @@
 <?php
 class RecruitmentEventDispatcher
 {
-    public const EVENT_CANDIDATE_STAGE_CHANGED = 'CANDIDATE_STAGE_CHANGED';
+    public const EVENT_CANDIDATE_STAGE_CHANGED = 'recrutamento.candidato.etapa_alterada';
+    public const EVENT_CANDIDATURA_CRIADA = 'recrutamento.candidatura.criada';
 
     private RecruitmentWebhookSettingRepository $settingRepository;
     private WebhookEventRepository $eventRepository;
@@ -15,53 +16,109 @@ class RecruitmentEventDispatcher
         RecruitmentWebhookSchemaService::ensureSchema();
         $this->settingRepository = $settingRepository ?? new RecruitmentWebhookSettingRepository();
         $this->eventRepository = $eventRepository ?? new WebhookEventRepository();
-        $this->deliveryService = $deliveryService ?? new RecruitmentWebhookDeliveryService($this->eventRepository);
+        $this->deliveryService = $deliveryService ?? new RecruitmentWebhookDeliveryService($this->eventRepository, null, $this->settingRepository);
     }
 
     public function dispatchCandidateStageChanged(array $context, ?PDO $pdo = null, bool $deliverImmediately = true): ?int
     {
-        $payload = $this->buildCandidateStageChangedPayload($context);
-        $tenantId = (int)($payload['tenant_id'] ?? 0);
-        $resolvedSetting = $this->resolveSetting($tenantId > 0 ? $tenantId : null);
+        $candidate = $context['candidate'] ?? [];
+        $empresaId = (int)($candidate['vaga_empresa_id'] ?? 0);
+        $eventId = WebhookEventRepository::generateEventId();
+
+        $payload = $this->buildCandidateStageChangedPayload($context, $eventId, $empresaId > 0 ? $empresaId : null, $candidate);
+
+        $setting = $this->settingRepository->get();
+        $webhookUrl = trim((string)($setting['webhook_url'] ?? ''));
 
         $status = 'pending';
         $lastError = null;
-        $webhookUrl = trim((string)($resolvedSetting['webhook_url'] ?? ''));
-
-        if (!$resolvedSetting) {
-            $status = 'skipped';
-            $lastError = 'Nenhuma configuração de webhook encontrada para o tenant.';
-        } elseif ((int)($resolvedSetting['enabled'] ?? 0) !== 1) {
+        if ((int)($setting['enabled'] ?? 0) !== 1) {
             $status = 'disabled';
-            $lastError = 'Webhook desabilitado para o tenant resolvido.';
+            $lastError = 'Integração de webhooks do recrutamento está desabilitada.';
         } elseif ($webhookUrl === '') {
             $status = 'failed';
             $lastError = 'Webhook habilitado sem URL configurada.';
         }
 
-        $eventId = $this->eventRepository->create([
-            'tenant_id' => $tenantId > 0 ? $tenantId : null,
+        $webhookEventId = $this->eventRepository->create([
+            'event_id' => $eventId,
+            'empresa_id' => $empresaId > 0 ? $empresaId : null,
+            'movement_id' => $context['movement_id'] ?? null,
             'event_type' => self::EVENT_CANDIDATE_STAGE_CHANGED,
             'payload_json' => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
             'webhook_url' => $webhookUrl !== '' ? $webhookUrl : null,
             'status' => $status,
             'last_error' => $lastError,
-            'processed_at' => in_array($status, ['disabled', 'skipped'], true) ? date('Y-m-d H:i:s') : null,
+            'processed_at' => $status === 'disabled' ? date('Y-m-d H:i:s') : null,
         ], $pdo);
 
         Logger::info('Evento interno de recrutamento registrado', [
             'event_type' => self::EVENT_CANDIDATE_STAGE_CHANGED,
-            'webhook_event_id' => $eventId,
-            'tenant_id' => $tenantId > 0 ? $tenantId : null,
-            'candidate_id' => $payload['candidate_id'] ?? null,
-            'new_stage' => $payload['new_stage'] ?? null,
+            'event_id' => $eventId,
+            'webhook_event_id' => $webhookEventId,
+            'empresa_id' => $empresaId > 0 ? $empresaId : null,
+            'candidate_id' => $payload['candidato']['id'] ?? null,
+            'new_stage' => $payload['etapa']['atual']['codigo'] ?? null,
         ]);
 
         if ($deliverImmediately && $status === 'pending' && (!$pdo || !$pdo->inTransaction())) {
-            $this->deliveryService->processEvent($eventId);
+            $this->deliveryService->processEvent($webhookEventId);
         }
 
-        return $eventId;
+        return $webhookEventId;
+    }
+
+    /**
+     * Disparado exclusivamente quando um candidato conclui a inscrição (HomeController::candidatar).
+     * Nunca deve ser usado para movimentação de Kanban — ver EVENT_CANDIDATE_STAGE_CHANGED.
+     */
+    public function dispatchCandidaturaCriada(array $context, ?PDO $pdo = null, bool $deliverImmediately = true): ?int
+    {
+        $candidate = $context['candidate'] ?? [];
+        $empresaId = (int)($candidate['vaga_empresa_id'] ?? 0);
+        $eventId = WebhookEventRepository::generateEventId();
+
+        $payload = $this->buildCandidaturaCriadaPayload($context, $eventId, $empresaId > 0 ? $empresaId : null, $candidate);
+
+        $setting = $this->settingRepository->get();
+        $webhookUrl = trim((string)($setting['webhook_url'] ?? ''));
+
+        $status = 'pending';
+        $lastError = null;
+        if ((int)($setting['enabled'] ?? 0) !== 1) {
+            $status = 'disabled';
+            $lastError = 'Integração de webhooks do recrutamento está desabilitada.';
+        } elseif ($webhookUrl === '') {
+            $status = 'failed';
+            $lastError = 'Webhook habilitado sem URL configurada.';
+        }
+
+        $webhookEventId = $this->eventRepository->create([
+            'event_id' => $eventId,
+            'empresa_id' => $empresaId > 0 ? $empresaId : null,
+            'movement_id' => null,
+            'event_type' => self::EVENT_CANDIDATURA_CRIADA,
+            'payload_json' => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            'webhook_url' => $webhookUrl !== '' ? $webhookUrl : null,
+            'status' => $status,
+            'last_error' => $lastError,
+            'processed_at' => $status === 'disabled' ? date('Y-m-d H:i:s') : null,
+        ], $pdo);
+
+        Logger::info('Evento interno de recrutamento registrado', [
+            'event_type' => self::EVENT_CANDIDATURA_CRIADA,
+            'event_id' => $eventId,
+            'webhook_event_id' => $webhookEventId,
+            'empresa_id' => $empresaId > 0 ? $empresaId : null,
+            'candidate_id' => $payload['candidato']['id'] ?? null,
+            'protocolo' => $payload['protocolo'] ?? null,
+        ]);
+
+        if ($deliverImmediately && $status === 'pending' && (!$pdo || !$pdo->inTransaction())) {
+            $this->deliveryService->processEvent($webhookEventId);
+        }
+
+        return $webhookEventId;
     }
 
     public function deliverQueuedEvent(int $eventId): array
@@ -69,79 +126,116 @@ class RecruitmentEventDispatcher
         return $this->deliveryService->processEvent($eventId);
     }
 
-    private function buildCandidateStageChangedPayload(array $context): array
+    private function buildCandidateStageChangedPayload(array $context, string $eventId, ?int $empresaId, array $candidate): array
     {
-        $candidate = $context['candidate'] ?? [];
-        $metadata = $context['metadata'] ?? [];
-        $newStage = (string)($context['new_stage'] ?? ($candidate['stage_nome'] ?? ''));
+        $stageFrom = $context['stage_from'] ?? null;
+        $stageTo = $context['stage_to'] ?? [];
+        $actor = $context['actor'] ?? [];
+        $stageToSlug = (string)($stageTo['slug'] ?? '');
 
-        $payload = [
-            'event' => 'candidate_stage_changed',
-            'tenant_id' => $this->resolveTenantId($candidate, $context),
-            'candidate_id' => (int)($candidate['id'] ?? 0),
-            'candidate_name' => (string)($candidate['nome'] ?? ''),
-            'candidate_email' => (string)($candidate['email'] ?? ''),
-            'candidate_phone' => $this->normalizePhoneForWebhook((string)($candidate['telefone'] ?? '')),
-            'job_id' => (int)($candidate['vaga_id'] ?? 0),
-            'job_title' => (string)($candidate['vaga_titulo'] ?? ''),
-            'previous_stage' => (string)($context['previous_stage'] ?? ''),
-            'new_stage' => $newStage,
-            'changed_by' => (string)($context['changed_by'] ?? 'Sistema'),
-            'changed_at' => (string)($context['changed_at'] ?? date(DATE_ATOM)),
+        return [
+            'event_id' => $eventId,
+            'event_type' => self::EVENT_CANDIDATE_STAGE_CHANGED,
+            'occurred_at' => (string)($context['occurred_at'] ?? (new DateTimeImmutable())->format(DATE_ATOM)),
+            'empresa' => $empresaId !== null ? [
+                'id' => $empresaId,
+                'nome' => (string)($candidate['vaga_empresa_nome'] ?? ''),
+            ] : null,
+            'candidato' => [
+                'id' => (int)($candidate['id'] ?? 0),
+                'nome' => (string)($candidate['nome'] ?? ''),
+                'telefone' => $this->normalizePhoneForWebhook((string)($candidate['telefone'] ?? '')),
+                'email' => (string)($candidate['email'] ?? ''),
+            ],
+            'vaga' => [
+                'id' => (int)($candidate['vaga_id'] ?? 0),
+                'titulo' => (string)($candidate['vaga_titulo'] ?? ''),
+            ],
+            'etapa' => [
+                'anterior' => $stageFrom !== null ? [
+                    'id' => $stageFrom['id'] ?? null,
+                    'codigo' => $stageFrom['slug'] ?? null,
+                    'nome' => $stageFrom['name'] ?? null,
+                ] : null,
+                'atual' => [
+                    'id' => $stageTo['id'] ?? null,
+                    'codigo' => $stageTo['slug'] ?? null,
+                    'nome' => $stageTo['name'] ?? null,
+                ],
+            ],
+            'dados_adicionais' => $this->buildDadosAdicionais($stageToSlug, $candidate),
+            'responsavel' => [
+                'id' => $actor['id'] ?? null,
+                'nome' => (string)($actor['name'] ?? 'Sistema'),
+            ],
+        ];
+    }
+
+    private function buildCandidaturaCriadaPayload(array $context, string $eventId, ?int $empresaId, array $candidate): array
+    {
+        $candidateId = (int)($candidate['id'] ?? 0);
+        $createdAt = (string)($candidate['created_at'] ?? '');
+
+        return [
+            'event_id' => $eventId,
+            'event_type' => self::EVENT_CANDIDATURA_CRIADA,
+            'occurred_at' => (string)($context['occurred_at'] ?? (new DateTimeImmutable())->format(DATE_ATOM)),
+            'protocolo' => Candidatura::formatProtocol($candidateId, $createdAt),
+            'empresa' => $empresaId !== null ? [
+                'id' => $empresaId,
+                'nome' => (string)($candidate['vaga_empresa_nome'] ?? ''),
+            ] : null,
+            'candidato' => [
+                'id' => $candidateId,
+                'nome' => (string)($candidate['nome'] ?? ''),
+                'telefone' => $this->normalizePhoneForWebhook((string)($candidate['telefone'] ?? '')),
+                'email' => (string)($candidate['email'] ?? ''),
+            ],
+            'vaga' => [
+                'id' => (int)($candidate['vaga_id'] ?? 0),
+                'titulo' => (string)($candidate['vaga_titulo'] ?? ''),
+            ],
+            'link_candidatura' => rtrim((string)(Config::app()['base_url'] ?? ''), '/') . '/admin/candidaturas/' . $candidateId,
+        ];
+    }
+
+    private function buildDadosAdicionais(string $stageSlug, array $candidate): array
+    {
+        $dados = [
+            'data_entrevista' => null,
+            'horario_entrevista' => null,
+            'local_entrevista' => null,
+            'link_entrevista' => null,
+            'prazo_documentos' => null,
+            'observacoes_admissao' => null,
+            'nome_teste' => null,
+            'prazo_teste' => null,
         ];
 
-        $normalizedStage = PipelineStage::normalizeName($newStage);
-        if (in_array($normalizedStage, ['entrevista rh', 'entrevista gestor'], true)) {
-            $this->appendIfNotEmpty($payload, 'interview_date', $this->formatDateForWebhook($metadata['interview_date'] ?? null));
-            $this->appendIfNotEmpty($payload, 'interview_time', $this->formatTimeForWebhook($metadata['interview_time'] ?? null));
-            $this->appendIfNotEmpty($payload, 'interview_location', $metadata['interview_location'] ?? null);
-            $this->appendIfNotEmpty($payload, 'interview_link', $metadata['interview_link'] ?? null);
+        if (in_array($stageSlug, ['entrevista-rh', 'entrevista-gestor'], true)) {
+            $dados['data_entrevista'] = $this->formatDateForWebhook($candidate['interview_date'] ?? null);
+            $dados['horario_entrevista'] = $this->formatTimeForWebhook($candidate['interview_time'] ?? null);
+            $dados['local_entrevista'] = $this->nullIfEmpty($candidate['interview_location'] ?? null);
+            $dados['link_entrevista'] = $this->nullIfEmpty($candidate['interview_link'] ?? null);
         }
 
-        if ($normalizedStage === 'admissao') {
-            $this->appendIfNotEmpty($payload, 'admission_date', $this->formatDateForWebhook($metadata['admission_date'] ?? null));
-            $this->appendIfNotEmpty($payload, 'admission_notes', $metadata['admission_notes'] ?? null);
+        if ($stageSlug === 'admissao') {
+            $dados['prazo_documentos'] = $this->formatDateForWebhook($candidate['admission_date'] ?? null);
+            $dados['observacoes_admissao'] = $this->nullIfEmpty($candidate['admission_notes'] ?? null);
         }
 
-        if ($normalizedStage === 'testes') {
-            $this->appendIfNotEmpty($payload, 'test_name', $metadata['test_name'] ?? null);
-            $this->appendIfNotEmpty($payload, 'deadline', $this->formatDateForWebhook($metadata['deadline'] ?? null));
+        if ($stageSlug === 'testes') {
+            $dados['nome_teste'] = $this->nullIfEmpty($candidate['test_name'] ?? null);
+            $dados['prazo_teste'] = $this->formatDateForWebhook($candidate['deadline'] ?? null);
         }
 
-        return $payload;
+        return $dados;
     }
 
-    private function resolveTenantId(array $candidate, array $context): int
+    private function nullIfEmpty(?string $value): ?string
     {
-        $tenantId = (int)($candidate['vaga_empresa_id'] ?? $candidate['empresa_id'] ?? $context['tenant_id'] ?? 0);
-        if ($tenantId > 0) {
-            return $tenantId;
-        }
-
-        $default = $this->settingRepository->resolveForTenant(null);
-        if ((int)($default['empresa_id'] ?? 0) > 0) {
-            return (int)$default['empresa_id'];
-        }
-
-        return (int)($this->settingRepository->firstActiveEmpresaId() ?? 0);
-    }
-
-    private function resolveSetting(?int $tenantId): ?array
-    {
-        $setting = $this->settingRepository->resolveForTenant($tenantId);
-        if ($setting) {
-            return $setting;
-        }
-
-        $fallbackTenantId = $this->settingRepository->firstActiveEmpresaId();
-        if ($fallbackTenantId) {
-            $fallbackSetting = $this->settingRepository->resolveForTenant($fallbackTenantId);
-            if ($fallbackSetting) {
-                return $fallbackSetting;
-            }
-        }
-
-        return null;
+        $value = trim((string)$value);
+        return $value !== '' ? $value : null;
     }
 
     private function normalizePhoneForWebhook(string $phone): string
@@ -180,17 +274,5 @@ class RecruitmentEventDispatcher
         } catch (Throwable $e) {
             return null;
         }
-    }
-
-    private function appendIfNotEmpty(array &$payload, string $key, $value): void
-    {
-        if ($value === null) {
-            return;
-        }
-        $stringValue = trim((string)$value);
-        if ($stringValue === '') {
-            return;
-        }
-        $payload[$key] = $stringValue;
     }
 }

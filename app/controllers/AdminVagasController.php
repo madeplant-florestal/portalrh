@@ -5,6 +5,7 @@ class AdminVagasController extends Controller
 
     public function __construct()
     {
+        parent::__construct();
         RecruitmentWebhookSchemaService::ensureSchema();
         $this->empresaRepository = new EmpresaRepository();
     }

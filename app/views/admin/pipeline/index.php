@@ -41,15 +41,25 @@
                 <span class="bg-gray-200 text-gray-600 text-xs px-2 py-1 rounded-full" data-kanban-count="1"><?= count($col['items']) ?></span>
             </div>
             
-            <div class="kanban-column flex-1 space-y-3 overflow-y-auto p-2" data-kanban-column="1" data-stage-id="<?= $stageId ?>">
+            <div class="kanban-column flex-1 space-y-3 overflow-y-auto p-2" data-kanban-column="1" data-stage-id="<?= $stageId ?>" data-stage-slug="<?= Security::e($col['stage']['slug'] ?? '') ?>">
                 <?php if (empty($col['items'])): ?>
                     <div class="rounded-lg border border-dashed border-gray-300 bg-white/70 px-4 py-6 text-center text-xs text-gray-400">
                         Nenhum candidato nesta etapa.
                     </div>
                 <?php endif; ?>
                 <?php foreach ($col['items'] as $c): ?>
-                    <div class="group relative cursor-move rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-shadow hover:shadow-md" data-kanban-card="1" draggable="true" id="cand-<?= $c['id'] ?>" data-cand-id="<?= $c['id'] ?>">
-                        
+                    <div class="group relative cursor-move rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-shadow hover:shadow-md" data-kanban-card="1" draggable="true" id="cand-<?= $c['id'] ?>" data-cand-id="<?= $c['id'] ?>"
+                        data-cand-name="<?= Security::e($c['nome']) ?>"
+                        data-interview-date="<?= Security::e(!empty($c['interview_date']) ? DateHelper::formatBrazilianDate((string)$c['interview_date']) : '') ?>"
+                        data-interview-time="<?= Security::e(!empty($c['interview_time']) ? substr((string)$c['interview_time'], 0, 5) : '') ?>"
+                        data-interview-location="<?= Security::e($c['interview_location'] ?? '') ?>"
+                        data-interview-link="<?= Security::e($c['interview_link'] ?? '') ?>"
+                        data-test-name="<?= Security::e($c['test_name'] ?? '') ?>"
+                        data-deadline="<?= Security::e(!empty($c['deadline']) ? DateHelper::formatBrazilianDate((string)$c['deadline']) : '') ?>"
+                        data-admission-date="<?= Security::e(!empty($c['admission_date']) ? DateHelper::formatBrazilianDate((string)$c['admission_date']) : '') ?>"
+                        data-admission-notes="<?= Security::e($c['admission_notes'] ?? '') ?>"
+                    >
+
                         <div class="flex justify-between items-start mb-2">
                             <h4 class="w-full truncate text-sm font-medium text-gray-900" title="<?= htmlspecialchars($c['nome']) ?>">
                                 <?= htmlspecialchars($c['nome']) ?>
@@ -75,5 +85,90 @@
             </div>
         </div>
     <?php endforeach; ?>
+  </div>
+
+  <div class="hidden fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4" data-stage-modal="1">
+    <div class="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
+      <h3 class="text-lg font-semibold text-slate-800">Confirmar movimentação</h3>
+      <p class="mt-1 text-sm text-slate-500">
+        Mover <strong data-stage-modal-candidate-name="1"></strong> para
+        <strong data-stage-modal-target-name="1"></strong>.
+      </p>
+
+      <div class="mt-4 hidden" data-stage-modal-error="1">
+        <div class="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700" data-stage-modal-error-text="1"></div>
+      </div>
+
+      <div class="mt-4 space-y-4">
+        <div class="hidden grid gap-4 sm:grid-cols-2" data-stage-modal-group="entrevista">
+          <div>
+            <label class="block text-sm font-medium text-slate-700">Data da entrevista *</label>
+            <input type="text" data-stage-modal-field="interview_date" placeholder="DD/MM/AAAA" data-mask-date="1" class="mt-1 w-full rounded border px-3 py-2 text-sm">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700">Horário da entrevista *</label>
+            <input type="time" data-stage-modal-field="interview_time" class="mt-1 w-full rounded border px-3 py-2 text-sm">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700">Local da entrevista</label>
+            <input type="text" data-stage-modal-field="interview_location" placeholder="Sala, endereço ou observação" class="mt-1 w-full rounded border px-3 py-2 text-sm">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700">Link da entrevista</label>
+            <input type="url" data-stage-modal-field="interview_link" placeholder="https://..." class="mt-1 w-full rounded border px-3 py-2 text-sm">
+          </div>
+          <p class="sm:col-span-2 text-xs text-slate-500">Preencha local ou link da entrevista (pelo menos um é obrigatório).</p>
+        </div>
+
+        <div class="hidden grid gap-4 sm:grid-cols-2" data-stage-modal-group="testes">
+          <div>
+            <label class="block text-sm font-medium text-slate-700">Nome do teste *</label>
+            <input type="text" data-stage-modal-field="test_name" placeholder="Ex.: Teste comportamental" class="mt-1 w-full rounded border px-3 py-2 text-sm">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700">Prazo do teste *</label>
+            <input type="text" data-stage-modal-field="deadline" placeholder="DD/MM/AAAA" data-mask-date="1" class="mt-1 w-full rounded border px-3 py-2 text-sm">
+          </div>
+        </div>
+
+        <div class="hidden space-y-4" data-stage-modal-group="admissao">
+          <div>
+            <label class="block text-sm font-medium text-slate-700">Data de admissão *</label>
+            <input type="text" data-stage-modal-field="admission_date" placeholder="DD/MM/AAAA" data-mask-date="1" class="mt-1 w-full rounded border px-3 py-2 text-sm">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700">Observações da admissão *</label>
+            <textarea data-stage-modal-field="admission_notes" rows="3" placeholder="Documentos, pendências ou orientações da admissão" class="mt-1 w-full rounded border px-3 py-2 text-sm"></textarea>
+          </div>
+        </div>
+
+        <div class="hidden space-y-4" data-stage-modal-group="reprovado">
+          <div>
+            <label class="block text-sm font-medium text-slate-700">Motivo da reprovação (uso interno) *</label>
+            <textarea data-stage-modal-field="observacoes" rows="3" placeholder="Este texto nunca é enviado ao candidato" class="mt-1 w-full rounded border px-3 py-2 text-sm"></textarea>
+          </div>
+          <label class="flex items-center gap-2 text-sm text-slate-700">
+            <input type="checkbox" data-stage-modal-field="confirm" class="rounded border-slate-300 text-ctgreen focus:ring-ctgreen">
+            Confirmo que desejo reprovar este candidato.
+          </label>
+        </div>
+
+        <div class="hidden space-y-4" data-stage-modal-group="banco-de-talentos">
+          <div>
+            <label class="block text-sm font-medium text-slate-700">Observação (opcional)</label>
+            <textarea data-stage-modal-field="observacoes" rows="3" class="mt-1 w-full rounded border px-3 py-2 text-sm"></textarea>
+          </div>
+          <label class="flex items-center gap-2 text-sm text-slate-700">
+            <input type="checkbox" data-stage-modal-field="confirm" class="rounded border-slate-300 text-ctgreen focus:ring-ctgreen">
+            Confirmo que desejo mover este candidato para o Banco de Talentos.
+          </label>
+        </div>
+      </div>
+
+      <div class="mt-6 flex justify-end gap-3">
+        <button type="button" class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100" data-stage-modal-cancel="1">Cancelar</button>
+        <button type="button" class="rounded-xl bg-ctgreen px-4 py-2 text-sm font-semibold text-white hover:bg-ctdark" data-stage-modal-confirm="1">Confirmar movimentação</button>
+      </div>
+    </div>
   </div>
 </div>

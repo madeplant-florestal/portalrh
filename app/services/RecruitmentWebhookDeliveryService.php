@@ -3,13 +3,16 @@ class RecruitmentWebhookDeliveryService
 {
     private WebhookEventRepository $eventRepository;
     private RecruitmentWebhookHttpClient $httpClient;
+    private RecruitmentWebhookSettingRepository $settingRepository;
 
     public function __construct(
         ?WebhookEventRepository $eventRepository = null,
-        ?RecruitmentWebhookHttpClient $httpClient = null
+        ?RecruitmentWebhookHttpClient $httpClient = null,
+        ?RecruitmentWebhookSettingRepository $settingRepository = null
     ) {
         $this->eventRepository = $eventRepository ?? new WebhookEventRepository();
         $this->httpClient = $httpClient ?? new RecruitmentWebhookHttpClient();
+        $this->settingRepository = $settingRepository ?? new RecruitmentWebhookSettingRepository();
     }
 
     public function processEvent(int $eventId): array
@@ -20,7 +23,7 @@ class RecruitmentWebhookDeliveryService
         }
 
         $status = (string)($event['status'] ?? '');
-        if ($status === 'disabled' || $status === 'skipped') {
+        if ($status === 'disabled') {
             return ['ok' => false, 'status' => $status];
         }
 
@@ -34,8 +37,13 @@ class RecruitmentWebhookDeliveryService
         $this->eventRepository->markProcessing($eventId);
 
         try {
+            RecruitmentWebhookUrlGuard::assertSafe($url);
+
             $payload = json_decode((string)$event['payload_json'], true, 512, JSON_THROW_ON_ERROR);
-            $response = $this->httpClient->postJson($url, is_array($payload) ? $payload : []);
+            $canonicalJson = json_encode(is_array($payload) ? $payload : [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            $headers = $this->buildSignatureHeaders($event, (string)$canonicalJson);
+
+            $response = $this->httpClient->postJson($url, is_array($payload) ? $payload : [], $headers);
             $statusCode = (int)($response['status_code'] ?? 0);
             $body = (string)($response['body'] ?? '');
 
@@ -76,5 +84,32 @@ class RecruitmentWebhookDeliveryService
             'processed' => $processed,
             'failed' => $failed,
         ];
+    }
+
+    private function buildSignatureHeaders(array $event, string $canonicalJson): array
+    {
+        $eventType = (string)($event['event_type'] ?? '');
+        $eventId = (string)($event['event_id'] ?? '');
+        $timestamp = (string)time();
+
+        $headers = [
+            'X-Webhook-Event: ' . $eventType,
+            'X-Webhook-Id: ' . $eventId,
+            'X-Webhook-Timestamp: ' . $timestamp,
+        ];
+
+        $secret = $this->settingRepository->getSecret();
+
+        if ($secret === null || $secret === '') {
+            Logger::warning('Enviando webhook sem assinatura HMAC: nenhum segredo global configurado.', [
+                'event_id' => $eventId,
+            ]);
+            return $headers;
+        }
+
+        $signature = hash_hmac('sha256', $timestamp . '.' . $canonicalJson, $secret);
+        $headers[] = 'X-Webhook-Signature: sha256=' . $signature;
+
+        return $headers;
     }
 }

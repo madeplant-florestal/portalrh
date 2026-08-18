@@ -39,6 +39,21 @@ class DateHelper
         }
     }
 
+    /**
+     * Formata um datetime "YYYY-MM-DD HH:MM:SS" (formato de retorno do MySQL) como
+     * "DD/MM/AAAA às HH:MM", via regex ao invés de DateTime/timezone — o valor é
+     * exibido exatamente como foi persistido, sem qualquer conversão de fuso.
+     */
+    public static function formatBrazilianDateTime(?string $value): string
+    {
+        $value = trim((string)$value);
+        if (!preg_match('/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/', $value, $m)) {
+            return '';
+        }
+        [, $ano, $mes, $dia, $hora, $min] = $m;
+        return "{$dia}/{$mes}/{$ano} às {$hora}:{$min}";
+    }
+
     public static function toDatabaseDate(?string $value): ?string
     {
         $date = self::parseBrazilianDate($value);

@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(php -r ' *)",
+      "Bash(php \"C:\\\\Users\\\\FABIOO~1.MAD\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--laragon-www-rhmadeplant\\\\97de50ab-9e9c-4194-999c-5e4d96fb0cc9\\\\scratchpad\\\\verify_phase1_regressions.php\")",
+      "Bash(php \"C:\\\\Users\\\\FABIOO~1.MAD\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--laragon-www-rhmadeplant\\\\97de50ab-9e9c-4194-999c-5e4d96fb0cc9\\\\scratchpad\\\\verify_phase2_regressions.php\")",
+      "Bash(php -l \"scripts/migrate_recruitment_webhook_to_global.php\")",
+      "Bash(php scripts/migrate_recruitment_webhook_to_global.php)",
+      "Bash(echo \"codigo de saida: $?\")"
+    ]
+  }
+}

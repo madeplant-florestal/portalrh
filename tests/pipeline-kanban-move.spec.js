@@ -76,16 +76,77 @@ test.describe('kanban de recrutamento e selecao', () => {
 
       const entrevistaRhColumn = page.locator('[data-kanban-column="1"]').nth(2);
       const entrevistaRhStageId = await entrevistaRhColumn.getAttribute('data-stage-id');
+
+      // Entrevista RH exige dados adicionais: o drop abre um modal contextual em vez de mover na hora.
+      await dragCardToColumn(page, triagemReloaded.locator(`#cand-${fixture.candidatura_id}`), entrevistaRhColumn);
+      const modal = page.locator('[data-stage-modal="1"]');
+      await expect(modal).toBeVisible();
+      // O cartão não deve ter sido movido ainda — continua na coluna de origem enquanto o modal está aberto.
+      await expect(triagemReloaded.locator(`#cand-${fixture.candidatura_id}`)).toBeVisible();
+
+      const entrevistaGroup = modal.locator('[data-stage-modal-group="entrevista"]');
+      await expect(entrevistaGroup).toBeVisible();
+      await entrevistaGroup.locator('[data-stage-modal-field="interview_date"]').fill('25/07/2026');
+      await entrevistaGroup.locator('[data-stage-modal-field="interview_time"]').fill('14:30');
+      await entrevistaGroup.locator('[data-stage-modal-field="interview_location"]').fill('Sala 2 - Matriz');
+
       const moveToEntrevistaRh = page.waitForResponse((response) =>
         response.url().includes('/api/pipeline/move') && response.request().method() === 'POST'
       );
-      await dragCardToColumn(page, triagemReloaded.locator(`#cand-${fixture.candidatura_id}`), entrevistaRhColumn);
+      await modal.locator('[data-stage-modal-confirm="1"]').click();
       expect((await moveToEntrevistaRh).ok()).toBeTruthy();
+      await expect(modal).toBeHidden();
       await expect(entrevistaRhColumn.locator(`#cand-${fixture.candidatura_id}`)).toBeVisible();
 
       await page.goto(`${appBase}/admin/candidaturas/${fixture.candidatura_id}`, { waitUntil: 'domcontentloaded' });
       await expect(page.locator('select[name="stage_id"]')).toHaveValue(String(entrevistaRhStageId));
       await expect(page.locator('select[name="stage_id"] option:checked')).toHaveText('Entrevista RH');
+      await expect(page.locator('input[name="interview_location"]')).toHaveValue('Sala 2 - Matriz');
+    } finally {
+      runFixture('cleanup', fixture.candidatura_id, fixture.vaga_id);
+    }
+  });
+
+  test('cancelar ou falhar validacao mantem o cartao na coluna original', async ({ page }) => {
+    const fixture = runFixture('create');
+
+    try {
+      const appBase = await getAppBase(page);
+      await login(page, appBase);
+
+      await page.goto(`${appBase}/admin/pipeline?vaga_id=${fixture.vaga_id}`, { waitUntil: 'domcontentloaded' });
+      await expect(page.getByRole('heading', { name: 'Kanban de Recrutamento e Seleção' })).toBeVisible();
+
+      const novaInscricaoColumn = page.locator('[data-kanban-column="1"]').nth(0);
+      const entrevistaRhColumn = page.locator('[data-kanban-column="1"]').nth(2);
+      const card = page.locator(`#cand-${fixture.candidatura_id}`);
+      await expect(card).toBeVisible();
+
+      // Cancelar: nenhuma requisicao deve ser disparada, e o cartao permanece na coluna original.
+      let requestFired = false;
+      const onRequest = (req) => {
+        if (req.url().includes('/api/pipeline/move')) requestFired = true;
+      };
+      page.on('request', onRequest);
+
+      await dragCardToColumn(page, card, entrevistaRhColumn);
+      const modal = page.locator('[data-stage-modal="1"]');
+      await expect(modal).toBeVisible();
+      await modal.locator('[data-stage-modal-cancel="1"]').click();
+      await expect(modal).toBeHidden();
+      await expect(novaInscricaoColumn.locator(`#cand-${fixture.candidatura_id}`)).toBeVisible();
+      expect(requestFired).toBeFalsy();
+      page.off('request', onRequest);
+
+      // Confirmar sem preencher os campos obrigatorios: backend rejeita, cartao continua na origem.
+      await dragCardToColumn(page, card, entrevistaRhColumn);
+      await expect(modal).toBeVisible();
+      const moveAttempt = page.waitForResponse((response) => response.url().includes('/api/pipeline/move'));
+      await modal.locator('[data-stage-modal-confirm="1"]').click();
+      const response = await moveAttempt;
+      expect(response.status()).toBe(422);
+      await expect(modal.locator('[data-stage-modal-error="1"]')).toBeVisible();
+      await expect(novaInscricaoColumn.locator(`#cand-${fixture.candidatura_id}`)).toBeVisible();
     } finally {
       runFixture('cleanup', fixture.candidatura_id, fixture.vaga_id);
     }

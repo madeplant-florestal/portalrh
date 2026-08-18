@@ -26,7 +26,8 @@ class Config
             ],
             'security' => [
                 'csrf_key' => 'csrf_token',
-                'session_name' => 'RHMADEPLANTSESSID'
+                'session_name' => 'RHMADEPLANTSESSID',
+                'webhook_allow_private_targets' => false
             ],
             'mail' => [
                 'enabled' => false,

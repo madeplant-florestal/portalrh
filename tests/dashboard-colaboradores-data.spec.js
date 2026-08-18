@@ -35,9 +35,7 @@ test.describe('dashboard com base de colaboradores', () => {
       const elapsed = Date.now() - startedAt;
 
       await expect(page.locator('h1')).toContainText('Dashboard de Indicadores de RH');
-      await expect(page.locator('text=Base híbrida de indicadores conectada')).toBeVisible();
-      await expect(page.locator('text=métrica(s) reais')).toBeVisible();
-      await expect(page.locator('text=fallback(s)')).toBeVisible();
+      await expect(page.locator('text=Base híbrida de indicadores conectada')).toHaveCount(0);
       await expect(page.locator('text=Colaboradores por Área')).toBeVisible();
       await expect(page.locator('text=Distribuição por Tempo de Empresa')).toBeVisible();
 

@@ -47,10 +47,13 @@ class Auth
         $role = strtolower(trim((string)($user->role ?? '')));
         $isSupervisor = (int)($user->is_supervisor ?? 0) === 1;
         $supervisorEmail = strtolower(trim((string)(Config::app()['security']['supervisor_email'] ?? '')));
+        // Repara cadastros legados com role vazia quando o e-mail bate com o
+        // supervisor configurado (ver AUTH_PERMISSOES_FIX.md); é o único caso,
+        // além da própria coluna usuarios.is_supervisor, em que promovemos a
+        // sessão a supervisor. Não promover mais todo usuário role='admin' —
+        // isso é o que estava sendo corrigido aqui.
         if ($role === '' && $supervisorEmail !== '' && strtolower((string)$user->email) === $supervisorEmail) {
             $role = 'admin';
-        }
-        if ($role === 'admin') {
             $isSupervisor = true;
         }
         if ($role === '') {

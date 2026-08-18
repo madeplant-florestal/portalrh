@@ -6,6 +6,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="app-base" content="<?= Security::e($base ?? '') ?>">
   <meta name="csrf-token" content="<?= Security::e(Security::csrfToken()) ?>">
+  <?php if (!empty($noIndex)): ?>
+  <meta name="robots" content="noindex,nofollow">
+  <?php endif; ?>
   <title>RH Madeplant</title>
   <link rel="stylesheet" href="<?= $base ?>/assets/tailwind.css?v=<?= urlencode(Config::app()['version'] ?? '') ?>">
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">

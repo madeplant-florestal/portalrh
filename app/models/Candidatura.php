@@ -10,21 +10,57 @@ class Candidatura
         self::ensureCpfColumn();
         self::ensureStageColumn();
         self::ensureIndicacaoColumns();
+        // A candidatura nasce já na etapa inicial do pipeline (nunca com stage_id NULL) — deixar NULL
+        // aqui quebra a checagem de concorrência do Kanban (ver RecruitmentPipelineService), que compara
+        // o stage_id real do banco com o que a tela mostra ao usuário.
+        $stageId = (int)($data['stage_id'] ?? PipelineStage::defaultStageId());
         $hasNomeIndicador = self::hasColumn('candidaturas', 'indicacao_colaborador_nome');
         if ($hasNomeIndicador) {
-            $sql = 'INSERT INTO candidaturas (vaga_id, nome, email, telefone, cpf, cargo_pretendido, experiencia, pdf_path, status, indicacao_colaborador, indicacao_colaborador_nome) VALUES (?,?,?,?,?,?,?,?,?,?,?)';
+            $sql = 'INSERT INTO candidaturas (vaga_id, nome, email, telefone, cpf, cargo_pretendido, experiencia, pdf_path, status, indicacao_colaborador, indicacao_colaborador_nome, stage_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)';
             $stmt = Database::conn()->prepare($sql);
             $stmt->execute([
-                (int)$data['vaga_id'], $data['nome'], $data['email'], $telefone, $data['cpf'], $data['cargo_pretendido'], $data['experiencia'], $data['pdf_path'], $data['status'] ?? 'novo', (int)($data['indicacao_colaborador'] ?? 0), (string)($data['indicacao_colaborador_nome'] ?? '')
+                (int)$data['vaga_id'], $data['nome'], $data['email'], $telefone, $data['cpf'], $data['cargo_pretendido'], $data['experiencia'], $data['pdf_path'], $data['status'] ?? 'novo', (int)($data['indicacao_colaborador'] ?? 0), (string)($data['indicacao_colaborador_nome'] ?? ''), $stageId
             ]);
         } else {
-            $sql = 'INSERT INTO candidaturas (vaga_id, nome, email, telefone, cpf, cargo_pretendido, experiencia, pdf_path, status, indicacao_colaborador) VALUES (?,?,?,?,?,?,?,?,?,?)';
+            $sql = 'INSERT INTO candidaturas (vaga_id, nome, email, telefone, cpf, cargo_pretendido, experiencia, pdf_path, status, indicacao_colaborador, stage_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)';
             $stmt = Database::conn()->prepare($sql);
             $stmt->execute([
-                (int)$data['vaga_id'], $data['nome'], $data['email'], $telefone, $data['cpf'], $data['cargo_pretendido'], $data['experiencia'], $data['pdf_path'], $data['status'] ?? 'novo', (int)($data['indicacao_colaborador'] ?? 0)
+                (int)$data['vaga_id'], $data['nome'], $data['email'], $telefone, $data['cpf'], $data['cargo_pretendido'], $data['experiencia'], $data['pdf_path'], $data['status'] ?? 'novo', (int)($data['indicacao_colaborador'] ?? 0), $stageId
             ]);
         }
         return (int)Database::conn()->lastInsertId();
+    }
+
+    /**
+     * Leitura mínima (id, nome, created_at), sem os efeitos colaterais de find()
+     * (ensureRecruitmentLifecycle/ensureSchema). Uso: páginas públicas que só
+     * precisam confirmar dados já persistidos, sem disparar checagens de schema.
+     */
+    public static function findBasic(int $id): ?array
+    {
+        $stmt = Database::conn()->prepare('SELECT id, nome, created_at FROM candidaturas WHERE id = ? LIMIT 1');
+        $stmt->execute([$id]);
+        $data = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $data ?: null;
+    }
+
+    /**
+     * Protocolo visível ao candidato e ao RH: AAAAMM-XXXX, onde AAAAMM vem da data real de
+     * criação (não da data atual) e XXXX é o id sequencial da candidatura. Único ponto de
+     * geração — reutilizado pela tela de confirmação pública e pelo payload do webhook
+     * recrutamento.candidatura.criada.
+     */
+    public static function formatProtocol(int $id, string $createdAt): string
+    {
+        if (preg_match('/^(\d{4})-(\d{2})-/', trim($createdAt), $m)) {
+            [, $ano, $mes] = $m;
+        } else {
+            // Fallback apenas para o caso improvável de created_at não vir no formato esperado.
+            $ano = date('Y');
+            $mes = date('m');
+        }
+        $sequencial = str_pad((string)max(0, $id), 4, '0', STR_PAD_LEFT);
+        return "{$ano}{$mes}-{$sequencial}";
     }
 
     public static function all(array $filters = []): array
@@ -34,11 +70,11 @@ class Candidatura
         self::ensureStageColumn();
         self::ensureIndicacaoColumns();
         $sql = 'SELECT c.*, v.titulo AS vaga_titulo, v.empresa_id AS vaga_empresa_id, e.nome AS vaga_empresa_nome,
-                       s.nome as stage_nome, s.cor as stage_cor,
+                       s.nome as stage_nome, s.slug as stage_slug, s.cor as stage_cor,
                        m.interview_date, m.interview_time, m.interview_location, m.interview_link,
                        m.admission_date, m.admission_notes, m.test_name, m.deadline
-                FROM candidaturas c 
-                LEFT JOIN vagas v ON v.id = c.vaga_id 
+                FROM candidaturas c
+                LEFT JOIN vagas v ON v.id = c.vaga_id
                 LEFT JOIN empresas e ON e.id = v.empresa_id
                 LEFT JOIN pipeline_stages s ON s.id = c.stage_id
                 LEFT JOIN candidatura_stage_metadata m ON m.candidatura_id = c.id
@@ -62,11 +98,11 @@ class Candidatura
         self::ensureStageColumn();
         self::ensureIndicacaoColumns();
         $sql = 'SELECT c.*, v.titulo AS vaga_titulo, v.empresa_id AS vaga_empresa_id, e.nome AS vaga_empresa_nome,
-                       s.nome as stage_nome, s.cor as stage_cor,
+                       s.nome as stage_nome, s.slug as stage_slug, s.cor as stage_cor,
                        m.interview_date, m.interview_time, m.interview_location, m.interview_link,
                        m.admission_date, m.admission_notes, m.test_name, m.deadline
-                FROM candidaturas c 
-                LEFT JOIN vagas v ON v.id = c.vaga_id 
+                FROM candidaturas c
+                LEFT JOIN vagas v ON v.id = c.vaga_id
                 LEFT JOIN empresas e ON e.id = v.empresa_id
                 LEFT JOIN pipeline_stages s ON s.id = c.stage_id
                 LEFT JOIN candidatura_stage_metadata m ON m.candidatura_id = c.id
@@ -77,9 +113,22 @@ class Candidatura
         return $data ?: null;
     }
 
-    public static function updateStage(int $id, int $newStageId, ?int $userId): bool
-    {
-        return (new RecruitmentPipelineService())->moveCandidateToStage($id, $newStageId, $userId);
+    public static function updateStage(
+        int $id,
+        int $newStageId,
+        ?int $userId,
+        array $metadata = [],
+        bool $checkConcurrency = false,
+        ?int $expectedCurrentStageId = null
+    ): array {
+        return (new RecruitmentPipelineService())->moveCandidateToStage(
+            $id,
+            $newStageId,
+            $userId,
+            $metadata,
+            $checkConcurrency,
+            $expectedCurrentStageId
+        );
     }
 
     public static function updateStatusNotes(int $id, string $status, ?string $observacoes = null, ?int $usuarioId = null): bool
@@ -103,9 +152,10 @@ class Candidatura
         return $result;
     }
 
-    public static function upsertStageMetadata(int $id, array $input): bool
+    public static function upsertStageMetadata(int $id, array $input, ?PDO $pdo = null): bool
     {
         RecruitmentWebhookSchemaService::ensureSchema();
+        $conn = $pdo ?? Database::conn();
         $candidatura = self::find($id);
         if (!$candidatura) {
             return false;
@@ -120,7 +170,7 @@ class Candidatura
         $testName = self::normalizeOptionalText($input['test_name'] ?? '');
         $deadline = self::normalizeOptionalDate($input['deadline'] ?? '');
 
-        $stmt = Database::conn()->prepare(
+        $stmt = $conn->prepare(
             'INSERT INTO candidatura_stage_metadata
                 (candidatura_id, interview_date, interview_time, interview_location, interview_link, admission_date, admission_notes, test_name, deadline)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)

@@ -2,64 +2,54 @@
 class Colaborador
 {
     private static bool $schemaEnsured = false;
+    private const ALLOWED_PER_PAGE = [20, 50, 100];
 
     public static function all(array $filters = []): array
     {
+        return self::paginateAdmin($filters, 1, 100)['items'];
+    }
+
+    public static function paginateAdmin(array $filters = [], int $page = 1, int $perPage = 20): array
+    {
         self::ensureRhSchema();
         if (!self::tableExists('colaboradores')) {
-            return [];
+            return [
+                'items' => [],
+                'total' => 0,
+                'page' => 1,
+                'per_page' => self::normalizePerPage($perPage),
+                'pages' => 1,
+            ];
         }
 
-        $sql = 'SELECT c.id, c.nome, c.ativo, c.created_at,
-                       c.matricula, c.codigo, c.cpf, c.salario_atual,
-                       c.data_admissao, c.data_inicio_cargo, c.data_nascimento, c.data_demissao, c.motivo_rescisao,
-                       c.cargo_id, c.empresa_id, c.setor_id,
-                       cg.nome AS cargo_nome,
-                       e.nome AS empresa_nome,
-                       s.nome AS setor_nome
-                FROM colaboradores c
-                INNER JOIN cargos cg ON cg.id = c.cargo_id
-                LEFT JOIN empresas e ON e.id = c.empresa_id
-                LEFT JOIN setores s ON s.id = c.setor_id
-                WHERE 1=1';
-        $params = [];
+        $page = max(1, $page);
+        $perPage = self::normalizePerPage($perPage);
+        $offset = ($page - 1) * $perPage;
 
-        $q = trim((string)($filters['q'] ?? ''));
-        if ($q !== '') {
-            $sql .= ' AND (c.nome LIKE ? OR cg.nome LIKE ? OR e.nome LIKE ? OR s.nome LIKE ?)';
-            $like = '%' . $q . '%';
-            $params[] = $like;
-            $params[] = $like;
-            $params[] = $like;
-            $params[] = $like;
+        $query = self::buildAdminListBaseQuery($filters);
+        $countStmt = Database::conn()->prepare('SELECT COUNT(*) FROM (' . $query['sql'] . ') AS colaboradores_filtrados');
+        $countStmt->execute($query['params']);
+        $total = (int)$countStmt->fetchColumn();
+        $pages = max(1, (int)ceil($total / $perPage));
+
+        if ($page > $pages) {
+            $page = $pages;
+            $offset = ($page - 1) * $perPage;
         }
 
-        if (!empty($filters['cargo_id'])) {
-            $sql .= ' AND c.cargo_id = ?';
-            $params[] = (int)$filters['cargo_id'];
-        }
-
-        if (!empty($filters['empresa_id'])) {
-            $sql .= ' AND c.empresa_id = ?';
-            $params[] = (int)$filters['empresa_id'];
-        }
-
-        if (!empty($filters['setor_id'])) {
-            $sql .= ' AND c.setor_id = ?';
-            $params[] = (int)$filters['setor_id'];
-        }
-
-        if (($filters['status'] ?? '') === 'vinculados') {
-            $sql .= ' AND c.empresa_id IS NOT NULL AND c.setor_id IS NOT NULL';
-        } elseif (($filters['status'] ?? '') === 'pendentes') {
-            $sql .= ' AND (c.empresa_id IS NULL OR c.setor_id IS NULL)';
-        }
-
-        $sql .= ' ORDER BY c.nome ASC';
-
-        $stmt = Database::conn()->prepare($sql);
+        $stmt = Database::conn()->prepare($query['sql'] . ' ORDER BY c.nome ASC LIMIT ? OFFSET ?');
+        $params = $query['params'];
+        $params[] = $perPage;
+        $params[] = $offset;
         $stmt->execute($params);
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        return [
+            'items' => $stmt->fetchAll(PDO::FETCH_ASSOC),
+            'total' => $total,
+            'page' => $page,
+            'per_page' => $perPage,
+            'pages' => $pages,
+        ];
     }
 
     public static function countAll(): int
@@ -369,5 +359,63 @@ class Colaborador
         $years = intdiv(max($months, 0), 12);
         $remaining = max($months, 0) % 12;
         return sprintf('%d ano(s) e %d mes(es)', $years, $remaining);
+    }
+
+    private static function buildAdminListBaseQuery(array $filters): array
+    {
+        $sql = 'SELECT c.id, c.nome, c.ativo, c.created_at,
+                       c.matricula, c.codigo, c.cpf, c.salario_atual,
+                       c.data_admissao, c.data_inicio_cargo, c.data_nascimento, c.data_demissao, c.motivo_rescisao,
+                       c.cargo_id, c.empresa_id, c.setor_id,
+                       cg.nome AS cargo_nome,
+                       e.nome AS empresa_nome,
+                       s.nome AS setor_nome
+                FROM colaboradores c
+                INNER JOIN cargos cg ON cg.id = c.cargo_id
+                LEFT JOIN empresas e ON e.id = c.empresa_id
+                LEFT JOIN setores s ON s.id = c.setor_id
+                WHERE 1=1';
+        $params = [];
+
+        $q = trim((string)($filters['q'] ?? ''));
+        if ($q !== '') {
+            $sql .= ' AND (c.nome LIKE ? OR cg.nome LIKE ? OR e.nome LIKE ? OR s.nome LIKE ?)';
+            $like = '%' . $q . '%';
+            $params[] = $like;
+            $params[] = $like;
+            $params[] = $like;
+            $params[] = $like;
+        }
+
+        if (!empty($filters['cargo_id'])) {
+            $sql .= ' AND c.cargo_id = ?';
+            $params[] = (int)$filters['cargo_id'];
+        }
+
+        if (!empty($filters['empresa_id'])) {
+            $sql .= ' AND c.empresa_id = ?';
+            $params[] = (int)$filters['empresa_id'];
+        }
+
+        if (!empty($filters['setor_id'])) {
+            $sql .= ' AND c.setor_id = ?';
+            $params[] = (int)$filters['setor_id'];
+        }
+
+        if (($filters['status'] ?? '') === 'vinculados') {
+            $sql .= ' AND c.empresa_id IS NOT NULL AND c.setor_id IS NOT NULL';
+        } elseif (($filters['status'] ?? '') === 'pendentes') {
+            $sql .= ' AND (c.empresa_id IS NULL OR c.setor_id IS NULL)';
+        }
+
+        return [
+            'sql' => $sql,
+            'params' => $params,
+        ];
+    }
+
+    private static function normalizePerPage(int $perPage): int
+    {
+        return in_array($perPage, self::ALLOWED_PER_PAGE, true) ? $perPage : 20;
     }
 }

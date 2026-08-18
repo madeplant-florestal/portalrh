@@ -283,7 +283,7 @@ class CollaboratorDashboardDataService
 
         arsort($groups);
         $total = array_sum($groups);
-        $colors = ['#2563eb', '#06b6d4', '#a855f7', '#10b981', '#f97316', '#94a3b8'];
+        $colors = ['#0d1321', '#1d2d44', '#2f4a68', '#3e5c76', '#6f8fa8', '#aebfd0'];
 
         $items = [];
         $others = 0;

@@ -171,7 +171,7 @@ class Logger
 
     private static function redact($value)
     {
-        $sensitive = ['password', 'pass', 'senha', 'token', 'csrf', 'cookie', 'authorization', 'db_pass', 'supervisor_password'];
+        $sensitive = ['password', 'pass', 'senha', 'token', 'csrf', 'cookie', 'authorization', 'db_pass', 'supervisor_password', 'secret'];
         if (is_array($value)) {
             $out = [];
             foreach ($value as $k => $v) {

@@ -1,5 +1,4 @@
 node_modules/
-vendor/
 .env
 .env.*
 app/config/local.php
@@ -12,6 +11,7 @@ storage/ratelimit/
 storage/resumes/
 storage/audit/
 storage/logs/
+storage/imports/*.json
 public/uploads/
 uploads/
 test-results/

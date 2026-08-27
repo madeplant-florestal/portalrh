@@ -30,6 +30,7 @@ try {
 
     $router->post('/api/check-cpf', [ApiController::class, 'checkCpf']);
     $router->post('/api/pipeline/move', [AdminPipelineController::class, 'move']);
+    $router->post('/api/solicitacoes-vaga/move', [AdminSolicitacoesVagaKanbanController::class, 'move']);
     $router->post('/api/admin/usuarios/{id}/password', [AdminUsuariosController::class, 'adminChangePasswordApi']);
 
     $router->get('/login', [AuthController::class, 'login']);
@@ -99,12 +100,14 @@ try {
     $router->post('/admin/vagas/editar/{id}', [AdminVagasController::class, 'update']);
     $router->post('/admin/vagas/excluir/{id}', [AdminVagasController::class, 'delete']);
     $router->get('/admin/solicitacoes-vaga', [AdminSolicitacoesVagaController::class, 'index']);
+    $router->get('/admin/solicitacoes-vaga/kanban', [AdminSolicitacoesVagaKanbanController::class, 'index']);
     $router->get('/admin/solicitacoes-vaga/nova', [AdminSolicitacoesVagaController::class, 'create']);
     $router->post('/admin/solicitacoes-vaga/nova', [AdminSolicitacoesVagaController::class, 'store']);
     $router->get('/admin/solicitacoes-vaga/{id}', [AdminSolicitacoesVagaController::class, 'show']);
     $router->post('/admin/solicitacoes-vaga/{id}/aprovar-lider', [AdminSolicitacoesVagaController::class, 'approveLeader']);
     $router->post('/admin/solicitacoes-vaga/{id}/aprovar-rh', [AdminSolicitacoesVagaController::class, 'approveRh']);
     $router->post('/admin/solicitacoes-vaga/{id}/controle-rh', [AdminSolicitacoesVagaController::class, 'updateRh']);
+    $router->post('/admin/solicitacoes-vaga/{id}/anotacao', [AdminSolicitacoesVagaController::class, 'addNota']);
     $router->get('/admin/movimentacoes-pessoal', [AdminMovimentacoesPessoalController::class, 'index']);
     $router->get('/admin/movimentacoes-pessoal/nova', [AdminMovimentacoesPessoalController::class, 'create']);
     $router->post('/admin/movimentacoes-pessoal/nova', [AdminMovimentacoesPessoalController::class, 'store']);

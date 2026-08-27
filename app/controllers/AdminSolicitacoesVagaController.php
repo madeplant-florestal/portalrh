@@ -131,6 +131,36 @@ class AdminSolicitacoesVagaController extends Controller
         redirect('/admin/solicitacoes-vaga/' . (int)$id . '?ok=' . urlencode('Controle interno de RH atualizado com sucesso.'));
     }
 
+    public function addNota(string $id): void
+    {
+        Auth::requireRole(['admin', 'rh', 'viewer']);
+        if (!Security::csrfCheck($_POST['csrf'] ?? '')) {
+            http_response_code(400);
+            echo 'CSRF inválido';
+            return;
+        }
+
+        $userId = (int)($_SESSION['user_id'] ?? 0);
+        $role = Auth::role();
+        $isSupervisor = !empty($_SESSION['user_is_supervisor']);
+
+        if (!SolicitacaoVaga::findAccessible((int)$id, $userId, $role, $isSupervisor)) {
+            http_response_code(404);
+            echo 'Solicitação de vaga não encontrada.';
+            return;
+        }
+
+        $texto = trim((string)($_POST['texto'] ?? ''));
+        $result = SolicitacaoVaga::addKanbanNota((int)$id, $texto, $userId);
+
+        if (!($result['ok'] ?? false)) {
+            redirect('/admin/solicitacoes-vaga/' . (int)$id . '?erro=' . urlencode((string)($result['message'] ?? 'Falha ao salvar a anotação.')));
+            return;
+        }
+
+        redirect('/admin/solicitacoes-vaga/' . (int)$id . '?ok=' . urlencode('Anotação registrada com sucesso.'));
+    }
+
     private function handleApproval(int $id, string $step): void
     {
         Auth::requireRole(['admin', 'rh', 'viewer']);

@@ -23,6 +23,7 @@ $statusClass = static function (string $status): string {
     </div>
     <div class="flex flex-wrap gap-2">
       <a href="<?= $base ?>/admin/vagas" class="inline-flex items-center justify-center rounded-lg border border-gray-300 px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50">Voltar para vagas</a>
+      <a href="<?= $base ?>/admin/solicitacoes-vaga/kanban" class="inline-flex items-center justify-center rounded-lg border border-ctgreen px-4 py-3 text-sm font-medium text-ctgreen hover:bg-ctgreen hover:text-white">Kanban de solicitações</a>
       <a href="<?= $base ?>/admin/solicitacoes-vaga/nova" class="inline-flex items-center justify-center rounded-lg bg-ctgreen px-4 py-3 text-sm font-medium text-white hover:bg-ctdark">Nova solicitação</a>
     </div>
   </div>

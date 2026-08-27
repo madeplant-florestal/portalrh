@@ -765,6 +765,29 @@ auditoria de 2026-07-09, sem inventar objetivos novos:
 - **Relacionamento Cargo × Setor** (`CARGO_SETORES_FEATURE.md`): governança N:N
   já implementada com padrão Repository/Service completo — use como referência
   de "melhor exemplo" da geração nova ao propor um módulo novo.
+- **Kanban de Solicitações de Vaga** (sprint 2026-08-25): segundo Kanban do
+  sistema, acompanhando a situação **operacional** da vaga solicitada pelo
+  gestor (`Em aprovação/Aprovada/Em recrutamento/Em processo seletivo/Fechada/
+  Cancelada`) — deliberadamente independente do Kanban de Recrutamento e
+  Seleção (`AdminPipelineController`/`PipelineStage`/`Candidatura`), que
+  acompanha candidatos. Implementado como um segundo stack completo, não como
+  generalização do primeiro: `SolicitacaoVagaStage` (catálogo de etapas,
+  tabela `solicitacao_vaga_stages`), `SolicitacaoVagaPipelineService`
+  (movimentação com lock/transação/validação, tabela
+  `solicitacao_vaga_kanban_historico`) e `SolicitacaoVagaStageValidator`
+  (campos obrigatórios por etapa — hoje só `motivo_cancelamento` na etapa
+  `cancelada`), além de um bloco próprio em `assets/admin.js`
+  (`initSolicitacaoVagaKanban`, seletores `data-sv-kanban-*`) que não toca em
+  `initKanban()`. A coluna `solicitacoes_vaga.situacao_kanban_id` é
+  **desacoplada de propósito** de `status_fluxo` (que continua exclusivo do
+  fluxo de aprovação líder/RH já existente): nenhuma automação sincroniza as
+  duas hoje — a movimentação no Kanban é sempre manual via drag-and-drop. Ver
+  migration `database/migrations/2026-08-25-solicitacao-vaga-kanban.sql` para
+  o backfill determinístico aplicado aos registros existentes (mapeamento
+  `status_fluxo → situacao_kanban_id`, com histórico explícito para os casos
+  migrados para `cancelada`, sem inventar motivo de negócio). A relação entre
+  `solicitacoes_vaga` e `vagas`/`candidaturas` continua não implementada por
+  decisão explícita desta sprint — arquitetura deixada preparada, não forçada.
 
 ## 21. Conhecimento do Projeto (memória permanente)
 

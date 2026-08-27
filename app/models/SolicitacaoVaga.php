@@ -150,6 +150,17 @@ class SolicitacaoVaga
             CONSTRAINT fk_solicitacoes_contratado FOREIGN KEY (nome_contratado_colaborador_id) REFERENCES colaboradores(id) ON DELETE SET NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
+        // Rede de segurança para ambientes onde a migration 2026-08-25-solicitacao-vaga-kanban.sql
+        // ainda não rodou (não há runner de migrations neste projeto — ver CLAUDE.md §3.7). A
+        // migration continua sendo a fonte principal; isto só evita que create()/allForKanban()
+        // quebrem com "coluna desconhecida" antes dela ser aplicada manualmente em produção.
+        self::addColumnIfMissing('solicitacoes_vaga', 'situacao_kanban_id', 'ALTER TABLE solicitacoes_vaga ADD COLUMN situacao_kanban_id INT NULL AFTER status_fluxo');
+        self::addColumnIfMissing('solicitacoes_vaga', 'motivo_cancelamento_encrypted', 'ALTER TABLE solicitacoes_vaga ADD COLUMN motivo_cancelamento_encrypted TEXT NULL AFTER situacao_kanban_id');
+        self::addColumnIfMissing('solicitacoes_vaga', 'cancelada_em', 'ALTER TABLE solicitacoes_vaga ADD COLUMN cancelada_em DATETIME NULL AFTER motivo_cancelamento_encrypted');
+        self::addColumnIfMissing('solicitacoes_vaga', 'cancelada_por_usuario_id', 'ALTER TABLE solicitacoes_vaga ADD COLUMN cancelada_por_usuario_id INT NULL AFTER cancelada_em');
+        self::addColumnIfMissing('solicitacoes_vaga', 'fechada_em', 'ALTER TABLE solicitacoes_vaga ADD COLUMN fechada_em DATETIME NULL AFTER cancelada_por_usuario_id');
+        self::addColumnIfMissing('solicitacoes_vaga', 'fechada_por_usuario_id', 'ALTER TABLE solicitacoes_vaga ADD COLUMN fechada_por_usuario_id INT NULL AFTER fechada_em');
+
         $pdo->exec("CREATE TABLE IF NOT EXISTS solicitacao_vaga_beneficios (
             solicitacao_id INT NOT NULL,
             beneficio_id INT NOT NULL,
@@ -445,8 +456,120 @@ class SolicitacaoVaga
         $row['competencias_comportamentais'] = self::selectedCompetencies((int)$row['id'], self::TIPO_COMPETENCIA_COMPORTAMENTAL);
         $row['aprovacoes'] = self::approvalStatus((int)$row['id']);
         $row['auditoria'] = self::auditTrail((int)$row['id']);
+        $row['situacao_kanban'] = !empty($row['situacao_kanban_id']) ? SolicitacaoVagaStage::find((int)$row['situacao_kanban_id']) : null;
+        $row['kanban_historico'] = self::kanbanHistorico((int)$row['id']);
 
         return self::hydrateRecord($row);
+    }
+
+    /**
+     * Listagem para o Kanban de Solicitações de Vaga (situação operacional), independente do
+     * status_fluxo de aprovação. Mesma restrição de acesso por linha usada em allForUser().
+     */
+    public static function allForKanban(?int $currentUserId, ?string $currentRole, bool $isSupervisor, array $filters = []): array
+    {
+        self::ensureSchema();
+        $pdo = Database::conn();
+
+        $sql = "SELECT sv.id, sv.quantidade_vagas, sv.situacao_kanban_id, sv.created_at,
+                       sv.setor_id, sv.cargo_id, sv.gestor_solicitante_colaborador_id,
+                       s.nome AS setor_nome, c.nome AS cargo_nome, g.nome AS gestor_nome,
+                       st.nome AS situacao_nome, st.slug AS situacao_slug, st.cor AS situacao_cor
+                FROM solicitacoes_vaga sv
+                INNER JOIN setores s ON s.id = sv.setor_id
+                INNER JOIN cargos c ON c.id = sv.cargo_id
+                INNER JOIN colaboradores g ON g.id = sv.gestor_solicitante_colaborador_id
+                LEFT JOIN solicitacao_vaga_stages st ON st.id = sv.situacao_kanban_id
+                LEFT JOIN solicitacao_vaga_aprovacoes ap_lider ON ap_lider.solicitacao_id = sv.id AND ap_lider.etapa = 'lider_imediato'
+                WHERE 1=1";
+        $params = [];
+
+        $currentRole = strtolower(trim((string)$currentRole));
+        if (!$isSupervisor && !in_array($currentRole, ['admin', 'rh'], true)) {
+            $sql .= " AND (sv.solicitante_usuario_id = ? OR ap_lider.destinatario_usuario_id = ?)";
+            $params[] = (int)$currentUserId;
+            $params[] = (int)$currentUserId;
+        }
+
+        if (!empty($filters['gestor_colaborador_id'])) {
+            $sql .= " AND sv.gestor_solicitante_colaborador_id = ?";
+            $params[] = (int)$filters['gestor_colaborador_id'];
+        }
+        if (!empty($filters['setor_id'])) {
+            $sql .= " AND sv.setor_id = ?";
+            $params[] = (int)$filters['setor_id'];
+        }
+        if (!empty($filters['cargo_id'])) {
+            $sql .= " AND sv.cargo_id = ?";
+            $params[] = (int)$filters['cargo_id'];
+        }
+        if (!empty($filters['data_de'])) {
+            $sql .= " AND sv.created_at >= ?";
+            $params[] = $filters['data_de'] . ' 00:00:00';
+        }
+        if (!empty($filters['data_ate'])) {
+            $sql .= " AND sv.created_at <= ?";
+            $params[] = $filters['data_ate'] . ' 23:59:59';
+        }
+        if (!empty($filters['situacao_slug'])) {
+            $sql .= " AND st.slug = ?";
+            $params[] = $filters['situacao_slug'];
+        }
+
+        $sql .= " ORDER BY sv.created_at DESC";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+
+        return array_map(static function (array $row): array {
+            return [
+                'id' => (int)$row['id'],
+                'setor_nome' => $row['setor_nome'],
+                'cargo_nome' => $row['cargo_nome'],
+                'gestor_nome' => $row['gestor_nome'],
+                'quantidade_vagas' => (int)$row['quantidade_vagas'],
+                'situacao_kanban_id' => $row['situacao_kanban_id'] !== null ? (int)$row['situacao_kanban_id'] : null,
+                'situacao_nome' => $row['situacao_nome'],
+                'situacao_slug' => $row['situacao_slug'],
+                'situacao_cor' => $row['situacao_cor'],
+                'created_at' => $row['created_at'],
+            ];
+        }, $stmt->fetchAll(PDO::FETCH_ASSOC));
+    }
+
+    public static function kanbanHistorico(int $solicitacaoId): array
+    {
+        $stmt = Database::conn()->prepare(
+            "SELECT h.*, u.nome AS usuario_nome
+             FROM solicitacao_vaga_kanban_historico h
+             LEFT JOIN usuarios u ON u.id = h.usuario_id
+             WHERE h.solicitacao_id = ?
+             ORDER BY h.created_at DESC, h.id DESC"
+        );
+        $stmt->execute([$solicitacaoId]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    public static function moveKanbanStage(
+        int $id,
+        int $newStageId,
+        ?int $userId,
+        array $metadata = [],
+        bool $checkConcurrency = false,
+        ?int $expectedCurrentStageId = null
+    ): array {
+        return (new SolicitacaoVagaPipelineService())->moveToStage(
+            $id,
+            $newStageId,
+            $userId,
+            $metadata,
+            $checkConcurrency,
+            $expectedCurrentStageId
+        );
+    }
+
+    public static function addKanbanNota(int $id, string $texto, ?int $userId): array
+    {
+        return (new SolicitacaoVagaPipelineService())->addNota($id, $texto, $userId);
     }
 
     public static function create(array $input, int $actorUserId, ?string $ip = null): int
@@ -454,6 +577,14 @@ class SolicitacaoVaga
         self::ensureSchema();
         $normalized = self::validateForSubmission($input, $actorUserId);
         $leader = self::resolveLeaderAssignment($normalized['gestor_solicitante_colaborador_id'], $normalized['setor_id']);
+
+        // situacao_kanban_id nunca nasce NULL (mesma classe de bug já corrigida para
+        // candidaturas.stage_id em 2026-07-13-candidaturas-stage-id-backfill.sql: uma coluna de
+        // etapa NULL quebra a checagem de concorrência do Kanban, que compara contra o valor real
+        // do banco). Resolvido ANTES de abrir a transação: SolicitacaoVagaStage::ensureSchema() pode
+        // rodar um CREATE TABLE IF NOT EXISTS na primeira chamada do processo, e DDL faz commit
+        // implícito no MySQL/InnoDB — chamá-lo dentro da transação abaixo derrubaria o commit final.
+        $situacaoKanbanId = SolicitacaoVagaStage::defaultStageId() ?: null;
 
         $pdo = Database::conn();
         $pdo->beginTransaction();
@@ -469,8 +600,8 @@ class SolicitacaoVaga
                     escolaridade_minima, formacao_academica_encrypted, experiencia_necessaria_encrypted,
                     entregas_esperadas_encrypted, nivel_responsabilidade, data_prevista_inicio,
                     urgencia, data_limite_fechamento, lider_imediato_colaborador_id, lider_imediato_usuario_id,
-                    status_fluxo
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+                    status_fluxo, situacao_kanban_id
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
             );
 
             $stmt->execute([
@@ -504,6 +635,7 @@ class SolicitacaoVaga
                 $leader['colaborador_id'],
                 $leader['usuario_id'],
                 self::STATUS_PENDENTE_LIDER,
+                $situacaoKanbanId,
             ]);
 
             $solicitacaoId = (int)$pdo->lastInsertId();
@@ -1229,10 +1361,13 @@ class SolicitacaoVaga
         $row['experiencia_necessaria'] = Cipher::decrypt($row['experiencia_necessaria_encrypted'] ?? null) ?? '';
         $row['entregas_esperadas'] = Cipher::decrypt($row['entregas_esperadas_encrypted'] ?? null) ?? '';
         $row['observacoes_rh'] = Cipher::decrypt($row['observacoes_rh_encrypted'] ?? null) ?? '';
+        $row['motivo_cancelamento'] = Cipher::decrypt($row['motivo_cancelamento_encrypted'] ?? null) ?? '';
         $row['data_prevista_inicio_br'] = DateHelper::formatBrazilianDate($row['data_prevista_inicio'] ?? '');
         $row['data_limite_fechamento_br'] = DateHelper::formatBrazilianDate($row['data_limite_fechamento'] ?? '');
         $row['data_desligamento_br'] = DateHelper::formatBrazilianDate($row['data_desligamento'] ?? '');
         $row['data_admissao_br'] = DateHelper::formatBrazilianDate($row['data_admissao'] ?? '');
+        $row['cancelada_em_br'] = DateHelper::formatBrazilianDateTime((string)($row['cancelada_em'] ?? ''));
+        $row['fechada_em_br'] = DateHelper::formatBrazilianDateTime((string)($row['fechada_em'] ?? ''));
         return $row;
     }
 
@@ -1454,6 +1589,22 @@ class SolicitacaoVaga
         );
         $stmt->execute([$table]);
         return (int)$stmt->fetchColumn() > 0;
+    }
+
+    private static function columnExists(string $table, string $column): bool
+    {
+        $stmt = Database::conn()->prepare(
+            'SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?'
+        );
+        $stmt->execute([$table, $column]);
+        return (int)$stmt->fetchColumn() > 0;
+    }
+
+    private static function addColumnIfMissing(string $table, string $column, string $ddl): void
+    {
+        if (!self::columnExists($table, $column)) {
+            Database::conn()->exec($ddl);
+        }
     }
 
     private static function cargoRequiresMachine(string $cargoName): bool

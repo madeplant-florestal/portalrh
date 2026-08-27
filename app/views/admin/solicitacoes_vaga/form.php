@@ -597,6 +597,56 @@ $payload = [
       </section>
 
       <section class="rounded-xl border bg-white p-5 shadow-sm">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <h3 class="text-lg font-semibold text-ctpblue">Situação operacional (Kanban de Solicitações de Vaga)</h3>
+          <a href="<?= $base ?>/admin/solicitacoes-vaga/kanban" class="text-sm font-medium text-ctgreen hover:underline">Abrir Kanban</a>
+        </div>
+        <p class="mt-1 text-xs text-gray-500">Independente do fluxo de aprovação líder/RH acima — reflete só o andamento operacional da vaga.</p>
+        <?php $svStage = $record['situacao_kanban'] ?? null; ?>
+        <div class="mt-3">
+          <span class="inline-flex rounded-full px-3 py-1 text-xs font-semibold text-white" style="background-color: <?= Security::e($svStage['cor'] ?? '#6b7280') ?>">
+            <?= Security::e($svStage['nome'] ?? 'Não definida') ?>
+          </span>
+          <?php if (!empty($record['cancelada_em_br'])): ?>
+            <p class="mt-2 text-sm text-gray-600">Cancelada em <?= Security::e($record['cancelada_em_br']) ?><?= !empty($record['motivo_cancelamento']) ? ' — Motivo: ' . Security::e($record['motivo_cancelamento']) : '' ?></p>
+          <?php endif; ?>
+          <?php if (!empty($record['fechada_em_br'])): ?>
+            <p class="mt-2 text-sm text-gray-600">Fechada em <?= Security::e($record['fechada_em_br']) ?></p>
+          <?php endif; ?>
+        </div>
+
+        <form method="POST" action="<?= $base ?>/admin/solicitacoes-vaga/<?= (int)$record['id'] ?>/anotacao" class="mt-4">
+          <input type="hidden" name="csrf" value="<?= Security::e($csrf) ?>">
+          <label class="block text-sm font-medium text-gray-700">Anotações / Observações do RH</label>
+          <textarea name="texto" rows="3" class="mt-1 w-full rounded border px-3 py-2" placeholder="Registre uma observação sobre o andamento desta vaga" required></textarea>
+          <div class="responsive-form-actions pt-2">
+            <button type="submit" class="rounded-lg bg-ctgreen px-4 py-3 text-sm font-medium text-white hover:bg-ctdark">Adicionar anotação</button>
+          </div>
+        </form>
+
+        <h4 class="mt-6 text-sm font-semibold text-gray-700">Histórico</h4>
+        <div class="mt-2 space-y-3">
+          <?php if (empty($record['kanban_historico'])): ?>
+            <p class="text-sm text-gray-500">Nenhum evento registrado ainda.</p>
+          <?php endif; ?>
+          <?php foreach (($record['kanban_historico'] ?? []) as $evento): ?>
+            <?php $isNotaAvulsa = ($evento['situacao_anterior'] ?? null) === ($evento['situacao_nova'] ?? null); ?>
+            <div class="rounded-lg border border-gray-100 bg-gray-50 p-3 text-sm">
+              <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500">
+                <span><?= Security::e(date('d/m/Y H:i', strtotime((string)$evento['created_at']))) ?> — <?= Security::e($evento['usuario_nome'] ?? 'Sistema') ?></span>
+                <span class="font-medium <?= $isNotaAvulsa ? 'text-ctpblue' : 'text-ctgreen' ?>">
+                  <?= $isNotaAvulsa ? 'Anotação' : 'Movimentação: ' . Security::e((string)($evento['situacao_anterior'] ?? '—')) . ' → ' . Security::e((string)$evento['situacao_nova']) ?>
+                </span>
+              </div>
+              <?php if (!empty($evento['observacao'])): ?>
+                <p class="mt-1 text-gray-700"><?= nl2br(Security::e($evento['observacao'])) ?></p>
+              <?php endif; ?>
+            </div>
+          <?php endforeach; ?>
+        </div>
+      </section>
+
+      <section class="rounded-xl border bg-white p-5 shadow-sm">
         <h3 class="text-lg font-semibold text-ctpblue">Auditoria</h3>
         <div class="mt-4 overflow-x-auto">
           <table class="min-w-full text-sm">

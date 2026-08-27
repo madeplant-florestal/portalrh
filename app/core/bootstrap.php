@@ -12,6 +12,13 @@ if (!defined('STORAGE_PATH')) {
     define('STORAGE_PATH', BASE_PATH . DIRECTORY_SEPARATOR . 'storage');
 }
 
+// Dependência escopada via Composer só para geração de PDF (Dompdf) — ver CLAUDE.md §4/§21.
+// O restante do projeto continua com autoload manual via glob() abaixo, sem Composer.
+$vendorAutoload = BASE_PATH . DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR . 'autoload.php';
+if (is_file($vendorAutoload)) {
+    require_once $vendorAutoload;
+}
+
 require_once __DIR__ . '/Config.php';
 require_once __DIR__ . '/Logger.php';
 require_once __DIR__ . '/Database.php';

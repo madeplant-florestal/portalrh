@@ -621,6 +621,206 @@ if (typeof module !== 'undefined' && module.exports) {
     }
   };
 
+  // Kanban de Solicitações de Vaga (situação operacional da vaga) — independente do Kanban de
+  // candidatos acima (initKanban). Mesmo padrão visual/de eventos, endpoint e payload próprios;
+  // não compartilha seletores nem estado com initKanban para não arriscar regressão ali.
+  const initSolicitacaoVagaKanban = () => {
+    const columns = Array.from(document.querySelectorAll('[data-sv-kanban-column="1"]'));
+    if (columns.length === 0) return;
+
+    const cards = Array.from(document.querySelectorAll('[data-sv-kanban-card="1"]'));
+    let draggedCard = null;
+    let sourceColumn = null;
+
+    const updateCounts = () => {
+      columns.forEach((col) => {
+        const counter = col.closest('[data-sv-kanban-board-column="1"]')?.querySelector('[data-sv-kanban-count="1"]');
+        if (counter) {
+          counter.textContent = String(col.querySelectorAll('[data-sv-kanban-card="1"]').length);
+        }
+      });
+    };
+
+    const sendMove = async (solicitacaoId, stageId, expectedCurrentStageId, metadata) => {
+      const res = await fetch(buildUrl('/api/solicitacoes-vaga/move'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+        body: JSON.stringify({
+          csrf,
+          solicitacao_id: solicitacaoId,
+          stage_id: stageId,
+          expected_current_stage_id: expectedCurrentStageId,
+          metadata: metadata || {},
+        }),
+      });
+
+      let data = null;
+      try {
+        data = await res.json();
+      } catch {
+        data = null;
+      }
+
+      if (!res.ok || !data || !data.success) {
+        throw new Error((data && data.error) || 'Falha ao mover solicitação');
+      }
+    };
+
+    const modal = document.querySelector('[data-sv-stage-modal="1"]');
+    const modalErrorBox = modal ? modal.querySelector('[data-sv-stage-modal-error="1"]') : null;
+    const modalErrorText = modal ? modal.querySelector('[data-sv-stage-modal-error-text="1"]') : null;
+    const modalCargo = modal ? modal.querySelector('[data-sv-stage-modal-cargo="1"]') : null;
+    const modalConfirmBtn = modal ? modal.querySelector('[data-sv-stage-modal-confirm="1"]') : null;
+    const modalCancelBtn = modal ? modal.querySelector('[data-sv-stage-modal-cancel="1"]') : null;
+    const modalFields = modal ? Array.from(modal.querySelectorAll('[data-sv-stage-modal-field]')) : [];
+    let modalBusy = false;
+
+    const setModalBusy = (busy) => {
+      modalBusy = busy;
+      if (modalConfirmBtn) {
+        modalConfirmBtn.disabled = busy;
+        modalConfirmBtn.classList.toggle('opacity-60', busy);
+      }
+    };
+
+    const hideModalError = () => {
+      if (modalErrorBox) modalErrorBox.classList.add('hidden');
+    };
+
+    const showModalError = (message) => {
+      if (!modalErrorBox || !modalErrorText) return;
+      modalErrorText.textContent = message;
+      modalErrorBox.classList.remove('hidden');
+    };
+
+    const collectModalMetadata = () => {
+      const metadata = {};
+      modalFields.forEach((field) => {
+        metadata[field.getAttribute('data-sv-stage-modal-field')] = field.value || '';
+      });
+      return metadata;
+    };
+
+    const openCancelModal = (card, col, stageId, solId, expectedCurrentStageId) => {
+      if (!modal) {
+        window.alert('Não foi possível abrir o formulário de cancelamento.');
+        return;
+      }
+
+      hideModalError();
+      modalFields.forEach((field) => { field.value = ''; });
+      if (modalCargo) modalCargo.textContent = card.querySelector('h4')?.textContent?.trim() || '';
+      setModalBusy(false);
+      modal.classList.remove('hidden');
+
+      const onCancel = () => {
+        modal.classList.add('hidden');
+        detachHandlers();
+      };
+
+      const onConfirm = async () => {
+        if (modalBusy) return;
+        const metadata = collectModalMetadata();
+        if (!metadata.motivo_cancelamento || !metadata.motivo_cancelamento.trim()) {
+          showModalError('Informe o motivo do cancelamento.');
+          return;
+        }
+        setModalBusy(true);
+        try {
+          await sendMove(solId, stageId, expectedCurrentStageId, metadata);
+          modal.classList.add('hidden');
+          detachHandlers();
+          col.appendChild(card);
+          updateCounts();
+        } catch (err) {
+          setModalBusy(false);
+          showModalError((err && err.message) || 'Falha ao cancelar a solicitação.');
+        }
+      };
+
+      const detachHandlers = () => {
+        if (modalConfirmBtn) modalConfirmBtn.removeEventListener('click', onConfirm);
+        if (modalCancelBtn) modalCancelBtn.removeEventListener('click', onCancel);
+      };
+
+      if (modalConfirmBtn) modalConfirmBtn.addEventListener('click', onConfirm);
+      if (modalCancelBtn) modalCancelBtn.addEventListener('click', onCancel);
+    };
+
+    cards.forEach((card) => {
+      card.addEventListener('dragstart', () => {
+        draggedCard = card;
+        sourceColumn = card.closest('[data-sv-kanban-column="1"]');
+        card.classList.add('opacity-50');
+      });
+
+      card.addEventListener('dragend', () => {
+        card.classList.remove('opacity-50');
+        columns.forEach((c) => c.classList.remove('bg-gray-200'));
+        draggedCard = null;
+        sourceColumn = null;
+      });
+    });
+
+    columns.forEach((col) => {
+      col.addEventListener('dragover', (ev) => {
+        ev.preventDefault();
+        col.classList.add('bg-gray-200');
+      });
+
+      col.addEventListener('dragleave', (ev) => {
+        if (ev.target === col) {
+          col.classList.remove('bg-gray-200');
+        }
+      });
+
+      col.addEventListener('drop', async (ev) => {
+        ev.preventDefault();
+        col.classList.remove('bg-gray-200');
+
+        const stageId = parseInt(col.getAttribute('data-stage-id') || '0', 10);
+        const stageSlug = col.getAttribute('data-stage-slug') || '';
+
+        const card = draggedCard;
+        const originColumn = sourceColumn;
+        const solId = card ? parseInt(card.getAttribute('data-sol-id') || '0', 10) : 0;
+
+        if (!card || !stageId || !solId || originColumn === col) {
+          return;
+        }
+
+        const expectedCurrentStageId = parseInt(originColumn?.getAttribute('data-stage-id') || '0', 10) || null;
+
+        if (stageSlug === 'cancelada') {
+          // Cancelamento sempre exige motivo — não move visualmente até confirmar no modal.
+          openCancelModal(card, col, stageId, solId, expectedCurrentStageId);
+          return;
+        }
+
+        if (stageSlug === 'fechada') {
+          if (!window.confirm('Confirma o fechamento desta solicitação de vaga?')) {
+            return;
+          }
+        }
+
+        col.appendChild(card);
+        updateCounts();
+        try {
+          await sendMove(solId, stageId, expectedCurrentStageId, {});
+        } catch (err) {
+          originColumn.appendChild(card);
+          updateCounts();
+          window.alert((err && err.message) || 'Falha ao mover a solicitação.');
+        }
+      });
+    });
+
+    updateCounts();
+  };
+
   const initInputMasks = () => {
     document.querySelectorAll('[data-mask-date="1"]').forEach((input) => {
       input.addEventListener('input', () => {
@@ -1252,5 +1452,6 @@ if (typeof module !== 'undefined' && module.exports) {
     initMovimentacaoPessoalForm();
     initAiAnalyze();
     initKanban();
+    initSolicitacaoVagaKanban();
   });
 })();

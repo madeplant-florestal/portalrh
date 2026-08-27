@@ -13,6 +13,14 @@ return [
         'user' => '',
         'pass' => ''
     ],
+    // METADADOS (SQL Server) — fonte oficial de colaboradores, consumida só pela sincronização
+    // (MetadadosSyncService / scripts/sync_metadados_colaboradores.php), nunca durante
+    // navegação normal do Portal. Preencha em app/config/local.php ou build.php, nunca aqui.
+    'metadados' => [
+        'dsn' => '',
+        'user' => '',
+        'pass' => ''
+    ],
     'security' => [
         'csrf_key' => 'csrf_token',
         'session_name' => 'RHMADEPLANTSESSID',

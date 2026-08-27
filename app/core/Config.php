@@ -24,6 +24,11 @@ class Config
                 'user' => '',
                 'pass' => ''
             ],
+            'metadados' => [
+                'dsn' => '',
+                'user' => '',
+                'pass' => ''
+            ],
             'security' => [
                 'csrf_key' => 'csrf_token',
                 'session_name' => 'RHMADEPLANTSESSID',

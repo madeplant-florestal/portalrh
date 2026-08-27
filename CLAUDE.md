@@ -352,6 +352,19 @@ qualquer ORM, qualquer dependência via Composer que altere significativamente a
 arquitetura, qualquer framework de frontend (React/Vue/Angular) ou bundler
 (Webpack/Vite) sem aprovação explícita e justificada do Fabio.
 
+**Exceções pontuais já aprovadas** (não abrem precedente geral — cada uma é
+escopada a uma necessidade concreta, o resto do projeto continua no padrão
+acima):
+- **Composer**, estritamente para `dompdf/dompdf` (geração de PDF da Carta
+  Proposta). `vendor/` é versionado no Git (produção não roda
+  `composer install`). Ver `composer.json`, `app/core/bootstrap.php`.
+- **Extensão PHP `pdo_sqlsrv`/`sqlsrv`** (driver oficial da Microsoft),
+  necessária só para a sincronização com o METADADOS (SQL Server, ver §20) —
+  usada exclusivamente por `MetadadosDatabase`/`MetadadosSyncService`/
+  `scripts/sync_metadados_colaboradores.php`, nunca em request normal do
+  Portal. Ainda não instalada em nenhum ambiente conhecido (dev/produção) até
+  2026-08-27 — bloqueia a Fase 1 rodar de ponta a ponta até ser instalada.
+
 ---
 
 ## 5. Filosofia de Desenvolvimento
@@ -788,6 +801,32 @@ auditoria de 2026-07-09, sem inventar objetivos novos:
   migrados para `cancelada`, sem inventar motivo de negócio). A relação entre
   `solicitacoes_vaga` e `vagas`/`candidaturas` continua não implementada por
   decisão explícita desta sprint — arquitetura deixada preparada, não forçada.
+- **Integração com METADADOS (sistema oficial de RH/DP, SQL Server) — Fase 1**
+  (sprint 2026-08-27): decisão de que o METADADOS passa a ser a fonte oficial
+  de dados de colaboradores; o Portal RH deixará **gradualmente** de manter
+  cadastro duplicado, mas `colaboradores` **não foi removida nem alterada**
+  nesta fase — plano de transição em 5 fases (consumir + espelhar; comparar;
+  mapear vínculos; migrar telas; descontinuar cadastro duplicado só quando não
+  houver mais dependência crítica). Fase 1 implementada: tabela espelho de
+  **leitura** `colaboradores_metadados` (uma linha por CONTRATO, não por
+  pessoa — readmissão gera nova linha, nunca sobrescreve; chave técnica
+  `codigo_empresa + codigo_unidade + numero_contrato`, nunca CPF isolado — ver
+  migration `2026-08-27-colaboradores-metadados.sql`), `MetadadosDatabase`
+  (conexão SQL Server dedicada, só usada pela sincronização, nunca em request
+  normal do Portal), `MetadadosSyncService` (upsert idempotente, nunca faz
+  `DELETE` de vínculo histórico) + `ColaboradorMetadadosRepository`, e
+  `scripts/sync_metadados_colaboradores.php` (CLI, agendado externamente —
+  mesmo padrão já usado pelos webhooks de recrutamento e pelo import XLSX de
+  colaboradores). `MetadadosSyncService::fetchSourceRows()` (lê do SQL Server)
+  e `::applyRows()` (upsert em MySQL) são deliberadamente separados para que a
+  lógica de upsert seja testável sem depender do driver/conectividade — ver
+  `tests/php/integration_colaborador_metadados_sync.php`. **Nenhuma FK nova
+  aponta para `colaboradores_metadados` nesta fase.** Risco arquitetural já
+  identificado e registrado para as próximas fases: `usuario_colaboradores`
+  tem `UNIQUE KEY` em `colaborador_id` (1 usuário de login ↔ 1 colaborador) —
+  isso não sobrevive a readmissão sem uma camada de vínculo
+  `colaborador_local ↔ colaboradores_metadados`, que ainda não foi construída
+  (Fase 3 do plano).
 
 ## 21. Conhecimento do Projeto (memória permanente)
 

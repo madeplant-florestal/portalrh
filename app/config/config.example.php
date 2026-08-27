@@ -13,6 +13,14 @@ return [
         'user' => '',
         'pass' => ''
     ],
+    // METADADOS (SQL Server) — sistema oficial de RH/DP, fonte de verdade de colaboradores.
+    // Ex.: 'dsn' => 'sqlsrv:Server=servidor,1433;Database=METADADOS'. Exige a extensão
+    // pdo_sqlsrv instalada. Usado só por scripts/sync_metadados_colaboradores.php.
+    'metadados' => [
+        'dsn' => '',
+        'user' => '',
+        'pass' => ''
+    ],
     'security' => [
         'csrf_key' => 'csrf_token',
         'session_name' => 'RHMADEPLANTSESSID',

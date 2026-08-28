@@ -26,7 +26,7 @@ class MetadadosDatabase
             );
         }
 
-        $config = Config::app()['metadados'] ?? [];
+        $config = Config::get()['metadados'] ?? [];
         $dsn = (string)($config['dsn'] ?? '');
 
         if ($dsn === '') {

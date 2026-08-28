@@ -18,6 +18,14 @@ class MetadadosSyncService
      * Cada linha representa um CONTRATO (RHCONTRATOS), não uma pessoa — ver §7 da auditoria.
      * Motivo de rescisão traz código + descrição via RHMOTIVOSRESCISOES (confirmado com o time
      * do METADADOS). CPF confirmado como RHPESSOAS.CPF.
+     *
+     * JOIN de RHCENTROSCUSTO1 é só por CENTROCUSTO1 (sem UNIDADE) — validado contra dados reais
+     * em RHTESTE: RHCENTROSCUSTO1.UNIDADE veio vazio para as linhas existentes, então exigir
+     * UNIDADE == UNIDADE zerava 100% dos matches (0/30), enquanto casar só por CENTROCUSTO1
+     * encontrou 30/30. Amostra pequena (só 2 linhas na tabela) — reconfirmar contra produção
+     * antes de tratar como definitivo. RHSETORES está vazia em RHTESTE (0 linhas) e
+     * RHCONTRATOS.SETOR veio em branco nos 40 contratos lidos — não há evidência de bug de JOIN
+     * aqui, mas também não há como validar o JOIN de setor nesta base; mesma ressalva.
      */
     private const QUERY = "
         SELECT
@@ -45,7 +53,7 @@ class MetadadosSyncService
         LEFT JOIN RHUNIDADES unid ON unid.EMPRESA = ctr.EMPRESA AND unid.UNIDADE = ctr.UNIDADE
         LEFT JOIN RHCARGOS cargo ON cargo.CARGO = ctr.CARGO
         LEFT JOIN RHSETORES setor ON setor.SETOR = ctr.SETOR
-        LEFT JOIN RHCENTROSCUSTO1 cc ON cc.CENTROCUSTO1 = ctr.CENTROCUSTO1 AND cc.UNIDADE = ctr.UNIDADE
+        LEFT JOIN RHCENTROSCUSTO1 cc ON cc.CENTROCUSTO1 = ctr.CENTROCUSTO1
         LEFT JOIN RHMOTIVOSRESCISOES mot ON mot.MOTIVORESCISAO = ctr.MOTIVORESCISAO
         ORDER BY pes.NOME
     ";

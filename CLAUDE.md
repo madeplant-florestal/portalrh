@@ -827,6 +827,34 @@ auditoria de 2026-07-09, sem inventar objetivos novos:
   isso não sobrevive a readmissão sem uma camada de vínculo
   `colaborador_local ↔ colaboradores_metadados`, que ainda não foi construída
   (Fase 3 do plano).
+  **Regra arquitetural definitiva: a conexão com o METADADOS é somente
+  leitura.** `MetadadosDatabase`/`MetadadosSyncService::fetchSourceRows()`
+  executam exclusivamente um `SELECT` (a constante `QUERY`); nenhum
+  INSERT/UPDATE/DELETE/MERGE/TRUNCATE/ALTER/CREATE/DROP/EXEC é ou deve ser
+  emitido contra o SQL Server do METADADOS — todas as gravações da
+  sincronização acontecem só no MySQL local, via `Database::conn()` dentro de
+  `ColaboradorMetadadosRepository`/`MetadadosSyncService::applyRows()`. Se
+  corrigir um dado oficial for necessário, a correção é feita no METADADOS
+  pela equipe responsável, nunca pelo Portal. **Fase 2 validada em
+  2026-08-27** contra `RHTESTE` (SQL Server real): conectividade, chave
+  técnica `EMPRESA+UNIDADE+CONTRATO` sem duplicidade, `RHPESSOAS.CPF` como
+  `varchar(11)` (preserva zero à esquerda), JOIN de `RHCENTROSCUSTO1`
+  corrigido para casar só por `CENTROCUSTO1` (sem `UNIDADE` — nas 2 linhas
+  existentes em `RHTESTE`, `RHCENTROSCUSTO1.UNIDADE` veio vazio, então exigir
+  igualdade de unidade zerava 100% dos matches; ressalva: amostra pequena,
+  revalidar contra base com volume real antes de tratar como definitivo para
+  todos os ambientes), e `setor = NULL` mantido fiel à origem (`RHSETORES`
+  está vazia em `RHTESTE` e os 40 contratos de teste não têm `SETOR`
+  preenchido — sem evidência de bug de JOIN, só de origem vazia nesta base).
+  Idempotência real confirmada: `{inserted:0, updated:0, unchanged:40,
+  errors:0}` numa segunda execução consecutiva. **Pendência de
+  infraestrutura, não implementada ainda**: a validação de 2026-08-27 usou a
+  credencial `sa` do SQL Server só temporariamente, para desenvolvimento —
+  antes de qualquer implantação em produção é obrigatório criar um usuário
+  dedicado ao Portal RH com privilégio exclusivo de `SELECT` nas tabelas
+  `RHCONTRATOS`, `RHPESSOAS`, `RHEMPRESAS`, `RHUNIDADES`, `RHCARGOS`,
+  `RHSETORES`, `RHCENTROSCUSTO1`, `RHMOTIVOSRESCISOES` — isso é infraestrutura
+  do SQL Server e exige autorização própria, fora do escopo desta sprint.
 
 ## 21. Conhecimento do Projeto (memória permanente)
 

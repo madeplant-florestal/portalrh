@@ -26,6 +26,17 @@ class MetadadosSyncService
      * antes de tratar como definitivo. RHSETORES está vazia em RHTESTE (0 linhas) e
      * RHCONTRATOS.SETOR veio em branco nos 40 contratos lidos — não há evidência de bug de JOIN
      * aqui, mas também não há como validar o JOIN de setor nesta base; mesma ressalva.
+     *
+     * Todos os 7 JOINs acima foram revalidados em 2026-08-27 contra o banco real RHMADEPLANT
+     * (727 contratos) com 100% de correspondência técnica em cada um — a ressalva de amostra
+     * pequena do parágrafo anterior está resolvida, nenhuma correção pendente.
+     *
+     * salario_atual e data_inicio_cargo (Fase 3.1) vêm de RHCONTRATOS.SALARIOCONTRATUAL e
+     * RHCONTRATOS.DATAULTALTCARGO — sem JOIN adicional, mesma tabela já consultada. Ver
+     * investigação dedicada: SALARIOMES é numericamente idêntico a SALARIOCONTRATUAL em 100%
+     * dos 725 contratos preenchidos em RHMADEPLANT, mas SALARIOCONTRATUAL foi escolhido por
+     * representar semanticamente o salário-base contratual, nunca total recebido no mês.
+     * DATAULTALTCARGO nunca cai em fallback para admissao — são conceitos diferentes.
      */
     private const QUERY = "
         SELECT
@@ -46,7 +57,9 @@ class MetadadosSyncService
             unid.DESCRICAO40                               AS unidade,
             setor.DESCRICAO40                               AS setor,
             cc.DESCRICAO40                                  AS centro_custo,
-            CASE WHEN ctr.DATARESCISAO IS NULL THEN 1 ELSE 0 END AS ativo
+            CASE WHEN ctr.DATARESCISAO IS NULL THEN 1 ELSE 0 END AS ativo,
+            ctr.SALARIOCONTRATUAL                          AS salario_atual,
+            CONVERT(char(10), ctr.DATAULTALTCARGO, 23)     AS data_inicio_cargo
         FROM RHCONTRATOS ctr
         INNER JOIN RHPESSOAS pes ON pes.EMPRESA = ctr.EMPRESA AND pes.PESSOA = ctr.PESSOA
         INNER JOIN RHEMPRESAS emp ON emp.EMPRESA = ctr.EMPRESA
@@ -106,6 +119,8 @@ class MetadadosSyncService
             'setor' => $row['setor'] ?? null,
             'centro_custo' => $row['centro_custo'] ?? null,
             'ativo' => array_key_exists('ativo', $row) ? (int)$row['ativo'] : null,
+            'salario_atual' => isset($row['salario_atual']) && $row['salario_atual'] !== '' ? (string)$row['salario_atual'] : null,
+            'data_inicio_cargo' => $row['data_inicio_cargo'] ?? null,
             'atualizado_em_origem' => $row['atualizado_em_origem'] ?? null,
         ];
     }

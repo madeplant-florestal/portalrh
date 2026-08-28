@@ -9,7 +9,8 @@ class ColaboradorMetadadosRepository
     private const COMPARABLE_FIELDS = [
         'identificador', 'cpf', 'nome', 'empresa', 'nascimento', 'admissao', 'cargo',
         'demissao', 'motivo_rescisao_codigo', 'motivo_rescisao_descricao', 'unidade',
-        'setor', 'centro_custo', 'ativo', 'atualizado_em_origem',
+        'setor', 'centro_custo', 'ativo', 'salario_atual', 'data_inicio_cargo',
+        'atualizado_em_origem',
     ];
 
     private PDO $pdo;
@@ -67,8 +68,8 @@ class ColaboradorMetadadosRepository
                 identificador, codigo_empresa, codigo_unidade, numero_contrato, codigo_pessoa,
                 cpf, nome, empresa, nascimento, admissao, cargo, demissao,
                 motivo_rescisao_codigo, motivo_rescisao_descricao, unidade, setor, centro_custo,
-                ativo, atualizado_em_origem
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
+                ativo, salario_atual, data_inicio_cargo, atualizado_em_origem
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
         );
         $stmt->execute([
             (string)$row['identificador'],
@@ -89,6 +90,8 @@ class ColaboradorMetadadosRepository
             self::nullableString($row['setor'] ?? null),
             self::nullableString($row['centro_custo'] ?? null),
             array_key_exists('ativo', $row) && $row['ativo'] !== null ? (int)$row['ativo'] : null,
+            self::nullableString($row['salario_atual'] ?? null),
+            self::nullableString($row['data_inicio_cargo'] ?? null),
             self::nullableString($row['atualizado_em_origem'] ?? null),
         ]);
     }
@@ -100,7 +103,8 @@ class ColaboradorMetadadosRepository
                 identificador = ?, codigo_pessoa = ?, cpf = ?, nome = ?, empresa = ?,
                 nascimento = ?, admissao = ?, cargo = ?, demissao = ?,
                 motivo_rescisao_codigo = ?, motivo_rescisao_descricao = ?,
-                unidade = ?, setor = ?, centro_custo = ?, ativo = ?, atualizado_em_origem = ?
+                unidade = ?, setor = ?, centro_custo = ?, ativo = ?,
+                salario_atual = ?, data_inicio_cargo = ?, atualizado_em_origem = ?
              WHERE id = ?'
         );
         $stmt->execute([
@@ -119,6 +123,8 @@ class ColaboradorMetadadosRepository
             self::nullableString($row['setor'] ?? null),
             self::nullableString($row['centro_custo'] ?? null),
             array_key_exists('ativo', $row) && $row['ativo'] !== null ? (int)$row['ativo'] : null,
+            self::nullableString($row['salario_atual'] ?? null),
+            self::nullableString($row['data_inicio_cargo'] ?? null),
             self::nullableString($row['atualizado_em_origem'] ?? null),
             $id,
         ]);
@@ -136,6 +142,12 @@ class ColaboradorMetadadosRepository
             if ($field === 'ativo') {
                 $existingValue = $existingValue === null ? null : (int)$existingValue;
                 $incomingValue = $incomingValue === null ? null : (int)$incomingValue;
+            } elseif ($field === 'salario_atual') {
+                // Comparação numérica canonizada em 2 casas — evita UPDATE espúrio só por
+                // diferença de formatação de string decimal (ex.: "1234.5" vindo da origem vs.
+                // "1234.50" devolvido pelo MySQL para a mesma coluna DECIMAL(11,2)).
+                $existingValue = $existingValue === null ? null : number_format((float)$existingValue, 2, '.', '');
+                $incomingValue = $incomingValue === null ? null : number_format((float)$incomingValue, 2, '.', '');
             } else {
                 $existingValue = $existingValue === null ? null : (string)$existingValue;
                 $incomingValue = $incomingValue === null ? null : (string)$incomingValue;

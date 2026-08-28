@@ -855,6 +855,32 @@ auditoria de 2026-07-09, sem inventar objetivos novos:
   `RHCONTRATOS`, `RHPESSOAS`, `RHEMPRESAS`, `RHUNIDADES`, `RHCARGOS`,
   `RHSETORES`, `RHCENTROSCUSTO1`, `RHMOTIVOSRESCISOES` — isso é infraestrutura
   do SQL Server e exige autorização própria, fora do escopo desta sprint.
+  **Fase 3 (auditoria) e Fase 3.1 (ampliação do espelho), 2026-08-27/28**:
+  todos os 7 JOINs da query foram revalidados contra o banco real
+  `RHMADEPLANT` (727 contratos, não mais só `RHTESTE`) com 100% de
+  correspondência técnica em cada um — nenhuma correção pendente. A tabela
+  espelho ganhou dois campos oficiais adicionais: `salario_atual` (de
+  `RHCONTRATOS.SALARIOCONTRATUAL` — escolhido em vez de `SALARIOMES`, que é
+  numericamente idêntico em 100% dos contratos preenchidos em produção, por
+  representar semanticamente o salário-base contratual, nunca total recebido
+  no mês) e `data_inicio_cargo` (de `RHCONTRATOS.DATAULTALTCARGO`, sem
+  fallback para `admissao` — são conceitos diferentes quando há
+  promoção/mudança de cargo). Ver migration
+  `2026-08-27-colaboradores-metadados-salario-cargo.sql`. Histórico salarial e
+  histórico de cargo continuam fora de escopo — o espelho reflete só o estado
+  atual do vínculo. **Nota de compatibilidade descoberta nesta sprint**: o
+  MySQL 8.4.3 usado neste ambiente de desenvolvimento não aceita `ADD COLUMN
+  IF NOT EXISTS`/`DROP COLUMN IF EXISTS` (erro de sintaxe 1064, testado
+  empiricamente) — migrations novas para tabelas da geração
+  Repository/Service devem usar `ALTER TABLE` puro quando a coluna nunca
+  existiu antes, documentando a limitação no próprio arquivo (não se aplica
+  retroativamente a migrations antigas já escritas com essa cláusula). A
+  auditoria completa de dependências de `colaboradores` (Fase 3) concluiu que
+  `colaboradores.id` já representa CONTRATO, não pessoa (11 CPFs duplicados
+  na base local, cada um com datas de admissão/demissão não sobrepostas) — o
+  mesmo grão de `colaboradores_metadados`, o que facilita a reconciliação
+  futura. Não implementado ainda: `colaboradores.metadados_id`, reconciliação
+  dos registros existentes, qualquer bloqueio de edição manual.
 
 ## 21. Conhecimento do Projeto (memória permanente)
 

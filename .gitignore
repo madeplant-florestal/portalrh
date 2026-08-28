@@ -12,6 +12,7 @@ storage/resumes/
 storage/audit/
 storage/logs/
 storage/imports/*.json
+storage/reconciliation/
 public/uploads/
 uploads/
 test-results/

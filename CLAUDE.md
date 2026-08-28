@@ -879,8 +879,36 @@ auditoria de 2026-07-09, sem inventar objetivos novos:
   `colaboradores.id` já representa CONTRATO, não pessoa (11 CPFs duplicados
   na base local, cada um com datas de admissão/demissão não sobrepostas) — o
   mesmo grão de `colaboradores_metadados`, o que facilita a reconciliação
-  futura. Não implementado ainda: `colaboradores.metadados_id`, reconciliação
-  dos registros existentes, qualquer bloqueio de edição manual.
+  futura.
+  **Fase 3.2 (ponte estrutural + relatório de reconciliação), 2026-08-28**:
+  `colaboradores` passa a representar o vínculo local estável e ganha
+  `colaboradores.metadados_id` (migration
+  `2026-08-28-colaboradores-metadados-id.sql`) — relação 0..1 ↔ 1 com
+  `colaboradores_metadados.id`, `UNIQUE` (permite múltiplos `NULL`),
+  `ON DELETE RESTRICT` (nunca `CASCADE` — o espelho não deve apagar um
+  colaborador local silenciosamente). `colaboradores.id` **nunca** é
+  substituído pelo id do espelho; continua sendo a referência das 9 FKs
+  existentes, inalteradas. `ColaboradorMetadadosReconciliationService`
+  (`app/services/`) só analisa e classifica
+  (`CORRESPONDENCIA_SEGURA`/`_PROVAVEL`/`AMBIGUA`/`SEM_CORRESPONDENCIA`/
+  `JA_VINCULADO`/`CONFLITO`) — **nunca escreve `metadados_id`**; a aplicação
+  de vínculos é uma fase futura, ainda não autorizada. CPF nunca decide o
+  vínculo sozinho (readmissão): a hierarquia é CPF → data de admissão → data
+  de demissão → nascimento como validação (nascimento claramente divergente
+  sempre vira `CONFLITO`, mesmo com CPF+admissão batendo); nunca escolhe "o
+  mais recente" nem "o ativo" automaticamente quando há ambiguidade.
+  `scripts/reconciliar_colaboradores_metadados.php` é somente leitura por
+  padrão, sem flag de aplicação (de propósito, para não permitir uso
+  acidental); gera relatório detalhado em CSV com CPF mascarado (só os
+  últimos 4 dígitos) em `storage/reconciliation/` (fora do Git), sem
+  salário/dados bancários. Testado com fixtures sintéticas — não usar os 40
+  registros de `RHTESTE` nem a comparação "408 vs 40" como conclusão de
+  negócio; a sincronização dos 727 contratos de `RHMADEPLANT` e a
+  reconciliação real ainda não foram autorizadas. Continuam intocados nesta
+  fase: `Colaborador::updateRhData()`, import XLSX, telas, dashboards,
+  `usuario_colaboradores`/autenticação (risco de `UNIQUE` em
+  `colaborador_id` sob readmissão continua registrado, não tratado), e o
+  vínculo candidato→colaborador em `solicitacoes_vaga.nome_contratado_colaborador_id`.
 
 ## 21. Conhecimento do Projeto (memória permanente)
 

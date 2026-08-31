@@ -11,6 +11,11 @@
  * pdo_sqlsrv e conectividade real com o METADADOS; applyRows() é pura lógica de upsert em MySQL
  * e pode ser testada sem SQL Server, injetando linhas já normalizadas (ver
  * tests/php/integration_colaborador_metadados_sync.php).
+ *
+ * Proteção contra mistura silenciosa de origem (RHTESTE vs RHMADEPLANT, ver
+ * docs/claude/roadmap-tecnico.md): toda linha grava `origem_metadados` (o `Database=` do DSN
+ * ativo, via MetadadosDatabase::sourceLabel()); applyRows() recusa sincronizar uma origem
+ * diferente da já predominante no espelho, a menos que `--permitir-origem-mista` seja explícito.
  */
 class MetadadosSyncService
 {
@@ -80,10 +85,13 @@ class MetadadosSyncService
         $this->repository = $repository ?? new ColaboradorMetadadosRepository();
     }
 
-    public function run(): array
+    /**
+     * @param bool $permitirOrigemMista Ver applyRows() — só passe true sabendo exatamente por quê.
+     */
+    public function run(bool $permitirOrigemMista = false): array
     {
         $rows = $this->fetchSourceRows();
-        return $this->applyRows($rows);
+        return $this->applyRows($rows, null, $permitirOrigemMista);
     }
 
     /**
@@ -130,12 +138,41 @@ class MetadadosSyncService
      * auditoria). Uma linha inválida não aborta o lote inteiro: é contada em 'errors' e
      * registrada via Logger, o restante do lote continua.
      *
-     * @return array{inserted:int, updated:int, unchanged:int, errors:int, error_details:array}
+     * Proteção contra mistura silenciosa de origem (ver docs/claude/roadmap-tecnico.md, missão
+     * corretiva "Pureza da base analítica METADADOS"): antes de escrever qualquer linha, verifica
+     * se o espelho já contém registros de uma origem DIFERENTE da desta sincronização
+     * (`$origem`). Se sim, a sincronização inteira é recusada — nenhuma linha é escrita — a menos
+     * que `$permitirOrigemMista` seja explicitamente true. Isso é o que teria impedido os 6
+     * contratos de RHTESTE de ficarem misturados aos 727 de RHMADEPLANT sem que ninguém soubesse.
+     *
+     * @param string|null $origem Rótulo da origem desta sincronização. Nulo = resolve
+     *                            automaticamente via MetadadosDatabase::sourceLabel() (o
+     *                            `Database=` do DSN ativo). Testes injetam um valor explícito
+     *                            para não depender do local.php do ambiente.
+     * @return array{inserted:int, updated:int, unchanged:int, errors:int, error_details:array, origem:string}
      */
-    public function applyRows(array $rows): array
+    public function applyRows(array $rows, ?string $origem = null, bool $permitirOrigemMista = false): array
     {
+        $origem = $origem ?? MetadadosDatabase::sourceLabel();
         $pdo = $this->repository->connection();
-        $summary = ['inserted' => 0, 'updated' => 0, 'unchanged' => 0, 'errors' => 0, 'error_details' => []];
+
+        if (!$permitirOrigemMista) {
+            $conflito = $this->originConflict($origem, $pdo);
+            if ($conflito !== []) {
+                $detalhe = [];
+                foreach ($conflito as $outraOrigem => $quantidade) {
+                    $detalhe[] = "{$outraOrigem} ({$quantidade} registro(s))";
+                }
+                throw new \RuntimeException(
+                    "Sincronização bloqueada: o espelho colaboradores_metadados já contém registros de outra origem — "
+                    . implode(', ', $detalhe) . " — e esta sincronização é de origem '{$origem}'. "
+                    . 'Misturar origens sem saber pode contaminar a base analítica oficial (ver docs/claude/roadmap-tecnico.md). '
+                    . 'Use --permitir-origem-mista apenas se você entende exatamente o impacto.'
+                );
+            }
+        }
+
+        $summary = ['inserted' => 0, 'updated' => 0, 'unchanged' => 0, 'errors' => 0, 'error_details' => [], 'origem' => $origem];
 
         $pdo->beginTransaction();
         try {
@@ -143,7 +180,7 @@ class MetadadosSyncService
                 $vinculo = ($row['codigo_empresa'] ?? '?') . '-' . ($row['codigo_unidade'] ?? '?') . '-' . ($row['numero_contrato'] ?? '?');
                 try {
                     $this->validateRow($row);
-                    $result = $this->repository->upsert($row);
+                    $result = $this->repository->upsert($row, $origem);
                     $summary[$result]++;
                 } catch (\Throwable $e) {
                     $summary['errors']++;
@@ -164,6 +201,30 @@ class MetadadosSyncService
         }
 
         return $summary;
+    }
+
+    /**
+     * @return array<string,int> Origem => quantidade de registros, para toda origem PRESENTE no
+     *                           espelho que seja diferente de `$origemAtual` (nunca inclui
+     *                           `$origemAtual` nem origem vazia/legada). Array vazio = sem
+     *                           conflito — sincronizar é seguro.
+     */
+    public function originConflict(string $origemAtual, ?\PDO $pdo = null): array
+    {
+        $pdo = $pdo ?? $this->repository->connection();
+        $stmt = $pdo->prepare(
+            "SELECT origem_metadados, COUNT(*) AS quantidade
+             FROM colaboradores_metadados
+             WHERE origem_metadados <> '' AND origem_metadados <> ?
+             GROUP BY origem_metadados"
+        );
+        $stmt->execute([$origemAtual]);
+
+        $conflitos = [];
+        foreach ($stmt->fetchAll(\PDO::FETCH_ASSOC) as $row) {
+            $conflitos[(string)$row['origem_metadados']] = (int)$row['quantidade'];
+        }
+        return $conflitos;
     }
 
     private function validateRow(array $row): void

@@ -47,4 +47,20 @@ class MetadadosDatabase
 
         return self::$pdo;
     }
+
+    /**
+     * Nome do banco de origem configurado (ex.: "RHTESTE", "RHMADEPLANT"), extraído do DSN ativo
+     * — pura leitura de config, nunca abre conexão. Usado para rotular a origem de cada linha
+     * sincronizada em `colaboradores_metadados` e para o guard anti-mistura de origem em
+     * MetadadosSyncService::originConflict() (ver docs/claude/roadmap-tecnico.md).
+     */
+    public static function sourceLabel(): string
+    {
+        $config = Config::get()['metadados'] ?? [];
+        $dsn = (string)($config['dsn'] ?? '');
+        if (preg_match('/Database=([^;]+)/i', $dsn, $matches) === 1) {
+            return trim($matches[1]);
+        }
+        return '';
+    }
 }

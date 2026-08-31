@@ -27,8 +27,16 @@ sincronizado. Indisponibilidade do METADADOS não derruba a tela.
 primeira entrega (nem individual, nem agregado, nem ranking) — decisão explícita da Fase 4, não
 uma limitação técnica.
 
-## Qualidade dos dados observada (carga validada em 31/08/2026)
+## Qualidade dos dados observada (carga validada em 31/08/2026, saneada em 31/08/2026)
 
+- Universo oficial: **727 contratos** (192 ativos / 535 desligados), exclusivamente de
+  `RHMADEPLANT`. Um lote de 733 chegou a existir temporariamente entre a Fase 3.3 e o saneamento
+  seguinte: 6 contratos de `RHTESTE` (sincronizados nas Fases 1/2/3.1, quando o ambiente de
+  desenvolvimento apontava para lá) permaneceram misturados por não terem sido nunca sobrescritos
+  pelo upsert real — identificados deterministicamente pela própria semântica do upsert (chave
+  técnica nunca tocada pela sincronização de RHMADEPLANT) e removidos. Ver
+  `roadmap-tecnico.md` para a missão corretiva completa e a proteção de origem implementada em
+  `MetadadosSyncService::originConflict()`/coluna `origem_metadados`.
 - Período: admissões de 2010-09-29 a 2026-08-25; demissões de 2020-01-07 a 2026-08-14. Volume
   relevante só a partir de ~2019 (poucas dezenas de contratos/ano antes disso).
 - Nenhuma anomalia de data encontrada: 0 demissões antes da admissão, 0 no mesmo dia, 0 datas
@@ -38,8 +46,9 @@ uma limitação técnica.
   não tem setor informado no METADADOS. Todo indicador por setor mostra "Não informado" para o
   resto, nunca descarta o registro.
 - `codigo_empresa` já apareceu associado a mais de um nome de `empresa` ao longo do histórico
-  (razão social alterada) — agrupamentos por empresa usam sempre `codigo_empresa` como chave
-  estável, nunca o nome.
+  (razão social alterada, ou — como no caso dos 6 registros de RHTESTE — reuso do mesmo código
+  numérico para uma empresa totalmente diferente em outro ambiente) — agrupamentos por empresa
+  usam sempre `codigo_empresa` como chave estável, nunca o nome.
 
 ## Fórmulas
 

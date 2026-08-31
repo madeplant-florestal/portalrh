@@ -38,9 +38,12 @@ class ColaboradorMetadadosRepository
     }
 
     /**
+     * @param string $origem Rótulo da origem desta sincronização (ex.: "RHMADEPLANT", "RHTESTE"),
+     *                       gravado em `origem_metadados` em todo insert/update — nunca deixado
+     *                       vazio numa escrita nova. Ver MetadadosSyncService::originConflict().
      * @return string 'inserted'|'updated'|'unchanged'
      */
-    public function upsert(array $row): string
+    public function upsert(array $row, string $origem): string
     {
         $codigoEmpresa = (string)$row['codigo_empresa'];
         $codigoUnidade = (string)$row['codigo_unidade'];
@@ -49,7 +52,7 @@ class ColaboradorMetadadosRepository
         $existing = $this->findByVinculo($codigoEmpresa, $codigoUnidade, $numeroContrato);
 
         if ($existing === null) {
-            $this->insert($row);
+            $this->insert($row, $origem);
             return 'inserted';
         }
 
@@ -57,19 +60,19 @@ class ColaboradorMetadadosRepository
             return 'unchanged';
         }
 
-        $this->update((int)$existing['id'], $row);
+        $this->update((int)$existing['id'], $row, $origem);
         return 'updated';
     }
 
-    private function insert(array $row): void
+    private function insert(array $row, string $origem): void
     {
         $stmt = $this->pdo->prepare(
             'INSERT INTO colaboradores_metadados (
                 identificador, codigo_empresa, codigo_unidade, numero_contrato, codigo_pessoa,
                 cpf, nome, empresa, nascimento, admissao, cargo, demissao,
                 motivo_rescisao_codigo, motivo_rescisao_descricao, unidade, setor, centro_custo,
-                ativo, salario_atual, data_inicio_cargo, atualizado_em_origem
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
+                ativo, origem_metadados, salario_atual, data_inicio_cargo, atualizado_em_origem
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
         );
         $stmt->execute([
             (string)$row['identificador'],
@@ -90,20 +93,21 @@ class ColaboradorMetadadosRepository
             self::nullableString($row['setor'] ?? null),
             self::nullableString($row['centro_custo'] ?? null),
             array_key_exists('ativo', $row) && $row['ativo'] !== null ? (int)$row['ativo'] : null,
+            $origem,
             self::nullableString($row['salario_atual'] ?? null),
             self::nullableString($row['data_inicio_cargo'] ?? null),
             self::nullableString($row['atualizado_em_origem'] ?? null),
         ]);
     }
 
-    private function update(int $id, array $row): void
+    private function update(int $id, array $row, string $origem): void
     {
         $stmt = $this->pdo->prepare(
             'UPDATE colaboradores_metadados SET
                 identificador = ?, codigo_pessoa = ?, cpf = ?, nome = ?, empresa = ?,
                 nascimento = ?, admissao = ?, cargo = ?, demissao = ?,
                 motivo_rescisao_codigo = ?, motivo_rescisao_descricao = ?,
-                unidade = ?, setor = ?, centro_custo = ?, ativo = ?,
+                unidade = ?, setor = ?, centro_custo = ?, ativo = ?, origem_metadados = ?,
                 salario_atual = ?, data_inicio_cargo = ?, atualizado_em_origem = ?
              WHERE id = ?'
         );
@@ -123,6 +127,7 @@ class ColaboradorMetadadosRepository
             self::nullableString($row['setor'] ?? null),
             self::nullableString($row['centro_custo'] ?? null),
             array_key_exists('ativo', $row) && $row['ativo'] !== null ? (int)$row['ativo'] : null,
+            $origem,
             self::nullableString($row['salario_atual'] ?? null),
             self::nullableString($row['data_inicio_cargo'] ?? null),
             self::nullableString($row['atualizado_em_origem'] ?? null),

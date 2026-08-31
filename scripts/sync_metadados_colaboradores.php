@@ -1,22 +1,27 @@
 <?php
 require __DIR__ . '/../app/core/bootstrap.php';
 
-$options = getopt('', ['dry-run']);
+$options = getopt('', ['dry-run', 'permitir-origem-mista']);
 $dryRun = array_key_exists('dry-run', $options);
+$permitirOrigemMista = array_key_exists('permitir-origem-mista', $options);
 
 try {
     $service = new MetadadosSyncService();
+    $origemAtual = MetadadosDatabase::sourceLabel();
 
     if ($dryRun) {
         $rows = $service->fetchSourceRows();
+        $conflito = $service->originConflict($origemAtual);
         $report = [
             'ok' => true,
             'dry_run' => true,
             'generated_at' => (new DateTimeImmutable())->format(DateTimeInterface::ATOM),
             'summary' => ['linhas_lidas_do_metadados' => count($rows)],
+            'origem' => $origemAtual,
+            'conflito_de_origem' => $conflito === [] ? null : $conflito,
         ];
     } else {
-        $summary = $service->run();
+        $summary = $service->run($permitirOrigemMista);
         $report = [
             'ok' => ($summary['errors'] ?? 0) === 0,
             'dry_run' => false,

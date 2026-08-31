@@ -9,16 +9,19 @@
 **Concluído e estável** (não precisa de decisão nova para continuar existindo): migração
 Repository/Service em Setor/CargoSetor/parte de Empresa e webhooks; consolidação de schema de
 `colaboradores` (2026-06-23/06-25); import XLSX de colaboradores; webhooks de recrutamento;
-relacionamento Cargo×Setor; Kanban de Solicitações de Vaga; integração METADADOS Fases 1 a 3.2
-(consumo + espelho + ponte estrutural + relatório de reconciliação — leia a seção dedicada abaixo
-para o que **ainda não** foi feito dentro dessa integração).
+relacionamento Cargo×Setor; Kanban de Solicitações de Vaga; integração METADADOS Fases 1 a 3.4
+(consumo + espelho + ponte estrutural + reconciliação real + aplicação dos 378 vínculos seguros),
+camada analítica de RH (Fase 4, `/admin/indicadores-rh`) e a missão corretiva de pureza da base
+analítica (saneamento dos 6 contratos de `RHTESTE` + proteção `origem_metadados` contra nova
+mistura de origem) — leia a seção dedicada abaixo para detalhes e para o que **ainda não** foi
+feito dentro dessa integração.
 
 **Decisão técnica futura, ainda em aberto** (exige conversa dedicada antes de agir): consolidação
 definitiva de `schema.sql`/`recrutamento.sql`/migrations em uma única fonte; migração do restante
-dos models legados para Repository/Service (sem prazo, módulo a módulo); qualquer fase da
-integração METADADOS além da 3.2 (reconciliação real, aplicação de vínculos, migração de telas,
-descontinuação do cadastro duplicado); resolução do risco de `usuario_colaboradores.colaborador_id`
-sob readmissão.
+dos models legados para Repository/Service (sem prazo, módulo a módulo); aplicação dos 4 vínculos
+seguros liberados pelo saneamento e saneamento dos 2 `CONFLITO`/24 `SEM_CORRESPONDENCIA`
+remanescentes; migração de telas legadas para a nova fonte e descontinuação do cadastro duplicado;
+resolução do risco de `usuario_colaboradores.colaborador_id` sob readmissão.
 
 ## Migração incremental para Repository/Service/DTO
 
@@ -157,9 +160,55 @@ ficava travado em `0` mesmo com candidatos reais; corrigido para `array_merge()`
 diagnóstico, nenhuma classificação mudou). **`colaboradores.metadados_id` continua 100% `NULL`** —
 nenhum vínculo foi aplicado em nenhuma fase até aqui.
 
+**Fase 3.4 — colisão global de `metadados_id` + aplicação real dos 378 vínculos seguros
+(2026-08-31).** `flagDuplicateLinks()` generalizado: antes só detectava colisão entre resultados
+`JA_VINCULADO`; passou a agrupar por `metadados_id_candidato` entre `SEGURA`/`PROVAVEL`/
+`JA_VINCULADO` juntos — cobre o caso real de CPF duplicado na base local resolvendo ao mesmo
+único candidato do espelho (2 colaboradores promovidos a `CONFLITO`, nunca escolhido vencedor).
+`LinkService::apply()` corrigido para validar integridade **escopada ao próprio plano**, nunca
+mais comparando o total global de `colaboradores.metadados_id` preenchidos — a checagem antiga
+quebrava qualquer aplicação incremental depois da primeira. Aplicados os 378 vínculos
+`CORRESPONDENCIA_SEGURA` reais (`colaboradores.metadados_id` preenchido, 378 distintos, 0
+órfãos); 30 permanecem sem vínculo (2 `CONFLITO`, 4 `AMBIGUA` à época, 24
+`SEM_CORRESPONDENCIA`) — deliberadamente não tratados nesta fase.
+
+**Fase 4 — camada analítica de RH (2026-08-31).** `RhIndicadoresRepository`/`RhIndicadoresService`
++ dashboard `/admin/indicadores-rh`, alimentados exclusivamente por `colaboradores_metadados`
+(nunca `colaboradores`, nunca SQL Server em tempo real). Dicionário completo de fórmulas/
+qualidade/limitações em `indicadores-rh.md`.
+
+**Missão corretiva — pureza da base analítica (2026-08-31).** Auditoria pós-Fase-4 encontrou
+733 contratos no espelho contra os 727 oficiais de `RHMADEPLANT` auditados na Fase 3. Causa raiz
+determinística (sem depender de CPF/nome/heurística de ativo): 6 contratos sincronizados nas
+Fases 1/2/3.1 a partir de `RHTESTE` (quando `local.php` apontava para lá) nunca tiveram sua chave
+técnica tocada pelo upsert real da Fase 3.3 contra `RHMADEPLANT` — provado pelos próprios logs de
+sincronização (`storage/imports/metadados-sync-2026082*.json`: dos 40 contratos de `RHTESTE`,
+34 foram encontrados/atualizados pela sincronização real — 33 updated + 1 unchanged —, sobrando
+exatamente 6 nunca tocados). Confirmado que nenhum dos 378 vínculos reais apontava para esses 6;
+removidos em transação única após snapshot técnico (`storage/reconciliation/saneamento-metadados-
+rhteste-*.json`, sem PII). Espelho voltou a 727/192/535, batendo exatamente com a auditoria
+oficial da Fase 3. Efeito colateral esperado e verificado: 4 colaboradores locais que antes
+reconciliavam como `AMBIGUA` (CPF batendo com 2 candidatos no espelho) passaram a `SEGURA` — um
+dos 2 candidatos "extras" era um dos 6 contratos de `RHTESTE` removidos, criando ambiguidade
+artificial; esses 4 novos vínculos seguros **não foram aplicados** nesta missão (fora de escopo,
+requer nova autorização explícita).
+
+**Proteção arquitetural contra nova mistura de origem**: `colaboradores_metadados` ganhou a coluna
+`origem_metadados` (migration `2026-08-31-colaboradores-metadados-origem.sql`, backfill dos 727
+como `RHMADEPLANT`), preenchida a partir de `MetadadosDatabase::sourceLabel()` (o `Database=` do
+DSN ativo em `local.php`/`build.php` — nunca um valor digitado à parte, para nunca divergir da
+conexão real). `MetadadosSyncService::applyRows()` agora chama `originConflict()` **antes** de
+escrever qualquer linha: se o espelho já contém uma origem diferente da desta sincronização, a
+sincronização inteira é recusada (nenhuma escrita parcial) a menos que
+`scripts/sync_metadados_colaboradores.php --permitir-origem-mista` seja passado explicitamente.
+Isso não impede o uso de `RHTESTE` em desenvolvimento — um espelho que só conhece `RHTESTE` nunca
+gera conflito consigo mesmo; o conflito só existe quando origens genuinamente diferentes tentam
+coexistir sem decisão explícita.
+
 **Continuam intocados/pendentes de autorização futura**: `Colaborador::updateRhData()`, import
-XLSX, telas, dashboards, `usuario_colaboradores`/autenticação (risco de `UNIQUE` em
-`colaborador_id` sob readmissão continua registrado, não tratado), vínculo candidato→colaborador
-em `solicitacoes_vaga.nome_contratado_colaborador_id`, aplicação real dos vínculos
-`CORRESPONDENCIA_SEGURA`, migração de telas/indicadores para a nova fonte, e descontinuação do
-cadastro duplicado.
+XLSX, `usuario_colaboradores`/autenticação (risco de `UNIQUE` em `colaborador_id` sob readmissão
+continua registrado, não tratado), vínculo candidato→colaborador em
+`solicitacoes_vaga.nome_contratado_colaborador_id`, aplicação dos 4 vínculos seguros liberados
+pelo saneamento, saneamento dos 2 `CONFLITO`/24 `SEM_CORRESPONDENCIA` restantes, criação de
+usuário SQL Server dedicado só-leitura para produção, migração de telas legadas para a nova fonte,
+e descontinuação do cadastro duplicado.

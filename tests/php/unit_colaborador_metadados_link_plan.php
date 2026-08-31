@@ -44,11 +44,22 @@ foreach ($plano as $item) {
 $validacaoOk = $service->validatePlan($plano, $resultados);
 $assert($validacaoOk['ok'] === true, 'Caso 1-4: plano só com SEGURA e sem JA_VINCULADO deveria validar OK: ' . implode('; ', $validacaoOk['errors']));
 
-// Caso 5 — JA_VINCULADO em qualquer lugar do cenário bloqueia a primeira aplicação inteira.
+// Caso 5 (Fase 3.5 — aplicação complementar) — JA_VINCULADO presente no cenário, SEM colidir com
+// nenhum metadados_id do novo plano, NÃO bloqueia. A mera presença de vínculos já existentes é o
+// estado normal de uma aplicação incremental (ex.: 378 já vinculados + 4 novos seguros) — nunca
+// motivo de bloqueio por si só.
 $resultadosComJaVinculado = array_merge($resultados, [reconciliacaoResultado(6, $C::JA_VINCULADO, 106)]);
 $planoComJaVinculado = $service->buildPlanFromReconciliation($resultadosComJaVinculado);
+$assert(count($planoComJaVinculado) === 1, 'Caso 5: JA_VINCULADO nunca deveria entrar no plano (buildPlanFromReconciliation já filtra).');
 $validacaoJaVinculado = $service->validatePlan($planoComJaVinculado, $resultadosComJaVinculado);
-$assert($validacaoJaVinculado['ok'] === false, 'Caso 5: presença de JA_VINCULADO deveria bloquear a validação do plano.');
+$assert($validacaoJaVinculado['ok'] === true, 'Caso 5: JA_VINCULADO sem colisão de metadados_id não deveria bloquear a aplicação complementar: ' . implode('; ', $validacaoJaVinculado['errors']));
+
+// Caso 5b (Fase 3.5) — JA_VINCULADO cujo metadados_id COLIDE com um item do novo plano bloqueia —
+// essa é a invariante real que protege vínculos já existentes (nenhum pode ser sobrescrito).
+$resultadosComColisaoJaVinculado = array_merge($resultados, [reconciliacaoResultado(7, $C::JA_VINCULADO, 101)]); // 101 = mesmo metadados_id do colaborador 1 (SEGURA)
+$planoComColisaoJaVinculado = $service->buildPlanFromReconciliation($resultadosComColisaoJaVinculado);
+$validacaoColisaoJaVinculado = $service->validatePlan($planoComColisaoJaVinculado, $resultadosComColisaoJaVinculado);
+$assert($validacaoColisaoJaVinculado['ok'] === false, 'Caso 5b: plano tentando usar um metadados_id que já pertence a um JA_VINCULADO deveria bloquear.');
 
 // Caso 6 — dois colaboradores apontando para o mesmo metadados_id bloqueiam o plano.
 $resultadosMetadadosDuplicado = [
@@ -87,5 +98,20 @@ $assert(strlen($hashA) === 64, 'Caso 8: hash deveria ser SHA-256 (64 caracteres 
 // Extra — plano vazio é uma entrada válida (nenhum SEGURA no cenário) e não deveria travar validatePlan.
 $validacaoVazia = $service->validatePlan([], []);
 $assert($validacaoVazia['ok'] === true, 'Extra: plano vazio, sem JA_VINCULADO, deveria validar OK.');
+
+// Caso 6 (Fase 3.5) — cenário com TODOS já vinculados (nenhum SEGURA restante, simulando o estado
+// depois que uma aplicação complementar esgota os candidatos) produz plano vazio e válido, sem
+// exigir nenhuma escrita.
+$resultadosTodosVinculados = [
+    reconciliacaoResultado(30, $C::JA_VINCULADO, 900),
+    reconciliacaoResultado(31, $C::JA_VINCULADO, 901),
+    reconciliacaoResultado(32, $C::JA_VINCULADO, 902),
+    reconciliacaoResultado(33, $C::SEM_CORRESPONDENCIA),
+    reconciliacaoResultado(34, $C::CONFLITO, 903),
+];
+$planoTodosVinculados = $service->buildPlanFromReconciliation($resultadosTodosVinculados);
+$assert($planoTodosVinculados === [], 'Caso 6: com todos já vinculados/sem correspondência/conflito, o plano deveria ficar vazio.');
+$validacaoTodosVinculados = $service->validatePlan($planoTodosVinculados, $resultadosTodosVinculados);
+$assert($validacaoTodosVinculados['ok'] === true, 'Caso 6: plano vazio depois de esgotar os candidatos seguros deveria validar OK, sem exigir escrita.');
 
 echo "OK unit_colaborador_metadados_link_plan\n";

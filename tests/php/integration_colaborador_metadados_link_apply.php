@@ -251,6 +251,33 @@ $stmtCheckMirrors6 = $pdo->prepare("SELECT COUNT(*) FROM colaboradores_metadados
 $stmtCheckMirrors6->execute($mirrors6);
 $assert((int)$stmtCheckMirrors6->fetchColumn() === 0, 'Cenário 7: os mirrors fictícios do Cenário 6 deveriam ter sido removidos pelo finally.');
 
+// ===== Cenário 8 (Fase 3.5 — aplicação complementar): validateAgainstDatabase() bloqueia um novo
+// vínculo tentando reivindicar um metadados_id que já pertence a OUTRO colaborador (simula o
+// estado normal de uma aplicação incremental, com vínculos de uma rodada anterior já presentes).
+// A UNIQUE do banco já impediria a escrita em apply(), mas essa validação pega o problema antes
+// de qualquer tentativa de escrita, com uma mensagem clara. =====
+$mirrors8 = criarMirrors($pdo, $sufixo . 'h', 1);
+$colabs8 = criarColaboradores($pdo, $cargoId, $sufixo . 'h', 2);
+try {
+    // colabs8[0] já está vinculado a mirrors8[0] (simula um vínculo de uma aplicação anterior).
+    $pdo->prepare('UPDATE colaboradores SET metadados_id = ? WHERE id = ?')->execute([$mirrors8[0], $colabs8[0]]);
+
+    $planoReivindicandoOutro = [
+        ['colaborador_id' => $colabs8[1], 'metadados_id' => $mirrors8[0], 'classificacao' => ColaboradorMetadadosReconciliationService::SEGURA, 'motivo_classificacao' => 'x'],
+    ];
+    $validacaoBanco8 = $service->validateAgainstDatabase($planoReivindicandoOutro);
+    $assert($validacaoBanco8['ok'] === false, 'Cenário 8: validação deveria bloquear metadados_id já vinculado a outro colaborador.');
+    $assert(count($validacaoBanco8['errors']) === 1 && str_contains($validacaoBanco8['errors'][0], (string)$colabs8[0]), 'Cenário 8: erro deveria identificar qual colaborador já usa o metadados_id.');
+
+    // Nenhuma escrita deve ter ocorrido — o vínculo original permanece intocado.
+    $rowOriginal8 = $pdo->query("SELECT metadados_id FROM colaboradores WHERE id = {$colabs8[0]}")->fetch(PDO::FETCH_ASSOC);
+    $assert((int)$rowOriginal8['metadados_id'] === $mirrors8[0], 'Cenário 8: o vínculo original não deveria ter sido afetado pela validação.');
+    $rowNovo8 = $pdo->query("SELECT metadados_id FROM colaboradores WHERE id = {$colabs8[1]}")->fetch(PDO::FETCH_ASSOC);
+    $assert($rowNovo8['metadados_id'] === null, 'Cenário 8: o colaborador novo não deveria ter recebido nenhum vínculo.');
+} finally {
+    limpar($pdo, $colabs8, $mirrors8);
+}
+
     echo "OK integration_colaborador_metadados_link_apply\n";
 } catch (Throwable $e) {
     fwrite(STDERR, $e->getMessage() . PHP_EOL);

@@ -53,8 +53,16 @@ class ColaboradorMetadadosLinkService
 
     /**
      * Validação estrutural do plano — não toca banco. Verifica as invariantes que dependem só
-     * do próprio plano e do cenário de reconciliação completo (nunca aplicar com qualquer
-     * JA_VINCULADO presente nesta primeira aplicação).
+     * do próprio plano e do cenário de reconciliação completo.
+     *
+     * Suporta tanto a primeira aplicação (nenhum JA_VINCULADO ainda) quanto aplicações
+     * complementares/incrementais (JA_VINCULADO já existem e devem permanecer intocados — nunca
+     * bloqueia só pela presença deles). A invariante real que protege vínculos já existentes é:
+     * nenhum item do plano pode reivindicar um `metadados_id` que já pertence a um JA_VINCULADO.
+     * Na prática isso já é impedido antes de chegar aqui, em
+     * ColaboradorMetadadosReconciliationService::flagDuplicateLinks() (que promove a CONFLITO
+     * qualquer SEGURA/PROVAVEL/JA_VINCULADO disputando o mesmo metadados_id) — esta checagem é
+     * uma segunda barreira, não a única.
      *
      * @return array{ok:bool, errors:string[]}
      */
@@ -81,12 +89,18 @@ class ColaboradorMetadadosLinkService
             $errors[] = 'Existe metadados_id duplicado no plano (dois colaboradores para o mesmo vínculo oficial).';
         }
 
-        $jaVinculados = array_filter(
-            $reconciliationResults,
-            static fn (array $r) => $r['classificacao'] === ColaboradorMetadadosReconciliationService::JA_VINCULADO
+        $metadadosIdsJaVinculados = array_column(
+            array_filter(
+                $reconciliationResults,
+                static fn (array $r) => $r['classificacao'] === ColaboradorMetadadosReconciliationService::JA_VINCULADO
+                    && $r['metadados_id_candidato'] !== null
+            ),
+            'metadados_id_candidato'
         );
-        if (count($jaVinculados) > 0) {
-            $errors[] = 'Existem ' . count($jaVinculados) . ' registro(s) JA_VINCULADO no cenário atual — a primeira aplicação espera zero; investigar antes de prosseguir.';
+        $colisaoComExistente = array_intersect($metadadosIds, $metadadosIdsJaVinculados);
+        if ($colisaoComExistente !== []) {
+            $errors[] = 'O plano tenta vincular metadados_id que já pertence a um colaborador JA_VINCULADO: '
+                . implode(', ', array_unique($colisaoComExistente)) . '.';
         }
 
         return ['ok' => $errors === [], 'errors' => $errors];
@@ -94,7 +108,10 @@ class ColaboradorMetadadosLinkService
 
     /**
      * Validação contra o estado real do banco — cada colaborador_id/metadados_id do plano
-     * precisa existir, e o colaborador precisa estar com metadados_id ainda NULL.
+     * precisa existir, o colaborador precisa estar com metadados_id ainda NULL, e o metadados_id
+     * não pode já estar em uso por outro colaborador (proteção explícita para aplicação
+     * complementar — sem isso, só a UNIQUE do banco pegaria o caso, no meio da transação de
+     * apply(), em vez de aqui, antes de qualquer escrita).
      *
      * @return array{ok:bool, errors:string[]}
      */
@@ -119,6 +136,13 @@ class ColaboradorMetadadosLinkService
             $stmtMetadados->execute([$item['metadados_id']]);
             if ($stmtMetadados->fetchColumn() === false) {
                 $errors[] = "metadados_id={$item['metadados_id']} não existe em colaboradores_metadados.";
+            }
+
+            $stmtEmUso = $pdo->prepare('SELECT id FROM colaboradores WHERE metadados_id = ?');
+            $stmtEmUso->execute([$item['metadados_id']]);
+            $colaboradorEmUso = $stmtEmUso->fetchColumn();
+            if ($colaboradorEmUso !== false && (int)$colaboradorEmUso !== (int)$item['colaborador_id']) {
+                $errors[] = "metadados_id={$item['metadados_id']} já está vinculado a outro colaborador (colaborador_id={$colaboradorEmUso}).";
             }
         }
 

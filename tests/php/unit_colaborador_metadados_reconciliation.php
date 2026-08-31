@@ -102,6 +102,67 @@ $resultadosDuplo = $service->analyze([$duploA, $duploB], [mirrorRow(['id' => 100
 $assert($resultadosDuplo[0]['classificacao'] === ColaboradorMetadadosReconciliationService::CONFLITO, 'Extra: primeiro registro duplicado deveria virar CONFLITO.');
 $assert($resultadosDuplo[1]['classificacao'] === ColaboradorMetadadosReconciliationService::CONFLITO, 'Extra: segundo registro duplicado deveria virar CONFLITO.');
 
+// Extra — colisão genérica: dois colaboradores locais com o MESMO CPF (duplicidade conhecida da
+// base local — a mesma pessoa com duas linhas de contrato) resolvendo ao único candidato do
+// espelho viram CONFLITO, mesmo sem nenhum id fixo em comum além do CPF. Cobre o cenário real
+// encontrado na Fase 3.4 (dois colaboradores locais, mesmo CPF, um único contrato sincronizado
+// no espelho) sem depender de nenhum id específico.
+$cpfDuplicadoLocal = '22233344455';
+$mirrorUnico = mirrorRow(['id' => 300, 'cpf' => $cpfDuplicadoLocal, 'admissao' => '2019-04-01']);
+
+// Ambos SEGURA (mesma admissão local, coincidência plausível quando o cadastro local duplicou o
+// contrato) — nenhum dos dois pode ser aplicado automaticamente.
+$colisaoSeguraA = localRow(['id' => 11, 'cpf' => $cpfDuplicadoLocal, 'data_admissao' => '2019-04-01']);
+$colisaoSeguraB = localRow(['id' => 12, 'cpf' => $cpfDuplicadoLocal, 'data_admissao' => '2019-04-01']);
+$resultadosColisaoSegura = $service->analyze([$colisaoSeguraA, $colisaoSeguraB], [$mirrorUnico]);
+$assert($resultadosColisaoSegura[0]['classificacao'] === ColaboradorMetadadosReconciliationService::CONFLITO, 'Extra: colisão SEGURA x SEGURA no mesmo metadados_id deveria virar CONFLITO (colaborador 1).');
+$assert($resultadosColisaoSegura[1]['classificacao'] === ColaboradorMetadadosReconciliationService::CONFLITO, 'Extra: colisão SEGURA x SEGURA no mesmo metadados_id deveria virar CONFLITO (colaborador 2).');
+
+// Um SEGURA (admissão bate) e outro PROVAVEL (admissão não bate) para o mesmo candidato único —
+// colisão mista também precisa virar CONFLITO nos dois lados, não só bloquear o SEGURA.
+$colisaoMistaSegura = localRow(['id' => 13, 'cpf' => $cpfDuplicadoLocal, 'data_admissao' => '2019-04-01']);
+$colisaoMistaProvavel = localRow(['id' => 14, 'cpf' => $cpfDuplicadoLocal, 'data_admissao' => '2017-01-10']);
+$resultadosColisaoMista = $service->analyze([$colisaoMistaSegura, $colisaoMistaProvavel], [$mirrorUnico]);
+$assert($resultadosColisaoMista[0]['classificacao'] === ColaboradorMetadadosReconciliationService::CONFLITO, 'Extra: colisão SEGURA x PROVAVEL deveria virar CONFLITO no lado SEGURA.');
+$assert($resultadosColisaoMista[1]['classificacao'] === ColaboradorMetadadosReconciliationService::CONFLITO, 'Extra: colisão SEGURA x PROVAVEL deveria virar CONFLITO no lado PROVAVEL.');
+
+// Colisão de 3 (generalização N >= 2, não só pares) — todos os disputantes viram CONFLITO.
+$colisaoTriplaA = localRow(['id' => 15, 'cpf' => $cpfDuplicadoLocal, 'data_admissao' => '2019-04-01']);
+$colisaoTriplaB = localRow(['id' => 16, 'cpf' => $cpfDuplicadoLocal, 'data_admissao' => '2019-04-01']);
+$colisaoTriplaC = localRow(['id' => 17, 'cpf' => $cpfDuplicadoLocal, 'data_admissao' => '2019-04-01']);
+$resultadosColisaoTripla = $service->analyze([$colisaoTriplaA, $colisaoTriplaB, $colisaoTriplaC], [$mirrorUnico]);
+foreach ($resultadosColisaoTripla as $i => $r) {
+    $assert($r['classificacao'] === ColaboradorMetadadosReconciliationService::CONFLITO, "Extra: colisão tripla deveria virar CONFLITO em todos os disputantes (índice {$i}).");
+}
+
+// Colisão entre um vínculo JÁ existente (JA_VINCULADO) e uma correspondência nova (SEGURA) para o
+// mesmo metadados_id — cenário futuro (Fase 5) de readmissão parcialmente vinculada; os dois lados
+// precisam virar CONFLITO, não só o lado novo.
+$mirrorJaVinculado = mirrorRow(['id' => 400, 'cpf' => '33344455566', 'admissao' => '2021-02-01']);
+$colaboradorJaVinculado = localRow(['id' => 18, 'cpf' => '33344455566', 'data_admissao' => '2021-02-01', 'metadados_id' => 400]);
+$colaboradorNovoMesmoAlvo = localRow(['id' => 19, 'cpf' => '33344455566', 'data_admissao' => '2021-02-01']);
+$resultadosColisaoMistaVinculo = $service->analyze([$colaboradorJaVinculado, $colaboradorNovoMesmoAlvo], [$mirrorJaVinculado]);
+$assert($resultadosColisaoMistaVinculo[0]['classificacao'] === ColaboradorMetadadosReconciliationService::CONFLITO, 'Extra: colisão JA_VINCULADO x SEGURA deveria virar CONFLITO no lado já vinculado.');
+$assert($resultadosColisaoMistaVinculo[1]['classificacao'] === ColaboradorMetadadosReconciliationService::CONFLITO, 'Extra: colisão JA_VINCULADO x SEGURA deveria virar CONFLITO no lado novo.');
+
+// Negativo — dois colaboradores com CPFs (e candidatos) DIFERENTES nunca deveriam se afetar; sem
+// falso positivo por causa da nova checagem.
+$resultadosSemColisao = $service->analyze(
+    [localRow(['id' => 20, 'cpf' => '11122233344']), localRow(['id' => 21, 'cpf' => '99988877766'])],
+    [mirrorRow(['id' => 500, 'cpf' => '11122233344']), mirrorRow(['id' => 501, 'cpf' => '99988877766'])]
+);
+$assert($resultadosSemColisao[0]['classificacao'] === ColaboradorMetadadosReconciliationService::SEGURA, 'Extra: sem colisão real, colaborador 1 deveria continuar SEGURA.');
+$assert($resultadosSemColisao[1]['classificacao'] === ColaboradorMetadadosReconciliationService::SEGURA, 'Extra: sem colisão real, colaborador 2 deveria continuar SEGURA.');
+
+// Negativo — AMBIGUA/SEM_CORRESPONDENCIA nunca têm metadados_id_candidato preenchido, então nunca
+// deveriam ser agrupadas pela checagem de colisão (regressão contra falso positivo por null).
+$resultadosSemCandidato = $service->analyze(
+    [localRow(['id' => 22, 'cpf' => '00000000000']), localRow(['id' => 23, 'cpf' => '00000000001'])],
+    [mirrorRow(['id' => 600, 'cpf' => '77788899900'])]
+);
+$assert($resultadosSemCandidato[0]['classificacao'] === ColaboradorMetadadosReconciliationService::SEM_CORRESPONDENCIA, 'Extra: sem CPF em comum, deveria continuar SEM_CORRESPONDENCIA (nenhuma colisão espúria).');
+$assert($resultadosSemCandidato[1]['classificacao'] === ColaboradorMetadadosReconciliationService::SEM_CORRESPONDENCIA, 'Extra: sem CPF em comum, deveria continuar SEM_CORRESPONDENCIA (nenhuma colisão espúria).');
+
 // Extra — normalizeCpf preserva zero à esquerda e rejeita tamanho inválido.
 $assert(ColaboradorMetadadosReconciliationService::normalizeCpf('011.222.333-44') === '01122233344', 'Extra: normalizeCpf deveria preservar zero à esquerda e remover formatação.');
 $assert(ColaboradorMetadadosReconciliationService::normalizeCpf('123') === null, 'Extra: CPF com menos de 11 dígitos deveria ser inválido (null).');

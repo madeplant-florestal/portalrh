@@ -94,27 +94,32 @@ class ColaboradorMetadadosReconciliationService
     }
 
     /**
-     * Invariante defensiva: dois registros locais nunca deveriam apontar para o mesmo
-     * metadados_id (a migration já impõe isso via UNIQUE) — mas o relatório verifica de novo,
-     * caso rode contra uma base anterior à migration ou com dado corrompido por outra via.
+     * Invariante defensiva: nenhum metadados_id pode ser reivindicado por mais de um colaborador
+     * local — nem por um vínculo já existente (JA_VINCULADO), nem por resultados recém-calculados
+     * (CORRESPONDENCIA_SEGURA/PROVAVEL). A migration só garante unicidade depois que o vínculo é
+     * gravado; antes disso, a colisão pode nascer de CPF duplicado na base local (a mesma pessoa
+     * com duas linhas de contrato locais) resolvendo ao mesmo único candidato do espelho. Nunca
+     * escolhe um "vencedor" entre os disputantes — todos viram CONFLITO, para decisão manual.
      */
     private function flagDuplicateLinks(array $results): array
     {
+        $classificacoesVinculaveis = [self::SEGURA, self::PROVAVEL, self::JA_VINCULADO];
+
         $countByMetadadosId = [];
         foreach ($results as $r) {
-            if ($r['classificacao'] === self::JA_VINCULADO && $r['metadados_id_candidato'] !== null) {
+            if (in_array($r['classificacao'], $classificacoesVinculaveis, true) && $r['metadados_id_candidato'] !== null) {
                 $countByMetadadosId[$r['metadados_id_candidato']] = ($countByMetadadosId[$r['metadados_id_candidato']] ?? 0) + 1;
             }
         }
 
         foreach ($results as &$r) {
             if (
-                $r['classificacao'] === self::JA_VINCULADO
+                in_array($r['classificacao'], $classificacoesVinculaveis, true)
                 && $r['metadados_id_candidato'] !== null
                 && ($countByMetadadosId[$r['metadados_id_candidato']] ?? 0) > 1
             ) {
                 $r['classificacao'] = self::CONFLITO;
-                $r['motivo_classificacao'] = 'Mais de um registro local aponta para o mesmo metadados_id — viola a unicidade esperada do vínculo.';
+                $r['motivo_classificacao'] = 'Mais de um colaborador local corresponde ao mesmo metadados_id — colisão de vínculo, não decidida automaticamente.';
             }
         }
         unset($r);

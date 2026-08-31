@@ -193,14 +193,14 @@ class ColaboradorMetadadosReconciliationService
             }
         }
 
-        return $base + [
+        return array_merge($base, [
             'quantidade_candidatos' => $totalCandidatos,
             'classificacao' => self::AMBIGUA,
             'motivo_classificacao' => sprintf(
                 'CPF corresponde a %d contratos no espelho (readmissão) e a data de admissão local não permite distinguir qual é o vínculo correto.',
                 $totalCandidatos
             ),
-        ];
+        ]);
     }
 
     private function classifyExistingLink(

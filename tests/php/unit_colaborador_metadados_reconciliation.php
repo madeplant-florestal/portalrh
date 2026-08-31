@@ -56,6 +56,7 @@ $assert($r2['quantidade_candidatos'] === 2, 'Caso 2: quantidade_candidatos dever
 // Caso 3 — readmissão ambígua (local sem admissão suficiente para distinguir).
 $r3 = $service->analyze([localRow(['data_admissao' => null])], [$mirror2020, $mirror2024])[0];
 $assert($r3['classificacao'] === ColaboradorMetadadosReconciliationService::AMBIGUA, 'Caso 3: esperado AMBIGUA, veio ' . $r3['classificacao']);
+$assert($r3['quantidade_candidatos'] === 2, 'Caso 3: quantidade_candidatos deveria ser 2 (não 0) — regressão do bug de relatório do operador "+".');
 
 // Caso 4 — sem correspondência (CPF local não existe no espelho).
 $r4 = $service->analyze([localRow(['cpf' => '99988877766'])], [mirrorRow()])[0];

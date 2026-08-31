@@ -49,6 +49,7 @@ try {
     $router->get('/admin/reset-password/{token}', [PasswordRecoveryController::class, 'resetForm']);
     $router->post('/admin/reset-password/{token}', [PasswordRecoveryController::class, 'performReset']);
     $router->get('/admin', [AdminController::class, 'index']);
+    $router->get('/admin/indicadores-rh', [AdminRhIndicadoresController::class, 'index']);
     $router->get('/admin/colaboradores', [AdminColaboradoresController::class, 'index']);
     $router->post('/admin/colaboradores/importar', [AdminColaboradoresController::class, 'import']);
     $router->get('/admin/colaboradores/rh/editar/{id}', [AdminColaboradoresController::class, 'editRh']);

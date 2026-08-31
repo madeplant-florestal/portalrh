@@ -129,6 +129,7 @@ tocar o assunto correspondente.
 | Checklists (revisão, banco, deploy, segurança, performance, testes) | [`checklists.md`](docs/claude/checklists.md) | antes de reportar concluído; banco; deploy |
 | UI/UX (tokens, componentes, layouts, responsividade) | [`ui-ux.md`](docs/claude/ui-ux.md) | alteração de interface |
 | Roadmap técnico (migração incremental, Kanban de Solicitações de Vaga, integração METADADOS) | [`roadmap-tecnico.md`](docs/claude/roadmap-tecnico.md) | planejamento técnico, módulo em transição |
+| Indicadores de RH (dicionário de fórmulas, fonte de dados, qualidade, limitações) | [`indicadores-rh.md`](docs/claude/indicadores-rh.md) | mudança na camada analítica ou no dashboard `/admin/indicadores-rh` |
 | Riscos conhecidos | [`riscos-conhecidos.md`](docs/claude/riscos-conhecidos.md) | qualquer alteração nas áreas afetadas |
 
 ---

@@ -50,6 +50,10 @@ $sidebarLinkClass = static function (array $paths = [], string $extra = '') use 
         <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg>
         <span class="sidebar-link-label">Dashboard</span>
       </a>
+      <a href="<?= $base ?>/admin/indicadores-rh" class="sidebar-primary-link <?= $sidebarLinkClass(['/admin/indicadores-rh']) ?>" data-admin-menu-close="1" title="Indicadores de RH" aria-label="Indicadores de RH">
+        <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg>
+        <span class="sidebar-link-label">Indicadores de RH</span>
+      </a>
       <a href="<?= $base ?>/admin/candidaturas" class="sidebar-primary-link <?= $sidebarLinkClass(['/admin/candidaturas']) ?>" data-admin-menu-close="1" title="Candidaturas" aria-label="Candidaturas">
         <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="8" cy="8" r="3"/><circle cx="16" cy="12" r="3"/></svg>
         <span class="sidebar-link-label">Candidaturas</span>

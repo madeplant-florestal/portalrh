@@ -21,6 +21,15 @@ return [
         'user' => '',
         'pass' => ''
     ],
+    // Sincronização segura RHMADEPLANT -> Portal RH em produção (Fase 4): o sender roda dentro da
+    // rede Madeplant e assina o lote com este segredo; o endpoint receptor (produção) verifica a
+    // assinatura com o mesmo segredo. Preencha em local.php/build.php, nunca aqui.
+    'metadados_sync' => [
+        'shared_secret' => '',
+        'endpoint_url' => '',
+        'max_batch_size' => 2000,
+        'replay_window_seconds' => 300
+    ],
     'security' => [
         'csrf_key' => 'csrf_token',
         'session_name' => 'RHMADEPLANTSESSID',

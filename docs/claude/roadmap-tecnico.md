@@ -205,10 +205,33 @@ Isso não impede o uso de `RHTESTE` em desenvolvimento — um espelho que só co
 gera conflito consigo mesmo; o conflito só existe quando origens genuinamente diferentes tentam
 coexistir sem decisão explícita.
 
+**Fase 4 (produção) — sincronização segura RHMADEPLANT → Portal RH sem SQL Server exposto
+(2026-08-31).** Diagnóstico: migrations nunca rodam automaticamente em deploy (nem `.cpanel.yml`
+nem `deploy.ps1`/`scripts/deploy_quick.ps1` executam SQL — só copiam arquivos; o único setup de
+schema é o instalador web de primeira instalação); produção tinha as 5 migrations do METADADOS
+aplicadas manualmente mas `colaboradores_metadados` vazia, e — hospedagem cPanel compartilhada —
+sem rota de rede até o SQL Server interno (`SRVCIGAMDB`) nem `pdo_sqlsrv`. Arquitetura implementada
+para não exigir isso: um **sender** (`scripts/sync_metadados_producao.php`), rodando dentro da
+rede Madeplant, reaproveita `MetadadosSyncService::fetchSourceRows()` (mesmo SELECT/normalização
+de sempre) e envia o lote assinado por **HTTPS + HMAC-SHA256** (`MetadadosSyncSignature`, mesmo
+esquema conceitual dos webhooks de recrutamento — timestamp + corpo, `hash_equals()`, janela de
+replay configurável) a um **endpoint receptor** novo,
+`POST /internal/metadados/colaboradores/sync` (`InternalMetadadosSyncController` +
+`MetadadosSyncIngestService`), fora do gate de sessão de `/admin`, sem HTML, sem GET. O receptor
+nunca confia no payload só por estar autenticado: `MetadadosSyncRequestValidator` rejeita o lote
+inteiro (antes de qualquer escrita) por estrutura inválida, contagem divergente ou chave lógica
+duplicada; a persistência delega inteiramente a `MetadadosSyncService::applyRows()` já validado —
+mesma transação única, mesmo upsert idempotente, mesma proteção `origem_metadados` contra mistura
+RHTESTE/RHMADEPLANT (Fase corretiva de pureza), nada duplicado. Segredo/URL do endpoint vivem em
+`metadados_sync.shared_secret`/`endpoint_url` (config, só em `local.php`, nunca no Git). Primeira
+carga real de produção **não foi executada** — só implementada, testada e simulada localmente;
+autorização de envio real é decisão separada.
+
 **Continuam intocados/pendentes de autorização futura**: `Colaborador::updateRhData()`, import
 XLSX, `usuario_colaboradores`/autenticação (risco de `UNIQUE` em `colaborador_id` sob readmissão
 continua registrado, não tratado), vínculo candidato→colaborador em
 `solicitacoes_vaga.nome_contratado_colaborador_id`, aplicação dos 4 vínculos seguros liberados
-pelo saneamento, saneamento dos 2 `CONFLITO`/24 `SEM_CORRESPONDENCIA` restantes, criação de
-usuário SQL Server dedicado só-leitura para produção, migração de telas legadas para a nova fonte,
-e descontinuação do cadastro duplicado.
+pelo saneamento, saneamento dos 2 `CONFLITO`/24 `SEM_CORRESPONDENCIA` restantes, **primeira carga
+real de produção via o novo mecanismo de sincronização segura**, agendamento recorrente dessa
+sincronização, migração de telas legadas para a nova fonte, e descontinuação do cadastro
+duplicado.

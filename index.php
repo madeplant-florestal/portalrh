@@ -63,6 +63,11 @@ try {
     $router->post('/admin/avaliacoes/excluir/{id}', [AdminAvaliacoesController::class, 'delete']);
     $router->get('/admin/manual', [AdminManualController::class, 'index']);
     $router->get('/admin/pipeline', [AdminPipelineController::class, 'index']);
+    // Máquina-a-máquina, autenticado via HMAC (nunca sessão/CSRF) — ver
+    // InternalMetadadosSyncController e docs/claude/roadmap-tecnico.md (Fase 4 - sincronização
+    // segura de produção). Fora do prefixo /admin de propósito: não é tela administrativa.
+    $router->post('/internal/metadados/colaboradores/sync', [InternalMetadadosSyncController::class, 'sync']);
+
     $router->get('/admin/recruitment-webhooks', [AdminRecruitmentWebhooksController::class, 'index']);
     $router->post('/admin/recruitment-webhooks/settings/save', [AdminRecruitmentWebhooksController::class, 'saveSetting']);
     $router->post('/admin/recruitment-webhooks/settings/regenerate-secret', [AdminRecruitmentWebhooksController::class, 'regenerateSecret']);

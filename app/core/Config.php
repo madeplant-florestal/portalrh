@@ -29,6 +29,15 @@ class Config
                 'user' => '',
                 'pass' => ''
             ],
+            'metadados_sync' => [
+                // Segredo HMAC compartilhado entre o sender interno (dentro da rede Madeplant) e
+                // o endpoint receptor em produção. Preencha só em local.php/build.php, nunca aqui.
+                'shared_secret' => '',
+                // URL do endpoint receptor, usada só pelo sender (scripts/sync_metadados_producao.php).
+                'endpoint_url' => '',
+                'max_batch_size' => 2000,
+                'replay_window_seconds' => 300
+            ],
             'security' => [
                 'csrf_key' => 'csrf_token',
                 'session_name' => 'RHMADEPLANTSESSID',

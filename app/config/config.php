@@ -24,11 +24,20 @@ return [
     // Sincronização segura RHMADEPLANT -> Portal RH em produção (Fase 4): o sender roda dentro da
     // rede Madeplant e assina o lote com este segredo; o endpoint receptor (produção) verifica a
     // assinatura com o mesmo segredo. Preencha em local.php/build.php, nunca aqui.
+    //
+    // orchestrator_url / orchestrator_secret (Sincronização operacional — Etapa 1): webhook da
+    // camada de orquestração interna (n8n) que o Dashboard de Indicadores aciona para solicitar
+    // uma sincronização sob demanda. O Portal só dispara o webhook (HTTPS + HMAC via
+    // MetadadosSyncSignature, com este segredo separado) e responde na hora; a conclusão chega
+    // pelo receiver já existente. Vazio = botão "Atualizar dados" responde "não configurado".
+    // Preencha em local.php/build.php, nunca aqui, nunca no HTML/JS.
     'metadados_sync' => [
         'shared_secret' => '',
         'endpoint_url' => '',
         'max_batch_size' => 2000,
-        'replay_window_seconds' => 300
+        'replay_window_seconds' => 300,
+        'orchestrator_url' => '',
+        'orchestrator_secret' => ''
     ],
     'security' => [
         'csrf_key' => 'csrf_token',

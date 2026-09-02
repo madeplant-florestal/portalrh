@@ -92,10 +92,22 @@ class MetadadosSyncRequestValidator
             $chavesVistas[$chave] = true;
         }
 
+        // correlacao_id é OPCIONAL — presente só quando o lote nasceu de uma solicitação manual
+        // do Dashboard (ver MetadadosSyncExecucaoRepository). Nunca chega dos senders legados;
+        // quando ausente/nulo, o receiver registra a execução como iniciada fora do Portal.
+        $correlacaoId = null;
+        if (array_key_exists('correlacao_id', $payload) && $payload['correlacao_id'] !== null && $payload['correlacao_id'] !== '') {
+            if (!is_string($payload['correlacao_id']) || !preg_match('/^[0-9a-fA-F-]{36}$/', $payload['correlacao_id'])) {
+                $errors[] = 'correlacao_id, quando presente, deve ser um UUID.';
+            } else {
+                $correlacaoId = strtolower($payload['correlacao_id']);
+            }
+        }
+
         if ($errors !== []) {
             return ['ok' => false, 'errors' => $errors];
         }
 
-        return ['ok' => true, 'errors' => [], 'origem' => trim($origem), 'registros' => $registros];
+        return ['ok' => true, 'errors' => [], 'origem' => trim($origem), 'registros' => $registros, 'correlacao_id' => $correlacaoId];
     }
 }

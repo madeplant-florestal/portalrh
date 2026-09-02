@@ -101,6 +101,22 @@ try {
     $v10 = MetadadosSyncRequestValidator::validar($payloadVazio, 2000);
     $assert($v10['ok'] === true, 'Caso 10: lote vazio (0 registros, total=0) deveria ser estruturalmente válido.');
 
+    // Caso 11 — correlacao_id ausente é aceito e devolvido como null (retrocompatível com senders legados).
+    $assert(array_key_exists('correlacao_id', $v1) && $v1['correlacao_id'] === null, 'Caso 11: sem correlacao_id, o campo devolvido deveria ser null.');
+
+    // Caso 12 — correlacao_id válido (UUID) é aceito e normalizado para minúsculas.
+    $payloadCorrelacao = $payloadValido;
+    $payloadCorrelacao['correlacao_id'] = '3F2504E0-4F89-41D3-9A0C-0305E82C3301';
+    $v12 = MetadadosSyncRequestValidator::validar($payloadCorrelacao, 2000);
+    $assert($v12['ok'] === true, 'Caso 12: correlacao_id UUID válido deveria passar.');
+    $assert($v12['correlacao_id'] === '3f2504e0-4f89-41d3-9a0c-0305e82c3301', 'Caso 12: correlacao_id deveria ser normalizado para minúsculas.');
+
+    // Caso 13 — correlacao_id malformado rejeita o lote inteiro.
+    $payloadCorrelacaoRuim = $payloadValido;
+    $payloadCorrelacaoRuim['correlacao_id'] = 'nao-e-uuid';
+    $v13 = MetadadosSyncRequestValidator::validar($payloadCorrelacaoRuim, 2000);
+    $assert($v13['ok'] === false, 'Caso 13: correlacao_id malformado deveria ser rejeitado.');
+
     echo "OK unit_metadados_sync_payload_validator\n";
 } catch (Throwable $e) {
     fwrite(STDERR, $e->getMessage() . PHP_EOL);

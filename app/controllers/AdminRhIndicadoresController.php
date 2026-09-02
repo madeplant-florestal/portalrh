@@ -47,6 +47,26 @@ class AdminRhIndicadoresController extends Controller
             $opcoesFiltro = ['empresas' => [], 'unidades' => [], 'cargos' => [], 'setores' => [], 'centrosCusto' => []];
         }
 
+        // "Última atualização" e botão "Atualizar dados": fonte é o histórico oficial de
+        // sincronizações (metadados_sync_execucoes), nunca updated_at de colaborador. Resiliente
+        // a ambiente onde a migration ainda não rodou — nesse caso o cabeçalho só omite a data.
+        $ultimaSincronizacao = null;
+        try {
+            $ultima = (new MetadadosSyncExecucaoRepository())->ultimaSincronizacaoValida();
+            if ($ultima !== null && !empty($ultima['concluido_em'])) {
+                $d = new DateTimeImmutable((string)$ultima['concluido_em']);
+                $ultimaSincronizacao = $d->format('d/m/Y') . ' às ' . $d->format('H:i');
+            }
+        } catch (Throwable $e) {
+            Logger::warning('Não foi possível ler a última sincronização do METADADOS', ['erro' => $e->getMessage()]);
+        }
+
+        $syncConfig = Config::get()['metadados_sync'] ?? [];
+        $orquestradorConfigurado = preg_match('#^https://#i', (string)($syncConfig['orchestrator_url'] ?? '')) === 1
+            && (string)($syncConfig['orchestrator_secret'] ?? '') !== '';
+        $podeSincronizar = in_array(strtolower((string)(Auth::role() ?? '')), ['admin', 'rh'], true)
+            || !empty($_SESSION['user_is_supervisor']);
+
         $this->view->render('admin/indicadores-rh', [
             'painel' => $painel,
             'erro' => $erro,
@@ -62,6 +82,9 @@ class AdminRhIndicadoresController extends Controller
             ],
             'periodoInicio' => $inicio,
             'periodoFim' => $fim,
+            'ultimaSincronizacao' => $ultimaSincronizacao,
+            'podeSincronizar' => $podeSincronizar,
+            'orquestradorConfigurado' => $orquestradorConfigurado,
         ], 'layouts/admin');
     }
 

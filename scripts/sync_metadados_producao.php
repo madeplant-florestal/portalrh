@@ -17,15 +17,22 @@ require __DIR__ . '/../app/core/bootstrap.php';
  * contagens, origem, horário, status e hash do lote.
  */
 
-function montarLote(array $rows, string $origem): array
+function montarLote(array $rows, string $origem, ?string $correlacaoId = null): array
 {
-    return [
+    $lote = [
         'versao' => '1',
         'origem_metadados' => $origem,
         'gerado_em' => (new DateTimeImmutable())->format(DateTimeInterface::ATOM),
         'total' => count($rows),
         'registros' => $rows,
     ];
+    // Opcional — repassado pela camada de orquestração (n8n) quando a sincronização nasceu de uma
+    // solicitação manual do Dashboard, para o receiver fechar exatamente aquela solicitação no
+    // histórico (metadados_sync_execucoes). Ausente numa execução direta por CLI/agendamento.
+    if ($correlacaoId !== null && $correlacaoId !== '') {
+        $lote['correlacao_id'] = $correlacaoId;
+    }
+    return $lote;
 }
 
 function enviarLote(string $url, string $corpoBruto, array $headers): array
@@ -60,8 +67,12 @@ function enviarLote(string $url, string $corpoBruto, array $headers): array
 }
 
 try {
-    $options = getopt('', ['enviar']);
+    $options = getopt('', ['enviar', 'correlacao-id:']);
     $enviar = array_key_exists('enviar', $options);
+    $correlacaoId = isset($options['correlacao-id']) ? trim((string)$options['correlacao-id']) : null;
+    if ($correlacaoId !== null && !preg_match('/^[0-9a-fA-F-]{36}$/', $correlacaoId)) {
+        throw new RuntimeException('--correlacao-id, quando informado, precisa ser um UUID.');
+    }
 
     $config = Config::get()['metadados_sync'] ?? [];
     $segredo = (string)($config['shared_secret'] ?? '');
@@ -89,7 +100,7 @@ try {
         );
     }
 
-    $lote = montarLote($rows, $origem);
+    $lote = montarLote($rows, $origem, $correlacaoId);
     $corpoBruto = json_encode($lote, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     $tamanhoBytes = strlen($corpoBruto);
     $hashLote = hash('sha256', $corpoBruto);
@@ -98,6 +109,7 @@ try {
         'modo' => $enviar ? 'envio' : 'simulacao',
         'generated_at' => (new DateTimeImmutable())->format(DateTimeInterface::ATOM),
         'origem' => $origem,
+        'correlacao_id' => $correlacaoId,
         'total_registros' => count($rows),
         'tamanho_bytes' => $tamanhoBytes,
         'hash_lote' => $hashLote,

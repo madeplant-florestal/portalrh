@@ -47,8 +47,28 @@ $corSuave = '#c9d2db';
       <div>
         <h1 class="text-2xl font-bold tracking-tight text-slate-900 xl:text-[2rem]">Indicadores de RH</h1>
         <p class="mt-1 text-sm text-slate-500">Quadro, movimentação e turnover — alimentado pelos dados oficiais sincronizados do METADADOS</p>
+        <p class="mt-2 text-xs text-slate-500" data-sync-ultima>
+          <?php if (!empty($ultimaSincronizacao)): ?>
+            Última atualização: <span class="font-semibold text-slate-700"><?= Security::e($ultimaSincronizacao) ?></span>
+          <?php else: ?>
+            Última atualização: <span class="font-semibold text-slate-700">—</span>
+          <?php endif; ?>
+        </p>
+        <p class="mt-1 hidden text-xs" data-sync-feedback></p>
       </div>
-      <a href="<?= $base ?>/admin" class="ct-btn ct-btn-muted">Voltar ao Dashboard</a>
+      <div class="flex flex-wrap items-center gap-2">
+        <?php if (!empty($podeSincronizar)): ?>
+          <button type="button"
+                  class="ct-btn ct-btn-primary"
+                  data-sync-btn
+                  data-endpoint="<?= $base ?>/admin/indicadores-rh/sincronizar"
+                  data-status-endpoint="<?= $base ?>/admin/indicadores-rh/sincronizar/status"
+                  <?= empty($orquestradorConfigurado) ? 'disabled title="Sincronização sob demanda ainda não configurada neste ambiente."' : '' ?>>
+            <span data-sync-label>Atualizar dados</span>
+          </button>
+        <?php endif; ?>
+        <a href="<?= $base ?>/admin" class="ct-btn ct-btn-muted">Voltar ao Dashboard</a>
+      </div>
     </div>
     <form method="get" class="mt-4 flex flex-wrap gap-2">
       <select name="periodo" data-autosubmit="1" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100">
@@ -260,3 +280,82 @@ $corSuave = '#c9d2db';
     </section>
   <?php endif; ?>
 </div>
+
+<script>
+(function () {
+  var btn = document.querySelector('[data-sync-btn]');
+  if (!btn || btn.disabled) { return; }
+
+  var label = btn.querySelector('[data-sync-label]');
+  var feedback = document.querySelector('[data-sync-feedback]');
+  var csrf = (document.querySelector('meta[name="csrf-token"]') || {}).content || '';
+  var endpoint = btn.getAttribute('data-endpoint');
+  var statusEndpoint = btn.getAttribute('data-status-endpoint');
+  var pollTimer = null;
+  var deadline = 0;
+
+  function setFeedback(text, cor) {
+    if (!feedback) { return; }
+    feedback.textContent = text || '';
+    feedback.style.color = cor || '';
+    feedback.classList.toggle('hidden', !text);
+  }
+
+  function reset(text, cor) {
+    btn.disabled = false;
+    label.textContent = 'Atualizar dados';
+    if (text) { setFeedback(text, cor); }
+  }
+
+  function poll(correlacaoId) {
+    if (Date.now() > deadline) {
+      reset('A sincronização ainda está em andamento. Recarregue a página em alguns minutos para ver os dados atualizados.', '#3e5c76');
+      return;
+    }
+    fetch(statusEndpoint + '?correlacao_id=' + encodeURIComponent(correlacaoId), {
+      headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+      .then(function (res) {
+        var d = res.data || {};
+        if (!res.ok) { reset(d.erro || 'Falha ao consultar o andamento da sincronização.', '#b91c1c'); return; }
+        if (!d.concluido) { pollTimer = setTimeout(function () { poll(correlacaoId); }, 4000); return; }
+        if (d.sucesso) {
+          label.textContent = 'Sincronizado';
+          btn.classList.remove('ct-btn-primary');
+          btn.classList.add('ct-btn-success');
+          setFeedback('Dados atualizados. Recarregando os indicadores…', '#1d2d44');
+          setTimeout(function () { window.location.reload(); }, 1200);
+          return;
+        }
+        reset(d.mensagem ? ('Falha na sincronização: ' + d.mensagem) : 'Falha na sincronização.', '#b91c1c');
+      })
+      .catch(function () { pollTimer = setTimeout(function () { poll(correlacaoId); }, 4000); });
+  }
+
+  btn.addEventListener('click', function () {
+    if (btn.disabled) { return; }
+    btn.disabled = true;
+    label.textContent = 'Atualizando…';
+    setFeedback('Solicitação enviada. Isso pode levar alguns minutos.', '#3e5c76');
+    if (pollTimer) { clearTimeout(pollTimer); }
+
+    fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+      body: JSON.stringify({ csrf: csrf })
+    })
+      .then(function (r) { return r.json().then(function (d) { return { status: r.status, data: d }; }); })
+      .then(function (res) {
+        var d = res.data || {};
+        if (res.status === 202 && d.correlacao_id) {
+          deadline = Date.now() + 3 * 60 * 1000;
+          pollTimer = setTimeout(function () { poll(d.correlacao_id); }, 4000);
+          return;
+        }
+        reset(d.erro || 'Não foi possível iniciar a sincronização.', '#b91c1c');
+      })
+      .catch(function () { reset('Erro de rede ao solicitar a sincronização.', '#b91c1c'); });
+  });
+})();
+</script>

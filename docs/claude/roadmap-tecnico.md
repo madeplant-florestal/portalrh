@@ -223,15 +223,57 @@ inteiro (antes de qualquer escrita) por estrutura inválida, contagem divergente
 duplicada; a persistência delega inteiramente a `MetadadosSyncService::applyRows()` já validado —
 mesma transação única, mesmo upsert idempotente, mesma proteção `origem_metadados` contra mistura
 RHTESTE/RHMADEPLANT (Fase corretiva de pureza), nada duplicado. Segredo/URL do endpoint vivem em
-`metadados_sync.shared_secret`/`endpoint_url` (config, só em `local.php`, nunca no Git). Primeira
-carga real de produção **não foi executada** — só implementada, testada e simulada localmente;
-autorização de envio real é decisão separada.
+`metadados_sync.shared_secret`/`endpoint_url` (config, só em `local.php`, nunca no Git).
+
+**Primeira carga real de produção — CONCLUÍDA (01/09/2026).** Origem oficial `RHMADEPLANT`, 728
+contratos sincronizados (191 ativos, 537 desligados), 728 vínculos únicos. Reconciliação inicial
+concluída: 385 registros locais em `colaboradores`, 385 vinculados, 0 sem correspondência, 0
+conflitos, 0 ambiguidades. O dashboard `/admin/indicadores-rh` já consome `colaboradores_metadados`
+em produção.
+
+**Sincronização operacional — Etapa 1 (camada Portal RH, 01/09/2026).** Prepara a operação
+contínua sem mudar a arquitetura de segurança (SQL Server continua só-leitura e inacessível ao
+servidor público). Adiciona:
+- Migration `2026-09-01-metadados-sync-execucoes.sql` — tabela `metadados_sync_execucoes`, uma
+  linha por sincronização recebida (status, origem, contadores inseridos/atualizados/inalterados/
+  erros, hash do lote, mensagem técnica sanitizada, horários). NUNCA guarda segredo, senha,
+  payload, CPF, nome, salário. Puramente aditiva; aplicada manualmente em produção.
+- `MetadadosSyncExecucaoRepository` — escrita/leitura do histórico + `sanitizarMensagem()`
+  (mascara hex longo, trunca em 500) + `ultimaSincronizacaoValida()` (fonte do "Última
+  atualização" do dashboard).
+- `MetadadosSyncIngestService` — passa a registrar cada sincronização válida no histórico (sucesso/
+  sucesso_com_erros) e cada falha pós-autenticação (ex.: conflito de origem) como `falha`
+  sanitizada. O registro é isolado em try/catch: nunca quebra uma sincronização já aplicada. HMAC,
+  replay, TLS, validação, transação e idempotência **intocados**.
+- `MetadadosSyncRequestValidator` — aceita um campo **opcional** `correlacao_id` (UUID) no
+  envelope; retrocompatível com os senders atuais.
+- `scripts/sync_metadados_producao.php` — opção opcional `--correlacao-id` (repassada pela
+  orquestração numa sincronização manual do Dashboard); sem ela o comportamento é idêntico.
+- `AdminMetadadosSyncController` + rotas `POST /admin/indicadores-rh/sincronizar` e
+  `GET /admin/indicadores-rh/sincronizar/status` — disparo sob demanda e polling de andamento.
+  Auth de sessão + `requireRole(['admin','rh'])` + CSRF + rate-limit + trava de execução
+  simultânea. O Portal só cria a linha da solicitação e aciona o **webhook da orquestração
+  interna (n8n)** por HTTPS+HMAC (`metadados_sync.orchestrator_url`/`orchestrator_secret`, só em
+  `local.php`) com timeout de 5s, respondendo 202 na hora. NUNCA chama `MetadadosDatabase::conn()`,
+  nunca conecta ao SQL Server, nenhum segredo chega ao navegador.
+- Dashboard `/admin/indicadores-rh` — cabeçalho ganha "Última atualização" e o botão "Atualizar
+  dados" (estados normal/processando/sucesso/erro, anti-duplo-clique, JS inline). Sem redesenho.
+
+**Fluxo assíncrono planejado (n8n NÃO implementado nesta etapa):** Dashboard → `POST /admin/
+indicadores-rh/sincronizar` → webhook n8n (202) → n8n aciona o sender interno com `--correlacao-id`
+→ sender lê RHMADEPLANT (só-leitura) e envia o lote assinado ao receiver existente → receiver
+fecha a MESMA linha `metadados_sync_execucoes` pelo `correlacao_id` → polling do Dashboard vê o
+status terminal e recarrega. Sincronização automática usará o mesmo pipeline (n8n Schedule
+Trigger → sender → receiver), registrada no histórico com `gatilho` distinto — sem duplicar a
+lógica de leitura. **Pendências de n8n:** criar o workflow (webhook + schedule) e configurar
+`orchestrator_url`/`orchestrator_secret` em produção; enquanto vazios, o botão fica desabilitado.
+
+Autorização de envio real (sender `--enviar`) continua decisão separada.
 
 **Continuam intocados/pendentes de autorização futura**: `Colaborador::updateRhData()`, import
 XLSX, `usuario_colaboradores`/autenticação (risco de `UNIQUE` em `colaborador_id` sob readmissão
 continua registrado, não tratado), vínculo candidato→colaborador em
 `solicitacoes_vaga.nome_contratado_colaborador_id`, aplicação dos 4 vínculos seguros liberados
-pelo saneamento, saneamento dos 2 `CONFLITO`/24 `SEM_CORRESPONDENCIA` restantes, **primeira carga
-real de produção via o novo mecanismo de sincronização segura**, agendamento recorrente dessa
-sincronização, migração de telas legadas para a nova fonte, e descontinuação do cadastro
-duplicado.
+pelo saneamento, saneamento dos 2 `CONFLITO`/24 `SEM_CORRESPONDENCIA` restantes, configuração do
+n8n (webhook de disparo + agendamento recorrente) e das chaves `metadados_sync.orchestrator_*` em
+produção, migração de telas legadas para a nova fonte, e descontinuação do cadastro duplicado.

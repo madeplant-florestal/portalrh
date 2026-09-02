@@ -21,6 +21,15 @@ if ($tableExists === 0) {
     exit(0);
 }
 
+// O receiver agora registra cada sincronização válida em metadados_sync_execucoes (observabilidade).
+// Marca o ponto de partida para limpar só as linhas criadas por este teste no finally.
+$execTableExists = (int)$pdo->query(
+    "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'metadados_sync_execucoes'"
+)->fetchColumn() > 0;
+$execMaxIdInicial = $execTableExists
+    ? (int)$pdo->query("SELECT COALESCE(MAX(id), 0) FROM metadados_sync_execucoes")->fetchColumn()
+    : 0;
+
 // Segredo/dados fictícios — nunca reais.
 $segredo = 'segredo-teste-' . bin2hex(random_bytes(4));
 $config = ['shared_secret' => $segredo, 'replay_window_seconds' => 300, 'max_batch_size' => 2000];
@@ -202,6 +211,9 @@ try {
     $falha = $e->getMessage();
 } finally {
     $pdo->prepare('DELETE FROM colaboradores_metadados WHERE codigo_empresa = ? AND codigo_unidade = ?')->execute([$empresa, $unidade]);
+    if ($execTableExists) {
+        $pdo->prepare('DELETE FROM metadados_sync_execucoes WHERE id > ?')->execute([$execMaxIdInicial]);
+    }
 }
 
 if ($falha !== null) {

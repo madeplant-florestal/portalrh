@@ -50,6 +50,11 @@ try {
     $router->post('/admin/reset-password/{token}', [PasswordRecoveryController::class, 'performReset']);
     $router->get('/admin', [AdminController::class, 'index']);
     $router->get('/admin/indicadores-rh', [AdminRhIndicadoresController::class, 'index']);
+    // Sincronização operacional do METADADOS sob demanda (Etapa 1). O Portal só aciona a camada
+    // de orquestração interna e consulta o andamento — nunca acessa o SQL Server. Ver
+    // AdminMetadadosSyncController e docs/claude/roadmap-tecnico.md.
+    $router->post('/admin/indicadores-rh/sincronizar', [AdminMetadadosSyncController::class, 'solicitar']);
+    $router->get('/admin/indicadores-rh/sincronizar/status', [AdminMetadadosSyncController::class, 'status']);
     $router->get('/admin/colaboradores', [AdminColaboradoresController::class, 'index']);
     $router->post('/admin/colaboradores/importar', [AdminColaboradoresController::class, 'import']);
     $router->get('/admin/colaboradores/rh/editar/{id}', [AdminColaboradoresController::class, 'editRh']);

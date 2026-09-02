@@ -18,10 +18,14 @@
 class MetadadosSyncIngestService
 {
     private MetadadosSyncService $syncService;
+    private ?MetadadosSyncExecucaoRepository $execucaoRepository;
 
-    public function __construct(?MetadadosSyncService $syncService = null)
-    {
+    public function __construct(
+        ?MetadadosSyncService $syncService = null,
+        ?MetadadosSyncExecucaoRepository $execucaoRepository = null
+    ) {
         $this->syncService = $syncService ?? new MetadadosSyncService();
+        $this->execucaoRepository = $execucaoRepository;
     }
 
     /**
@@ -56,25 +60,74 @@ class MetadadosSyncIngestService
             return ['http_status' => 400, 'body' => ['ok' => false, 'error' => 'Payload inválido.', 'detalhes' => $validacao['errors']]];
         }
 
+        $correlacaoId = $validacao['correlacao_id'] ?? null;
+        $inicio = new DateTimeImmutable();
+        $hashLote = hash('sha256', $corpoBruto);
+
         try {
             $resumo = $this->syncService->applyRows($validacao['registros'], $validacao['origem'], false);
         } catch (Throwable $e) {
             Logger::exception($e, 'ERROR', ['endpoint' => 'internal/metadados/colaboradores/sync']);
+            $this->registrarHistorico($correlacaoId, MetadadosSyncExecucaoRepository::STATUS_FALHA, [
+                'origem' => $validacao['origem'],
+                'iniciado_em' => $inicio->format('Y-m-d H:i:s'),
+                'concluido_em' => (new DateTimeImmutable())->format('Y-m-d H:i:s'),
+                'hash_lote' => $hashLote,
+                'mensagem_tecnica' => MetadadosSyncExecucaoRepository::sanitizarMensagem($e->getMessage()),
+            ]);
             return ['http_status' => 409, 'body' => ['ok' => false, 'error' => $e->getMessage()]];
         }
+
+        $erros = (int)($resumo['errors'] ?? 0);
+        $recebidos = count($validacao['registros']);
+        $this->registrarHistorico(
+            $correlacaoId,
+            $erros === 0 ? MetadadosSyncExecucaoRepository::STATUS_SUCESSO : MetadadosSyncExecucaoRepository::STATUS_SUCESSO_COM_ERROS,
+            [
+                'origem' => $resumo['origem'] ?? $validacao['origem'],
+                'iniciado_em' => $inicio->format('Y-m-d H:i:s'),
+                'concluido_em' => (new DateTimeImmutable())->format('Y-m-d H:i:s'),
+                'hash_lote' => $hashLote,
+                'registros_recebidos' => $recebidos,
+                'inseridos' => (int)($resumo['inserted'] ?? 0),
+                'atualizados' => (int)($resumo['updated'] ?? 0),
+                'inalterados' => (int)($resumo['unchanged'] ?? 0),
+                'erros' => $erros,
+            ]
+        );
 
         return [
             'http_status' => 200,
             'body' => [
-                'ok' => ($resumo['errors'] ?? 0) === 0,
-                'recebidos' => count($validacao['registros']),
+                'ok' => $erros === 0,
+                'recebidos' => $recebidos,
                 'inseridos' => $resumo['inserted'] ?? 0,
                 'atualizados' => $resumo['updated'] ?? 0,
                 'inalterados' => $resumo['unchanged'] ?? 0,
-                'erros' => $resumo['errors'] ?? 0,
+                'erros' => $erros,
                 'origem' => $resumo['origem'] ?? $validacao['origem'],
             ],
         ];
+    }
+
+    /**
+     * Registra a execução no histórico operacional (metadados_sync_execucoes). É observabilidade,
+     * NUNCA parte do contrato de sincronização: qualquer falha aqui (tabela ausente, erro de
+     * escrita) é engolida com um aviso — uma sincronização já aplicada nunca é revertida nem
+     * respondida como erro por causa do histórico.
+     *
+     * @param array<string,mixed> $dados
+     */
+    private function registrarHistorico(?string $correlacaoId, string $status, array $dados): void
+    {
+        try {
+            $repo = $this->execucaoRepository ?? new MetadadosSyncExecucaoRepository();
+            $repo->registrarResultado($correlacaoId, $status, $dados);
+        } catch (\Throwable $e) {
+            Logger::warning('Não foi possível registrar a execução da sincronização METADADOS no histórico', [
+                'erro' => $e->getMessage(),
+            ]);
+        }
     }
 
     private static function header(array $headers, string $name): ?string

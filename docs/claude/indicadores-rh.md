@@ -19,6 +19,25 @@ vínculo `colaboradores.metadados_id`, só da carga do espelho.
 O dashboard nunca acessa o SQL Server do METADADOS em tempo real — só o espelho MySQL local, já
 sincronizado. Indisponibilidade do METADADOS não derruba a tela.
 
+## Cabeçalho: "Última atualização" e botão "Atualizar dados"
+
+O cabeçalho de `/admin/indicadores-rh` mostra **Última atualização: DD/MM/AAAA às HH:mm**, lida de
+`metadados_sync_execucoes` (`MetadadosSyncExecucaoRepository::ultimaSincronizacaoValida()` — última
+execução `sucesso`/`sucesso_com_erros`), **nunca** de `updated_at`/`sincronizado_em` de um
+colaborador. Resiliente: se a migration `2026-09-01-metadados-sync-execucoes.sql` ainda não rodou,
+o cabeçalho só omite a data (log `WARNING`, tela não quebra).
+
+O botão **Atualizar dados** aparece só para `admin`/`rh` (e supervisor). Aciona
+`POST /admin/indicadores-rh/sincronizar` (`AdminMetadadosSyncController::solicitar`) — CSRF +
+`Auth::requireRole(['admin','rh'])` + rate-limit + trava de execução simultânea
+(`existeEmAndamento`). O Portal só cria a linha da solicitação e dispara o webhook da orquestração
+interna (n8n) com timeout curto, respondendo **202** na hora — nunca conecta ao SQL Server, nunca
+segura a requisição web durante a sincronização. O front faz *polling* de
+`GET /admin/indicadores-rh/sincronizar/status` e recarrega a página ao concluir. Estados do botão:
+`Atualizar dados` → `Atualizando…` → `Sincronizado` (sucesso, recarrega) / mensagem de erro
+sanitizada. Enquanto `metadados_sync.orchestrator_url`/`orchestrator_secret` não estiverem
+configurados em `local.php`, o botão fica desabilitado com tooltip explicativo.
+
 ## Privacidade
 
 `RhIndicadoresRepository::buscarContratos()` nunca seleciona `cpf`, `nome`, `nascimento` ou
@@ -145,6 +164,9 @@ anos / 3 a 5 anos / 5 a 10 anos / Acima de 10 anos.
   `$_GET`, delega ao service, nunca calcula indicador na view.
 - `app/views/admin/partials/chart-helpers.php` — helpers de gráfico SVG puro (extraídos de
   `admin/dashboard.php`, reaproveitados aqui) — nenhuma biblioteca de charting nova.
+- `MetadadosSyncExecucaoRepository` + `AdminMetadadosSyncController` — histórico operacional das
+  sincronizações e disparo sob demanda (ver seção "Cabeçalho" acima e `roadmap-tecnico.md`). O JS
+  do botão é inline em `admin/indicadores-rh.php` (cache-busting de `admin.js` está congelado).
 
 ## Limitações conhecidas desta primeira versão
 

@@ -28,6 +28,13 @@ if ($hasSalarioCargo === 0) {
     echo "SKIP integration_colaborador_metadados_sync (migration 2026-08-27-colaboradores-metadados-salario-cargo.sql nao aplicada)\n";
     exit(0);
 }
+$hasCodigosOficiais = (int)$pdo->query(
+    "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'colaboradores_metadados' AND COLUMN_NAME = 'codigo_setor'"
+)->fetchColumn();
+if ($hasCodigosOficiais === 0) {
+    echo "SKIP integration_colaborador_metadados_sync (migration 2026-09-04-colaboradores-metadados-codigos-oficiais.sql nao aplicada)\n";
+    exit(0);
+}
 
 // Este teste valida applyRows() — a metade da sincronização que independe de SQL Server/pdo_sqlsrv.
 // fetchSourceRows() não é testável neste ambiente (driver ausente, ver auditoria da sprint).
@@ -54,6 +61,9 @@ $contrato1 = [
     'unidade' => 'Unidade Teste',
     'setor' => 'Setor Teste',
     'centro_custo' => 'CC-001',
+    'codigo_setor' => 'S001',
+    'codigo_cargo' => 'C042',
+    'codigo_centro_custo' => 'CC01',
     'ativo' => 0,
     'salario_atual' => '3500.00',
     'data_inicio_cargo' => '2020-01-01',
@@ -84,6 +94,17 @@ try {
     $assert((int)$row1['ativo'] === 0 && (int)$row2['ativo'] === 1, 'Falha: ativo deveria refletir cada contrato independentemente.');
     $assert((float)$row1['salario_atual'] === 3500.00, 'Falha: salario_atual deveria ter sido persistido na inserção.');
     $assert($row1['data_inicio_cargo'] === '2020-01-01', 'Falha: data_inicio_cargo deveria ter sido persistida na inserção.');
+    $assert($row1['codigo_setor'] === 'S001' && $row1['codigo_cargo'] === 'C042' && $row1['codigo_centro_custo'] === 'CC01', 'Falha: códigos oficiais de setor/cargo/centro de custo deveriam ter sido persistidos.');
+    $assert($row1['setor'] === 'Setor Teste' && $row1['cargo'] === 'Analista', 'Falha (sanity): colunas textuais de setor/cargo continuam preenchidas em paralelo.');
+
+    // 1b) Mudança só de código oficial (ex.: reclassificação de centro de custo na origem) → update.
+    $contrato1NovoCC = $contrato1;
+    $contrato1NovoCC['codigo_centro_custo'] = 'CC99';
+    $summary1b = $service->applyRows([$contrato1NovoCC, $contrato2], 'RHMADEPLANT');
+    $assert($summary1b['updated'] === 1, 'Falha: mudança de codigo_centro_custo deveria gerar update.');
+    $assert($repo->findByVinculo($empresa, $unidade, '001')['codigo_centro_custo'] === 'CC99', 'Falha: novo codigo_centro_custo deveria ter sido persistido.');
+    // Restaura para não interferir nos cenários seguintes.
+    $service->applyRows([$contrato1, $contrato2], 'RHMADEPLANT');
 
     // 2) Rodar de novo com os mesmos dados → nada muda (idempotente).
     $summary2 = $service->applyRows([$contrato1, $contrato2], 'RHMADEPLANT');

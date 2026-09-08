@@ -11,10 +11,13 @@ Repository/Service em Setor/CargoSetor/parte de Empresa e webhooks; consolidaç�
 `colaboradores` (2026-06-23/06-25); import XLSX de colaboradores; webhooks de recrutamento;
 relacionamento Cargo×Setor; Kanban de Solicitações de Vaga; integração METADADOS Fases 1 a 3.4
 (consumo + espelho + ponte estrutural + reconciliação real + aplicação dos 378 vínculos seguros),
-camada analítica de RH (Fase 4, `/admin/indicadores-rh`) e a missão corretiva de pureza da base
+camada analítica de RH (Fase 4, `/admin/indicadores-rh`), a missão corretiva de pureza da base
 analítica (saneamento dos 6 contratos de `RHTESTE` + proteção `origem_metadados` contra nova
-mistura de origem) — leia a seção dedicada abaixo para detalhes e para o que **ainda não** foi
-feito dentro dessa integração.
+mistura de origem), a sincronização operacional Etapa 1 (histórico `metadados_sync_execucoes` +
+botão "Atualizar dados" no Dashboard) e a Fase 5.1A da Estrutura Organizacional (Empresas e
+Unidades como dimensões oficiais sincronizadas + códigos oficiais de setor/cargo/centro de custo
+no espelho) — leia a seção dedicada abaixo para detalhes e para o que **ainda não** foi feito
+dentro dessa integração.
 
 **Decisão técnica futura, ainda em aberto** (exige conversa dedicada antes de agir): consolidação
 definitiva de `schema.sql`/`recrutamento.sql`/migrations em uma única fonte; migração do restante
@@ -270,6 +273,108 @@ lógica de leitura. **Pendências de n8n:** criar o workflow (webhook + schedule
 
 Autorização de envio real (sender `--enviar`) continua decisão separada.
 
+**Fase 5.1A — Estrutura Organizacional: Empresas e Unidades como dimensões oficiais (2026-09-04).**
+Início da migração da Estrutura Organizacional para a Estratégia B (o METADADOS é o cadastro
+mestre oficial de Empresas/Unidades/Setores/Cargos; o Portal sincroniza e usa essas dimensões em
+vez de manter cadastros mestres paralelos). Escopo desta etapa: **só Empresas, Unidades e os
+CÓDIGOS oficiais de setor/cargo/centro de custo** — Setores, Cargos e Centros de Custo **não**
+são reconstruídos ainda (próxima fase); `setores`/`cargos`/`centros_custo`/`cargo_setores` e suas
+FKs seguem intocados. Regra imutável mantida: **a conexão com o SQL Server é somente leitura** —
+`{Empresa,Unidade}MetadadosSyncService::fetchSourceRows()` executam apenas `SELECT`.
+
+- **`empresas` já é dimensão oficial sincronizada.** Migration
+  `2026-09-04-empresas-unidades-metadados.sql` (aditiva): `empresas` ganha `codigo_empresa`
+  (`UNIQUE`, identidade oficial = `RHEMPRESAS.EMPRESA`, nunca o nome), `razao_social`
+  (`RHEMPRESAS.RAZAOSOCIAL`), `origem_metadados`, `sincronizado_em`. `id`/`nome`/`slug`/`ativo`
+  **mantidos** — `id` segue sendo a referência das FKs legadas (vagas, setores, colaboradores,
+  solicitacoes_vaga...), `nome`/`slug` seguem sendo a identidade de exibição legada durante a
+  transição e **não são sobrescritos** pela sincronização (só `razao_social` fica em dia).
+  `EmpresaMetadadosSyncService`/`EmpresaMetadadosRepository`: upsert por `codigo_empresa`, nunca
+  DELETE. **Adoção única na primeira carga**: uma empresa local sem `codigo_empresa` é adotada
+  (recebe o código, preservando o `id` e as FKs) se — e só se — exatamente uma empresa do
+  METADADOS tem o mesmo nome normalizado (transliteração PT-BR determinística, sem depender de
+  iconv/locale); 0 ou 2+ matches nunca adotam — inserem como empresa nova e reportam em `avisos`.
+  Prévia com a base real (proxy RHEMPRESAS = razões sociais já em `colaboradores_metadados`, 8
+  empresas): **2 adotadas** (FOREST SERVICES LTDA=0001, MADEPLANT FLORESTAL LTDA=0002), **6
+  inseridas novas**, **3 locais não adotadas** (MADEPLANT TRANSPORTES id 2, MADEPLANT CSC id 3,
+  PROSPECTA SERVICOS id 4 — nome não bate exato; a #2 vira quase-duplicata de "MADEPLANT
+  TRANSPORTES LTDA"=0005). Essas 3 exigem decisão manual (renomear local para o oficial, ou
+  vincular `codigo_empresa` à mão) antes de migrar as telas legadas — **fora do escopo desta
+  fase**. `ativo` de `empresas` **não** é alterado pela sincronização (status oficial de
+  RHEMPRESAS ainda não confirmado — ver pendências); empresa nova entra `ativo=1`.
+- **`unidades` já é dimensão oficial sincronizada.** Tabela nova (mesma migration). Chave oficial
+  `(codigo_empresa, codigo_unidade)` — **nunca** `codigo_unidade` isolado. `empresa_id` FK →
+  `empresas(id)` `ON DELETE RESTRICT`, resolvido a partir de `codigo_empresa` contra as empresas
+  já sincronizadas — se a empresa correspondente ainda não existe, a unidade é **erro controlado
+  de integridade** (contado, reportado, não aborta o lote). Daí a ordem canônica:
+  **empresas → unidades → colaboradores**. `UnidadeMetadadosSyncService`/`UnidadeMetadadosRepository`:
+  upsert por chave composta, nunca DELETE. `ativo` gerenciado pela sincronização (default 1 até o
+  status oficial de RHUNIDADES ser confirmado).
+- **`colaboradores_metadados` guarda os códigos oficiais.** Migration
+  `2026-09-04-colaboradores-metadados-codigos-oficiais.sql` (aditiva): `codigo_setor`,
+  `codigo_cargo`, `codigo_centro_custo` (de `RHCONTRATOS.SETOR/CARGO/CENTROCUSTO1`, direto, sem
+  JOIN novo). As colunas **textuais** `setor`/`cargo`/`centro_custo` (de `DESCRICAO40`) **continuam
+  intactas** — só serão depreciadas quando as dimensões oficiais estiverem completas e as telas
+  migradas. `MetadadosSyncService::QUERY` e `normalizeSourceRow()` ampliadas;
+  `ColaboradorMetadadosRepository` (INSERT/UPDATE/`COMPARABLE_FIELDS`) inclui os 3 códigos; o
+  payload e o `MetadadosSyncRequestValidator` de colaboradores são **retrocompatíveis** (senders
+  legados que não enviam os campos → persistem NULL, sem erro).
+- **Infra de sincronização reaproveitada, não duplicada.** `MetadadosSyncEnvelope` (novo, em
+  `app/core/`) extrai o bloco comum HMAC + janela de replay + decode JSON — usado por
+  `MetadadosSyncIngestService` (colaboradores, refatorado) e por `MetadadosDimensaoSyncIngestService`
+  (empresas/unidades). Validação de forma por dimensão em `MetadadosDimensaoSyncRequestValidator`
+  (o `MetadadosSyncRequestValidator` de colaboradores **não** foi tocado). Endpoints novos, mesma
+  auth HMAC, fora do gate `/admin`: `POST /internal/metadados/empresas/sync` e
+  `.../unidades/sync` (`InternalMetadadosSyncController::empresas/unidades`).
+- **Histórico com dimensão.** Migration `2026-09-04-metadados-sync-execucoes-dimensao.sql`
+  (aditiva): `metadados_sync_execucoes.dimensao` (`empresas`/`unidades`/`colaboradores`), nullable,
+  backfill das linhas existentes como `colaboradores` (provado — até aqui a única sincronização
+  registrada). Cada dimensão gera sua própria linha de execução; unificar por `correlacao_id` é
+  concern de fase futura.
+- **Sender.** `scripts/sync_metadados_producao.php` ampliado: `--dimensao=empresas|unidades|`
+  `colaboradores|todas` (padrão `todas` = empresas→unidades→colaboradores nessa ordem), `--dry-run`
+  explícito (é o padrão de qualquer forma), `--enviar` para envio real (**não autorizado**),
+  `--correlacao-id` (em `todas`, repassado só à etapa de colaboradores — casa com o fluxo do
+  Dashboard). Endpoints de empresas/unidades derivados de `metadados_sync.endpoint_url` trocando o
+  segmento da dimensão; `metadados_sync.endpoints` (opcional) permite sobrescrever.
+  `--dimensao=empresas --dry-run` inclui uma **prévia de reconciliação SOMENTE LEITURA**
+  (`preview_reconciliacao`): para cada empresa oficial de `RHEMPRESAS`, a ação prevista
+  (`ADOTAR_EXISTENTE`/`INSERIR_NOVA`/`ATUALIZAR_EXISTENTE`/`INALTERADA`/`ERRO`), a empresa local
+  candidata + `empresa_local_id` + nome local, e o critério da decisão; ao final, as empresas
+  locais restantes sem código (`LOCAL_SEM_CORRESPONDENCIA_OFICIAL`, com id/nome/slug/ativo). A
+  prévia usa `EmpresaMetadadosSyncService::planejar()` — **exatamente** a mesma decisão que
+  `applyRows()` executa (o plano é a fonte única; `applyRows()` só executa o plano), contra a
+  tabela `empresas` do MySQL configurado no `local.php` da máquina onde o sender roda.
+- **Não feito nesta fase (por decisão)**: reconstrução de Setores/Cargos/Centros de Custo;
+  qualquer mudança em `setores`/`cargos`/`centros_custo`/`cargo_setores` ou nas FKs desses
+  cadastros; reengenharia de formulários / Solicitação de Vaga / parametrização de benefícios;
+  remoção de CRUDs; migração de telas legadas para consulta oficial. Migrations **não** aplicadas
+  em produção nesta execução. `--enviar` **não** executado. n8n **não** configurado.
+- **Pendências de validação na máquina interna (SQL Server inacessível no ambiente de dev)**: a
+  query real de `RHEMPRESAS` (existe coluna oficial de status/inatividade? hoje assumimos
+  `ativo=1`); a query real de `RHUNIDADES` (idem status; todas as `(EMPRESA,UNIDADE)` de
+  `RHCONTRATOS` têm linha correspondente?); volume real de empresas/unidades vs.
+  `metadados_sync.max_batch_size`; rodar `php scripts/sync_metadados_producao.php --dimensao=empresas`
+  e `--dimensao=unidades` (dry-run) e conferir os resumos.
+
+**Fase 5.1A.1 — reconciliação manual das 3 empresas locais abreviadas (2026-09-08).** O dry-run
+real contra `RHMADEPLANT` confirmou **9 empresas oficiais** e mostrou 3 empresas locais que
+claramente são empresas oficiais mas não foram adotadas automaticamente (nome local abreviado; a
+adoção automática exige correspondência EXATA, nunca aproximação). Decisão aprovada, aplicada por
+migration dedicada **fora do algoritmo genérico** (nada de fuzzy matching ou regra Madeplant em
+`planejar()`): `2026-09-08-reconciliar-empresas-locais-metadados.sql` (+rollback) — procedure com
+transação única + `EXIT HANDLER`/`RESIGNAL`, guardas por `SIGNAL` (os 3 ids existem; nenhum já tem
+código diferente do aprovado; nenhum código-alvo pertence a outro id), UPDATE só nas linhas ainda
+sem código (idempotente), sem tocar `id`/FKs/`nome`/`slug`/`ativo`. Mapa: `id 2 → 0005`
+(MADEPLANT TRANSPORTES), `id 3 → 0007` (MADEPLANT CSC), `id 4 → 0008` (PROSPECTA SERVICOS).
+Preenche `origem_metadados='RHMADEPLANT'`; **não** preenche `sincronizado_em` (nenhuma sync de
+dados ocorreu — `razao_social` continua NULL até a 1ª sincronização real). Após a migration,
+`planejar()` prevê: `0001/0002 ADOTAR_EXISTENTE`, `0003/0004/0006/0009 INSERIR_NOVA`,
+`0005/0007/0008 ATUALIZAR_EXISTENTE`, **`locais_sem_correspondencia` vazio**. `0004` e `0006` têm
+a MESMA razão social (`CELSO LUIZ MELLO CORREA`) — confirma que a identidade oficial é
+exclusivamente `codigo_empresa`, nunca o nome. Ordem de aplicação em produção: esta migration
+**depois** de `2026-09-04-empresas-unidades-metadados.sql`. Não aplicada em produção nesta etapa.
+
 **Continuam intocados/pendentes de autorização futura**: `Colaborador::updateRhData()`, import
 XLSX, `usuario_colaboradores`/autenticação (risco de `UNIQUE` em `colaborador_id` sob readmissão
 continua registrado, não tratado), vínculo candidato→colaborador em
@@ -277,3 +382,12 @@ continua registrado, não tratado), vínculo candidato→colaborador em
 pelo saneamento, saneamento dos 2 `CONFLITO`/24 `SEM_CORRESPONDENCIA` restantes, configuração do
 n8n (webhook de disparo + agendamento recorrente) e das chaves `metadados_sync.orchestrator_*` em
 produção, migração de telas legadas para a nova fonte, e descontinuação do cadastro duplicado.
+
+**Follow-ups abertos da Fase 5.1A**: aplicar em produção, nesta ordem, as 3 migrations
+`2026-09-04-*` (empresas-unidades → colaboradores-codigos-oficiais → sync-execucoes-dimensao; a de
+códigos oficiais **antes** de qualquer deploy do código, senão a sincronização de colaboradores
+quebra por coluna ausente) e **depois** a `2026-09-08-reconciliar-empresas-locais-metadados.sql`
+(5.1A.1); validar as queries de `RHEMPRESAS`/`RHUNIDADES` na máquina interna (status oficial,
+volume); autorizar (ou não) o `--enviar` do sender para as novas dimensões; próxima fase:
+reconstrução definitiva de Setores/Cargos/Centros de Custo a partir dos códigos oficiais agora
+guardados, e migração das telas de Empresas/Unidades para consulta oficial.

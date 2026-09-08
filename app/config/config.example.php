@@ -23,11 +23,18 @@ return [
     ],
     // Sincronização segura RHMADEPLANT -> Portal RH em produção (Fase 4): segredo HMAC
     // compartilhado entre scripts/sync_metadados_producao.php (sender, roda na rede Madeplant) e
-    // o endpoint receptor /internal/metadados/colaboradores/sync. Gere com algo como
-    // bin2hex(random_bytes(32)) e configure o MESMO valor nos dois lados, só em local.php.
+    // os endpoints receptores /internal/metadados/{colaboradores|empresas|unidades}/sync. Gere
+    // com algo como bin2hex(random_bytes(32)) e configure o MESMO valor nos dois lados, só em
+    // local.php. Os endpoints de empresas/unidades (Fase 5.1A) são derivados de `endpoint_url`
+    // trocando o segmento da dimensão; use `endpoints` só se precisar sobrescrever algum.
     'metadados_sync' => [
         'shared_secret' => '',
         'endpoint_url' => 'https://portalrh.appmadeplant.com/internal/metadados/colaboradores/sync',
+        // 'endpoints' => [
+        //     'empresas' => 'https://portalrh.appmadeplant.com/internal/metadados/empresas/sync',
+        //     'unidades' => 'https://portalrh.appmadeplant.com/internal/metadados/unidades/sync',
+        //     'colaboradores' => 'https://portalrh.appmadeplant.com/internal/metadados/colaboradores/sync',
+        // ],
         'max_batch_size' => 2000,
         'replay_window_seconds' => 300
     ],

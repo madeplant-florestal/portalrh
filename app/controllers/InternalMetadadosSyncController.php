@@ -1,9 +1,13 @@
 <?php
 
 /**
- * Endpoint de finalidade única: receber o lote de sincronização METADADOS enviado por
+ * Endpoints de finalidade única: receber os lotes de sincronização METADADOS enviados por
  * scripts/sync_metadados_producao.php de dentro da rede Madeplant (ver
- * docs/claude/roadmap-tecnico.md, Fase 4 — sincronização segura de produção).
+ * docs/claude/roadmap-tecnico.md, Fase 4 — sincronização segura de produção; Fase 5.1A —
+ * dimensões Empresas/Unidades). Uma rota POST por dimensão:
+ *   /internal/metadados/colaboradores/sync  -> MetadadosSyncIngestService
+ *   /internal/metadados/empresas/sync       -> MetadadosDimensaoSyncIngestService('empresas')
+ *   /internal/metadados/unidades/sync       -> MetadadosDimensaoSyncIngestService('unidades')
  *
  * Sem sessão, sem CSRF de formulário — autenticação é inteiramente via assinatura HMAC
  * (MetadadosSyncSignature), verificada dentro de MetadadosSyncIngestService. Fora do gate de
@@ -16,20 +20,40 @@ class InternalMetadadosSyncController extends Controller
 {
     public function sync(): void
     {
+        $this->processar('colaboradores', static fn () => new MetadadosSyncIngestService());
+    }
+
+    /** Fase 5.1A — dimensão EMPRESAS (RHEMPRESAS). */
+    public function empresas(): void
+    {
+        $this->processar('empresas', static fn () => new MetadadosDimensaoSyncIngestService('empresas'));
+    }
+
+    /** Fase 5.1A — dimensão UNIDADES (RHUNIDADES). */
+    public function unidades(): void
+    {
+        $this->processar('unidades', static fn () => new MetadadosDimensaoSyncIngestService('unidades'));
+    }
+
+    /**
+     * @param callable():object $fabricaServico Fábrica do serviço de ingestão — recebe
+     *        receberLote(string $corpoBruto, array $headers): array{http_status:int, body:array}.
+     */
+    private function processar(string $dimensao, callable $fabricaServico): void
+    {
         header('Content-Type: application/json; charset=utf-8');
 
         try {
             $corpoBruto = (string)file_get_contents('php://input');
             $headers = $this->readHeaders();
 
-            $service = new MetadadosSyncIngestService();
-            $resultado = $service->receberLote($corpoBruto, $headers);
+            $resultado = $fabricaServico()->receberLote($corpoBruto, $headers);
 
             http_response_code($resultado['http_status']);
             echo json_encode($resultado['body'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         } catch (Throwable $e) {
             // Nunca expor stack trace ao chamador — só loga internamente.
-            Logger::exception($e, 'ERROR', ['endpoint' => 'internal/metadados/colaboradores/sync']);
+            Logger::exception($e, 'ERROR', ['endpoint' => "internal/metadados/{$dimensao}/sync"]);
             http_response_code(500);
             echo json_encode(['ok' => false, 'error' => 'Falha interna ao processar a sincronização.'], JSON_UNESCAPED_UNICODE);
         }

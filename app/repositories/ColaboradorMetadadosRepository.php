@@ -9,8 +9,8 @@ class ColaboradorMetadadosRepository
     private const COMPARABLE_FIELDS = [
         'identificador', 'cpf', 'nome', 'empresa', 'nascimento', 'admissao', 'cargo',
         'demissao', 'motivo_rescisao_codigo', 'motivo_rescisao_descricao', 'unidade',
-        'setor', 'centro_custo', 'ativo', 'salario_atual', 'data_inicio_cargo',
-        'atualizado_em_origem',
+        'setor', 'centro_custo', 'codigo_setor', 'codigo_cargo', 'codigo_centro_custo',
+        'ativo', 'salario_atual', 'data_inicio_cargo', 'atualizado_em_origem',
     ];
 
     private PDO $pdo;
@@ -71,8 +71,9 @@ class ColaboradorMetadadosRepository
                 identificador, codigo_empresa, codigo_unidade, numero_contrato, codigo_pessoa,
                 cpf, nome, empresa, nascimento, admissao, cargo, demissao,
                 motivo_rescisao_codigo, motivo_rescisao_descricao, unidade, setor, centro_custo,
+                codigo_setor, codigo_cargo, codigo_centro_custo,
                 ativo, origem_metadados, salario_atual, data_inicio_cargo, atualizado_em_origem
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
         );
         $stmt->execute([
             (string)$row['identificador'],
@@ -92,6 +93,9 @@ class ColaboradorMetadadosRepository
             self::nullableString($row['unidade'] ?? null),
             self::nullableString($row['setor'] ?? null),
             self::nullableString($row['centro_custo'] ?? null),
+            self::nullableString($row['codigo_setor'] ?? null),
+            self::nullableString($row['codigo_cargo'] ?? null),
+            self::nullableString($row['codigo_centro_custo'] ?? null),
             array_key_exists('ativo', $row) && $row['ativo'] !== null ? (int)$row['ativo'] : null,
             $origem,
             self::nullableString($row['salario_atual'] ?? null),
@@ -107,7 +111,9 @@ class ColaboradorMetadadosRepository
                 identificador = ?, codigo_pessoa = ?, cpf = ?, nome = ?, empresa = ?,
                 nascimento = ?, admissao = ?, cargo = ?, demissao = ?,
                 motivo_rescisao_codigo = ?, motivo_rescisao_descricao = ?,
-                unidade = ?, setor = ?, centro_custo = ?, ativo = ?, origem_metadados = ?,
+                unidade = ?, setor = ?, centro_custo = ?,
+                codigo_setor = ?, codigo_cargo = ?, codigo_centro_custo = ?,
+                ativo = ?, origem_metadados = ?,
                 salario_atual = ?, data_inicio_cargo = ?, atualizado_em_origem = ?
              WHERE id = ?'
         );
@@ -126,6 +132,9 @@ class ColaboradorMetadadosRepository
             self::nullableString($row['unidade'] ?? null),
             self::nullableString($row['setor'] ?? null),
             self::nullableString($row['centro_custo'] ?? null),
+            self::nullableString($row['codigo_setor'] ?? null),
+            self::nullableString($row['codigo_cargo'] ?? null),
+            self::nullableString($row['codigo_centro_custo'] ?? null),
             array_key_exists('ativo', $row) && $row['ativo'] !== null ? (int)$row['ativo'] : null,
             $origem,
             self::nullableString($row['salario_atual'] ?? null),

@@ -40,21 +40,13 @@ class MetadadosSyncIngestService
         $janela = (int)($config['replay_window_seconds'] ?? 300);
         $maxBatch = (int)($config['max_batch_size'] ?? 2000);
 
-        $timestamp = self::header($headers, MetadadosSyncSignature::HEADER_TIMESTAMP);
-        $assinatura = self::header($headers, MetadadosSyncSignature::HEADER_SIGNATURE);
-
-        $verificacao = MetadadosSyncSignature::verificar($timestamp, $assinatura, $corpoBruto, $segredo, $janela);
-        if (!$verificacao['ok']) {
-            Logger::warning('Sincronização METADADOS recusada: falha de autenticação', ['motivo' => $verificacao['motivo']]);
-            return ['http_status' => 401, 'body' => ['ok' => false, 'error' => 'Autenticação inválida.']];
+        // HMAC + janela de replay + decode JSON — comum às três dimensões (ver MetadadosSyncEnvelope).
+        $envelope = MetadadosSyncEnvelope::abrir($corpoBruto, $headers, $segredo, $janela);
+        if (!$envelope['ok']) {
+            return ['http_status' => $envelope['http_status'], 'body' => $envelope['body']];
         }
 
-        $payload = json_decode($corpoBruto, true);
-        if (!is_array($payload) || json_last_error() !== JSON_ERROR_NONE) {
-            return ['http_status' => 400, 'body' => ['ok' => false, 'error' => 'JSON inválido.']];
-        }
-
-        $validacao = MetadadosSyncRequestValidator::validar($payload, $maxBatch);
+        $validacao = MetadadosSyncRequestValidator::validar($envelope['payload'], $maxBatch);
         if (!$validacao['ok']) {
             Logger::warning('Sincronização METADADOS recusada: payload inválido', ['erros' => $validacao['errors']]);
             return ['http_status' => 400, 'body' => ['ok' => false, 'error' => 'Payload inválido.', 'detalhes' => $validacao['errors']]];
@@ -69,6 +61,7 @@ class MetadadosSyncIngestService
         } catch (Throwable $e) {
             Logger::exception($e, 'ERROR', ['endpoint' => 'internal/metadados/colaboradores/sync']);
             $this->registrarHistorico($correlacaoId, MetadadosSyncExecucaoRepository::STATUS_FALHA, [
+                'dimensao' => 'colaboradores',
                 'origem' => $validacao['origem'],
                 'iniciado_em' => $inicio->format('Y-m-d H:i:s'),
                 'concluido_em' => (new DateTimeImmutable())->format('Y-m-d H:i:s'),
@@ -84,6 +77,7 @@ class MetadadosSyncIngestService
             $correlacaoId,
             $erros === 0 ? MetadadosSyncExecucaoRepository::STATUS_SUCESSO : MetadadosSyncExecucaoRepository::STATUS_SUCESSO_COM_ERROS,
             [
+                'dimensao' => 'colaboradores',
                 'origem' => $resumo['origem'] ?? $validacao['origem'],
                 'iniciado_em' => $inicio->format('Y-m-d H:i:s'),
                 'concluido_em' => (new DateTimeImmutable())->format('Y-m-d H:i:s'),
@@ -128,15 +122,5 @@ class MetadadosSyncIngestService
                 'erro' => $e->getMessage(),
             ]);
         }
-    }
-
-    private static function header(array $headers, string $name): ?string
-    {
-        foreach ($headers as $key => $value) {
-            if (strcasecmp((string)$key, $name) === 0) {
-                return (string)$value;
-            }
-        }
-        return null;
     }
 }

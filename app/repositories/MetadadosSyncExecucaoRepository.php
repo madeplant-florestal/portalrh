@@ -24,7 +24,7 @@ class MetadadosSyncExecucaoRepository
 
     /** Colunas que registrarResultado() aceita atualizar/inserir — whitelist, nunca vem do request. */
     private const CAMPOS_RESULTADO = [
-        'origem', 'iniciado_em', 'concluido_em', 'registros_recebidos', 'inseridos',
+        'dimensao', 'origem', 'iniciado_em', 'concluido_em', 'registros_recebidos', 'inseridos',
         'atualizados', 'inalterados', 'erros', 'hash_lote', 'mensagem_tecnica',
     ];
 
@@ -44,14 +44,14 @@ class MetadadosSyncExecucaoRepository
      * Cria a linha da solicitação de sincronização manual disparada pelo Dashboard.
      * @return int id da linha criada.
      */
-    public function criarSolicitacao(string $correlacaoId, ?int $usuarioId, string $gatilho): int
+    public function criarSolicitacao(string $correlacaoId, ?int $usuarioId, string $gatilho, string $dimensao = 'colaboradores'): int
     {
         $stmt = $this->pdo->prepare(
             "INSERT INTO metadados_sync_execucoes
-                (correlacao_id, gatilho, solicitado_por_usuario_id, status, solicitado_em)
-             VALUES (?, ?, ?, ?, NOW())"
+                (correlacao_id, gatilho, dimensao, solicitado_por_usuario_id, status, solicitado_em)
+             VALUES (?, ?, ?, ?, ?, NOW())"
         );
-        $stmt->execute([$correlacaoId, $gatilho, $usuarioId, self::STATUS_SOLICITADA]);
+        $stmt->execute([$correlacaoId, $gatilho, $dimensao, $usuarioId, self::STATUS_SOLICITADA]);
         return (int)$this->pdo->lastInsertId();
     }
 

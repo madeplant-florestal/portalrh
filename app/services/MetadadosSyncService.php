@@ -36,6 +36,11 @@ class MetadadosSyncService
      * (727 contratos) com 100% de correspondência técnica em cada um — a ressalva de amostra
      * pequena do parágrafo anterior está resolvida, nenhuma correção pendente.
      *
+     * codigo_setor/codigo_cargo/codigo_centro_custo (Fase 5.1A) vêm direto de RHCONTRATOS.SETOR/
+     * CARGO/CENTROCUSTO1 — sem JOIN novo, mesma tabela base. São os CÓDIGOS oficiais, guardados
+     * para a reconstrução das dimensões Setor/Cargo/Centro de Custo na fase seguinte; as colunas
+     * textuais (setor/cargo/centro_custo, via DESCRICAO40) continuam intactas nesta fase.
+     *
      * salario_atual e data_inicio_cargo (Fase 3.1) vêm de RHCONTRATOS.SALARIOCONTRATUAL e
      * RHCONTRATOS.DATAULTALTCARGO — sem JOIN adicional, mesma tabela já consultada. Ver
      * investigação dedicada: SALARIOMES é numericamente idêntico a SALARIOCONTRATUAL em 100%
@@ -62,6 +67,9 @@ class MetadadosSyncService
             unid.DESCRICAO40                               AS unidade,
             setor.DESCRICAO40                               AS setor,
             cc.DESCRICAO40                                  AS centro_custo,
+            ctr.SETOR                                      AS codigo_setor,
+            ctr.CARGO                                      AS codigo_cargo,
+            ctr.CENTROCUSTO1                               AS codigo_centro_custo,
             CASE WHEN ctr.DATARESCISAO IS NULL THEN 1 ELSE 0 END AS ativo,
             ctr.SALARIOCONTRATUAL                          AS salario_atual,
             CONVERT(char(10), ctr.DATAULTALTCARGO, 23)     AS data_inicio_cargo
@@ -126,6 +134,9 @@ class MetadadosSyncService
             'unidade' => $row['unidade'] ?? null,
             'setor' => $row['setor'] ?? null,
             'centro_custo' => $row['centro_custo'] ?? null,
+            'codigo_setor' => $row['codigo_setor'] ?? null,
+            'codigo_cargo' => $row['codigo_cargo'] ?? null,
+            'codigo_centro_custo' => $row['codigo_centro_custo'] ?? null,
             'ativo' => array_key_exists('ativo', $row) ? (int)$row['ativo'] : null,
             'salario_atual' => isset($row['salario_atual']) && $row['salario_atual'] !== '' ? (string)$row['salario_atual'] : null,
             'data_inicio_cargo' => $row['data_inicio_cargo'] ?? null,

@@ -104,6 +104,17 @@ try {
     }
     $assert(strpos(json_encode($r1['body']), '11122233344') === false, 'Caso 1: resposta não deveria conter CPF em nenhum lugar.');
 
+    // Caso 1b) O histórico da sincronização de colaboradores é registrado com dimensao='colaboradores'.
+    if ($execTableExists) {
+        $temDimensao = (int)$pdo->query(
+            "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'metadados_sync_execucoes' AND COLUMN_NAME = 'dimensao'"
+        )->fetchColumn() > 0;
+        if ($temDimensao) {
+            $dim = $pdo->query("SELECT dimensao FROM metadados_sync_execucoes WHERE id > {$execMaxIdInicial} ORDER BY id DESC LIMIT 1")->fetchColumn();
+            $assert($dim === 'colaboradores', 'Caso 1b: histórico da sincronização de colaboradores deveria registrar dimensao=colaboradores.');
+        }
+    }
+
     // 2) Segunda importação idêntica -> idempotente, 0 inseridos/atualizados, 2 inalterados.
     $assinado2 = assinarLote($payloadValido, $segredo);
     $r2 = $service->receberLote($assinado2['corpo'], $assinado2['headers'], $config);

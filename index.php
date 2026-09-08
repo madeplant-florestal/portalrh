@@ -72,6 +72,10 @@ try {
     // InternalMetadadosSyncController e docs/claude/roadmap-tecnico.md (Fase 4 - sincronização
     // segura de produção). Fora do prefixo /admin de propósito: não é tela administrativa.
     $router->post('/internal/metadados/colaboradores/sync', [InternalMetadadosSyncController::class, 'sync']);
+    // Fase 5.1A — Estrutura Organizacional: Empresas (RHEMPRESAS) e Unidades (RHUNIDADES) como
+    // dimensões oficiais sincronizadas. Mesma auth HMAC, mesmo padrão de resposta.
+    $router->post('/internal/metadados/empresas/sync', [InternalMetadadosSyncController::class, 'empresas']);
+    $router->post('/internal/metadados/unidades/sync', [InternalMetadadosSyncController::class, 'unidades']);
 
     $router->get('/admin/recruitment-webhooks', [AdminRecruitmentWebhooksController::class, 'index']);
     $router->post('/admin/recruitment-webhooks/settings/save', [AdminRecruitmentWebhooksController::class, 'saveSetting']);

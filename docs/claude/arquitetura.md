@@ -148,8 +148,13 @@ Regras de bloqueio e exceções pontuais aprovadas: ver `CLAUDE.md` §3.
 
 Usado em `Setor`, `CargoSetor`, `Empresa` (parcialmente), webhooks de recrutamento e a integração
 com o METADADOS (`ColaboradorMetadadosRepository`/`MetadadosSyncService`/
-`ColaboradorMetadadosReconciliationService`, ver `roadmap-tecnico.md`). Fluxo de uma escrita (ex.:
-criar Setor):
+`ColaboradorMetadadosReconciliationService`; a Fase 5.1A acrescentou `EmpresaMetadadosRepository`/
+`EmpresaMetadadosSyncService`, `UnidadeMetadadosRepository`/`UnidadeMetadadosSyncService` e as
+tabelas `unidades` + colunas `codigo_empresa/razao_social` em `empresas`; ver `roadmap-tecnico.md`).
+Endpoints internos máquina-a-máquina (auth HMAC, fora do gate `/admin`):
+`POST /internal/metadados/{colaboradores|empresas|unidades}/sync` — `InternalMetadadosSyncController`,
+com `MetadadosSyncEnvelope` (HMAC + replay + decode, `app/core/`) compartilhado. Fluxo de uma
+escrita (ex.: criar Setor):
 
 ```
 Controller
@@ -184,6 +189,13 @@ Controller
   assumir que uma coluna não existe, verifique nos três lugares.**
 - Tabela hub: `colaboradores` (FK obrigatória para `cargos`, opcional para `empresas`/`setores`;
   ganhou `metadados_id` opcional na integração com o METADADOS, ver `roadmap-tecnico.md`).
+- Estrutura Organizacional em transição para o METADADOS (Fase 5.1A, ver `roadmap-tecnico.md`):
+  `empresas` ganhou `codigo_empresa` (`UNIQUE`, identidade oficial) + `razao_social` +
+  `origem_metadados` + `sincronizado_em`, sem perder `nome`/`slug`/`id` (identidade legada e
+  referência das FKs); `unidades` (nova) = `(codigo_empresa, codigo_unidade)` + FK `empresa_id →
+  empresas(id)` `ON DELETE RESTRICT`; `colaboradores_metadados` ganhou `codigo_setor`/
+  `codigo_cargo`/`codigo_centro_custo` ao lado das colunas textuais existentes. Setores/Cargos/
+  Centros de Custo **ainda não** reconstruídos.
 - Campos sensíveis (justificativas/contexto salarial em `solicitacoes_vaga` e
   `movimentacoes_pessoal`) são colunas `*_encrypted` via `Cipher` (AES-256-CBC), descriptografadas
   na leitura.

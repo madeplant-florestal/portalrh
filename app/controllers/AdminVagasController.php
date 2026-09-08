@@ -14,7 +14,11 @@ class AdminVagasController extends Controller
     {
         Auth::requireRole(['admin', 'rh', 'viewer']);
         $vagas = Vaga::all();
-        $this->view->render('admin/vagas/index', ['vagas' => $vagas], 'layouts/admin');
+        $this->view->render('admin/vagas/index', [
+            'vagas' => $vagas,
+            'flashSuccess' => Security::sanitizeString($_GET['ok'] ?? ''),
+            'flashError' => Security::sanitizeString($_GET['erro'] ?? ''),
+        ], 'layouts/admin');
     }
 
     public function create(): void
@@ -88,6 +92,27 @@ class AdminVagasController extends Controller
         if (!Security::csrfCheck($_POST['csrf'] ?? '')) { http_response_code(400); echo 'CSRF inválido'; return; }
         Vaga::delete((int)$id);
         redirect('/admin/vagas');
+    }
+
+    /**
+     * Publica um rascunho de vaga (originado de Solicitação de Vaga aprovada): `ativo = 1`,
+     * `publicada_em` carimbado. A partir daí a vaga aparece na página pública. Idempotente.
+     */
+    public function publicar(string $id): void
+    {
+        Auth::requireRole(['admin', 'rh']);
+        if (!Security::csrfCheck($_POST['csrf'] ?? '')) { http_response_code(400); echo 'CSRF inválido'; return; }
+
+        $result = (new SolicitacaoVagaPublicacaoService())->publicar(
+            (int)$id,
+            (int)($_SESSION['user_id'] ?? 0) ?: null,
+            Security::clientIp()
+        );
+        if (!($result['ok'] ?? false)) {
+            redirect('/admin/vagas?erro=' . urlencode((string)($result['error'] ?? 'Falha ao publicar a vaga.')));
+        }
+        $msg = ($result['ja_publicada'] ?? false) ? 'Esta vaga já estava publicada.' : 'Vaga publicada. Já está no site.';
+        redirect('/admin/vagas?ok=' . urlencode($msg));
     }
 
     private function assertEmpresaValida($empresaId): void

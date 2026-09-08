@@ -16,7 +16,11 @@ ORM) para o grupo Madeplant. Cobre três domínios:
    `cargo_setores`) e `colaboradores` (tabela hub do sistema).
 3. **Fluxos de aprovação de RH com assinatura eletrônica** — `SolicitacaoVaga` (abertura de vaga,
    aprovação líder + RH) e `MovimentacaoPessoal` (promoções/transferências/desligamentos, com
-   assinatura RH), além de avaliações de desempenho e gestão de benefícios.
+   assinatura RH), além de avaliações de desempenho e gestão de benefícios. A partir de 2026-09-08
+   a solicitação aprovada pelo RH **origina automaticamente** a vaga pública em rascunho
+   (`vagas.solicitacao_vaga_id` UNIQUE, `SolicitacaoVagaPublicacaoService`), que o RH publica em um
+   clique — o líder autorizado (`usuario_colaboradores.pode_solicitar_vaga`) usa só o formulário de
+   Solicitação de Vaga, nunca o cadastro manual. Ver `SOLICITACAO_VAGA_PUBLICACAO.md`.
 
 Também expõe uma API de webhooks de recrutamento (`app/services/RecruitmentWebhook*`) e uma
 central administrativa completa (`/admin/**`).

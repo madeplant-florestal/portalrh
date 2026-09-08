@@ -66,7 +66,14 @@ class Vaga
     public static function update(int $id, array $data): bool
     {
         RecruitmentWebhookSchemaService::ensureSchema();
-        $sql = 'UPDATE vagas SET titulo=?, descricao=?, requisitos=?, area=?, local=?, empresa_id=?, ativo=? WHERE id=?';
+        // `publicada_em` é carimbado na primeira vez que a vaga vai ao ar (ativo = 1), qualquer
+        // que seja o caminho (publicação do rascunho ou edição manual). Nunca é apagado ao
+        // desativar — responde "quando foi publicada?" na auditoria.
+        $ativo = (int)$data['ativo'];
+        $sql = 'UPDATE vagas
+                SET titulo=?, descricao=?, requisitos=?, area=?, local=?, empresa_id=?, ativo=?,
+                    publicada_em = CASE WHEN ? = 1 THEN COALESCE(publicada_em, NOW()) ELSE publicada_em END
+                WHERE id=?';
         $stmt = Database::conn()->prepare($sql);
         return $stmt->execute([
             $data['titulo'],
@@ -75,7 +82,8 @@ class Vaga
             $data['area'],
             $data['local'],
             self::normalizeEmpresaId($data['empresa_id'] ?? null),
-            (int)$data['ativo'],
+            $ativo,
+            $ativo,
             $id
         ]);
     }

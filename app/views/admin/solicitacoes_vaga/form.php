@@ -447,6 +447,33 @@ $payload = [
         </div>
       </section>
 
+      <?php
+      $vagaVinculada = $vagaVinculada ?? null;
+      $solicitacaoAprovada = in_array((string)($record['status_fluxo'] ?? ''), ['aprovada', 'concluida'], true);
+      $podeGerarVaga = $isShow && $canEditRh && $solicitacaoAprovada && $vagaVinculada === null;
+      ?>
+      <section class="rounded-xl border bg-white p-5 shadow-sm">
+        <h3 class="text-lg font-semibold text-ctpblue">Vaga pública</h3>
+        <?php if ($vagaVinculada !== null): ?>
+          <?php $vagaPublicada = (int)($vagaVinculada['ativo'] ?? 0) === 1; ?>
+          <p class="mt-2 text-sm text-gray-600">
+            Esta solicitação originou a vaga
+            <a href="<?= $base ?>/admin/vagas" class="font-semibold text-ctgreen hover:text-ctdark">#<?= (int)$vagaVinculada['id'] ?></a>,
+            atualmente <strong><?= $vagaPublicada ? 'publicada no site' : 'em rascunho (aguardando publicação pelo RH)' ?></strong>.
+          </p>
+        <?php elseif ($solicitacaoAprovada): ?>
+          <p class="mt-2 text-sm text-gray-600">A vaga ainda não foi gerada.</p>
+          <?php if ($podeGerarVaga): ?>
+            <form action="<?= $base ?>/admin/solicitacoes-vaga/<?= (int)$record['id'] ?>/gerar-vaga" method="post" class="mt-3">
+              <input type="hidden" name="csrf" value="<?= Security::e($csrf) ?>">
+              <button class="rounded-lg bg-ctgreen px-4 py-2 text-sm font-medium text-white hover:bg-ctdark">Gerar rascunho da vaga</button>
+            </form>
+          <?php endif; ?>
+        <?php else: ?>
+          <p class="mt-2 text-sm text-gray-600">A vaga em rascunho é gerada automaticamente quando a solicitação for aprovada pelo RH.</p>
+        <?php endif; ?>
+      </section>
+
       <section class="grid gap-6 xl:grid-cols-2">
         <div class="rounded-xl border bg-white p-5 shadow-sm">
           <h3 class="text-lg font-semibold text-ctpblue">1. Identificação da vaga</h3>

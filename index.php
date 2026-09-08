@@ -59,6 +59,10 @@ try {
     $router->post('/admin/colaboradores/importar', [AdminColaboradoresController::class, 'import']);
     $router->get('/admin/colaboradores/rh/editar/{id}', [AdminColaboradoresController::class, 'editRh']);
     $router->post('/admin/colaboradores/rh/editar/{id}', [AdminColaboradoresController::class, 'updateRh']);
+    // Acesso / Liderança do colaborador (sprint Solicitação/Publicação de Vagas): vincula o
+    // usuário de login e define os papéis do Portal (é líder / pode solicitar vaga / líder imediato).
+    $router->get('/admin/colaboradores/{id}/acesso', [AdminColaboradoresController::class, 'acesso']);
+    $router->post('/admin/colaboradores/{id}/acesso', [AdminColaboradoresController::class, 'updateAcesso']);
 
     $router->get('/admin/avaliacoes', [AdminAvaliacoesController::class, 'index']);
     $router->get('/admin/avaliacoes/novo', [AdminAvaliacoesController::class, 'create']);
@@ -114,6 +118,9 @@ try {
     $router->get('/admin/vagas/editar/{id}', [AdminVagasController::class, 'edit']);
     $router->post('/admin/vagas/editar/{id}', [AdminVagasController::class, 'update']);
     $router->post('/admin/vagas/excluir/{id}', [AdminVagasController::class, 'delete']);
+    // Publica um rascunho de vaga (originado de Solicitação de Vaga aprovada) — a partir daí
+    // aparece na página pública.
+    $router->post('/admin/vagas/{id}/publicar', [AdminVagasController::class, 'publicar']);
     $router->get('/admin/solicitacoes-vaga', [AdminSolicitacoesVagaController::class, 'index']);
     $router->get('/admin/solicitacoes-vaga/kanban', [AdminSolicitacoesVagaKanbanController::class, 'index']);
     $router->get('/admin/solicitacoes-vaga/nova', [AdminSolicitacoesVagaController::class, 'create']);
@@ -123,6 +130,8 @@ try {
     $router->post('/admin/solicitacoes-vaga/{id}/aprovar-rh', [AdminSolicitacoesVagaController::class, 'approveRh']);
     $router->post('/admin/solicitacoes-vaga/{id}/controle-rh', [AdminSolicitacoesVagaController::class, 'updateRh']);
     $router->post('/admin/solicitacoes-vaga/{id}/anotacao', [AdminSolicitacoesVagaController::class, 'addNota']);
+    // Rede de segurança / disparo manual da geração do rascunho da vaga (solicitação já aprovada).
+    $router->post('/admin/solicitacoes-vaga/{id}/gerar-vaga', [AdminSolicitacoesVagaController::class, 'gerarVaga']);
     $router->get('/admin/movimentacoes-pessoal', [AdminMovimentacoesPessoalController::class, 'index']);
     $router->get('/admin/movimentacoes-pessoal/nova', [AdminMovimentacoesPessoalController::class, 'create']);
     $router->post('/admin/movimentacoes-pessoal/nova', [AdminMovimentacoesPessoalController::class, 'store']);

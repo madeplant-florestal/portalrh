@@ -9,6 +9,7 @@ $originalUserLink = null;
 $userLinkTouched = false;
 $adminUser = null;
 $cleanup = [
+    'vagas' => [],
     'centros' => [],
     'colaboradores' => [],
     'cargos' => [],
@@ -124,7 +125,7 @@ try {
         if ($originalUserLink) {
             $pdo->prepare(
                 "UPDATE usuario_colaboradores
-                 SET colaborador_id = ?, is_gestor = 1, is_rh = ?, ativo = 1
+                 SET colaborador_id = ?, is_gestor = 1, is_rh = ?, pode_solicitar_vaga = 1, ativo = 1
                  WHERE id = ?"
             )->execute([
                 (int)$candidate['id'],
@@ -133,8 +134,8 @@ try {
             ]);
         } else {
             $pdo->prepare(
-                "INSERT INTO usuario_colaboradores (usuario_id, colaborador_id, is_gestor, is_rh, lider_colaborador_id, ativo)
-                 VALUES (?, ?, 1, ?, NULL, 1)"
+                "INSERT INTO usuario_colaboradores (usuario_id, colaborador_id, is_gestor, is_rh, pode_solicitar_vaga, lider_colaborador_id, ativo)
+                 VALUES (?, ?, 1, ?, 1, NULL, 1)"
             )->execute([
                 (int)$adminUser['id'],
                 (int)$candidate['id'],
@@ -215,6 +216,37 @@ try {
         throw new RuntimeException('A criação da solicitação não retornou um ID válido.');
     }
 
+    // Segurança: o solicitante persistido é SEMPRE o usuário autenticado (parâmetro do backend),
+    // nunca um id vindo do formulário.
+    $solicitanteRow = (int)$pdo->query('SELECT solicitante_usuario_id FROM solicitacoes_vaga WHERE id = ' . (int)$createdId)->fetchColumn();
+    if ($solicitanteRow !== (int)$adminUser['id']) {
+        throw new RuntimeException('O solicitante deveria ser o usuário autenticado.');
+    }
+    $payloadAdulterado = array_merge($payload, ['solicitante_usuario_id' => 999999, 'gestor_solicitante_colaborador_id' => (int)$candidate['id']]);
+    $idAdulterado = SolicitacaoVaga::create($payloadAdulterado, (int)$adminUser['id'], '127.0.0.1');
+    $solicitanteAdulterado = (int)$pdo->query('SELECT solicitante_usuario_id FROM solicitacoes_vaga WHERE id = ' . (int)$idAdulterado)->fetchColumn();
+    $pdo->prepare('DELETE FROM vagas WHERE solicitacao_vaga_id = ?')->execute([$idAdulterado]);
+    $pdo->prepare('DELETE FROM solicitacoes_vaga WHERE id = ?')->execute([$idAdulterado]);
+    if ($solicitanteAdulterado !== (int)$adminUser['id']) {
+        throw new RuntimeException('Tentativa de adulterar o solicitante pelo POST deveria ter sido ignorada.');
+    }
+
+    // Autorização: sem `pode_solicitar_vaga`, a criação é rejeitada no backend (independe da tela).
+    $linkGestor = $pdo->prepare('SELECT id FROM usuario_colaboradores WHERE colaborador_id = ? LIMIT 1');
+    $linkGestor->execute([(int)$candidate['id']]);
+    $linkGestorId = (int)$linkGestor->fetchColumn();
+    $pdo->prepare('UPDATE usuario_colaboradores SET pode_solicitar_vaga = 0 WHERE id = ?')->execute([$linkGestorId]);
+    $rejeitou = false;
+    try {
+        SolicitacaoVaga::create($payload, (int)$adminUser['id'], '127.0.0.1');
+    } catch (\InvalidArgumentException $e) {
+        $rejeitou = stripos($e->getMessage(), 'autorizado') !== false;
+    }
+    $pdo->prepare('UPDATE usuario_colaboradores SET pode_solicitar_vaga = 1 WHERE id = ?')->execute([$linkGestorId]);
+    if (!$rejeitou) {
+        throw new RuntimeException('create() deveria rejeitar quando o gestor não tem pode_solicitar_vaga.');
+    }
+
     $record = SolicitacaoVaga::findAccessible($createdId, (int)$adminUser['id'], (string)$adminUser['role'], (int)$adminUser['is_supervisor'] === 1);
     if (!$record) {
         throw new RuntimeException('A solicitação criada não pôde ser recuperada.');
@@ -239,6 +271,56 @@ try {
         throw new RuntimeException('Falha na aprovação do RH: ' . ($rhResult['error'] ?? 'erro desconhecido'));
     }
 
+    // Sprint Solicitação/Publicação de Vagas: a aprovação do RH gera automaticamente o RASCUNHO
+    // da vaga pública (ativo=0, invisível), vinculado à solicitação.
+    $vagaGerada = $pdo->prepare('SELECT * FROM vagas WHERE solicitacao_vaga_id = ? LIMIT 1');
+    $vagaGerada->execute([$createdId]);
+    $vagaRow = $vagaGerada->fetch(PDO::FETCH_ASSOC);
+    if (!$vagaRow) {
+        throw new RuntimeException('A aprovação do RH deveria ter gerado o rascunho da vaga.');
+    }
+    $cleanup['vagas'][] = (int)$vagaRow['id'];
+    if ((int)$vagaRow['ativo'] !== 0 || $vagaRow['publicada_em'] !== null) {
+        throw new RuntimeException('A vaga gerada deveria nascer em rascunho (ativo=0, publicada_em NULL).');
+    }
+    if ((int)($rhResult['vaga_id'] ?? 0) !== (int)$vagaRow['id']) {
+        throw new RuntimeException('approve() deveria retornar o vaga_id gerado.');
+    }
+    // Idempotência: gerar de novo não cria uma segunda vaga.
+    $segundaTentativa = (new SolicitacaoVagaPublicacaoService())->gerarRascunho($createdId, (int)$adminUser['id'], '127.0.0.1');
+    if (($segundaTentativa['vaga_id'] ?? 0) !== (int)$vagaRow['id'] || ($segundaTentativa['ja_existia'] ?? false) !== true) {
+        throw new RuntimeException('gerarRascunho() deveria ser idempotente.');
+    }
+    $qtdVagas = (int)$pdo->query('SELECT COUNT(*) FROM vagas WHERE solicitacao_vaga_id = ' . (int)$createdId)->fetchColumn();
+    if ($qtdVagas !== 1) {
+        throw new RuntimeException('Nunca pode existir mais de uma vaga por solicitação.');
+    }
+    // Enquanto rascunho, NÃO aparece na consulta pública.
+    $idsPublicas = array_map(static fn(array $r): int => (int)$r['id'], Vaga::allActive());
+    if (in_array((int)$vagaRow['id'], $idsPublicas, true)) {
+        throw new RuntimeException('A vaga em rascunho não pode aparecer na página pública.');
+    }
+    // Publicação pelo RH -> vai ao ar.
+    $pub = (new SolicitacaoVagaPublicacaoService())->publicar((int)$vagaRow['id'], (int)$adminUser['id'], '127.0.0.1');
+    if (!($pub['ok'] ?? false)) {
+        throw new RuntimeException('Falha ao publicar a vaga: ' . ($pub['error'] ?? '?'));
+    }
+    $vagaPub = Vaga::find((int)$vagaRow['id']);
+    if ((int)$vagaPub['ativo'] !== 1 || empty($vagaPub['publicada_em'])) {
+        throw new RuntimeException('Após publicar, a vaga deveria estar ativa e com publicada_em carimbado.');
+    }
+    $idsPublicasDepois = array_map(static fn(array $r): int => (int)$r['id'], Vaga::allActive());
+    if (!in_array((int)$vagaRow['id'], $idsPublicasDepois, true)) {
+        throw new RuntimeException('Após publicar, a vaga deveria aparecer na consulta pública.');
+    }
+    // Rastreabilidade: auditoria da solicitação registra geração e publicação.
+    $eventos = $pdo->prepare("SELECT event_type FROM solicitacao_vaga_auditoria WHERE solicitacao_id = ? AND event_type IN ('vaga_rascunho_gerada','vaga_publicada')");
+    $eventos->execute([$createdId]);
+    $tiposEvento = $eventos->fetchAll(PDO::FETCH_COLUMN);
+    if (!in_array('vaga_rascunho_gerada', $tiposEvento, true) || !in_array('vaga_publicada', $tiposEvento, true)) {
+        throw new RuntimeException('A auditoria deveria registrar a geração e a publicação da vaga.');
+    }
+
     $rhControl = SolicitacaoVaga::saveRhControl($createdId, [
         'nome_contratado_colaborador_id' => (int)$colaboradorContratado['id'],
         'data_admissao' => date('d/m/Y', strtotime('+40 days')),
@@ -259,6 +341,9 @@ try {
 
     echo "SOLICITACAO_FLOW_OK\n";
 } finally {
+    foreach ($cleanup['vagas'] as $vagaId) {
+        $pdo->prepare('DELETE FROM vagas WHERE id = ?')->execute([(int)$vagaId]);
+    }
     if ($createdId) {
         $stmt = $pdo->prepare('DELETE FROM solicitacoes_vaga WHERE id = ?');
         $stmt->execute([$createdId]);
@@ -267,12 +352,13 @@ try {
         if ($originalUserLink) {
             $pdo->prepare(
                 "UPDATE usuario_colaboradores
-                 SET colaborador_id = ?, is_gestor = ?, is_rh = ?, lider_colaborador_id = ?, ativo = ?
+                 SET colaborador_id = ?, is_gestor = ?, is_rh = ?, pode_solicitar_vaga = ?, lider_colaborador_id = ?, ativo = ?
                  WHERE id = ?"
             )->execute([
                 (int)$originalUserLink['colaborador_id'],
                 (int)$originalUserLink['is_gestor'],
                 (int)$originalUserLink['is_rh'],
+                (int)($originalUserLink['pode_solicitar_vaga'] ?? 0),
                 $originalUserLink['lider_colaborador_id'] !== null ? (int)$originalUserLink['lider_colaborador_id'] : null,
                 (int)$originalUserLink['ativo'],
                 (int)$originalUserLink['id'],

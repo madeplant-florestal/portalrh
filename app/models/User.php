@@ -166,6 +166,18 @@ class User
         return ['ok' => true, 'status' => 200];
     }
 
+    /**
+     * Define o hash de senha diretamente. Uso restrito ao provisionamento de acesso de líderes
+     * (Colaboradores → Acesso), onde o admin gera uma senha temporária e a comunica ao líder.
+     * Sem e-mail, sem checagem de "self" (o alvo nunca é o próprio admin). O controller é quem
+     * garante que o ator é admin.
+     */
+    public static function definirSenhaHash(int $id, string $senhaHash): bool
+    {
+        $stmt = Database::conn()->prepare('UPDATE usuarios SET senha_hash = ? WHERE id = ?');
+        return $stmt->execute([$senhaHash, $id]);
+    }
+
     public static function setActiveStatus(int $id, bool $active): bool
     {
         if ($active) {

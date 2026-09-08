@@ -1,12 +1,14 @@
 <?php
 class SolicitacaoVaga
 {
-    private const STATUS_PENDENTE_LIDER = 'pendente_lider';
-    private const STATUS_PENDENTE_RH = 'pendente_rh';
-    private const STATUS_APROVADA = 'aprovada';
-    private const STATUS_REPROVADA_LIDER = 'reprovada_lider';
-    private const STATUS_REPROVADA_RH = 'reprovada_rh';
-    private const STATUS_CONCLUIDA = 'concluida';
+    // Vocabulário do `status_fluxo` (coluna pública) — visível para serviços do mesmo domínio
+    // (ex.: SolicitacaoVagaPublicacaoService).
+    public const STATUS_PENDENTE_LIDER = 'pendente_lider';
+    public const STATUS_PENDENTE_RH = 'pendente_rh';
+    public const STATUS_APROVADA = 'aprovada';
+    public const STATUS_REPROVADA_LIDER = 'reprovada_lider';
+    public const STATUS_REPROVADA_RH = 'reprovada_rh';
+    public const STATUS_CONCLUIDA = 'concluida';
 
     private const TIPO_COMPETENCIA_TECNICA = 'tecnica';
     private const TIPO_COMPETENCIA_COMPORTAMENTAL = 'comportamental';
@@ -85,6 +87,7 @@ class SolicitacaoVaga
             colaborador_id INT NOT NULL,
             is_gestor TINYINT(1) NOT NULL DEFAULT 0,
             is_rh TINYINT(1) NOT NULL DEFAULT 0,
+            pode_solicitar_vaga TINYINT(1) NOT NULL DEFAULT 0,
             lider_colaborador_id INT NULL,
             ativo TINYINT(1) NOT NULL DEFAULT 1,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -154,6 +157,7 @@ class SolicitacaoVaga
         // ainda não rodou (não há runner de migrations neste projeto — ver CLAUDE.md §3.7). A
         // migration continua sendo a fonte principal; isto só evita que create()/allForKanban()
         // quebrem com "coluna desconhecida" antes dela ser aplicada manualmente em produção.
+        self::addColumnIfMissing('usuario_colaboradores', 'pode_solicitar_vaga', 'ALTER TABLE usuario_colaboradores ADD COLUMN pode_solicitar_vaga TINYINT(1) NOT NULL DEFAULT 0 AFTER is_rh');
         self::addColumnIfMissing('solicitacoes_vaga', 'situacao_kanban_id', 'ALTER TABLE solicitacoes_vaga ADD COLUMN situacao_kanban_id INT NULL AFTER status_fluxo');
         self::addColumnIfMissing('solicitacoes_vaga', 'motivo_cancelamento_encrypted', 'ALTER TABLE solicitacoes_vaga ADD COLUMN motivo_cancelamento_encrypted TEXT NULL AFTER situacao_kanban_id');
         self::addColumnIfMissing('solicitacoes_vaga', 'cancelada_em', 'ALTER TABLE solicitacoes_vaga ADD COLUMN cancelada_em DATETIME NULL AFTER motivo_cancelamento_encrypted');
@@ -250,14 +254,15 @@ class SolicitacaoVaga
         )->fetchAll(PDO::FETCH_ASSOC);
 
         $gestores = $pdo->query(
-            "SELECT uc.usuario_id, uc.colaborador_id, uc.is_gestor, uc.is_rh, uc.lider_colaborador_id,
+            "SELECT uc.usuario_id, uc.colaborador_id, uc.is_gestor, uc.is_rh, uc.pode_solicitar_vaga,
+                    uc.lider_colaborador_id,
                     c.nome AS colaborador_nome, c.setor_id, cg.nome AS cargo_nome,
                     u.nome AS usuario_nome, u.role AS usuario_role
              FROM usuario_colaboradores uc
              INNER JOIN colaboradores c ON c.id = uc.colaborador_id
              INNER JOIN cargos cg ON cg.id = c.cargo_id
              INNER JOIN usuarios u ON u.id = uc.usuario_id
-             WHERE uc.ativo = 1 AND uc.is_gestor = 1 AND c.ativo = 1
+             WHERE uc.ativo = 1 AND uc.is_gestor = 1 AND uc.pode_solicitar_vaga = 1 AND c.ativo = 1
              ORDER BY c.nome ASC"
         )->fetchAll(PDO::FETCH_ASSOC);
 
@@ -333,6 +338,7 @@ class SolicitacaoVaga
                     'nome' => $row['colaborador_nome'],
                     'cargo_nome' => $row['cargo_nome'],
                     'setor_id' => (int)$row['setor_id'],
+                    'pode_solicitar_vaga' => (int)($row['pode_solicitar_vaga'] ?? 0),
                     'lider_colaborador_id' => $row['lider_colaborador_id'] !== null ? (int)$row['lider_colaborador_id'] : null,
                     'usuario_role' => $row['usuario_role'],
                 ];
@@ -730,13 +736,30 @@ class SolicitacaoVaga
             );
 
             $pdo->commit();
-            return ['ok' => true, 'status' => $newStatus];
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
             }
             return ['ok' => false, 'error' => $e->getMessage()];
         }
+
+        // Solicitação aprovada -> gera o RASCUNHO da vaga pública. Best-effort e idempotente: se
+        // falhar aqui, a aprovação NÃO é revertida — o RH tem o botão "Gerar rascunho da vaga"
+        // na tela da solicitação como rede de segurança. Ver SolicitacaoVagaPublicacaoService.
+        $vagaId = null;
+        if ($newStatus === self::STATUS_APROVADA) {
+            try {
+                $resultadoVaga = (new SolicitacaoVagaPublicacaoService())->gerarRascunho($solicitacaoId, $actorUserId, $ip);
+                $vagaId = $resultadoVaga['vaga_id'] ?? null;
+            } catch (\Throwable $e) {
+                Logger::error('Falha ao gerar rascunho de vaga após aprovação da solicitação', [
+                    'solicitacao_id' => $solicitacaoId,
+                    'erro' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        return ['ok' => true, 'status' => $newStatus, 'vaga_id' => $vagaId];
     }
 
     public static function saveRhControl(int $solicitacaoId, array $input, int $actorUserId, ?string $ip = null): array
@@ -882,6 +905,11 @@ class SolicitacaoVaga
         }
         if ((int)$gestor['is_gestor'] !== 1 || (int)$gestor['setor_id'] !== $setorId) {
             throw new InvalidArgumentException('O gestor solicitante informado não pertence à área selecionada ou não possui perfil de gestor.');
+        }
+        // Autorização EXPLÍCITA do Portal (nunca inferida por cargo) — separada de "é líder".
+        // Vale tanto para o líder abrindo a própria solicitação quanto para o RH abrindo em nome dele.
+        if ((int)($gestor['pode_solicitar_vaga'] ?? 0) !== 1) {
+            throw new InvalidArgumentException('O gestor solicitante não está autorizado a abrir Solicitação de Vaga. Um administrador precisa liberar essa permissão em Colaboradores → Acesso.');
         }
         if ((int)$centro['setor_id'] !== $setorId) {
             throw new InvalidArgumentException('O centro de custo informado não pertence à área selecionada.');
@@ -1371,7 +1399,18 @@ class SolicitacaoVaga
         return $row;
     }
 
-    private static function logAudit(int $solicitacaoId, int $actorUserId, string $eventType, ?string $fieldName, $oldValue, $newValue, ?string $ip): void
+    /**
+     * Registro de auditoria público — usado por serviços fora do model (ex.:
+     * SolicitacaoVagaPublicacaoService) para manter a trilha da solicitação (geração/publicação
+     * da vaga) na MESMA tabela de auditoria das aprovações. `actorUserId` NULL vira 0
+     * (evento de sistema).
+     */
+    public static function registrarEventoAuditoria(int $solicitacaoId, ?int $actorUserId, string $eventType, ?string $fieldName, $oldValue, $newValue, ?string $ip): void
+    {
+        self::logAudit($solicitacaoId, $actorUserId, $eventType, $fieldName, $oldValue, $newValue, $ip);
+    }
+
+    private static function logAudit(int $solicitacaoId, ?int $actorUserId, string $eventType, ?string $fieldName, $oldValue, $newValue, ?string $ip): void
     {
         $stmt = Database::conn()->prepare(
             "INSERT INTO solicitacao_vaga_auditoria

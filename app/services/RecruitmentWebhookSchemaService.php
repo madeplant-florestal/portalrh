@@ -23,6 +23,21 @@ class RecruitmentWebhookSchemaService
                 if (self::tableExists($pdo, 'empresas') && !self::constraintExists($pdo, 'vagas', 'fk_vagas_empresa')) {
                     $pdo->exec('ALTER TABLE vagas ADD CONSTRAINT fk_vagas_empresa FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE SET NULL ON UPDATE CASCADE');
                 }
+                // Sprint Solicitação/Publicação de Vagas — vínculo rastreável e idempotente
+                // Solicitação -> Vaga + carimbo de publicação (ver migration
+                // 2026-09-08-vagas-solicitacao-vaga-id.sql).
+                if (!self::columnExists($pdo, 'vagas', 'solicitacao_vaga_id')) {
+                    $pdo->exec('ALTER TABLE vagas ADD COLUMN solicitacao_vaga_id INT NULL AFTER id');
+                }
+                if (!self::columnExists($pdo, 'vagas', 'publicada_em')) {
+                    $pdo->exec('ALTER TABLE vagas ADD COLUMN publicada_em DATETIME NULL AFTER ativo');
+                }
+                if (!self::indexExists($pdo, 'vagas', 'uk_vagas_solicitacao_vaga')) {
+                    $pdo->exec('ALTER TABLE vagas ADD UNIQUE KEY uk_vagas_solicitacao_vaga (solicitacao_vaga_id)');
+                }
+                if (self::tableExists($pdo, 'solicitacoes_vaga') && !self::constraintExists($pdo, 'vagas', 'fk_vagas_solicitacao_vaga')) {
+                    $pdo->exec('ALTER TABLE vagas ADD CONSTRAINT fk_vagas_solicitacao_vaga FOREIGN KEY (solicitacao_vaga_id) REFERENCES solicitacoes_vaga(id) ON DELETE SET NULL');
+                }
             }
 
             if (self::tableExists($pdo, 'candidaturas')) {

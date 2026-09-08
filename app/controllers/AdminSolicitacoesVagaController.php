@@ -89,6 +89,11 @@ class AdminSolicitacoesVagaController extends Controller
             return;
         }
 
+        $vagaVinculada = null;
+        $stmtVaga = Database::conn()->prepare('SELECT id, ativo, publicada_em FROM vagas WHERE solicitacao_vaga_id = ? LIMIT 1');
+        $stmtVaga->execute([(int)$id]);
+        $vagaVinculada = $stmtVaga->fetch(PDO::FETCH_ASSOC) ?: null;
+
         $this->view->render('admin/solicitacoes_vaga/form', [
             'mode' => 'show',
             'csrf' => Security::csrfToken(),
@@ -100,6 +105,7 @@ class AdminSolicitacoesVagaController extends Controller
             'canEditRh' => SolicitacaoVaga::userCanEditRh($role, $isSupervisor),
             'currentRole' => $role,
             'currentUserId' => $userId,
+            'vagaVinculada' => $vagaVinculada,
         ], 'layouts/admin');
     }
 
@@ -161,6 +167,35 @@ class AdminSolicitacoesVagaController extends Controller
         redirect('/admin/solicitacoes-vaga/' . (int)$id . '?ok=' . urlencode('Anotação registrada com sucesso.'));
     }
 
+    /**
+     * Rede de segurança / disparo manual: gera (ou revincula) o rascunho da vaga de uma
+     * solicitação já APROVADA. Idempotente — nunca cria uma segunda vaga. Restrito a RH/Admin.
+     */
+    public function gerarVaga(string $id): void
+    {
+        Auth::requireRole(['admin', 'rh']);
+        if (!Security::csrfCheck($_POST['csrf'] ?? '')) {
+            http_response_code(400);
+            echo 'CSRF inválido';
+            return;
+        }
+
+        $result = (new SolicitacaoVagaPublicacaoService())->gerarRascunho(
+            (int)$id,
+            (int)($_SESSION['user_id'] ?? 0) ?: null,
+            Security::clientIp()
+        );
+
+        if (!($result['ok'] ?? false)) {
+            redirect('/admin/solicitacoes-vaga/' . (int)$id . '?erro=' . urlencode((string)($result['error'] ?? 'Não foi possível gerar o rascunho da vaga.')));
+        }
+
+        $msg = ($result['ja_existia'] ?? false)
+            ? 'Esta solicitação já tem uma vaga vinculada.'
+            : 'Rascunho da vaga gerado. Revise e publique em Vagas.';
+        redirect('/admin/solicitacoes-vaga/' . (int)$id . '?ok=' . urlencode($msg));
+    }
+
     private function handleApproval(int $id, string $step): void
     {
         Auth::requireRole(['admin', 'rh', 'viewer']);
@@ -202,7 +237,11 @@ class AdminSolicitacoesVagaController extends Controller
 
         $dependencies = SolicitacaoVaga::formDependencies($userId);
         $access = $dependencies['current_access'] ?? null;
-        return is_array($access) && (int)($access['is_gestor'] ?? 0) === 1;
+        // Autorização EXPLÍCITA do Portal — "pode solicitar vaga" é separado de "é líder"
+        // (is_gestor). Nunca inferida por cargo. Só o RH/Admin libera (Colaboradores → Acesso).
+        return is_array($access)
+            && (int)($access['ativo'] ?? 0) === 1
+            && (int)($access['pode_solicitar_vaga'] ?? 0) === 1;
     }
 
     private function defaultFormValues(): array

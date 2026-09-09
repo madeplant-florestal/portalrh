@@ -6,111 +6,51 @@ class AdminColaboradoresController extends Controller
         // Restrito a admin/RH: a listagem expõe salário individual dos colaboradores. `viewer`
         // (usado a partir da sprint de Vagas para o acesso de líderes) NÃO deve ver isto.
         Auth::requireRole(['admin', 'rh']);
+
         $page = max(1, (int)($_GET['page'] ?? 1));
         $perPage = ctype_digit((string)($_GET['per_page'] ?? '')) ? (int)$_GET['per_page'] : 20;
 
-        $filters = [
+        // Fonte oficial da tela: o espelho `colaboradores_metadados` (sincronizado do METADADOS).
+        // A tabela hub legada `colaboradores` só é consultada via LEFT JOIN, para as ações que
+        // ainda dependem de `colaboradores.id` (ver ColaboradorMetadadosConsultaRepository).
+        $filtros = [
             'q' => Security::sanitizeString($_GET['q'] ?? ''),
-            'cargo_id' => ctype_digit((string)($_GET['cargo_id'] ?? '')) ? (int)$_GET['cargo_id'] : null,
-            'empresa_id' => ctype_digit((string)($_GET['empresa_id'] ?? '')) ? (int)$_GET['empresa_id'] : null,
-            'setor_id' => ctype_digit((string)($_GET['setor_id'] ?? '')) ? (int)$_GET['setor_id'] : null,
-            'status' => Security::sanitizeString($_GET['status'] ?? ''),
+            'empresa' => Security::sanitizeString($_GET['empresa'] ?? ''),
+            'setor' => Security::sanitizeString($_GET['setor'] ?? ''),
+            'cargo' => Security::sanitizeString($_GET['cargo'] ?? ''),
+            'situacao' => Security::sanitizeString($_GET['situacao'] ?? ''),
         ];
-        $result = Colaborador::paginateAdmin($filters, $page, $perPage);
+
+        $repo = new ColaboradorMetadadosConsultaRepository();
+        $erro = null;
+        try {
+            $resultado = $repo->paginate($filtros, $page, $perPage);
+            $summary = $repo->summary();
+            $opcoesFiltro = $repo->opcoesFiltro();
+        } catch (Throwable $e) {
+            Logger::exception($e, 'ERROR', ['controller' => __CLASS__, 'action' => __FUNCTION__]);
+            $erro = 'Não foi possível carregar a base de colaboradores agora. Tente novamente em instantes.';
+            $resultado = ['items' => [], 'total' => 0, 'page' => 1, 'pages' => 1, 'per_page' => 20];
+            $summary = [
+                'contratos' => 0, 'ativos' => 0, 'desligados' => 0,
+                'empresas' => 0, 'cargos_distintos' => 0, 'pessoas_distintas' => 0,
+            ];
+            $opcoesFiltro = ['empresas' => [], 'setores' => [], 'cargos' => []];
+        }
 
         $this->view->render('admin/colaboradores/index', [
-            'colaboradores' => $result['items'],
-            'total' => $result['total'],
-            'page' => $result['page'],
-            'pages' => $result['pages'],
-            'perPage' => $result['per_page'],
-            'filters' => $filters,
-            'summary' => Colaborador::summary(),
-            'cargoOptions' => Colaborador::cargoOptions(),
-            'empresaOptions' => Colaborador::empresaOptions(),
-            'setorOptions' => Colaborador::setorOptions(),
-            'csrf' => Security::csrfToken(),
+            'colaboradores' => $resultado['items'],
+            'total' => $resultado['total'],
+            'page' => $resultado['page'],
+            'pages' => $resultado['pages'],
+            'perPage' => $resultado['per_page'],
+            'filters' => $filtros,
+            'summary' => $summary,
+            'opcoesFiltro' => $opcoesFiltro,
+            'erro' => $erro,
             'flashError' => Security::sanitizeString($_GET['erro'] ?? ''),
             'flashSuccess' => Security::sanitizeString($_GET['ok'] ?? ''),
         ], 'layouts/admin');
-    }
-
-    public function import(): void
-    {
-        Auth::requireRole(['admin', 'rh']);
-        header('Content-Type: application/json; charset=UTF-8');
-
-        if (!Security::csrfCheck($_POST['csrf'] ?? '')) {
-            $this->jsonResponse(['ok' => false, 'error' => 'Falha na verificacao de seguranca (CSRF).'], 400);
-            return;
-        }
-
-        $upload = $_FILES['import_file'] ?? null;
-        if (!is_array($upload)) {
-            $this->jsonResponse(['ok' => false, 'error' => 'Nenhum arquivo foi enviado para importacao.'], 400);
-            return;
-        }
-
-        $uploadError = (int)($upload['error'] ?? UPLOAD_ERR_NO_FILE);
-        if ($uploadError !== UPLOAD_ERR_OK) {
-            $this->jsonResponse(['ok' => false, 'error' => $this->uploadErrorMessage($uploadError)], 400);
-            return;
-        }
-
-        $originalName = Security::sanitizeString((string)($upload['name'] ?? ''));
-        $extension = strtolower((string)pathinfo($originalName, PATHINFO_EXTENSION));
-        if (!in_array($extension, ['xlsx', 'csv'], true)) {
-            $this->jsonResponse(['ok' => false, 'error' => 'Formato invalido. Utilize um arquivo .xlsx ou .csv.'], 422);
-            return;
-        }
-
-        $tmpName = (string)($upload['tmp_name'] ?? '');
-        if ($tmpName === '' || !is_file($tmpName)) {
-            $this->jsonResponse(['ok' => false, 'error' => 'Arquivo temporario de importacao nao encontrado.'], 400);
-            return;
-        }
-
-        try {
-            $service = new CollaboratorSpreadsheetImportService();
-            $report = $service->import($tmpName, [
-                'sheet_name' => $extension === 'xlsx' ? 'Ativos x Desligados' : 'CSV',
-                'dry_run' => false,
-                'validate_only' => false,
-            ]);
-
-            $summary = $report['summary'] ?? [];
-            $payload = [
-                'ok' => (bool)($report['ok'] ?? false),
-                'message' => ($report['ok'] ?? false)
-                    ? sprintf(
-                        'Importacao concluida com sucesso. %d inseridos, %d atualizados e %d rejeitados.',
-                        (int)($summary['inserted'] ?? 0),
-                        (int)($summary['updated'] ?? 0),
-                        (int)($summary['rejected'] ?? 0)
-                    )
-                    : ((($report['errors'][0] ?? '') !== '') ? (string)$report['errors'][0] : 'Nao foi possivel concluir a importacao.'),
-                'summary' => $summary,
-                'warnings' => array_values(array_slice((array)($report['warnings'] ?? []), 0, 10)),
-                'errors' => array_values(array_slice((array)($report['errors'] ?? []), 0, 10)),
-                'rejected_records' => array_values(array_slice((array)($report['rejected_records'] ?? []), 0, 10)),
-                'report_path' => $report['report_path'] ?? null,
-                'file_type' => $report['file_type'] ?? $extension,
-                'file_name' => $originalName,
-            ];
-
-            $this->jsonResponse($payload, ($report['ok'] ?? false) ? 200 : 422);
-        } catch (Throwable $e) {
-            Logger::exception($e, 'ERROR', [
-                'controller' => __CLASS__,
-                'action' => __FUNCTION__,
-                'file_name' => $originalName,
-            ]);
-
-            $this->jsonResponse([
-                'ok' => false,
-                'error' => 'Erro interno ao processar a importacao de colaboradores.',
-            ], 500);
-        }
     }
 
     public function editRh(string $id): void
@@ -337,24 +277,5 @@ class AdminColaboradoresController extends Controller
             $senha .= $todos[random_int(0, strlen($todos) - 1)];
         }
         return str_shuffle($senha);
-    }
-
-    private function jsonResponse(array $payload, int $status = 200): void
-    {
-        http_response_code($status);
-        echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    }
-
-    private function uploadErrorMessage(int $errorCode): string
-    {
-        return match ($errorCode) {
-            UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE => 'O arquivo excede o tamanho maximo permitido para upload.',
-            UPLOAD_ERR_PARTIAL => 'O upload foi interrompido antes da conclusao.',
-            UPLOAD_ERR_NO_FILE => 'Nenhum arquivo foi selecionado para importacao.',
-            UPLOAD_ERR_NO_TMP_DIR => 'Diretorio temporario de upload indisponivel.',
-            UPLOAD_ERR_CANT_WRITE => 'Nao foi possivel gravar o arquivo enviado no servidor.',
-            UPLOAD_ERR_EXTENSION => 'O upload foi bloqueado por uma extensao do servidor.',
-            default => 'Falha ao receber o arquivo de importacao.',
-        };
     }
 }

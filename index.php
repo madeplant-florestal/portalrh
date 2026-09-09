@@ -56,7 +56,6 @@ try {
     $router->post('/admin/indicadores-rh/sincronizar', [AdminMetadadosSyncController::class, 'solicitar']);
     $router->get('/admin/indicadores-rh/sincronizar/status', [AdminMetadadosSyncController::class, 'status']);
     $router->get('/admin/colaboradores', [AdminColaboradoresController::class, 'index']);
-    $router->post('/admin/colaboradores/importar', [AdminColaboradoresController::class, 'import']);
     $router->get('/admin/colaboradores/rh/editar/{id}', [AdminColaboradoresController::class, 'editRh']);
     $router->post('/admin/colaboradores/rh/editar/{id}', [AdminColaboradoresController::class, 'updateRh']);
     // Acesso / Liderança do colaborador (sprint Solicitação/Publicação de Vagas): vincula o

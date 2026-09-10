@@ -6,6 +6,9 @@ class User
     public string $email;
     public string $senha_hash;
     public string $role;
+    public int $pode_solicitar_vaga = 0;
+    public ?int $colaborador_metadados_id = null;
+    public ?int $aprovador_usuario_id = null;
     public int $is_supervisor;
     public ?string $email_verified_at;
     public ?string $last_password_reset_at;
@@ -235,6 +238,104 @@ class User
         return $stmt->execute([$targetId]);
     }
 
+    /**
+     * Usuários que podem ser escolhidos como aprovador/líder imediato de outro usuário:
+     * qualquer conta ativa (email_verified_at IS NOT NULL), exceto o próprio.
+     */
+    public static function candidatosAprovador(int $excluirUsuarioId): array
+    {
+        $stmt = Database::conn()->prepare(
+            "SELECT id, nome, email, role FROM usuarios
+             WHERE email_verified_at IS NOT NULL AND id <> ?
+             ORDER BY nome ASC"
+        );
+        $stmt->execute([$excluirUsuarioId]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * Domínio de Solicitação de Vaga (migration 2026-09-09-usuarios-dominio-vagas.sql):
+     * autorização (`pode_solicitar_vaga`, fonte canônica) + aprovador/líder imediato
+     * (`aprovador_usuario_id`, NULL = sem líder configurado). Nada aqui infere hierarquia por
+     * cargo, setor ou METADADOS.
+     */
+    public static function setVagaAccess(int $id, bool $podeSolicitarVaga, ?int $aprovadorUsuarioId, ?self $actor = null, ?string $ip = null): array
+    {
+        $target = self::findById($id);
+        if (!$target) {
+            return ['ok' => false, 'error' => 'Usuário não encontrado.'];
+        }
+
+        if ($aprovadorUsuarioId !== null) {
+            if ($aprovadorUsuarioId === $id) {
+                return ['ok' => false, 'error' => 'Um usuário não pode ser o próprio aprovador.'];
+            }
+            $aprovador = self::findById($aprovadorUsuarioId);
+            if (!$aprovador) {
+                return ['ok' => false, 'error' => 'O aprovador informado não é um usuário válido.'];
+            }
+            if (empty($aprovador->email_verified_at)) {
+                return ['ok' => false, 'error' => 'O aprovador informado está inativo. Ative o usuário antes de designá-lo.'];
+            }
+            // Impede o ciclo direto A -> B e B -> A (validação simples, sem algoritmo de grafo).
+            if ((int)($aprovador->aprovador_usuario_id ?? 0) === $id) {
+                return ['ok' => false, 'error' => 'Ciclo de aprovação inválido: o aprovador escolhido já é aprovado por este usuário.'];
+            }
+        }
+
+        $stmt = Database::conn()->prepare(
+            'UPDATE usuarios SET pode_solicitar_vaga = ?, aprovador_usuario_id = ? WHERE id = ?'
+        );
+        $stmt->execute([$podeSolicitarVaga ? 1 : 0, $aprovadorUsuarioId, $id]);
+
+        AuditLog::log($actor?->id, $id, 'vaga_access_update', sprintf(
+            'pode_solicitar_vaga=%d aprovador_usuario_id=%s',
+            $podeSolicitarVaga ? 1 : 0,
+            $aprovadorUsuarioId === null ? 'NULL' : (string)$aprovadorUsuarioId
+        ), $ip);
+
+        return ['ok' => true];
+    }
+
+    /** Vínculo OPCIONAL do usuário com um contrato oficial do METADADOS (colaboradores_metadados.id). */
+    public static function vincularMetadados(int $id, int $colaboradorMetadadosId, ?self $actor = null, ?string $ip = null): array
+    {
+        if (!self::findById($id)) {
+            return ['ok' => false, 'error' => 'Usuário não encontrado.'];
+        }
+        $existe = Database::conn()->prepare('SELECT id FROM colaboradores_metadados WHERE id = ? LIMIT 1');
+        $existe->execute([$colaboradorMetadadosId]);
+        if (!$existe->fetchColumn()) {
+            return ['ok' => false, 'error' => 'O contrato oficial informado não existe na base do METADADOS.'];
+        }
+        $emUso = Database::conn()->prepare('SELECT id FROM usuarios WHERE colaborador_metadados_id = ? AND id <> ? LIMIT 1');
+        $emUso->execute([$colaboradorMetadadosId, $id]);
+        if ($emUso->fetchColumn()) {
+            return ['ok' => false, 'error' => 'Este contrato oficial já está vinculado a outro usuário.'];
+        }
+
+        try {
+            $stmt = Database::conn()->prepare('UPDATE usuarios SET colaborador_metadados_id = ? WHERE id = ?');
+            $stmt->execute([$colaboradorMetadadosId, $id]);
+        } catch (\PDOException $e) {
+            return ['ok' => false, 'error' => 'Não foi possível vincular: o contrato já está em uso por outro usuário.'];
+        }
+
+        AuditLog::log($actor?->id, $id, 'vaga_metadados_link', 'colaborador_metadados_id=' . $colaboradorMetadadosId, $ip);
+        return ['ok' => true];
+    }
+
+    public static function desvincularMetadados(int $id, ?self $actor = null, ?string $ip = null): array
+    {
+        if (!self::findById($id)) {
+            return ['ok' => false, 'error' => 'Usuário não encontrado.'];
+        }
+        $stmt = Database::conn()->prepare('UPDATE usuarios SET colaborador_metadados_id = NULL WHERE id = ?');
+        $stmt->execute([$id]);
+        AuditLog::log($actor?->id, $id, 'vaga_metadados_unlink', 'colaborador_metadados_id=NULL', $ip);
+        return ['ok' => true];
+    }
+
     private static function map(array $data): self
     {
         $u = new self();
@@ -243,6 +344,9 @@ class User
         $u->email = $data['email'];
         $u->senha_hash = $data['senha_hash'];
         $u->role = $data['role'];
+        $u->pode_solicitar_vaga = (int)($data['pode_solicitar_vaga'] ?? 0);
+        $u->colaborador_metadados_id = isset($data['colaborador_metadados_id']) ? (int)$data['colaborador_metadados_id'] : null;
+        $u->aprovador_usuario_id = isset($data['aprovador_usuario_id']) ? (int)$data['aprovador_usuario_id'] : null;
         $u->is_supervisor = (int)($data['is_supervisor'] ?? 0);
         $u->email_verified_at = $data['email_verified_at'] ?? null;
         $u->last_password_reset_at = $data['last_password_reset_at'] ?? null;

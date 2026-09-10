@@ -23,8 +23,18 @@ class AdminSolicitacoesVagaController extends Controller
         $isSupervisor = !empty($_SESSION['user_is_supervisor']);
         if (!$this->canCreate($userId, $role, $isSupervisor)) {
             http_response_code(403);
-            echo 'Apenas usuários vinculados como gestores ou RH podem registrar solicitações de vaga.';
+            echo 'Seu usuário não está autorizado a registrar solicitações de vaga. Peça a um administrador para habilitar "Pode solicitar vaga" no seu cadastro de usuário.';
             return;
+        }
+
+        // Aviso não-bloqueante: usuário comum autorizado, mas ainda sem aprovador (líder imediato)
+        // configurado. O envio será rejeitado no backend — antecipamos a mensagem na tela.
+        $aviso = '';
+        if (!SolicitacaoVaga::userCanEditRh($role, $isSupervisor)) {
+            $access = SolicitacaoVaga::userAccessProfilePublic($userId);
+            if (is_array($access) && ($access['aprovador_usuario_id'] ?? null) === null) {
+                $aviso = 'Seu usuário está autorizado a solicitar vagas, mas ainda não possui um aprovador (líder imediato) configurado. Procure o RH ou o administrador do Portal antes de enviar.';
+            }
         }
 
         $this->view->render('admin/solicitacoes_vaga/form', [
@@ -34,6 +44,7 @@ class AdminSolicitacoesVagaController extends Controller
             'record' => null,
             'dependencies' => SolicitacaoVaga::formDependencies($userId),
             'error' => '',
+            'aviso' => $aviso,
             'canEditRh' => SolicitacaoVaga::userCanEditRh($role, $isSupervisor),
             'currentRole' => $role,
             'currentUserId' => $userId,
@@ -54,7 +65,7 @@ class AdminSolicitacoesVagaController extends Controller
         $isSupervisor = !empty($_SESSION['user_is_supervisor']);
         if (!$this->canCreate($userId, $role, $isSupervisor)) {
             http_response_code(403);
-            echo 'Apenas usuários vinculados como gestores ou RH podem registrar solicitações de vaga.';
+            echo 'Seu usuário não está autorizado a registrar solicitações de vaga. Peça a um administrador para habilitar "Pode solicitar vaga" no seu cadastro de usuário.';
             return;
         }
 
@@ -231,14 +242,15 @@ class AdminSolicitacoesVagaController extends Controller
             return false;
         }
 
+        // RH / Admin / supervisor sempre podem abrir Solicitação de Vaga.
         if (SolicitacaoVaga::userCanEditRh($role, $isSupervisor)) {
             return true;
         }
 
-        $dependencies = SolicitacaoVaga::formDependencies($userId);
-        $access = $dependencies['current_access'] ?? null;
-        // Autorização EXPLÍCITA do Portal — "pode solicitar vaga" é separado de "é líder"
-        // (is_gestor). Nunca inferida por cargo. Só o RH/Admin libera (Colaboradores → Acesso).
+        // Demais usuários: autorização EXPLÍCITA em `usuarios.pode_solicitar_vaga` (migration
+        // 2026-09-09). Nunca inferida por cargo, setor ou vínculo com colaborador/METADADOS.
+        // O usuário precisa também estar ativo (email_verified_at IS NOT NULL).
+        $access = SolicitacaoVaga::userAccessProfilePublic($userId);
         return is_array($access)
             && (int)($access['ativo'] ?? 0) === 1
             && (int)($access['pode_solicitar_vaga'] ?? 0) === 1;

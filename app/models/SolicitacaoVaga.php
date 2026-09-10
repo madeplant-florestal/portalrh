@@ -375,12 +375,14 @@ class SolicitacaoVaga
 
         $sql = "SELECT sv.id, sv.quantidade_vagas, sv.tipo_vaga, sv.tipo_contratacao, sv.salario_previsto,
                        sv.status_fluxo, sv.data_prevista_inicio, sv.data_limite_fechamento, sv.created_at,
-                       s.nome AS setor_nome, c.nome AS cargo_nome, g.nome AS gestor_nome,
+                       s.nome AS setor_nome, c.nome AS cargo_nome,
+                       COALESCE(g.nome, su.nome) AS gestor_nome,
                        ap_lider.status AS status_lider, ap_rh.status AS status_rh
                 FROM solicitacoes_vaga sv
                 INNER JOIN setores s ON s.id = sv.setor_id
                 INNER JOIN cargos c ON c.id = sv.cargo_id
-                INNER JOIN colaboradores g ON g.id = sv.gestor_solicitante_colaborador_id
+                INNER JOIN usuarios su ON su.id = sv.solicitante_usuario_id
+                LEFT JOIN colaboradores g ON g.id = sv.gestor_solicitante_colaborador_id
                 LEFT JOIN solicitacao_vaga_aprovacoes ap_lider ON ap_lider.solicitacao_id = sv.id AND ap_lider.etapa = 'lider_imediato'
                 LEFT JOIN solicitacao_vaga_aprovacoes ap_rh ON ap_rh.solicitacao_id = sv.id AND ap_rh.etapa = 'rh'
                 WHERE 1=1";
@@ -422,16 +424,22 @@ class SolicitacaoVaga
         self::ensureSchema();
         $pdo = Database::conn();
 
-        $sql = "SELECT sv.*, s.nome AS setor_nome, c.nome AS cargo_nome, g.nome AS gestor_nome,
+        $sql = "SELECT sv.*, s.nome AS setor_nome, c.nome AS cargo_nome,
+                       COALESCE(g.nome, su.nome) AS gestor_nome,
+                       su.nome AS solicitante_nome, su.email AS solicitante_email,
                        cc.nome AS centro_custo_nome, cc.codigo AS centro_custo_codigo,
-                       sub.nome AS substituido_nome, lider.nome AS lider_nome, contratado.nome AS contratado_nome
+                       sub.nome AS substituido_nome,
+                       COALESCE(lider.nome, lu.nome) AS lider_nome,
+                       contratado.nome AS contratado_nome
                 FROM solicitacoes_vaga sv
                 INNER JOIN setores s ON s.id = sv.setor_id
                 INNER JOIN cargos c ON c.id = sv.cargo_id
-                INNER JOIN colaboradores g ON g.id = sv.gestor_solicitante_colaborador_id
+                INNER JOIN usuarios su ON su.id = sv.solicitante_usuario_id
                 INNER JOIN centros_custo cc ON cc.id = sv.centro_custo_id
+                LEFT JOIN colaboradores g ON g.id = sv.gestor_solicitante_colaborador_id
                 LEFT JOIN colaboradores sub ON sub.id = sv.colaborador_substituido_id
                 LEFT JOIN colaboradores lider ON lider.id = sv.lider_imediato_colaborador_id
+                LEFT JOIN usuarios lu ON lu.id = sv.lider_imediato_usuario_id
                 LEFT JOIN colaboradores contratado ON contratado.id = sv.nome_contratado_colaborador_id
                 WHERE sv.id = ?";
         $params = [$id];
@@ -582,7 +590,13 @@ class SolicitacaoVaga
     {
         self::ensureSchema();
         $normalized = self::validateForSubmission($input, $actorUserId);
-        $leader = self::resolveLeaderAssignment($normalized['gestor_solicitante_colaborador_id'], $normalized['setor_id']);
+
+        // Aprovador da 1ª etapa vem de `usuarios.aprovador_usuario_id` do solicitante — nunca
+        // de inferência por cargo/setor/METADADOS. Pode lançar InvalidArgumentException (usuário
+        // comum autorizado sem aprovador configurado) ANTES de qualquer persistência.
+        $approver = self::resolveApprover($actorUserId);
+        $etapaLiderDispensada = (bool)$approver['etapa_lider_dispensada'];
+        $statusInicial = $etapaLiderDispensada ? self::STATUS_PENDENTE_RH : self::STATUS_PENDENTE_LIDER;
 
         // situacao_kanban_id nunca nasce NULL (mesma classe de bug já corrigida para
         // candidaturas.stage_id em 2026-07-13-candidaturas-stage-id-backfill.sql: uma coluna de
@@ -638,9 +652,9 @@ class SolicitacaoVaga
                 $normalized['data_prevista_inicio'],
                 $normalized['urgencia'],
                 $normalized['data_limite_fechamento'],
-                $leader['colaborador_id'],
-                $leader['usuario_id'],
-                self::STATUS_PENDENTE_LIDER,
+                null,
+                $approver['usuario_id'],
+                $statusInicial,
                 $situacaoKanbanId,
             ]);
 
@@ -648,9 +662,20 @@ class SolicitacaoVaga
             self::syncBenefits($solicitacaoId, $normalized['beneficio_ids']);
             self::syncCompetencies($solicitacaoId, $normalized['competencia_tecnica_ids'], self::TIPO_COMPETENCIA_TECNICA);
             self::syncCompetencies($solicitacaoId, $normalized['competencia_comportamental_ids'], self::TIPO_COMPETENCIA_COMPORTAMENTAL);
-            self::seedApprovalRows($solicitacaoId, $leader['usuario_id']);
+            self::seedApprovalRows($solicitacaoId, $approver['usuario_id'], $etapaLiderDispensada, $actorUserId);
 
             self::logAudit($solicitacaoId, $actorUserId, 'created', null, null, 'Solicitação criada', $ip);
+            if ($etapaLiderDispensada) {
+                self::logAudit(
+                    $solicitacaoId,
+                    $actorUserId,
+                    'approval_lider_imediato',
+                    'status_fluxo',
+                    self::STATUS_PENDENTE_LIDER,
+                    self::STATUS_PENDENTE_RH,
+                    $ip
+                );
+            }
             $pdo->commit();
 
             return $solicitacaoId;
@@ -843,12 +868,30 @@ class SolicitacaoVaga
         return $isSupervisor || in_array($role, ['admin', 'rh', 'viewer'], true);
     }
 
+    /**
+     * Acesso público ao perfil de autorização do usuário (lê `usuarios`, migration 2026-09-09):
+     * `pode_solicitar_vaga`, `aprovador_usuario_id`, `ativo`. Usado pelo controller e pelo form.
+     */
+    public static function userAccessProfilePublic(int $userId): ?array
+    {
+        return self::userAccessProfile($userId);
+    }
+
     private static function validateForSubmission(array $input, int $actorUserId): array
     {
         $setorId = self::requiredEntityId($input['setor_id'] ?? null, 'setores', 'Área / Departamento');
         $cargoId = self::requiredEntityId($input['cargo_id'] ?? null, 'cargos', 'Cargo');
-        $gestorColaboradorId = self::requiredEntityId($input['gestor_solicitante_colaborador_id'] ?? null, 'colaboradores', 'Gestor solicitante');
         $centroCustoId = self::requiredEntityId($input['centro_custo_id'] ?? null, 'centros_custo', 'Centro de custo');
+
+        // `gestor_solicitante_colaborador_id` é OPCIONAL e apenas contexto legado (migration
+        // 2026-09-09): a identidade do solicitante é sempre `solicitante_usuario_id` da sessão.
+        // Se enviado, valida-se só a existência do colaborador — sem exigir `usuario_colaboradores`,
+        // sem `is_gestor`, sem trava de setor, sem inferência.
+        $gestorColaboradorId = null;
+        $rawGestor = trim((string)($input['gestor_solicitante_colaborador_id'] ?? ''));
+        if ($rawGestor !== '') {
+            $gestorColaboradorId = self::requiredEntityId($rawGestor, 'colaboradores', 'Gestor solicitante');
+        }
 
         $quantidadeVagas = max(0, (int)($input['quantidade_vagas'] ?? 0));
         if ($quantidadeVagas < 1) {
@@ -891,9 +934,8 @@ class SolicitacaoVaga
 
         $setor = self::findSimple('setores', $setorId);
         $cargo = self::findSimple('cargos', $cargoId);
-        $gestor = self::findUserColaboradorByColaboradorId($gestorColaboradorId);
         $centro = self::findSimple('centros_custo', $centroCustoId);
-        if (!$setor || !$cargo || !$gestor || !$centro) {
+        if (!$setor || !$cargo || !$centro) {
             throw new InvalidArgumentException('Não foi possível validar os vínculos obrigatórios do formulário.');
         }
 
@@ -903,19 +945,8 @@ class SolicitacaoVaga
             }
             throw new InvalidArgumentException('Selecione um cargo válido vinculado à área/departamento informado.');
         }
-        if ((int)$gestor['is_gestor'] !== 1 || (int)$gestor['setor_id'] !== $setorId) {
-            throw new InvalidArgumentException('O gestor solicitante informado não pertence à área selecionada ou não possui perfil de gestor.');
-        }
-        // Autorização EXPLÍCITA do Portal (nunca inferida por cargo) — separada de "é líder".
-        // Vale tanto para o líder abrindo a própria solicitação quanto para o RH abrindo em nome dele.
-        if ((int)($gestor['pode_solicitar_vaga'] ?? 0) !== 1) {
-            throw new InvalidArgumentException('O gestor solicitante não está autorizado a abrir Solicitação de Vaga. Um administrador precisa liberar essa permissão em Colaboradores → Acesso.');
-        }
         if ((int)$centro['setor_id'] !== $setorId) {
             throw new InvalidArgumentException('O centro de custo informado não pertence à área selecionada.');
-        }
-        if ((int)$gestor['usuario_id'] !== $actorUserId && !self::isRhOrAdmin($actorUserId)) {
-            throw new InvalidArgumentException('Você só pode abrir solicitações vinculadas ao seu próprio perfil gestor.');
         }
 
         $faixa = self::salaryRangeForCargo($cargoId);
@@ -1235,14 +1266,42 @@ class SolicitacaoVaga
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
-    private static function seedApprovalRows(int $solicitacaoId, ?int $leaderUserId): void
+    /**
+     * Cria as duas linhas de aprovação (líder imediato + RH). Sempre existem as duas — o histórico
+     * e o Kanban dependem disso.
+     *
+     * Quando a etapa do líder é dispensada (solicitante RH/Admin sem aprovador configurado), a
+     * linha do líder nasce já `aprovado`, sem destinatário, carimbada pelo próprio solicitante e
+     * com observação explicando a dispensa — nunca fica uma aprovação pendente sem destinatário.
+     */
+    private static function seedApprovalRows(int $solicitacaoId, ?int $leaderUserId, bool $etapaLiderDispensada = false, ?int $actorUserId = null): void
     {
-        $stmt = Database::conn()->prepare(
+        $pdo = Database::conn();
+
+        if ($etapaLiderDispensada) {
+            $stmt = $pdo->prepare(
+                "INSERT INTO solicitacao_vaga_aprovacoes
+                    (solicitacao_id, etapa, destinatario_usuario_id, status, aprovador_usuario_id,
+                     observacao_encrypted, assinatura_hash, aprovado_em)
+                 VALUES (?, 'lider_imediato', NULL, 'aprovado', ?, ?, ?, NOW())"
+            );
+            $stmt->execute([
+                $solicitacaoId,
+                $actorUserId,
+                self::encryptNullable('Etapa do líder imediato dispensada: solicitante RH/Admin sem líder configurado.'),
+                hash('sha256', $solicitacaoId . '|lider_imediato|dispensada|' . (int)$actorUserId . '|' . gmdate('c')),
+            ]);
+        } else {
+            $pdo->prepare(
+                "INSERT INTO solicitacao_vaga_aprovacoes (solicitacao_id, etapa, destinatario_usuario_id, status)
+                 VALUES (?, 'lider_imediato', ?, 'pendente')"
+            )->execute([$solicitacaoId, $leaderUserId]);
+        }
+
+        $pdo->prepare(
             "INSERT INTO solicitacao_vaga_aprovacoes (solicitacao_id, etapa, destinatario_usuario_id, status)
-             VALUES (?, ?, ?, 'pendente')"
-        );
-        $stmt->execute([$solicitacaoId, 'lider_imediato', $leaderUserId]);
-        $stmt->execute([$solicitacaoId, 'rh', null]);
+             VALUES (?, 'rh', NULL, 'pendente')"
+        )->execute([$solicitacaoId]);
     }
 
     private static function syncBenefits(int $solicitacaoId, array $beneficioIds): void
@@ -1275,32 +1334,51 @@ class SolicitacaoVaga
         }
     }
 
-    private static function resolveLeaderAssignment(int $gestorColaboradorId, int $setorId): array
+    /**
+     * Resolve o aprovador da 1ª etapa (líder imediato) a partir de `usuarios.aprovador_usuario_id`
+     * do próprio solicitante. NUNCA infere por cargo, setor, METADADOS ou `lider_colaborador_id`.
+     * Também é o guarda de autorização de backend (defesa em profundidade, independe da tela):
+     *
+     * - Solicitante sem `pode_solicitar_vaga` e sem perfil RH/Admin -> exceção.
+     * - Solicitante COM aprovador configurado -> etapa "líder imediato" endereçada a esse usuário.
+     * - Solicitante RH/Admin/supervisor SEM aprovador -> etapa do líder é DISPENSADA e a
+     *   solicitação já entra em `pendente_rh` (decisão de negócio aprovada nesta sprint).
+     * - Solicitante comum autorizado SEM aprovador -> exceção (bloqueio antes da persistência).
+     *
+     * @return array{usuario_id:?int, colaborador_id:null, etapa_lider_dispensada:bool}
+     */
+    private static function resolveApprover(int $actorUserId): array
     {
-        $gestorLink = self::findUserColaboradorByColaboradorId($gestorColaboradorId);
-        if ($gestorLink && !empty($gestorLink['lider_colaborador_id'])) {
-            $leaderLink = self::findUserColaboradorByColaboradorId((int)$gestorLink['lider_colaborador_id']);
-            if ($leaderLink) {
-                return [
-                    'colaborador_id' => (int)$leaderLink['colaborador_id'],
-                    'usuario_id' => (int)$leaderLink['usuario_id'],
-                ];
+        $access = self::userAccessProfile($actorUserId);
+        if ($access === null) {
+            throw new InvalidArgumentException('Usuário solicitante não encontrado.');
+        }
+
+        $isRhAdmin = in_array(strtolower($access['role']), ['admin', 'rh'], true) || $access['is_supervisor'] === 1;
+
+        if (!$isRhAdmin) {
+            if ($access['ativo'] !== 1) {
+                throw new InvalidArgumentException('Usuário inativo não pode abrir Solicitação de Vaga.');
+            }
+            if ($access['pode_solicitar_vaga'] !== 1) {
+                throw new InvalidArgumentException('Seu usuário não está autorizado a abrir Solicitação de Vaga. Um administrador precisa habilitar "Pode solicitar vaga" no seu cadastro de usuário.');
             }
         }
 
-        $fallback = self::findFallbackLeaderBySetor($setorId, $gestorColaboradorId);
-        if ($fallback) {
-            return $fallback;
+        $aprovadorId = $access['aprovador_usuario_id'];
+        if ($aprovadorId !== null) {
+            $aprovador = self::userAccessProfile($aprovadorId);
+            if ($aprovador === null || $aprovador['ativo'] !== 1) {
+                throw new InvalidArgumentException('O aprovador (líder imediato) configurado para o seu usuário está inválido ou inativo. Procure o RH ou o administrador do Portal.');
+            }
+            return ['usuario_id' => $aprovadorId, 'colaborador_id' => null, 'etapa_lider_dispensada' => false];
         }
 
-        if ($gestorLink) {
-            return [
-                'colaborador_id' => (int)$gestorLink['colaborador_id'],
-                'usuario_id' => (int)$gestorLink['usuario_id'],
-            ];
+        if ($isRhAdmin) {
+            return ['usuario_id' => null, 'colaborador_id' => null, 'etapa_lider_dispensada' => true];
         }
 
-        throw new InvalidArgumentException('Não foi possível identificar o líder imediato do gestor solicitante. Configure o vínculo gestor/líder na base de usuários.');
+        throw new InvalidArgumentException('Seu usuário está autorizado a solicitar vagas, mas ainda não possui um aprovador (líder imediato) configurado. Procure o RH ou o administrador do Portal.');
     }
 
     private static function findFallbackLeaderBySetor(int $setorId, int $excludeColaboradorId): ?array
@@ -1332,19 +1410,36 @@ class SolicitacaoVaga
         return null;
     }
 
+    /**
+     * Perfil de acesso do usuário ao fluxo de Solicitação de Vaga — lido direto de `usuarios`
+     * (migration 2026-09-09). NÃO depende mais de `usuario_colaboradores`: um gestor PJ/terceiro
+     * não tem linha lá e ainda assim opera normalmente.
+     *
+     * @return array{usuario_id:int,pode_solicitar_vaga:int,aprovador_usuario_id:?int,colaborador_metadados_id:?int,ativo:int,role:string,is_supervisor:int}|null
+     */
     private static function userAccessProfile(int $userId): ?array
     {
         $stmt = Database::conn()->prepare(
-            "SELECT uc.*, c.nome AS colaborador_nome, c.setor_id, cg.nome AS cargo_nome
-             FROM usuario_colaboradores uc
-             INNER JOIN colaboradores c ON c.id = uc.colaborador_id
-             INNER JOIN cargos cg ON cg.id = c.cargo_id
-             WHERE uc.usuario_id = ? AND uc.ativo = 1
-             LIMIT 1"
+            "SELECT id, role, is_supervisor, pode_solicitar_vaga, aprovador_usuario_id,
+                    colaborador_metadados_id,
+                    CASE WHEN email_verified_at IS NULL THEN 0 ELSE 1 END AS ativo
+             FROM usuarios WHERE id = ? LIMIT 1"
         );
         $stmt->execute([$userId]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
-        return $row ?: null;
+        if (!$row) {
+            return null;
+        }
+
+        return [
+            'usuario_id' => (int)$row['id'],
+            'role' => (string)$row['role'],
+            'is_supervisor' => (int)$row['is_supervisor'],
+            'pode_solicitar_vaga' => (int)$row['pode_solicitar_vaga'],
+            'aprovador_usuario_id' => $row['aprovador_usuario_id'] !== null ? (int)$row['aprovador_usuario_id'] : null,
+            'colaborador_metadados_id' => $row['colaborador_metadados_id'] !== null ? (int)$row['colaborador_metadados_id'] : null,
+            'ativo' => (int)$row['ativo'],
+        ];
     }
 
     private static function findUserColaboradorByColaboradorId(int $colaboradorId): ?array

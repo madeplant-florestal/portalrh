@@ -64,9 +64,13 @@ $statusLabels = [
 $selectedBenefitIds = array_map('intval', $form['beneficio_ids'] ?? []);
 $selectedTecnicaIds = array_map('intval', $form['competencia_tecnica_ids'] ?? []);
 $selectedComportamentalIds = array_map('intval', $form['competencia_comportamental_ids'] ?? []);
-$gestorLocked = !$isShow && !$canEditRh && is_array($currentAccess) && (int)($currentAccess['is_gestor'] ?? 0) === 1;
-$defaultSetorId = $gestorLocked ? (int)($currentAccess['setor_id'] ?? 0) : (int)($form['setor_id'] ?? 0);
-$defaultGestorId = $gestorLocked ? (int)($currentAccess['colaborador_id'] ?? 0) : (int)($form['gestor_solicitante_colaborador_id'] ?? 0);
+// Sprint 2026-09-09: a autorização e a hierarquia migraram para `usuarios`. Não há mais trava de
+// setor pelo gestor. O campo "Gestor solicitante" é opcional e só aparece para RH/Admin (contexto
+// legado); usuário comum/PJ nem o vê e a solicitação nasce com gestor NULL.
+$mostrarGestor = !$isShow && $canEditRh;
+$defaultSetorId = (int)($form['setor_id'] ?? 0);
+$defaultGestorId = (int)($form['gestor_solicitante_colaborador_id'] ?? 0);
+$aviso = $aviso ?? '';
 
 $benefitCatalog = [];
 foreach ($beneficiosByCargo as $benefitItems) {
@@ -122,16 +126,15 @@ $payload = [
   <?php if (!empty($success)): ?>
     <div class="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700"><?= Security::e($success) ?></div>
   <?php endif; ?>
+  <?php if (!empty($aviso)): ?>
+    <div class="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"><?= Security::e($aviso) ?></div>
+  <?php endif; ?>
 
   <?php if (!$isShow): ?>
     <form class="mt-6 space-y-8" action="<?= $base ?>/admin/solicitacoes-vaga/nova" method="post" novalidate data-solicitacao-form-element="1">
       <input type="hidden" name="csrf" value="<?= Security::e($csrf) ?>">
       <script type="application/json" data-solicitacao-payload="1"><?= json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?></script>
 
-      <?php if ($gestorLocked): ?>
-        <input type="hidden" name="setor_id" value="<?= (int)$defaultSetorId ?>">
-        <input type="hidden" name="gestor_solicitante_colaborador_id" value="<?= (int)$defaultGestorId ?>">
-      <?php endif; ?>
 
       <section class="space-y-4">
         <div class="border-b pb-2">
@@ -140,7 +143,7 @@ $payload = [
         <div class="grid gap-4 lg:grid-cols-2">
           <div>
             <label class="block text-sm font-medium text-gray-700">Área / Departamento *</label>
-            <select name="setor_id" class="mt-1 w-full rounded border px-3 py-2" data-solicitacao-setor="1" <?= $gestorLocked ? 'disabled' : 'required' ?>>
+            <select name="setor_id" class="mt-1 w-full rounded border px-3 py-2" data-solicitacao-setor="1" required>
               <option value="">Selecione</option>
               <?php foreach ($setores as $setor): ?>
                 <option value="<?= (int)$setor['id'] ?>" <?= (int)$defaultSetorId === (int)$setor['id'] ? 'selected' : '' ?>><?= Security::e($setor['nome']) ?></option>
@@ -162,17 +165,20 @@ $payload = [
             <p id="solicitacao-cargo-feedback" class="mt-1 text-xs text-gray-500" data-solicitacao-cargo-feedback="1" aria-live="polite"></p>
             <p id="solicitacao-cargo-faixa" class="mt-1 text-xs text-gray-500" data-solicitacao-faixa-label="1" aria-live="polite"></p>
           </div>
+          <?php if ($mostrarGestor): ?>
           <div>
-            <label class="block text-sm font-medium text-gray-700">Gestor solicitante *</label>
-            <select name="gestor_solicitante_colaborador_id" class="mt-1 w-full rounded border px-3 py-2" data-solicitacao-gestor="1" <?= $gestorLocked ? 'disabled' : 'required' ?>>
-              <option value="">Selecione</option>
+            <label class="block text-sm font-medium text-gray-700">Gestor solicitante <span class="text-gray-400">(opcional — contexto legado)</span></label>
+            <select name="gestor_solicitante_colaborador_id" class="mt-1 w-full rounded border px-3 py-2" data-solicitacao-gestor="1">
+              <option value="">Não informar</option>
               <?php foreach ($gestores as $gestor): ?>
                 <option value="<?= (int)$gestor['colaborador_id'] ?>" <?= (int)$defaultGestorId === (int)$gestor['colaborador_id'] ? 'selected' : '' ?>>
                   <?= Security::e($gestor['nome'] . ' - ' . $gestor['cargo_nome']) ?>
                 </option>
               <?php endforeach; ?>
             </select>
+            <p class="mt-1 text-xs text-gray-500">A identidade do solicitante é sempre o seu usuário autenticado. Este campo é apenas contexto opcional.</p>
           </div>
+          <?php endif; ?>
         </div>
 
         <div class="hidden" data-solicitacao-maquina-wrap="1">

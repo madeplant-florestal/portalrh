@@ -8,12 +8,15 @@ $createdId = null;
 $originalUserLink = null;
 $userLinkTouched = false;
 $adminUser = null;
+$actorVagaAccessTouched = false;
+$originalActorVagaAccess = null;
 $cleanup = [
     'vagas' => [],
     'centros' => [],
     'colaboradores' => [],
     'cargos' => [],
     'setores' => [],
+    'usuarios_extra' => [],
 ];
 
 try {
@@ -22,6 +25,23 @@ try {
     if (!$adminUser) {
         throw new RuntimeException('Nenhum usuário disponível para executar o teste.');
     }
+
+    // Sprint 2026-09-09: autorização e hierarquia de aprovação vivem em `usuarios`. Para exercitar
+    // o fluxo completo de 2 etapas (líder -> RH), o usuário-ator precisa ter um aprovador.
+    $approverId = (int)$pdo->query(
+        "SELECT id FROM usuarios WHERE email_verified_at IS NOT NULL AND id <> " . (int)$adminUser['id'] . " ORDER BY id ASC LIMIT 1"
+    )->fetchColumn();
+    if ($approverId <= 0) {
+        $approverId = User::create('Aprovador Teste Integracao', 'aprovador.teste.integracao.' . uniqid() . '@example.com', password_hash('x', PASSWORD_BCRYPT), 'rh');
+        User::setActiveStatus($approverId, true);
+        $cleanup['usuarios_extra'][] = $approverId;
+    }
+    $originalActorVagaAccess = $pdo->query(
+        "SELECT pode_solicitar_vaga, aprovador_usuario_id FROM usuarios WHERE id = " . (int)$adminUser['id']
+    )->fetch(PDO::FETCH_ASSOC) ?: null;
+    $pdo->prepare("UPDATE usuarios SET pode_solicitar_vaga = 1, aprovador_usuario_id = ? WHERE id = ?")
+        ->execute([$approverId, (int)$adminUser['id']]);
+    $actorVagaAccessTouched = true;
 
     $deps = SolicitacaoVaga::formDependencies((int)$adminUser['id']);
     if (empty($deps['setores'])) {
@@ -222,7 +242,7 @@ try {
     if ($solicitanteRow !== (int)$adminUser['id']) {
         throw new RuntimeException('O solicitante deveria ser o usuário autenticado.');
     }
-    $payloadAdulterado = array_merge($payload, ['solicitante_usuario_id' => 999999, 'gestor_solicitante_colaborador_id' => (int)$candidate['id']]);
+    $payloadAdulterado = array_merge($payload, ['solicitante_usuario_id' => 999999]);
     $idAdulterado = SolicitacaoVaga::create($payloadAdulterado, (int)$adminUser['id'], '127.0.0.1');
     $solicitanteAdulterado = (int)$pdo->query('SELECT solicitante_usuario_id FROM solicitacoes_vaga WHERE id = ' . (int)$idAdulterado)->fetchColumn();
     $pdo->prepare('DELETE FROM vagas WHERE solicitacao_vaga_id = ?')->execute([$idAdulterado]);
@@ -231,20 +251,20 @@ try {
         throw new RuntimeException('Tentativa de adulterar o solicitante pelo POST deveria ter sido ignorada.');
     }
 
-    // Autorização: sem `pode_solicitar_vaga`, a criação é rejeitada no backend (independe da tela).
-    $linkGestor = $pdo->prepare('SELECT id FROM usuario_colaboradores WHERE colaborador_id = ? LIMIT 1');
-    $linkGestor->execute([(int)$candidate['id']]);
-    $linkGestorId = (int)$linkGestor->fetchColumn();
-    $pdo->prepare('UPDATE usuario_colaboradores SET pode_solicitar_vaga = 0 WHERE id = ?')->execute([$linkGestorId]);
+    // Autorização canônica (migration 2026-09-09): `usuarios.pode_solicitar_vaga`. Um usuário
+    // comum sem a flag é rejeitado no backend, independente da tela e sem depender de
+    // `usuario_colaboradores`.
+    $comumSemPermissaoId = User::create('Comum Sem Permissao', 'comum.sem.permissao.' . uniqid() . '@example.com', password_hash('x', PASSWORD_BCRYPT), 'viewer');
+    User::setActiveStatus($comumSemPermissaoId, true);
+    $cleanup['usuarios_extra'][] = $comumSemPermissaoId;
     $rejeitou = false;
     try {
-        SolicitacaoVaga::create($payload, (int)$adminUser['id'], '127.0.0.1');
+        SolicitacaoVaga::create($payload, $comumSemPermissaoId, '127.0.0.1');
     } catch (\InvalidArgumentException $e) {
-        $rejeitou = stripos($e->getMessage(), 'autorizado') !== false;
+        $rejeitou = stripos($e->getMessage(), 'autoriz') !== false;
     }
-    $pdo->prepare('UPDATE usuario_colaboradores SET pode_solicitar_vaga = 1 WHERE id = ?')->execute([$linkGestorId]);
     if (!$rejeitou) {
-        throw new RuntimeException('create() deveria rejeitar quando o gestor não tem pode_solicitar_vaga.');
+        throw new RuntimeException('create() deveria rejeitar usuário comum sem usuarios.pode_solicitar_vaga.');
     }
 
     $record = SolicitacaoVaga::findAccessible($createdId, (int)$adminUser['id'], (string)$adminUser['role'], (int)$adminUser['is_supervisor'] === 1);
@@ -378,5 +398,16 @@ try {
     }
     foreach ($cleanup['setores'] as $setorId) {
         $pdo->prepare('DELETE FROM setores WHERE id = ?')->execute([(int)$setorId]);
+    }
+    if ($actorVagaAccessTouched && $adminUser) {
+        $pdo->prepare('UPDATE usuarios SET pode_solicitar_vaga = ?, aprovador_usuario_id = ? WHERE id = ?')->execute([
+            (int)($originalActorVagaAccess['pode_solicitar_vaga'] ?? 0),
+            isset($originalActorVagaAccess['aprovador_usuario_id']) && $originalActorVagaAccess['aprovador_usuario_id'] !== null
+                ? (int)$originalActorVagaAccess['aprovador_usuario_id'] : null,
+            (int)$adminUser['id'],
+        ]);
+    }
+    foreach ($cleanup['usuarios_extra'] as $uid) {
+        $pdo->prepare('DELETE FROM usuarios WHERE id = ?')->execute([(int)$uid]);
     }
 }

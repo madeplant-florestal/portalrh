@@ -133,16 +133,136 @@ class AdminUsuariosController extends Controller
     public function show(string $id): void
     {
         Auth::requireRole(['admin']);
+        SchemaManager::ensure();
         $user = User::findById((int)$id);
         if (!$user) {
             http_response_code(404);
             echo 'Usuário não encontrado';
             return;
         }
+
+        $aprovador = $user->aprovador_usuario_id ? User::findById((int)$user->aprovador_usuario_id) : null;
+        $vinculoMetadados = null;
+        if ($user->colaborador_metadados_id) {
+            $vinculoMetadados = (new ColaboradorMetadadosConsultaRepository())->findById((int)$user->colaborador_metadados_id);
+        }
+
         $this->view->render('admin/usuarios/show', [
             'user' => $user,
-            'csrf' => Security::csrfToken()
+            'csrf' => Security::csrfToken(),
+            'aprovador' => $aprovador,
+            'aprovadorOptions' => User::candidatosAprovador((int)$user->id),
+            'vinculoMetadados' => $vinculoMetadados,
+            'flashError' => Security::sanitizeString($_GET['erro'] ?? ''),
+            'flashSuccess' => Security::sanitizeString($_GET['ok'] ?? ''),
         ], 'layouts/admin');
+    }
+
+    /**
+     * Salva o acesso ao fluxo de Solicitação de Vaga do usuário: autorização
+     * (`pode_solicitar_vaga`) + aprovador/líder imediato (`aprovador_usuario_id`).
+     */
+    public function updateVagaAcesso(string $id): void
+    {
+        Auth::requireRole(['admin']);
+        SchemaManager::ensure();
+        if (!Security::csrfCheck($_POST['csrf'] ?? '')) {
+            http_response_code(400);
+            echo 'Falha na verificação de segurança (CSRF).';
+            return;
+        }
+        $target = User::findById((int)$id);
+        if (!$target) {
+            http_response_code(404);
+            echo 'Usuário não encontrado';
+            return;
+        }
+        $actor = User::findById((int)($_SESSION['user_id'] ?? 0));
+        if (!User::canManageUser($actor, $target)) {
+            http_response_code(403);
+            echo 'Operação não permitida.';
+            return;
+        }
+
+        $pode = !empty($_POST['pode_solicitar_vaga']);
+        $aprovadorId = ctype_digit((string)($_POST['aprovador_usuario_id'] ?? '')) ? (int)$_POST['aprovador_usuario_id'] : null;
+        $result = User::setVagaAccess((int)$id, $pode, $aprovadorId, $actor, Security::clientIp());
+
+        $back = '/admin/usuarios/' . (int)$id;
+        if (!($result['ok'] ?? false)) {
+            redirect($back . '?erro=' . urlencode((string)($result['error'] ?? 'Falha ao salvar o acesso a Solicitação de Vagas.')));
+        }
+        redirect($back . '?ok=' . urlencode('Acesso a Solicitação de Vagas atualizado.'));
+    }
+
+    /** Vincula (ação administrativa explícita) o usuário a um contrato oficial do METADADOS. */
+    public function vincularMetadados(string $id): void
+    {
+        Auth::requireRole(['admin']);
+        SchemaManager::ensure();
+        if (!Security::csrfCheck($_POST['csrf'] ?? '')) {
+            http_response_code(400);
+            echo 'Falha na verificação de segurança (CSRF).';
+            return;
+        }
+        $target = User::findById((int)$id);
+        if (!$target) {
+            http_response_code(404);
+            echo 'Usuário não encontrado';
+            return;
+        }
+        $actor = User::findById((int)($_SESSION['user_id'] ?? 0));
+        if (!User::canManageUser($actor, $target)) {
+            http_response_code(403);
+            echo 'Operação não permitida.';
+            return;
+        }
+
+        $back = '/admin/usuarios/' . (int)$id;
+        $acao = Security::sanitizeString($_POST['acao'] ?? 'vincular');
+        if ($acao === 'desvincular') {
+            User::desvincularMetadados((int)$id, $actor, Security::clientIp());
+            redirect($back . '?ok=' . urlencode('Vínculo com o METADADOS removido.'));
+        }
+
+        $metadadosId = ctype_digit((string)($_POST['colaborador_metadados_id'] ?? '')) ? (int)$_POST['colaborador_metadados_id'] : 0;
+        if ($metadadosId <= 0) {
+            redirect($back . '?erro=' . urlencode('Selecione um contrato oficial para vincular.'));
+        }
+        $result = User::vincularMetadados((int)$id, $metadadosId, $actor, Security::clientIp());
+        if (!($result['ok'] ?? false)) {
+            redirect($back . '?erro=' . urlencode((string)($result['error'] ?? 'Falha ao vincular o contrato oficial.')));
+        }
+        redirect($back . '?ok=' . urlencode('Usuário vinculado ao contrato oficial do METADADOS.'));
+    }
+
+    /** Busca JSON de contratos oficiais ATIVOS para o autocomplete do vínculo METADADOS. Sem CPF. */
+    public function buscarMetadados(): void
+    {
+        Auth::requireRole(['admin']);
+        header('Content-Type: application/json; charset=UTF-8');
+        $q = Security::sanitizeString($_GET['q'] ?? '');
+        if (mb_strlen($q) < 2) {
+            echo json_encode(['ok' => true, 'items' => []], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        $resultado = (new ColaboradorMetadadosConsultaRepository())->paginate(
+            ['q' => $q, 'situacao' => 'ativos'],
+            1,
+            20
+        );
+        $items = array_map(static function (array $row): array {
+            return [
+                'id' => (int)$row['id'],
+                'nome' => (string)$row['nome'],
+                'empresa' => (string)($row['empresa'] ?? ''),
+                'unidade' => (string)($row['unidade'] ?? ''),
+                'setor' => (string)($row['setor'] ?? ''),
+                'cargo' => (string)($row['cargo'] ?? ''),
+                'contrato' => (string)($row['numero_contrato'] ?? ''),
+            ];
+        }, $resultado['items']);
+        echo json_encode(['ok' => true, 'items' => $items], JSON_UNESCAPED_UNICODE);
     }
 
     public function updateStatus(string $id): void

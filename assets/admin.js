@@ -994,7 +994,8 @@ if (typeof module !== 'undefined' && module.exports) {
     const motivoOutrosWrap = root.querySelector('[data-solicitacao-motivo-outros-wrap="1"]');
     const motivoOutrosInput = root.querySelector('[data-solicitacao-motivo-outros="1"]');
     const beneficioWrap = root.querySelector('[data-solicitacao-beneficios-wrap="1"]');
-    if (!payloadNode || !setorSelect || !cargoSelect || !gestorSelect || !centroSelect) {
+    // gestorSelect é opcional desde 2026-09-09 (só aparece para RH/Admin) — não bloquear o form.
+    if (!payloadNode || !setorSelect || !cargoSelect || !centroSelect) {
       return;
     }
 
@@ -1037,6 +1038,7 @@ if (typeof module !== 'undefined' && module.exports) {
     };
 
     const renderOptions = (select, items, selectedValue, labelBuilder, options = {}) => {
+      if (!select) return;
       const previous = String(selectedValue || '');
       const emptyLabel = options.emptyLabel || 'Selecione';
       const keepPlaceholderEnabled = !!options.keepPlaceholderEnabled;
@@ -1211,7 +1213,7 @@ if (typeof module !== 'undefined' && module.exports) {
       renderOptions(
         gestorSelect,
         gestores.filter((item) => String(item.setor_id) === setorId),
-        gestorSelect.value,
+        gestorSelect ? gestorSelect.value : '',
         (item) => `${item.nome} - ${item.cargo_nome}`
       );
       renderOptions(

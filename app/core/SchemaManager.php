@@ -52,6 +52,24 @@ class SchemaManager
         if ((int)$checkResetAt->fetchColumn() === 0) {
             $pdo->exec("ALTER TABLE usuarios ADD COLUMN last_password_reset_at DATETIME NULL");
         }
+
+        // Domínio de Solicitação de Vaga movido de `usuario_colaboradores` para `usuarios`
+        // (migration 2026-09-09-usuarios-dominio-vagas.sql). Rede de segurança só para as COLUNAS
+        // simples em instalações onde a migration formal ainda não rodou — FK/UNIQUE continuam
+        // sendo responsabilidade exclusiva da migration.
+        foreach ([
+            'pode_solicitar_vaga' => "ALTER TABLE usuarios ADD COLUMN pode_solicitar_vaga TINYINT(1) NOT NULL DEFAULT 0 AFTER role",
+            'colaborador_metadados_id' => "ALTER TABLE usuarios ADD COLUMN colaborador_metadados_id INT NULL AFTER pode_solicitar_vaga",
+            'aprovador_usuario_id' => "ALTER TABLE usuarios ADD COLUMN aprovador_usuario_id INT NULL AFTER colaborador_metadados_id",
+        ] as $coluna => $ddl) {
+            $existe = $pdo->query(
+                "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE()"
+                . " AND TABLE_NAME = 'usuarios' AND COLUMN_NAME = '" . $coluna . "'"
+            );
+            if ((int)$existe->fetchColumn() === 0) {
+                $pdo->exec($ddl);
+            }
+        }
     }
 }
 

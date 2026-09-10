@@ -64,7 +64,12 @@ if ($status !== '') { $params['status'] = $status; }
         <tr class="hover:bg-gray-50">
           <td class="p-3 font-medium text-gray-900"><?= Security::e($u['nome']) ?></td>
           <td class="p-3 text-gray-700"><?= Security::e($u['email']) ?></td>
-          <td class="p-3 text-gray-700"><?= Security::e(strtoupper((string)($u['role'] ?? ''))) ?></td>
+          <td class="p-3 text-gray-700">
+            <?= Security::e(strtoupper((string)($u['role'] ?? ''))) ?>
+            <?php if ((int)($u['pode_solicitar_vaga'] ?? 0) === 1): ?>
+              <span class="ml-1 inline-flex rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700" title="Autorizado a solicitar vagas">Solicita vaga</span>
+            <?php endif; ?>
+          </td>
           <td class="p-3">
             <span class="ct-badge <?= $isActive ? 'ct-badge-active' : 'ct-badge-inactive' ?>">
               <?= $isActive ? 'Ativo' : 'Inativo' ?>
@@ -92,6 +97,9 @@ if ($status !== '') { $params['status'] = $status; }
         <div class="mt-1 text-sm text-gray-600"><?= Security::e($u['email']) ?></div>
         <div class="mt-3 flex flex-wrap items-center gap-2">
           <span class="text-xs font-medium text-gray-500"><?= Security::e(strtoupper((string)($u['role'] ?? ''))) ?></span>
+          <?php if ((int)($u['pode_solicitar_vaga'] ?? 0) === 1): ?>
+            <span class="inline-flex rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700">Solicita vaga</span>
+          <?php endif; ?>
           <span class="ct-badge <?= $isActive ? 'ct-badge-active' : 'ct-badge-inactive' ?>">
             <?= $isActive ? 'Ativo' : 'Inativo' ?>
           </span>

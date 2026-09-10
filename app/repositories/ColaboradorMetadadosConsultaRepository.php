@@ -158,6 +158,21 @@ class ColaboradorMetadadosConsultaRepository
     }
 
     /**
+     * Um contrato oficial pelo id — usado pela administração de Usuários (vínculo opcional
+     * `usuarios.colaborador_metadados_id`) para exibir o vínculo já configurado. Sem CPF.
+     */
+    public function findById(int $id): ?array
+    {
+        $stmt = $this->connection()->prepare(
+            'SELECT id, nome, empresa, unidade, setor, cargo, numero_contrato,
+                    codigo_empresa, codigo_unidade, ativo
+             FROM colaboradores_metadados WHERE id = ? LIMIT 1'
+        );
+        $stmt->execute([$id]);
+        return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+    }
+
+    /**
      * @return array{0: string[], 1: array<int, string>} [cláusulas WHERE, parâmetros posicionais]
      */
     private function montarFiltros(array $filtros): array

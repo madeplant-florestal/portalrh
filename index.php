@@ -161,11 +161,14 @@ try {
 
     $router->get('/admin/usuarios', [AdminUsuariosController::class, 'index']);
     $router->get('/admin/usuarios/novo', [AdminUsuariosController::class, 'create']);
+    $router->get('/admin/usuarios/metadados/buscar', [AdminUsuariosController::class, 'buscarMetadados']);
     $router->get('/admin/usuarios/{id}', [AdminUsuariosController::class, 'show']);
     $router->post('/admin/usuarios/novo', [AdminUsuariosController::class, 'store']);
     $router->post('/admin/usuarios/supervisor/garantir', [AdminSupervisorController::class, 'ensure']);
     $router->post('/admin/usuarios/{id}/role', [AdminUsuariosController::class, 'updateRole']);
     $router->post('/admin/usuarios/{id}/status', [AdminUsuariosController::class, 'updateStatus']);
+    $router->post('/admin/usuarios/{id}/vaga-acesso', [AdminUsuariosController::class, 'updateVagaAcesso']);
+    $router->post('/admin/usuarios/{id}/metadados-vinculo', [AdminUsuariosController::class, 'vincularMetadados']);
     $router->post('/admin/usuarios/{id}/excluir', [AdminUsuariosController::class, 'delete']);
 
     $router->dispatch();

@@ -75,6 +75,35 @@ $assert($v['ok'] === false, 'Unidades: descricao vazia deveria falhar.');
 $v = MetadadosDimensaoSyncRequestValidator::validar(enveloparDimensao([['codigo_empresa' => '0001', 'descricao' => 'SEM UNIDADE']]), 2000, 'unidades');
 $assert($v['ok'] === false, 'Unidades: codigo_unidade ausente deveria falhar.');
 
+// ===== SETORES / CARGOS (Fase 5.2) =====
+foreach (['setores', 'cargos'] as $dimCat) {
+    $catOk = enveloparDimensao([
+        ['codigo' => '0001', 'descricao_oficial' => 'CONTABILIDADE', 'situacao_oficial' => 'A'],
+        ['codigo' => '0120', 'descricao_oficial' => 'AUX ADMINISTRATIVO', 'situacao_oficial' => 'D'],
+    ]);
+    $v = MetadadosDimensaoSyncRequestValidator::validar($catOk, 5000, $dimCat);
+    $assert($v['ok'] === true, "{$dimCat}: payload válido deveria passar: " . implode('; ', $v['errors'] ?? []));
+    // código opaco com zero à esquerda passa pela chave lógica sem coerção
+    $assert($v['registros'][1]['codigo'] === '0120', "{$dimCat}: código '0120' preservado como string no registro validado.");
+
+    $v = MetadadosDimensaoSyncRequestValidator::validar(enveloparDimensao([['codigo' => '1', 'descricao_oficial' => '']]), 5000, $dimCat);
+    $assert($v['ok'] === false, "{$dimCat}: descricao_oficial vazia deveria falhar.");
+
+    $v = MetadadosDimensaoSyncRequestValidator::validar(enveloparDimensao([['descricao_oficial' => 'SEM CODIGO']]), 5000, $dimCat);
+    $assert($v['ok'] === false, "{$dimCat}: codigo ausente deveria falhar.");
+
+    $catDup = enveloparDimensao([
+        ['codigo' => '0001', 'descricao_oficial' => 'A'],
+        ['codigo' => '0001', 'descricao_oficial' => 'B'],
+    ]);
+    $v = MetadadosDimensaoSyncRequestValidator::validar($catDup, 5000, $dimCat);
+    $assert($v['ok'] === false, "{$dimCat}: código duplicado no lote deveria falhar.");
+
+    // código string "0" (só zero) não é tratado como vazio
+    $v = MetadadosDimensaoSyncRequestValidator::validar(enveloparDimensao([['codigo' => '0', 'descricao_oficial' => 'ZERO']]), 5000, $dimCat);
+    $assert($v['ok'] === true, "{$dimCat}: código '0' é válido (não confundir com vazio).");
+}
+
 // ===== ENVELOPE / DIMENSÃO =====
 $semOrigem = enveloparDimensao([['codigo_empresa' => '1', 'razao_social' => 'X']]);
 unset($semOrigem['origem_metadados']);

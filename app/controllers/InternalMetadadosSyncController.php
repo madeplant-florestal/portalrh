@@ -8,6 +8,8 @@
  *   /internal/metadados/colaboradores/sync  -> MetadadosSyncIngestService
  *   /internal/metadados/empresas/sync       -> MetadadosDimensaoSyncIngestService('empresas')
  *   /internal/metadados/unidades/sync       -> MetadadosDimensaoSyncIngestService('unidades')
+ *   /internal/metadados/setores/sync        -> MetadadosDimensaoSyncIngestService('setores')
+ *   /internal/metadados/cargos/sync         -> MetadadosDimensaoSyncIngestService('cargos')
  *
  * Sem sessão, sem CSRF de formulário — autenticação é inteiramente via assinatura HMAC
  * (MetadadosSyncSignature), verificada dentro de MetadadosSyncIngestService. Fora do gate de
@@ -33,6 +35,18 @@ class InternalMetadadosSyncController extends Controller
     public function unidades(): void
     {
         $this->processar('unidades', static fn () => new MetadadosDimensaoSyncIngestService('unidades'));
+    }
+
+    /** Fase 5.2 — dimensão SETORES (RHSETORES). */
+    public function setores(): void
+    {
+        $this->processar('setores', static fn () => new MetadadosDimensaoSyncIngestService('setores'));
+    }
+
+    /** Fase 5.2 — dimensão CARGOS (RHCARGOS). */
+    public function cargos(): void
+    {
+        $this->processar('cargos', static fn () => new MetadadosDimensaoSyncIngestService('cargos'));
     }
 
     /**

@@ -1,16 +1,16 @@
 <?php
 
 /**
- * Recebe e aplica um lote de sincronização das dimensões EMPRESAS ou UNIDADES enviado pelo sender
- * interno (scripts/sync_metadados_producao.php) via
- * POST /internal/metadados/{empresas|unidades}/sync — Fase 5.1A.
+ * Recebe e aplica um lote de sincronização das dimensões EMPRESAS, UNIDADES, SETORES ou CARGOS
+ * enviado pelo sender interno (scripts/sync_metadados_producao.php) via
+ * POST /internal/metadados/{empresas|unidades|setores|cargos}/sync — Fases 5.1A e 5.2.
  *
  * Espelha MetadadosSyncIngestService (colaboradores), reaproveitando o que é comum e sem duplicar
  * mecanismo nenhum:
  *   1) MetadadosSyncEnvelope::abrir()  -> HMAC + janela de replay + decode JSON;
  *   2) MetadadosDimensaoSyncRequestValidator -> forma do envelope + chave lógica por registro;
- *   3) {Empresa|Unidade}MetadadosSyncService::applyRows() -> persistência (transação única, upsert
- *      idempotente, nunca DELETE) — a mesma lógica testável sem SQL Server;
+ *   3) {Empresa|Unidade|Catalogo}MetadadosSyncService::applyRows() -> persistência (transação
+ *      única, upsert idempotente, nunca DELETE) — a mesma lógica testável sem SQL Server;
  *   4) MetadadosSyncExecucaoRepository -> histórico operacional, com `dimensao` preenchida.
  *
  * Este endpoint NUNCA acessa o SQL Server do METADADOS — só recebe dados já extraídos pelo sender
@@ -18,26 +18,38 @@
  */
 class MetadadosDimensaoSyncIngestService
 {
-    private const DIMENSOES = ['empresas', 'unidades'];
+    private const DIMENSOES = ['empresas', 'unidades', 'setores', 'cargos'];
 
     private string $dimensao;
-    private EmpresaMetadadosSyncService $empresaService;
-    private UnidadeMetadadosSyncService $unidadeService;
+    /** @var object Serviço de sincronização da dimensão — expõe applyRows(array, ?string): array. */
+    private object $syncService;
     private ?MetadadosSyncExecucaoRepository $execucaoRepository;
 
     public function __construct(
         string $dimensao,
-        ?EmpresaMetadadosSyncService $empresaService = null,
-        ?UnidadeMetadadosSyncService $unidadeService = null,
+        ?object $syncService = null,
         ?MetadadosSyncExecucaoRepository $execucaoRepository = null
     ) {
         if (!in_array($dimensao, self::DIMENSOES, true)) {
             throw new \InvalidArgumentException("Dimensão não suportada: {$dimensao}");
         }
         $this->dimensao = $dimensao;
-        $this->empresaService = $empresaService ?? new EmpresaMetadadosSyncService();
-        $this->unidadeService = $unidadeService ?? new UnidadeMetadadosSyncService();
+        $this->syncService = $syncService ?? self::servicoPadrao($dimensao);
         $this->execucaoRepository = $execucaoRepository;
+    }
+
+    private static function servicoPadrao(string $dimensao): object
+    {
+        switch ($dimensao) {
+            case 'empresas':
+                return new EmpresaMetadadosSyncService();
+            case 'unidades':
+                return new UnidadeMetadadosSyncService();
+            case 'setores':
+            case 'cargos':
+                return new CatalogoMetadadosSyncService($dimensao);
+        }
+        throw new \InvalidArgumentException("Dimensão não suportada: {$dimensao}");
     }
 
     /**
@@ -71,9 +83,7 @@ class MetadadosDimensaoSyncIngestService
         $hashLote = hash('sha256', $corpoBruto);
 
         try {
-            $resumo = $this->dimensao === 'empresas'
-                ? $this->empresaService->applyRows($validacao['registros'], $validacao['origem'])
-                : $this->unidadeService->applyRows($validacao['registros'], $validacao['origem']);
+            $resumo = $this->syncService->applyRows($validacao['registros'], $validacao['origem']);
         } catch (Throwable $e) {
             // applyRows() só chega aqui por falha real de infraestrutura (transação abortada) —
             // erros de negócio por linha são contados em 'errors', não lançados. Logo: 500, não 4xx.

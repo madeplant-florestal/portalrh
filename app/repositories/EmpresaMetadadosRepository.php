@@ -137,31 +137,13 @@ class EmpresaMetadadosRepository
     }
 
     /**
-     * Normaliza um nome de empresa para comparação de adoção: maiúsculas, sem acento, espaços
-     * colapsados. NUNCA é a identidade — só um heurístico de match único na primeira carga.
+     * Normaliza um nome de empresa para comparação de adoção. NUNCA é a identidade — só um
+     * heurístico de match único e exato. Implementação única em MetadadosTexto::normalizarNome()
+     * (compartilhada com Setor/Cargo); mantida aqui como fachada estável.
      */
-    /** Transliteração determinística de acentos PT-BR — independente de locale/libiconv (Windows). */
-    private const ACENTOS = [
-        'Á' => 'A', 'À' => 'A', 'Ã' => 'A', 'Â' => 'A', 'Ä' => 'A',
-        'É' => 'E', 'È' => 'E', 'Ê' => 'E', 'Ë' => 'E',
-        'Í' => 'I', 'Ì' => 'I', 'Î' => 'I', 'Ï' => 'I',
-        'Ó' => 'O', 'Ò' => 'O', 'Õ' => 'O', 'Ô' => 'O', 'Ö' => 'O',
-        'Ú' => 'U', 'Ù' => 'U', 'Û' => 'U', 'Ü' => 'U',
-        'Ç' => 'C', 'Ñ' => 'N',
-        'á' => 'a', 'à' => 'a', 'ã' => 'a', 'â' => 'a', 'ä' => 'a',
-        'é' => 'e', 'è' => 'e', 'ê' => 'e', 'ë' => 'e',
-        'í' => 'i', 'ì' => 'i', 'î' => 'i', 'ï' => 'i',
-        'ó' => 'o', 'ò' => 'o', 'õ' => 'o', 'ô' => 'o', 'ö' => 'o',
-        'ú' => 'u', 'ù' => 'u', 'û' => 'u', 'ü' => 'u',
-        'ç' => 'c', 'ñ' => 'n',
-    ];
-
     public static function normalizarNome(string $nome): string
     {
-        $nome = strtr(trim($nome), self::ACENTOS);
-        $nome = preg_replace('/[^A-Za-z0-9]+/', ' ', $nome) ?? '';
-        $nome = preg_replace('/\s+/', ' ', $nome) ?? '';
-        return strtoupper(trim($nome));
+        return MetadadosTexto::normalizarNome($nome);
     }
 
     private static function slugify(string $value): string

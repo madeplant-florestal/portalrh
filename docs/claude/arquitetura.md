@@ -154,11 +154,15 @@ Usado em `Setor`, `CargoSetor`, `Empresa` (parcialmente), webhooks de recrutamen
 com o METADADOS (`ColaboradorMetadadosRepository`/`MetadadosSyncService`/
 `ColaboradorMetadadosReconciliationService`; a Fase 5.1A acrescentou `EmpresaMetadadosRepository`/
 `EmpresaMetadadosSyncService`, `UnidadeMetadadosRepository`/`UnidadeMetadadosSyncService` e as
-tabelas `unidades` + colunas `codigo_empresa/razao_social` em `empresas`; ver `roadmap-tecnico.md`).
+tabelas `unidades` + colunas `codigo_empresa/razao_social` em `empresas`; a Fase 5.2 acrescentou
+`CatalogoMetadadosRepository`/`CatalogoMetadadosSyncService` — uma classe parametrizada por
+`setores`/`cargos` — e colunas `codigo_setor`/`codigo_cargo`/`descricao_oficial`/`situacao_metadados`
+em `setores`/`cargos`; `MetadadosTexto::normalizarNome()` compartilha o normalizador de adoção;
+ver `roadmap-tecnico.md`).
 Endpoints internos máquina-a-máquina (auth HMAC, fora do gate `/admin`):
-`POST /internal/metadados/{colaboradores|empresas|unidades}/sync` — `InternalMetadadosSyncController`,
-com `MetadadosSyncEnvelope` (HMAC + replay + decode, `app/core/`) compartilhado. Fluxo de uma
-escrita (ex.: criar Setor):
+`POST /internal/metadados/{colaboradores|empresas|unidades|setores|cargos}/sync` —
+`InternalMetadadosSyncController`, com `MetadadosSyncEnvelope` (HMAC + replay + decode,
+`app/core/`) compartilhado. Fluxo de uma escrita (ex.: criar Setor):
 
 ```
 Controller
@@ -193,13 +197,18 @@ Controller
   assumir que uma coluna não existe, verifique nos três lugares.**
 - Tabela hub: `colaboradores` (FK obrigatória para `cargos`, opcional para `empresas`/`setores`;
   ganhou `metadados_id` opcional na integração com o METADADOS, ver `roadmap-tecnico.md`).
-- Estrutura Organizacional em transição para o METADADOS (Fase 5.1A, ver `roadmap-tecnico.md`):
+- Estrutura Organizacional em transição para o METADADOS (Fases 5.1A/5.2, ver `roadmap-tecnico.md`):
   `empresas` ganhou `codigo_empresa` (`UNIQUE`, identidade oficial) + `razao_social` +
   `origem_metadados` + `sincronizado_em`, sem perder `nome`/`slug`/`id` (identidade legada e
   referência das FKs); `unidades` (nova) = `(codigo_empresa, codigo_unidade)` + FK `empresa_id →
-  empresas(id)` `ON DELETE RESTRICT`; `colaboradores_metadados` ganhou `codigo_setor`/
-  `codigo_cargo`/`codigo_centro_custo` ao lado das colunas textuais existentes. Setores/Cargos/
-  Centros de Custo **ainda não** reconstruídos.
+  empresas(id)` `ON DELETE RESTRICT`; `setores` e `cargos` ganharam `codigo_setor`/`codigo_cargo`
+  (`VARCHAR(8) UNIQUE`, string opaca — identidade oficial GLOBAL, `RHSETORES`/`RHCARGOS` não têm
+  empresa) + `descricao_oficial` + `situacao_metadados` (valor bruto de `ATIVADESATIVADA`) +
+  `origem_metadados` + `sincronizado_em`, sem perder `id`/`nome`/`slug`/`ativo`/`setores.empresa_id`
+  nem nenhuma das 12 FKs; `colaboradores_metadados` tem `codigo_setor`/`codigo_cargo`/
+  `codigo_centro_custo` ao lado das colunas textuais. Centro de Custo **ainda não** reconstruído;
+  `ativo` local de setores/cargos **não** é mexido pela sincronização (semântica de
+  `ATIVADESATIVADA` pendente).
 - Campos sensíveis (justificativas/contexto salarial em `solicitacoes_vaga` e
   `movimentacoes_pessoal`) são colunas `*_encrypted` via `Cipher` (AES-256-CBC), descriptografadas
   na leitura.

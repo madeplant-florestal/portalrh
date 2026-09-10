@@ -4,31 +4,36 @@ require __DIR__ . '/../app/core/bootstrap.php';
 /**
  * Sender interno — roda DENTRO da rede Madeplant (mesma máquina/rede que já executa
  * scripts/sync_metadados_colaboradores.php contra o SQL Server). Lê o METADADOS oficial via
- * {Empresa|Unidade}MetadadosSyncService / MetadadosSyncService::fetchSourceRows() (SELECT — nunca
- * escreve no SQL Server, reaproveita a mesma query/normalização já validada), monta um lote
- * assinado com HMAC e envia por HTTPS para os endpoints receptores em produção
- * (POST /internal/metadados/{empresas|unidades|colaboradores}/sync — ver
+ * {Empresa|Unidade|Catalogo}MetadadosSyncService / MetadadosSyncService::fetchSourceRows()
+ * (SELECT — nunca escreve no SQL Server, reaproveita a mesma query/normalização já validada),
+ * monta um lote assinado com HMAC e envia por HTTPS para os endpoints receptores em produção
+ * (POST /internal/metadados/{empresas|unidades|setores|cargos|colaboradores}/sync — ver
  * InternalMetadadosSyncController).
  *
- * Fase 5.1A: passa a cobrir TRÊS dimensões. Uma execução padrão sincroniza, nesta ordem:
- *   1) empresas   2) unidades   3) colaboradores
+ * Fases 5.1A/5.2: cobre CINCO dimensões. Uma execução padrão sincroniza, nesta ordem:
+ *   1) empresas  2) unidades  3) setores  4) cargos  5) colaboradores
  * — a ordem importa: unidades resolvem empresa_id contra as empresas já sincronizadas.
  *
  * Modo padrão é SEMPRE seguro: monta o(s) lote(s), valida tamanho, mostra um resumo local e NÃO
  * envia. Só envia de verdade com --enviar, explícito, sem prompt interativo.
  *
  * Opções:
- *   --dimensao=empresas|unidades|colaboradores|todas   (padrão: todas)
+ *   --dimensao=empresas|unidades|setores|cargos|colaboradores|todas   (padrão: todas)
  *   --dry-run                                          (explícito; é o padrão de qualquer forma)
  *   --enviar                                           (envio real — decisão separada, ainda não autorizada)
  *   --correlacao-id=<uuid>                             (repassado só à etapa de colaboradores em "todas")
+ *
+ * No dry-run, as dimensões empresas/setores/cargos trazem `preview_reconciliacao` — o plano de
+ * adoção/inserção (planejar()), idêntico ao que o envio real executaria.
  *
  * Nunca imprime segredo HMAC, senha, CPF, nome, salário individual ou o payload completo — só
  * contagens, origem, horário, status e hash do lote.
  */
 
-const DIMENSOES_SUPORTADAS = ['empresas', 'unidades', 'colaboradores'];
-const ORDEM_TODAS = ['empresas', 'unidades', 'colaboradores'];
+const DIMENSOES_SUPORTADAS = ['empresas', 'unidades', 'setores', 'cargos', 'colaboradores'];
+const ORDEM_TODAS = ['empresas', 'unidades', 'setores', 'cargos', 'colaboradores'];
+/** Dimensões cujo dry-run traz a prévia de reconciliação (planejar()). */
+const DIMENSOES_COM_PREVIA = ['empresas', 'setores', 'cargos'];
 
 function montarLote(array $rows, string $origem, ?string $correlacaoId = null): array
 {
@@ -84,6 +89,9 @@ function lerOrigem(string $dimensao): array
             return (new EmpresaMetadadosSyncService())->fetchSourceRows();
         case 'unidades':
             return (new UnidadeMetadadosSyncService())->fetchSourceRows();
+        case 'setores':
+        case 'cargos':
+            return (new CatalogoMetadadosSyncService($dimensao))->fetchSourceRows();
         case 'colaboradores':
             return (new MetadadosSyncService())->fetchSourceRows();
         default:
@@ -91,20 +99,28 @@ function lerOrigem(string $dimensao): array
     }
 }
 
+/** Serviço que expõe planejar() para a dimensão (usado só pela prévia do dry-run). */
+function servicoPlano(string $dimensao): object
+{
+    if ($dimensao === 'empresas') {
+        return new EmpresaMetadadosSyncService();
+    }
+    return new CatalogoMetadadosSyncService($dimensao); // setores | cargos
+}
+
 /**
- * Prévia SOMENTE LEITURA da reconciliação Empresas: RHEMPRESAS (lido agora) x `empresas` local.
- * Reutiliza EXATAMENTE a decisão de EmpresaMetadadosSyncService::planejar() — a mesma que o
- * primeiro envio real executaria. Não escreve nada. Se o MySQL do Portal não estiver acessível
- * desta máquina, devolve o erro sem derrubar o dry-run do lote.
+ * Prévia SOMENTE LEITURA da reconciliação (empresas / setores / cargos): catálogo oficial lido
+ * agora x tabela local. Reutiliza EXATAMENTE a decisão de {Empresa|Catalogo}MetadadosSyncService
+ * ::planejar() — a mesma que o primeiro envio real executaria. Não escreve nada. Se o MySQL do
+ * Portal não estiver acessível desta máquina, devolve o erro sem derrubar o dry-run do lote.
  *
- * ATENÇÃO: a prévia reflete o estado da tabela `empresas` do banco MySQL configurado em
- * `local.php` DESTA máquina. Confirme que é o banco de produção (ou uma cópia fiel) antes de
- * tirar conclusões.
+ * ATENÇÃO: a prévia reflete o estado da tabela local do banco MySQL configurado em `local.php`
+ * DESTA máquina. Confirme que é o banco de produção (ou uma cópia fiel) antes de tirar conclusões.
  */
-function previewReconciliacaoEmpresas(array $rows, string $origem): array
+function previewReconciliacao(string $dimensao, array $rows, string $origem): array
 {
     try {
-        $plano = (new EmpresaMetadadosSyncService())->planejar($rows, $origem);
+        $plano = servicoPlano($dimensao)->planejar($rows, $origem);
     } catch (Throwable $e) {
         return ['erro' => 'Não foi possível montar a prévia (MySQL do Portal acessível desta máquina?): ' . $e->getMessage()];
     }
@@ -114,21 +130,23 @@ function previewReconciliacaoEmpresas(array $rows, string $origem): array
         $contagem[$item['acao']] = ($contagem[$item['acao']] ?? 0) + 1;
     }
 
+    // Normaliza o item para uma forma única (empresas usa codigo_empresa/razao_social/empresa_local_id;
+    // setores/cargos usa codigo/descricao_oficial/local_id).
     $itens = array_map(static function (array $item): array {
         return [
-            'codigo_empresa' => $item['codigo_empresa'],
-            'razao_social' => $item['razao_social'],
+            'codigo' => $item['codigo'] ?? $item['codigo_empresa'] ?? null,
+            'descricao_oficial' => $item['descricao_oficial'] ?? $item['razao_social'] ?? null,
+            'situacao_oficial' => $item['situacao_oficial'] ?? null,
             'acao' => $item['acao'],
-            'empresa_local_id' => $item['empresa_local_id'],
-            'empresa_local_candidata' => $item['nome_local'],
-            'nome_local_atual' => $item['nome_local'],
+            'local_id' => $item['local_id'] ?? $item['empresa_local_id'] ?? null,
+            'nome_local' => $item['nome_local'],
             'criterio' => $item['criterio'],
         ];
     }, $plano['itens']);
 
     return [
-        'rhempresas_lidas' => count($rows),
-        'aviso_fonte' => 'Prévia contra a tabela `empresas` do MySQL configurado em local.php desta máquina.',
+        'total_oficial' => count($rows),
+        'aviso_fonte' => 'Prévia contra a tabela local do MySQL configurado em local.php desta máquina.',
         'contagem_por_acao' => $contagem,
         'itens' => $itens,
         'locais_sem_correspondencia' => $plano['locais_sem_correspondencia'],
@@ -182,8 +200,8 @@ function sincronizarDimensao(string $dimensao, array $config, bool $enviar, ?str
 
     if (!$enviar) {
         $resumo['status'] = 'SIMULADO_NAO_ENVIADO';
-        if ($dimensao === 'empresas') {
-            $resumo['preview_reconciliacao'] = previewReconciliacaoEmpresas($rows, $origem);
+        if (in_array($dimensao, DIMENSOES_COM_PREVIA, true)) {
+            $resumo['preview_reconciliacao'] = previewReconciliacao($dimensao, $rows, $origem);
         }
         return $resumo;
     }
@@ -217,7 +235,7 @@ try {
     } elseif (in_array($dimensaoOpt, DIMENSOES_SUPORTADAS, true)) {
         $dimensoes = [$dimensaoOpt];
     } else {
-        throw new RuntimeException('--dimensao deve ser empresas, unidades, colaboradores ou todas.');
+        throw new RuntimeException('--dimensao deve ser empresas, unidades, setores, cargos, colaboradores ou todas.');
     }
 
     $correlacaoId = isset($options['correlacao-id']) ? trim((string)$options['correlacao-id']) : null;

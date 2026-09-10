@@ -79,6 +79,10 @@ try {
     // dimensões oficiais sincronizadas. Mesma auth HMAC, mesmo padrão de resposta.
     $router->post('/internal/metadados/empresas/sync', [InternalMetadadosSyncController::class, 'empresas']);
     $router->post('/internal/metadados/unidades/sync', [InternalMetadadosSyncController::class, 'unidades']);
+    // Fase 5.2 — Setores (RHSETORES) e Cargos (RHCARGOS) como dimensões oficiais. Chave global,
+    // código string opaca. Mesma auth HMAC.
+    $router->post('/internal/metadados/setores/sync', [InternalMetadadosSyncController::class, 'setores']);
+    $router->post('/internal/metadados/cargos/sync', [InternalMetadadosSyncController::class, 'cargos']);
 
     $router->get('/admin/recruitment-webhooks', [AdminRecruitmentWebhooksController::class, 'index']);
     $router->post('/admin/recruitment-webhooks/settings/save', [AdminRecruitmentWebhooksController::class, 'saveSetting']);

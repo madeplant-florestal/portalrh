@@ -11,6 +11,10 @@
 --   Um mesmo `correlacao_id` poderá futuramente identificar uma execução completa contendo várias
 --   dimensões; nesta fase cada dimensão gera sua própria linha.
 --
+--   Produção: MariaDB 11.8.9-log (u172743873_portalrh) — coluna `dimensao` já estava aplicada
+--   anteriormente (a reaplicação em 10/09/2026 retornou #1060 "Duplicate column name 'dimensao'").
+--   Só comentário — nenhuma instrução SQL abaixo foi alterada.
+--
 --   Puramente aditiva. `ALTER TABLE` puro (coluna nova, MySQL 8.4.3 não aceita IF NOT EXISTS).
 --   NÃO aplicar em produção nesta execução.
 

@@ -25,6 +25,7 @@ require_once __DIR__ . '/Database.php';
 require_once __DIR__ . '/MetadadosDatabase.php';
 require_once __DIR__ . '/MetadadosSyncSignature.php';
 require_once __DIR__ . '/MetadadosSyncEnvelope.php';
+require_once __DIR__ . '/MetadadosTexto.php';
 require_once __DIR__ . '/PasswordPolicy.php';
 require_once __DIR__ . '/Security.php';
 require_once __DIR__ . '/Cipher.php';

@@ -1,18 +1,21 @@
 <?php
 
 /**
- * Validação estrutural do lote recebido em POST /internal/metadados/{empresas|unidades}/sync —
- * Fase 5.1A. Mesma filosofia de MetadadosSyncRequestValidator (a de colaboradores, mantida
- * intacta): valida só a FORMA do envelope, a chave lógica de cada registro, ausência de
- * duplicidade no lote e o limite de tamanho. Um payload que falha aqui é rejeitado por inteiro,
- * antes de qualquer escrita. Validação de conteúdo de negócio por registro fica nos serviços de
- * sincronização (EmpresaMetadadosSyncService / UnidadeMetadadosSyncService), que já isolam erro
- * por linha.
+ * Validação estrutural do lote recebido em
+ * POST /internal/metadados/{empresas|unidades|setores|cargos}/sync — Fases 5.1A e 5.2. Mesma
+ * filosofia de MetadadosSyncRequestValidator (a de colaboradores, mantida intacta): valida só a
+ * FORMA do envelope, a chave lógica de cada registro, ausência de duplicidade no lote e o limite
+ * de tamanho. Um payload que falha aqui é rejeitado por inteiro, antes de qualquer escrita.
+ * Validação de conteúdo de negócio por registro fica nos serviços de sincronização
+ * (Empresa/Unidade/CatalogoMetadadosSyncService), que já isolam erro por linha.
  *
  * O envelope é idêntico ao de colaboradores (versao/origem_metadados/gerado_em/total/registros +
  * correlacao_id opcional). O que muda por dimensão é só a chave lógica e o campo de descrição:
  *   - empresas:  chave (codigo_empresa)                 + razao_social não vazio
  *   - unidades:  chave (codigo_empresa, codigo_unidade) + descricao não vazio
+ *   - setores:   chave (codigo)                         + descricao_oficial não vazio
+ *   - cargos:    chave (codigo)                         + descricao_oficial não vazio
+ * O código é tratado como string opaca — nunca convertido para número.
  */
 class MetadadosDimensaoSyncRequestValidator
 {
@@ -21,6 +24,8 @@ class MetadadosDimensaoSyncRequestValidator
     private const DIMENSOES = [
         'empresas' => ['chave' => ['codigo_empresa'], 'descricao' => 'razao_social'],
         'unidades' => ['chave' => ['codigo_empresa', 'codigo_unidade'], 'descricao' => 'descricao'],
+        'setores'  => ['chave' => ['codigo'], 'descricao' => 'descricao_oficial'],
+        'cargos'   => ['chave' => ['codigo'], 'descricao' => 'descricao_oficial'],
     ];
 
     /**

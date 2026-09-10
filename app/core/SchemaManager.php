@@ -70,6 +70,32 @@ class SchemaManager
                 $pdo->exec($ddl);
             }
         }
+
+        // Contexto organizacional do usuário (migration 2026-09-10-usuarios-contexto-organizacional.sql).
+        // Rede de segurança só para a COLUNA simples `usuarios.cargo_id` — a FK/índice continuam
+        // sendo responsabilidade exclusiva da migration.
+        $temCargoId = $pdo->query(
+            "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE()"
+            . " AND TABLE_NAME = 'usuarios' AND COLUMN_NAME = 'cargo_id'"
+        );
+        if ((int)$temCargoId->fetchColumn() === 0) {
+            $pdo->exec("ALTER TABLE usuarios ADD COLUMN cargo_id INT NULL AFTER colaborador_metadados_id");
+        }
+
+        $pdo->exec("CREATE TABLE IF NOT EXISTS usuario_setores (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            usuario_id INT NOT NULL,
+            setor_id INT NOT NULL,
+            principal TINYINT(1) NOT NULL DEFAULT 0,
+            origem ENUM('METADADOS', 'MANUAL') NOT NULL DEFAULT 'MANUAL',
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uk_usuario_setores (usuario_id, setor_id),
+            KEY idx_usuario_setores_usuario (usuario_id),
+            KEY idx_usuario_setores_setor (setor_id),
+            CONSTRAINT fk_usuario_setores_usuario FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+            CONSTRAINT fk_usuario_setores_setor FOREIGN KEY (setor_id) REFERENCES setores(id) ON DELETE RESTRICT
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     }
 }
 

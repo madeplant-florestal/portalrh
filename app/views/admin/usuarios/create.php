@@ -36,6 +36,10 @@ $base = Config::app()['base_url'] ?? '';
         <option value="admin">Admin</option>
       </select>
     </div>
+    <p class="text-xs text-gray-500">
+      Vínculo com o METADADOS e contexto organizacional (Cargo principal, Setores de atuação,
+      aprovador) são definidos na tela de detalhe do usuário, após a criação.
+    </p>
     <div class="responsive-form-actions pt-2">
       <button type="submit" class="bg-ctgreen text-white px-4 py-2 rounded hover:bg-ctdark">Criar usuário</button>
       <a href="<?= $base ?>/admin" class="text-ctpblue hover:text-ctgreen">Voltar</a>

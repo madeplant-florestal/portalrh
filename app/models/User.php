@@ -9,6 +9,7 @@ class User
     public int $pode_solicitar_vaga = 0;
     public ?int $colaborador_metadados_id = null;
     public ?int $aprovador_usuario_id = null;
+    public ?int $cargo_id = null;
     public int $is_supervisor;
     public ?string $email_verified_at;
     public ?string $last_password_reset_at;
@@ -314,11 +315,21 @@ class User
             return ['ok' => false, 'error' => 'Este contrato oficial já está vinculado a outro usuário.'];
         }
 
+        $pdo = Database::conn();
+        $pdo->beginTransaction();
         try {
-            $stmt = Database::conn()->prepare('UPDATE usuarios SET colaborador_metadados_id = ? WHERE id = ?');
+            $stmt = $pdo->prepare('UPDATE usuarios SET colaborador_metadados_id = ? WHERE id = ?');
             $stmt->execute([$colaboradorMetadadosId, $id]);
+            // Herança do contexto organizacional (Cargo principal + Setor principal oficiais).
+            (new UsuarioContextoOrganizacionalService($pdo))
+                ->aplicarContextoDoVinculo($id, $colaboradorMetadadosId, $actor, $ip);
+            $pdo->commit();
         } catch (\PDOException $e) {
+            $pdo->rollBack();
             return ['ok' => false, 'error' => 'Não foi possível vincular: o contrato já está em uso por outro usuário.'];
+        } catch (\Throwable $e) {
+            $pdo->rollBack();
+            return ['ok' => false, 'error' => 'Não foi possível aplicar o contexto organizacional do contrato oficial.'];
         }
 
         AuditLog::log($actor?->id, $id, 'vaga_metadados_link', 'colaborador_metadados_id=' . $colaboradorMetadadosId, $ip);
@@ -330,8 +341,18 @@ class User
         if (!self::findById($id)) {
             return ['ok' => false, 'error' => 'Usuário não encontrado.'];
         }
-        $stmt = Database::conn()->prepare('UPDATE usuarios SET colaborador_metadados_id = NULL WHERE id = ?');
-        $stmt->execute([$id]);
+        $pdo = Database::conn();
+        $pdo->beginTransaction();
+        try {
+            $pdo->prepare('UPDATE usuarios SET colaborador_metadados_id = NULL WHERE id = ?')->execute([$id]);
+            // Preserva as associações já gravadas; as linhas herdadas passam a ser MANUAL e o
+            // Cargo (`usuarios.cargo_id`) é mantido — a edição volta a ser liberada na tela.
+            (new UsuarioContextoOrganizacionalService($pdo))->aoDesvincular($id);
+            $pdo->commit();
+        } catch (\Throwable $e) {
+            $pdo->rollBack();
+            return ['ok' => false, 'error' => 'Falha ao remover o vínculo com o METADADOS.'];
+        }
         AuditLog::log($actor?->id, $id, 'vaga_metadados_unlink', 'colaborador_metadados_id=NULL', $ip);
         return ['ok' => true];
     }
@@ -347,6 +368,7 @@ class User
         $u->pode_solicitar_vaga = (int)($data['pode_solicitar_vaga'] ?? 0);
         $u->colaborador_metadados_id = isset($data['colaborador_metadados_id']) ? (int)$data['colaborador_metadados_id'] : null;
         $u->aprovador_usuario_id = isset($data['aprovador_usuario_id']) ? (int)$data['aprovador_usuario_id'] : null;
+        $u->cargo_id = isset($data['cargo_id']) ? (int)$data['cargo_id'] : null;
         $u->is_supervisor = (int)($data['is_supervisor'] ?? 0);
         $u->email_verified_at = $data['email_verified_at'] ?? null;
         $u->last_password_reset_at = $data['last_password_reset_at'] ?? null;

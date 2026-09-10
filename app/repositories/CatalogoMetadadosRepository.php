@@ -56,6 +56,44 @@ class CatalogoMetadadosRepository
     }
 
     /**
+     * Catálogo OFICIAL da dimensão — só registros com identidade do METADADOS
+     * (`codigo_* IS NOT NULL`) e ativos. É a fonte dos seletores "somente oficiais" das telas
+     * (contexto organizacional do usuário, etc.): os registros legados sem código NUNCA aparecem.
+     *
+     * @return array<int, array{id:int, codigo:string, nome:string, descricao_oficial:?string}>
+     */
+    public function listarOficiais(): array
+    {
+        $stmt = $this->pdo->query(
+            "SELECT id, {$this->colCodigo} AS codigo, nome, descricao_oficial
+             FROM {$this->tabela}
+             WHERE {$this->colCodigo} IS NOT NULL AND {$this->colCodigo} <> '' AND ativo = 1
+             ORDER BY COALESCE(NULLIF(descricao_oficial, ''), nome) ASC"
+        );
+        return array_map(static function (array $row): array {
+            return [
+                'id' => (int)$row['id'],
+                'codigo' => (string)$row['codigo'],
+                'nome' => (string)$row['nome'],
+                'descricao_oficial' => $row['descricao_oficial'] !== null ? (string)$row['descricao_oficial'] : null,
+            ];
+        }, $stmt->fetchAll(PDO::FETCH_ASSOC));
+    }
+
+    /** Um registro oficial pelo id local — valida que o id pertence ao catálogo oficial (não-legado). */
+    public function oficialPorId(int $id): ?array
+    {
+        $stmt = $this->pdo->prepare(
+            "SELECT id, {$this->colCodigo} AS codigo, nome, descricao_oficial
+             FROM {$this->tabela}
+             WHERE id = ? AND {$this->colCodigo} IS NOT NULL AND {$this->colCodigo} <> '' LIMIT 1"
+        );
+        $stmt->execute([$id]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $row ?: null;
+    }
+
+    /**
      * Registros locais ainda SEM código oficial — candidatos a adoção única por nome.
      * nomeNormalizado => lista de linhas (lista porque dois registros locais podem normalizar
      * para o mesmo nome; nesse caso a adoção é ambígua e NÃO acontece).

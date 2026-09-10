@@ -147,12 +147,17 @@ class AdminUsuariosController extends Controller
             $vinculoMetadados = (new ColaboradorMetadadosConsultaRepository())->findById((int)$user->colaborador_metadados_id);
         }
 
+        $contextoService = new UsuarioContextoOrganizacionalService();
+
         $this->view->render('admin/usuarios/show', [
             'user' => $user,
             'csrf' => Security::csrfToken(),
             'aprovador' => $aprovador,
             'aprovadorOptions' => User::candidatosAprovador((int)$user->id),
             'vinculoMetadados' => $vinculoMetadados,
+            'contexto' => $contextoService->contextoDoUsuario((int)$user->id),
+            'cargosOficiais' => (new CatalogoMetadadosRepository('cargos'))->listarOficiais(),
+            'setoresOficiais' => (new CatalogoMetadadosRepository('setores'))->listarOficiais(),
             'flashError' => Security::sanitizeString($_GET['erro'] ?? ''),
             'flashSuccess' => Security::sanitizeString($_GET['ok'] ?? ''),
         ], 'layouts/admin');
@@ -221,8 +226,13 @@ class AdminUsuariosController extends Controller
         $back = '/admin/usuarios/' . (int)$id;
         $acao = Security::sanitizeString($_POST['acao'] ?? 'vincular');
         if ($acao === 'desvincular') {
+            // Desvínculo nunca é silencioso: exige a confirmação explícita do administrador
+            // (a tela mostra o aviso de que Cargo/Setores são preservados como contexto manual).
+            if (($_POST['confirmar_desvinculo'] ?? '') !== '1') {
+                redirect($back . '?erro=' . urlencode('Confirme a desvinculação do METADADOS para prosseguir.'));
+            }
             User::desvincularMetadados((int)$id, $actor, Security::clientIp());
-            redirect($back . '?ok=' . urlencode('Vínculo com o METADADOS removido.'));
+            redirect($back . '?ok=' . urlencode('Vínculo com o METADADOS removido. Cargo e Setores preservados como contexto manual.'));
         }
 
         $metadadosId = ctype_digit((string)($_POST['colaborador_metadados_id'] ?? '')) ? (int)$_POST['colaborador_metadados_id'] : 0;
@@ -234,6 +244,56 @@ class AdminUsuariosController extends Controller
             redirect($back . '?erro=' . urlencode((string)($result['error'] ?? 'Falha ao vincular o contrato oficial.')));
         }
         redirect($back . '?ok=' . urlencode('Usuário vinculado ao contrato oficial do METADADOS.'));
+    }
+
+    /**
+     * Salva o contexto organizacional do usuário: Cargo principal + Setor principal + Setores
+     * adicionais, sempre a partir dos catálogos OFICIAIS do METADADOS. Campos herdados de um
+     * contrato vinculado ficam travados (a validação final é do Service).
+     */
+    public function updateContextoOrganizacional(string $id): void
+    {
+        Auth::requireRole(['admin']);
+        SchemaManager::ensure();
+        if (!Security::csrfCheck($_POST['csrf'] ?? '')) {
+            http_response_code(400);
+            echo 'Falha na verificação de segurança (CSRF).';
+            return;
+        }
+        $target = User::findById((int)$id);
+        if (!$target) {
+            http_response_code(404);
+            echo 'Usuário não encontrado';
+            return;
+        }
+        $actor = User::findById((int)($_SESSION['user_id'] ?? 0));
+        if (!User::canManageUser($actor, $target)) {
+            http_response_code(403);
+            echo 'Operação não permitida.';
+            return;
+        }
+
+        $cargoId = ctype_digit((string)($_POST['cargo_id'] ?? '')) ? (int)$_POST['cargo_id'] : null;
+        $setorPrincipalId = ctype_digit((string)($_POST['setor_principal_id'] ?? '')) ? (int)$_POST['setor_principal_id'] : null;
+        $adicionais = array_values(array_filter(array_map(
+            static fn ($v): int => (int)$v,
+            (array)($_POST['setores_adicionais'] ?? [])
+        ), static fn (int $v): bool => $v > 0));
+
+        $result = (new UsuarioContextoOrganizacionalService())->definirContextoManual(
+            (int)$id,
+            $cargoId,
+            $setorPrincipalId,
+            $adicionais,
+            $actor,
+            Security::clientIp()
+        );
+
+        $back = '/admin/usuarios/' . (int)$id;
+        if (!($result['ok'] ?? false)) {
+            redirect($back . '?erro=' . urlencode((string)($result['error'] ?? 'Falha ao salvar o contexto organizacional.')));
+        }
+        redirect($back . '?ok=' . urlencode('Contexto organizacional atualizado.'));
     }
 
     /** Busca JSON de contratos oficiais ATIVOS para o autocomplete do vínculo METADADOS. Sem CPF. */

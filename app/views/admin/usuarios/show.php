@@ -95,12 +95,30 @@ $vinculoMetadados = $vinculoMetadados ?? null;
             ])))) ?>
             <?= (int)($vinculoMetadados['ativo'] ?? 0) === 1 ? '' : ' — contrato desligado' ?>
           </div>
-          <form action="<?= $base ?>/admin/usuarios/<?= (int)$user->id ?>/metadados-vinculo" method="post" class="mt-3">
+          <form action="<?= $base ?>/admin/usuarios/<?= (int)$user->id ?>/metadados-vinculo" method="post" class="mt-3"
+                data-desvincular-metadados="1">
             <input type="hidden" name="csrf" value="<?= Security::e($csrf) ?>">
             <input type="hidden" name="acao" value="desvincular">
-            <button class="text-sm text-red-600 hover:text-red-700">Remover vínculo</button>
+            <input type="hidden" name="confirmar_desvinculo" value="1">
+            <p class="mb-2 text-xs text-gray-500">
+              O vínculo com o contrato oficial será removido. O Cargo e os Setores atuais são
+              preservados como contexto manual e passam a ser editáveis.
+            </p>
+            <button class="text-sm text-red-600 hover:text-red-700">Desvincular do METADADOS</button>
           </form>
         </div>
+        <script>
+        (function () {
+          var f = document.querySelector('[data-desvincular-metadados="1"]');
+          if (!f) return;
+          f.addEventListener('submit', function (e) {
+            var msg = 'Desvincular este usuário do METADADOS?\n\n'
+              + 'O vínculo com o contrato oficial será removido. O Cargo e os Setores atuais serão '
+              + 'preservados como contexto manual e poderão ser alterados posteriormente.';
+            if (!window.confirm(msg)) { e.preventDefault(); }
+          });
+        })();
+        </script>
       <?php else: ?>
         <p class="mt-1 text-xs text-gray-500">Nenhum vínculo. O usuário funciona normalmente sem vínculo (caso PJ/terceiro).</p>
         <form action="<?= $base ?>/admin/usuarios/<?= (int)$user->id ?>/metadados-vinculo" method="post" class="mt-3 space-y-2" data-metadados-vinculo="1">
@@ -157,6 +175,105 @@ $vinculoMetadados = $vinculoMetadados ?? null;
         </script>
       <?php endif; ?>
     </div>
+  </section>
+
+  <?php
+    $ctx = $contexto ?? [];
+    $cargosOficiais = $cargosOficiais ?? [];
+    $setoresOficiais = $setoresOficiais ?? [];
+    $cargoTravado = !empty($ctx['cargo_travado']);
+    $setorPrincipalTravado = !empty($ctx['setor_principal_travado']);
+    $vinculado = !empty($ctx['vinculado']);
+    $principalId = $ctx['setor_principal']['setor_id'] ?? null;
+    $adicionaisIds = array_map(static fn ($s) => (int)$s['setor_id'], $ctx['setores_adicionais'] ?? []);
+    $rotuloCatalogo = static fn (array $r): string => trim((string)($r['descricao_oficial'] ?? '')) !== ''
+        ? (string)$r['descricao_oficial'] : (string)$r['nome'];
+  ?>
+  <section class="mt-8 rounded-xl border border-gray-200 bg-gray-50 p-5">
+    <h3 class="flex items-center gap-2 text-lg font-semibold text-ctpblue">
+      <svg class="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="3" width="6" height="6" rx="1"/><rect x="3" y="15" width="6" height="6" rx="1"/><rect x="15" y="15" width="6" height="6" rx="1"/><path d="M12 9v3M6 15v-1a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1"/></svg>
+      Contexto organizacional
+    </h3>
+    <p class="mt-1 text-sm text-gray-500">
+      Cargo e Setores usam exclusivamente os catálogos oficiais do METADADOS. Com vínculo a um
+      contrato oficial, o Cargo principal e — quando o contrato informa — o Setor principal são
+      herdados e ficam somente leitura.
+    </p>
+
+    <form action="<?= $base ?>/admin/usuarios/<?= (int)$user->id ?>/contexto-organizacional" method="post" class="mt-4 space-y-5">
+      <input type="hidden" name="csrf" value="<?= Security::e($csrf) ?>">
+
+      <div>
+        <span class="block text-sm font-medium text-gray-700">Cargo principal</span>
+        <?php if ($cargoTravado): ?>
+          <div class="mt-1 flex flex-wrap items-center gap-2">
+            <span class="font-medium text-gray-900"><?= Security::e((string)($ctx['cargo_rotulo'] ?? '—')) ?></span>
+            <span class="ct-badge ct-badge-active">Herdado do METADADOS</span>
+          </div>
+          <p class="mt-1 text-xs text-gray-500">Definido pelo contrato oficial vinculado. Não editável enquanto o vínculo existir.</p>
+        <?php elseif ($vinculado && !empty($ctx['cargo_aviso'])): ?>
+          <div class="mt-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            <?= Security::e((string)$ctx['cargo_aviso']) ?>
+          </div>
+        <?php else: ?>
+          <select name="cargo_id" class="mt-1 w-full rounded border px-3 py-2 text-sm">
+            <option value="">— Sem cargo definido —</option>
+            <?php foreach ($cargosOficiais as $c): ?>
+              <option value="<?= (int)$c['id'] ?>" <?= (int)($ctx['cargo_id'] ?? 0) === (int)$c['id'] ? 'selected' : '' ?>>
+                <?= Security::e($rotuloCatalogo($c)) ?>
+              </option>
+            <?php endforeach; ?>
+          </select>
+          <p class="mt-1 text-xs text-gray-500">Somente cargos oficiais. Cargo não define autorização nesta fase.</p>
+        <?php endif; ?>
+      </div>
+
+      <div>
+        <span class="block text-sm font-medium text-gray-700">Setor principal</span>
+        <?php if ($setorPrincipalTravado): ?>
+          <div class="mt-1 flex flex-wrap items-center gap-2">
+            <span class="font-medium text-gray-900"><?= Security::e((string)($ctx['setor_principal']['rotulo'] ?? '—')) ?></span>
+            <span class="ct-badge ct-badge-active">Herdado do METADADOS</span>
+          </div>
+          <p class="mt-1 text-xs text-gray-500">Definido pelo Setor oficial do contrato. Não substituível manualmente.</p>
+        <?php else: ?>
+          <?php if ($vinculado && !empty($ctx['setor_aviso'])): ?>
+            <div class="mt-1 mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              <?= Security::e((string)$ctx['setor_aviso']) ?> — selecione um Setor principal manualmente.
+            </div>
+          <?php endif; ?>
+          <select name="setor_principal_id" class="mt-1 w-full rounded border px-3 py-2 text-sm">
+            <option value="">— Sem setor principal —</option>
+            <?php foreach ($setoresOficiais as $s): ?>
+              <option value="<?= (int)$s['id'] ?>" <?= (int)($principalId ?? 0) === (int)$s['id'] ? 'selected' : '' ?>>
+                <?= Security::e($rotuloCatalogo($s)) ?>
+              </option>
+            <?php endforeach; ?>
+          </select>
+        <?php endif; ?>
+      </div>
+
+      <div>
+        <span class="block text-sm font-medium text-gray-700">Setores adicionais de atuação</span>
+        <p class="mt-1 text-xs text-gray-500">Escopo extra concedido manualmente (origem MANUAL). O Setor principal não aparece aqui.</p>
+        <div class="mt-2 grid gap-2 sm:grid-cols-2">
+          <?php foreach ($setoresOficiais as $s): ?>
+            <?php if ((int)$s['id'] === (int)($principalId ?? 0)) { continue; } ?>
+            <label class="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm">
+              <input type="checkbox" name="setores_adicionais[]" value="<?= (int)$s['id'] ?>"
+                     class="h-4 w-4 rounded border-gray-300"
+                     <?= in_array((int)$s['id'], $adicionaisIds, true) ? 'checked' : '' ?>>
+              <span class="text-gray-800"><?= Security::e($rotuloCatalogo($s)) ?></span>
+            </label>
+          <?php endforeach; ?>
+          <?php if ($setoresOficiais === []): ?>
+            <p class="text-sm text-gray-500">Nenhum setor oficial disponível no catálogo.</p>
+          <?php endif; ?>
+        </div>
+      </div>
+
+      <button class="bg-ctgreen text-white px-4 py-2 rounded hover:bg-ctdark text-sm">Salvar contexto organizacional</button>
+    </form>
   </section>
 
   <div class="responsive-form-actions mt-6">

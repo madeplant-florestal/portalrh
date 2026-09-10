@@ -82,6 +82,51 @@ migrados para `cancelada`, sem inventar motivo de negócio). A relação entre `
 `vagas`/`candidaturas` continua não implementada por decisão explícita desta sprint — arquitetura
 deixada preparada, não forçada.
 
+## Contexto organizacional do usuário (sprint 2026-09-10, Etapa 1)
+
+`usuarios` passou a carregar o contexto organizacional além da identidade/autorização:
+
+- **`usuarios.cargo_id`** — FK `→ cargos(id) ON DELETE SET NULL`, nullable. É o **Cargo principal
+  oficial** do usuário (1 só, sem cargo por setor nesta fase). Nunca guarda `codigo_cargo` solto.
+- **`usuario_setores`** — N:N usuário ↔ setores de atuação. Colunas: `usuario_id`, `setor_id`,
+  `principal TINYINT(1)`, `origem ENUM('METADADOS','MANUAL')`, `created_at`/`updated_at`.
+  `UNIQUE(usuario_id, setor_id)`, FK usuário `ON DELETE CASCADE`, FK setor `ON DELETE RESTRICT`.
+- Migration `2026-09-10-usuarios-contexto-organizacional.sql` (+ rollback). Compatível MySQL 8.4 /
+  MariaDB 11.8. Aplicada em produção em 10/09/2026 (puramente estrutural — baseline de 29 usuários
+  inalterado, `usuario_setores` criada vazia, nenhum backfill). Código publicado na sequência.
+
+Regras (todas na camada de aplicação — `UsuarioContextoOrganizacionalService`, geração nova):
+
+- **Com vínculo `colaborador_metadados_id`**: Cargo e Setor principal são **herdados** dos códigos
+  oficiais do contrato (`colaboradores_metadados.codigo_cargo → cargos.codigo_cargo`,
+  `codigo_setor → setores.codigo_setor`). Enquanto o vínculo existir, Cargo e — se o contrato
+  informa Setor — Setor principal ficam **somente leitura**. Sem `codigo_setor` no contrato: **sem
+  inferência** (nem CC, nem nome, nem fuzzy); RH escolhe o principal manualmente e a tela mostra
+  "Setor não informado no METADADOS".
+- **Sem vínculo**: RH/Admin define Cargo e Setores manualmente, aceitando **só registros oficiais**
+  (`codigo_* IS NOT NULL` — via `CatalogoMetadadosRepository::listarOficiais()`/`oficialPorId()`).
+  Os 22 cargos / 4 setores legados nunca aparecem nos seletores nem são aceitos no backend.
+- **1 Setor principal por usuário** — garantido no serviço, dentro da transação (nada de índice
+  único parcial: suporte divergente MySQL/MariaDB).
+- **`origem`**: o principal herdado do contrato é `METADADOS`; qualquer setor concedido por RH é
+  `MANUAL`. `aplicarContextoDoVinculo()` (chamado por `User::vincularMetadados`) sincroniza só a
+  linha `METADADOS` e **nunca destrói** linhas `MANUAL`. `aoDesvincular()` reetiqueta as linhas
+  `METADADOS → MANUAL` (nada é apagado; `usuarios.cargo_id` é mantido) e libera a edição — só
+  como consequência de uma ação **confirmada explicitamente** pelo admin (`confirmar_desvinculo=1`
+  exigido no controller; a tela mostra aviso + `confirm()`). Não há coluna de origem para
+  `cargo_id`; após o desvínculo a tela deixa de exibir "Herdado do METADADOS".
+- Não há automação periódica de re-sincronização do contexto (modelagem preparada, execução não).
+- Sem backfill em massa nesta etapa. Sem filtro global por Setor ainda (só estrutura + dados).
+
+Débito de collation da Fase 5.2 (`utf8mb4_general_ci` × `utf8mb4_uca1400_ai_ci`) permanece
+registrado; a resolução do contexto compara valores já lidos do espelho contra o catálogo via
+parâmetro vinculado (coercível), então não dispara `#1267`.
+
+Tela: bloco "Contexto organizacional" em `app/views/admin/usuarios/show.php` (Cargo principal /
+Setor principal / Setores adicionais), ícones SVG inline no padrão do `layouts/admin.php`. Rota
+`POST /admin/usuarios/{id}/contexto-organizacional` (admin-only). `pode_solicitar_vaga` e
+`aprovador_usuario_id` seguem intocados e independentes de cargo/setor.
+
 ## Integração com METADADOS (sistema oficial de RH/DP, SQL Server)
 
 Decisão: o METADADOS passa a ser a fonte oficial de dados de colaboradores; o Portal RH deixará

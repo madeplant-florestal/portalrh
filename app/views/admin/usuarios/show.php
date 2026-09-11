@@ -4,6 +4,10 @@ $podeSolicitarVaga = (int)($user->pode_solicitar_vaga ?? 0) === 1;
 $aprovador = $aprovador ?? null;
 $aprovadorOptions = $aprovadorOptions ?? [];
 $vinculoMetadados = $vinculoMetadados ?? null;
+// RH (Sprint Solicitação de Vaga — Etapa 2) só administra o bloco de Contexto Organizacional
+// (Cargo/Setores/vínculo METADADOS) desta tela. Acesso operacional (Solicitação de Vagas),
+// status da conta e senha continuam exclusivos de Admin/supervisor.
+$isAdminAtor = !empty($isAdminAtor);
 ?>
 <div class="responsive-panel max-w-2xl">
   <div class="responsive-header">
@@ -54,6 +58,7 @@ $vinculoMetadados = $vinculoMetadados ?? null;
       Um gestor PJ/terceiro opera normalmente sem qualquer vínculo.
     </p>
 
+    <?php if ($isAdminAtor): ?>
     <form action="<?= $base ?>/admin/usuarios/<?= (int)$user->id ?>/vaga-acesso" method="post" class="mt-4 space-y-4">
       <input type="hidden" name="csrf" value="<?= Security::e($csrf) ?>">
       <label class="flex items-center gap-3 text-sm">
@@ -79,6 +84,9 @@ $vinculoMetadados = $vinculoMetadados ?? null;
 
       <button class="bg-ctgreen text-white px-4 py-2 rounded hover:bg-ctdark text-sm">Salvar acesso a vagas</button>
     </form>
+    <?php else: ?>
+    <p class="mt-4 text-sm text-gray-500">Acesso operacional a Solicitação de Vagas (autorização e aprovador) é gerenciado por um administrador.</p>
+    <?php endif; ?>
 
     <div class="mt-6 border-t border-gray-200 pt-4">
       <div class="text-sm font-medium text-gray-800">Vínculo opcional com o METADADOS</div>
@@ -276,6 +284,7 @@ $vinculoMetadados = $vinculoMetadados ?? null;
     </form>
   </section>
 
+  <?php if ($isAdminAtor): ?>
   <div class="responsive-form-actions mt-6">
     <form action="<?= $base ?>/admin/usuarios/<?= (int)$user->id ?>/status" method="post">
       <input type="hidden" name="csrf" value="<?= Security::e($csrf) ?>">
@@ -288,7 +297,9 @@ $vinculoMetadados = $vinculoMetadados ?? null;
       Alterar Senha
     </button>
   </div>
+  <?php endif; ?>
 </div>
+<?php if ($isAdminAtor): ?>
 <div id="password-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 p-4">
   <div class="w-full max-w-md rounded bg-white p-6 shadow">
     <div class="responsive-header">
@@ -369,3 +380,4 @@ passwordChangeForm.addEventListener('submit', async function (event) {
   }
 });
 </script>
+<?php endif; ?>

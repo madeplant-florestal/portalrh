@@ -1,0 +1,31 @@
+-- Migration: 2026-09-11-solicitacoes-vaga-centro-custo-opcional.sql
+-- Objetivo:
+--   Sprint "Solicitação de Vaga" — Etapa 2 (adaptação ao Contexto Organizacional do Usuário).
+--   `solicitacoes_vaga.centro_custo_id` deixa de ser obrigatório.
+--
+--   Motivo: Centro de Custo é informação real e útil para RH/Financeiro (fica ao lado de
+--   `previsto_orcamento`/`justificativa_orcamento` no domínio), mas os 12 Setores oficiais do
+--   METADADOS (Fase 5.2) ainda não têm nenhum registro em `centros_custo` — ninguém cadastrou
+--   centro de custo para eles. Continuar exigindo `centro_custo_id NOT NULL` bloquearia toda nova
+--   Solicitação de Vaga para Setor oficial.
+--
+--   Regra de negócio nova (aplicação, não banco):
+--     - Setor SEM Centro de Custo cadastrado -> `centro_custo_id = NULL` é aceito, sem bloqueio.
+--     - Setor COM um ou mais Centros de Custo cadastrados -> seleção continua OBRIGATÓRIA e restrita
+--       aos Centros de Custo daquele Setor.
+--
+--   Estado atual confirmado antes de alterar (dev, MySQL 8.4.3):
+--     `centro_custo_id` int NOT NULL, FK `fk_solicitacoes_centro_custo` -> centros_custo(id)
+--     ON DELETE RESTRICT (ver SHOW CREATE TABLE solicitacoes_vaga).
+--
+--   Puramente aditiva/permissiva: `MODIFY COLUMN` apenas remove o NOT NULL. Preserva o tipo (INT),
+--   a FK `fk_solicitacoes_centro_custo` (não é tocada — FK com coluna nullable é padrão, NULL nunca
+--   é verificado por FK) e o índice implícito da FK. NENHUM registro existente é alterado — todas as
+--   solicitações antigas já têm `centro_custo_id` preenchido, então continuam exatamente como estão.
+--
+--   Compatibilidade: `ALTER TABLE ... MODIFY COLUMN` tem sintaxe e comportamento idênticos em
+--   MySQL 8.4.x e MariaDB 11.8.9-log. NÃO aplicar em produção nesta etapa (sprint de
+--   desenvolvimento — Etapa 2 da Solicitação de Vaga).
+
+ALTER TABLE solicitacoes_vaga
+  MODIFY COLUMN centro_custo_id INT NULL;

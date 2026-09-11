@@ -3,14 +3,22 @@ $isShow = ($mode ?? 'create') === 'show';
 $currentRole = strtolower((string)($currentRole ?? 'viewer'));
 $isSupervisor = !empty($_SESSION['user_is_supervisor']);
 $currentAccess = $dependencies['current_access'] ?? null;
-$setores = $dependencies['setores'] ?? [];
-$cargos = $dependencies['cargos'] ?? [];
 $gestores = $dependencies['gestores'] ?? [];
-$centros = $dependencies['centros_custo'] ?? [];
 $colaboradores = $dependencies['colaboradores'] ?? [];
 $competencias = $dependencies['competencias'] ?? ['tecnica' => [], 'comportamental' => []];
 $beneficiosByCargo = $dependencies['beneficios_by_cargo'] ?? [];
 $schoolOptions = $dependencies['escolaridades'] ?? [];
+
+// Etapa 2 (Contexto Organizacional dos Usuários) — Cargo é catálogo oficial GLOBAL (independente
+// de Setor); Setor vem do CONTEXTO DO SOLICITANTE (usuario_setores), nunca de uma lista global.
+$cargosOficiais = $dependencies['cargos_oficiais'] ?? [];
+$podeEscolherSolicitante = !empty($dependencies['pode_escolher_solicitante']);
+$elegiveisSolicitantes = $dependencies['elegiveis_solicitantes'] ?? [];
+$solicitanteContexto = $dependencies['solicitante_contexto'] ?? [
+    'usuario_id' => 0, 'nome' => null, 'cargo_rotulo' => null,
+    'setores' => [], 'centros_custo_by_setor' => [], 'bloqueado_sem_setor' => true,
+];
+$setoresSolicitante = $solicitanteContexto['setores'] ?? [];
 
 $tipoVagaLabels = [
     'nova_posicao' => 'Nova posição',
@@ -98,11 +106,10 @@ $canApproveRh = $isShow
 $canEditRhSection = $isShow && $canEditRh && in_array((string)($record['status_fluxo'] ?? ''), ['aprovada', 'concluida'], true);
 
 $payload = [
-    'setores' => $setores,
-    'cargos' => $cargos,
+    'cargos' => $cargosOficiais,
     'gestores' => $gestores,
-    'centros_custo' => $centros,
     'beneficios_by_cargo' => $beneficiosByCargo,
+    'solicitante_contexto' => $solicitanteContexto,
 ];
 ?>
 <div class="responsive-panel max-w-6xl" data-solicitacao-vaga-form="1">
@@ -142,12 +149,44 @@ $payload = [
         </div>
         <div class="grid gap-4 lg:grid-cols-2">
           <div>
-            <label class="block text-sm font-medium text-gray-700">Área / Departamento *</label>
+            <label class="block text-sm font-medium text-gray-700">Solicitante <?= $podeEscolherSolicitante ? '*' : '' ?></label>
+            <?php if ($podeEscolherSolicitante): ?>
+              <select name="solicitante_usuario_id" class="mt-1 w-full rounded border px-3 py-2" data-solicitacao-solicitante="1" required>
+                <?php foreach ($elegiveisSolicitantes as $elegivel): ?>
+                  <option value="<?= (int)$elegivel['id'] ?>" <?= (int)($form['solicitante_usuario_id'] ?? $currentUserId) === (int)$elegivel['id'] ? 'selected' : '' ?>>
+                    <?= Security::e($elegivel['nome']) ?>
+                  </option>
+                <?php endforeach; ?>
+              </select>
+              <p class="mt-1 text-xs text-gray-500" data-solicitacao-cargo-solicitante="1">
+                <?= $solicitanteContexto['cargo_rotulo'] ? Security::e('Cargo do solicitante: ' . $solicitanteContexto['cargo_rotulo']) : '' ?>
+              </p>
+            <?php else: ?>
+              <div class="mt-1 rounded border bg-gray-50 px-3 py-2 text-sm text-gray-800"><?= Security::e((string)($solicitanteContexto['nome'] ?? '')) ?></div>
+              <p class="mt-1 text-xs text-gray-500">A identidade do solicitante é sempre o seu usuário autenticado.</p>
+            <?php endif; ?>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Área / Departamento (Setor) *</label>
+            <div class="<?= $setoresSolicitante === [] ? '' : 'hidden' ?> mt-1 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" data-solicitacao-setor-bloqueio="1">
+              O usuário solicitante ainda não possui Setor de atuação configurado.
+              <?php if ($podeEscolherSolicitante): ?>
+                <a href="<?= $base ?>/admin/usuarios/<?= (int)($solicitanteContexto['usuario_id'] ?? 0) ?>" class="font-medium underline" target="_blank" rel="noopener">Atualizar contexto organizacional do usuário</a>.
+              <?php endif; ?>
+            </div>
             <select name="setor_id" class="mt-1 w-full rounded border px-3 py-2" data-solicitacao-setor="1" required>
-              <option value="">Selecione</option>
-              <?php foreach ($setores as $setor): ?>
-                <option value="<?= (int)$setor['id'] ?>" <?= (int)$defaultSetorId === (int)$setor['id'] ? 'selected' : '' ?>><?= Security::e($setor['nome']) ?></option>
-              <?php endforeach; ?>
+              <?php if ($setoresSolicitante === []): ?>
+                <option value="">Nenhum Setor configurado</option>
+              <?php elseif (count($setoresSolicitante) === 1): ?>
+                <option value="<?= (int)$setoresSolicitante[0]['id'] ?>" selected><?= Security::e($setoresSolicitante[0]['nome']) ?></option>
+              <?php else: ?>
+                <option value="">Selecione</option>
+                <?php foreach ($setoresSolicitante as $s): ?>
+                  <option value="<?= (int)$s['id'] ?>" <?= (int)$defaultSetorId === (int)$s['id'] ? 'selected' : '' ?>>
+                    <?= Security::e($s['nome']) ?><?= !empty($s['principal']) ? ' — principal' : '' ?>
+                  </option>
+                <?php endforeach; ?>
+              <?php endif; ?>
             </select>
           </div>
           <div>
@@ -156,13 +195,13 @@ $payload = [
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700">Cargo *</label>
-            <select name="cargo_id" class="mt-1 w-full rounded border px-3 py-2" data-solicitacao-cargo="1" aria-describedby="solicitacao-cargo-feedback solicitacao-cargo-faixa" required>
+            <select name="cargo_id" class="mt-1 w-full rounded border px-3 py-2" data-solicitacao-cargo="1" aria-describedby="solicitacao-cargo-faixa" required>
               <option value="">Selecione</option>
-              <?php foreach ($cargos as $cargo): ?>
+              <?php foreach ($cargosOficiais as $cargo): ?>
                 <option value="<?= (int)$cargo['id'] ?>" <?= (int)($form['cargo_id'] ?? 0) === (int)$cargo['id'] ? 'selected' : '' ?>><?= Security::e($cargo['nome']) ?></option>
               <?php endforeach; ?>
             </select>
-            <p id="solicitacao-cargo-feedback" class="mt-1 text-xs text-gray-500" data-solicitacao-cargo-feedback="1" aria-live="polite"></p>
+            <p class="mt-1 text-xs text-gray-500">Catálogo oficial do METADADOS — independente do Cargo do solicitante.</p>
             <p id="solicitacao-cargo-faixa" class="mt-1 text-xs text-gray-500" data-solicitacao-faixa-label="1" aria-live="polite"></p>
           </div>
           <?php if ($mostrarGestor): ?>
@@ -176,7 +215,7 @@ $payload = [
                 </option>
               <?php endforeach; ?>
             </select>
-            <p class="mt-1 text-xs text-gray-500">A identidade do solicitante é sempre o seu usuário autenticado. Este campo é apenas contexto opcional.</p>
+            <p class="mt-1 text-xs text-gray-500">A identidade do solicitante é o Usuário selecionado acima. Este campo é apenas contexto opcional (histórico).</p>
           </div>
           <?php endif; ?>
         </div>
@@ -255,16 +294,21 @@ $payload = [
             <label class="block text-sm font-medium text-gray-700">Salário previsto *</label>
             <input type="text" name="salario_previsto" value="<?= Security::e($form['salario_previsto'] ?? '') ?>" class="mt-1 w-full rounded border px-3 py-2" placeholder="R$ 0,00" required data-mask-money="1" data-solicitacao-salario="1">
           </div>
+          <?php
+            $centroInicialSetorId = $defaultSetorId ?: (count($setoresSolicitante) === 1 ? (int)$setoresSolicitante[0]['id'] : 0);
+            $centrosInicial = $solicitanteContexto['centros_custo_by_setor'][$centroInicialSetorId] ?? [];
+          ?>
           <div>
-            <label class="block text-sm font-medium text-gray-700">Centro de custo *</label>
-            <select name="centro_custo_id" class="mt-1 w-full rounded border px-3 py-2" data-solicitacao-centro-custo="1" required>
+            <label class="block text-sm font-medium text-gray-700" data-solicitacao-centro-label="1">Centro de custo<?= $centrosInicial !== [] ? ' *' : '' ?></label>
+            <select name="centro_custo_id" class="mt-1 w-full rounded border px-3 py-2 <?= $centrosInicial === [] ? 'hidden' : '' ?>" data-solicitacao-centro-custo="1" <?= $centrosInicial !== [] ? 'required' : '' ?>>
               <option value="">Selecione</option>
-              <?php foreach ($centros as $centro): ?>
+              <?php foreach ($centrosInicial as $centro): ?>
                 <option value="<?= (int)$centro['id'] ?>" <?= (int)($form['centro_custo_id'] ?? 0) === (int)$centro['id'] ? 'selected' : '' ?>>
                   <?= Security::e($centro['codigo'] . ' - ' . $centro['nome']) ?>
                 </option>
               <?php endforeach; ?>
             </select>
+            <p class="mt-1 text-xs text-gray-500" data-solicitacao-centro-vazio="1" <?= $centrosInicial !== [] ? 'hidden' : '' ?>>Nenhum Centro de Custo cadastrado para este Setor.</p>
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700">Previsto no orçamento anual? *</label>
@@ -447,8 +491,8 @@ $payload = [
           <div class="mt-2 text-sm text-gray-600"><?= Security::e($record['cargo_nome']) ?></div>
         </div>
         <div class="rounded-xl border bg-white p-4 shadow-sm">
-          <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">Gestor solicitante</div>
-          <div class="mt-2 text-lg font-semibold text-ctpblue"><?= Security::e($record['gestor_nome']) ?></div>
+          <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">Solicitante</div>
+          <div class="mt-2 text-lg font-semibold text-ctpblue"><?= Security::e($record['solicitante_nome'] ?? $record['gestor_nome']) ?></div>
           <div class="mt-2 text-sm text-gray-600">Quantidade de vagas: <?= (int)$record['quantidade_vagas'] ?></div>
         </div>
       </section>
@@ -486,7 +530,10 @@ $payload = [
           <dl class="mt-4 space-y-3 text-sm">
             <div><dt class="font-semibold text-gray-700">Área / Departamento</dt><dd class="text-gray-600"><?= Security::e($record['setor_nome']) ?></dd></div>
             <div><dt class="font-semibold text-gray-700">Cargo</dt><dd class="text-gray-600"><?= Security::e($record['cargo_nome']) ?></dd></div>
-            <div><dt class="font-semibold text-gray-700">Gestor solicitante</dt><dd class="text-gray-600"><?= Security::e($record['gestor_nome']) ?></dd></div>
+            <div><dt class="font-semibold text-gray-700">Solicitante</dt><dd class="text-gray-600"><?= Security::e(trim(($record['solicitante_nome'] ?? '') . ' — ' . ($record['solicitante_email'] ?? ''), ' —')) ?></dd></div>
+            <?php if (!empty($record['gestor_nome']) && $record['gestor_nome'] !== ($record['solicitante_nome'] ?? null)): ?>
+              <div><dt class="font-semibold text-gray-700">Gestor solicitante <span class="font-normal text-gray-400">(contexto legado)</span></dt><dd class="text-gray-600"><?= Security::e($record['gestor_nome']) ?></dd></div>
+            <?php endif; ?>
             <div><dt class="font-semibold text-gray-700">Tipo de vaga</dt><dd class="text-gray-600"><?= Security::e($tipoVagaLabels[$record['tipo_vaga']] ?? $record['tipo_vaga']) ?></dd></div>
             <?php if (!empty($record['maquina_operada'])): ?><div><dt class="font-semibold text-gray-700">Máquina a operar</dt><dd class="text-gray-600"><?= Security::e($record['maquina_operada']) ?></dd></div><?php endif; ?>
             <?php if (!empty($record['substituido_nome'])): ?><div><dt class="font-semibold text-gray-700">Colaborador substituído</dt><dd class="text-gray-600"><?= Security::e($record['substituido_nome']) ?></dd></div><?php endif; ?>
@@ -499,7 +546,7 @@ $payload = [
           <dl class="mt-4 space-y-3 text-sm">
             <div><dt class="font-semibold text-gray-700">Tipo de contratação</dt><dd class="text-gray-600"><?= Security::e($tipoContratacaoLabels[$record['tipo_contratacao']] ?? $record['tipo_contratacao']) ?></dd></div>
             <div><dt class="font-semibold text-gray-700">Salário previsto</dt><dd class="text-gray-600">R$ <?= Security::e(number_format((float)$record['salario_previsto'], 2, ',', '.')) ?></dd></div>
-            <div><dt class="font-semibold text-gray-700">Centro de custo</dt><dd class="text-gray-600"><?= Security::e($record['centro_custo_codigo'] . ' - ' . $record['centro_custo_nome']) ?></dd></div>
+            <div><dt class="font-semibold text-gray-700">Centro de custo</dt><dd class="text-gray-600"><?= $record['centro_custo_nome'] ? Security::e($record['centro_custo_codigo'] . ' - ' . $record['centro_custo_nome']) : 'Não informado (nenhum Centro de Custo cadastrado para o Setor no momento da criação)' ?></dd></div>
             <div><dt class="font-semibold text-gray-700">Previsto no orçamento</dt><dd class="text-gray-600"><?= (int)$record['previsto_orcamento'] === 1 ? 'Sim' : 'Não' ?></dd></div>
             <?php if (!empty($record['justificativa_orcamento'])): ?><div><dt class="font-semibold text-gray-700">Justificativa</dt><dd class="text-gray-600"><?= nl2br(Security::e($record['justificativa_orcamento'])) ?></dd></div><?php endif; ?>
             <div><dt class="font-semibold text-gray-700">Benefícios aplicáveis</dt><dd class="text-gray-600"><?= !empty($record['beneficios']) ? Security::e(implode(', ', array_column($record['beneficios'], 'nome'))) : 'Nenhum benefício informado' ?></dd></div>

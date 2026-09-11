@@ -1,57 +1,24 @@
-const filterSolicitacaoCargosBySetor = (cargos, setorId) => {
-  const normalizedSetorId = String(setorId || '');
-  if (!normalizedSetorId) {
-    return [];
+// Sprint Solicitação de Vaga — Etapa 2 (Contexto Organizacional dos Usuários): Cargo oficial e
+// Setor oficial são selecionados de forma INDEPENDENTE (decisão de negócio da Etapa 2 — sem gate
+// `cargo_setores`). O Setor da vaga vem do contexto de Setores do Usuário solicitante
+// (`usuario_setores`), nunca de uma lista global nem filtrado pelo Cargo escolhido.
+const resolveSolicitanteSetorState = (setores) => {
+  const lista = Array.isArray(setores) ? setores : [];
+  if (lista.length === 0) {
+    return { bloqueado: true, opcoes: [], valorInicial: '' };
   }
-  return (Array.isArray(cargos) ? cargos : []).filter(
-    (item) => Array.isArray(item.setor_ids) && item.setor_ids.map(String).includes(normalizedSetorId)
-  );
+  if (lista.length === 1) {
+    return { bloqueado: false, opcoes: lista, valorInicial: String(lista[0].id) };
+  }
+  return { bloqueado: false, opcoes: lista, valorInicial: '' };
 };
 
-const resolveSolicitacaoCargoState = ({
-  cargos,
-  setorId,
-  selectedCargoId = '',
-  preserveSelection = true,
-  preferredValue = '',
-}) => {
-  const availableCargos = filterSolicitacaoCargosBySetor(cargos, setorId);
-
-  if (!String(setorId || '')) {
-    return {
-      availableCargos: [],
-      selectedCargoId: '',
-      disabled: true,
-      placeholder: 'Selecione uma área/departamento primeiro',
-      message: 'Selecione uma área/departamento para carregar os cargos disponíveis.',
-      invalidMessage: '',
-    };
-  }
-
-  if (availableCargos.length === 0) {
-    return {
-      availableCargos: [],
-      selectedCargoId: '',
-      disabled: true,
-      placeholder: 'Nenhum cargo disponível para este setor',
-      message: 'Nenhum cargo disponível para este setor.',
-      invalidMessage: 'Nenhum cargo disponível para este setor.',
-    };
-  }
-
-  const expectedValue = preserveSelection ? String(preferredValue || selectedCargoId || '') : '';
-  const hasSelection = availableCargos.some((item) => String(item.id) === expectedValue);
-
-  return {
-    availableCargos,
-    selectedCargoId: hasSelection ? expectedValue : '',
-    disabled: false,
-    placeholder: 'Selecione',
-    message: hasSelection
-      ? 'Cargo compatível com a área/departamento selecionado.'
-      : 'Selecione um cargo vinculado à área/departamento escolhido.',
-    invalidMessage: hasSelection ? '' : 'Selecione um cargo válido vinculado à área/departamento informado.',
-  };
+// Centro de Custo depende só do Setor resolvido (não do Cargo): opcional quando o Setor não tem
+// nenhum cadastrado, obrigatório e restrito àquele Setor quando tiver.
+const resolveCentrosCustoParaSetor = (centrosPorSetor, setorId) => {
+  const mapa = centrosPorSetor && typeof centrosPorSetor === 'object' ? centrosPorSetor : {};
+  const lista = mapa[setorId] ?? mapa[String(setorId)];
+  return Array.isArray(lista) ? lista : [];
 };
 
 const validateCollaboratorImportFile = (file) => {
@@ -137,8 +104,8 @@ const summarizeCollaboratorImportResult = (payload = {}) => {
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
-    filterSolicitacaoCargosBySetor,
-    resolveSolicitacaoCargoState,
+    resolveSolicitanteSetorState,
+    resolveCentrosCustoParaSetor,
     validateCollaboratorImportFile,
     summarizeCollaboratorImportResult,
   };
@@ -980,11 +947,15 @@ if (typeof module !== 'undefined' && module.exports) {
     if (!root) return;
 
     const form = root.querySelector('form[data-solicitacao-form-element="1"]');
+    const solicitanteSelect = root.querySelector('[data-solicitacao-solicitante="1"]');
+    const cargoSolicitanteLabel = root.querySelector('[data-solicitacao-cargo-solicitante="1"]');
     const setorSelect = root.querySelector('[data-solicitacao-setor="1"]');
+    const setorBloqueioWrap = root.querySelector('[data-solicitacao-setor-bloqueio="1"]');
     const cargoSelect = root.querySelector('[data-solicitacao-cargo="1"]');
-    const cargoFeedback = root.querySelector('[data-solicitacao-cargo-feedback="1"]');
     const gestorSelect = root.querySelector('[data-solicitacao-gestor="1"]');
     const centroSelect = root.querySelector('[data-solicitacao-centro-custo="1"]');
+    const centroLabel = root.querySelector('[data-solicitacao-centro-label="1"]');
+    const centroVazioMsg = root.querySelector('[data-solicitacao-centro-vazio="1"]');
     const faixaLabel = root.querySelector('[data-solicitacao-faixa-label="1"]');
     const maquinaWrap = root.querySelector('[data-solicitacao-maquina-wrap="1"]');
     const maquinaInput = root.querySelector('[data-solicitacao-maquina-input="1"]');
@@ -994,8 +965,8 @@ if (typeof module !== 'undefined' && module.exports) {
     const motivoOutrosWrap = root.querySelector('[data-solicitacao-motivo-outros-wrap="1"]');
     const motivoOutrosInput = root.querySelector('[data-solicitacao-motivo-outros="1"]');
     const beneficioWrap = root.querySelector('[data-solicitacao-beneficios-wrap="1"]');
-    // gestorSelect é opcional desde 2026-09-09 (só aparece para RH/Admin) — não bloquear o form.
-    if (!payloadNode || !setorSelect || !cargoSelect || !centroSelect) {
+    // gestorSelect é opcional (só aparece para RH/Admin) — não bloquear o form por ele.
+    if (!payloadNode || !cargoSelect || !setorSelect) {
       return;
     }
 
@@ -1009,33 +980,10 @@ if (typeof module !== 'undefined' && module.exports) {
 
     const cargos = Array.isArray(payload.cargos) ? payload.cargos : [];
     const gestores = Array.isArray(payload.gestores) ? payload.gestores : [];
-    const centros = Array.isArray(payload.centros_custo) ? payload.centros_custo : [];
     const beneficiosByCargo = payload.beneficios_by_cargo || {};
-    const initialCargoValue = String(cargoSelect.value || '');
-
-    const setCargoFeedbackState = (message, tone = 'neutral') => {
-      if (!cargoFeedback) return;
-      cargoFeedback.textContent = message;
-      cargoFeedback.classList.remove('text-gray-500', 'text-red-600', 'text-amber-600');
-      if (tone === 'error') {
-        cargoFeedback.classList.add('text-red-600');
-      } else if (tone === 'warning') {
-        cargoFeedback.classList.add('text-amber-600');
-      } else {
-        cargoFeedback.classList.add('text-gray-500');
-      }
-    };
-
-    const resetCargoValidity = () => {
-      cargoSelect.setCustomValidity('');
-      cargoSelect.removeAttribute('aria-invalid');
-    };
-
-    const invalidateCargo = (message) => {
-      cargoSelect.setCustomValidity(message);
-      cargoSelect.setAttribute('aria-invalid', 'true');
-      setCargoFeedbackState(message, 'error');
-    };
+    const contextoVazio = { usuario_id: 0, nome: null, cargo_rotulo: null, setores: [], centros_custo_by_setor: {}, bloqueado_sem_setor: true };
+    let contexto = payload.solicitante_contexto && typeof payload.solicitante_contexto === 'object' ? payload.solicitante_contexto : contextoVazio;
+    const setorValueInicial = String(setorSelect.value || '');
 
     const renderOptions = (select, items, selectedValue, labelBuilder, options = {}) => {
       if (!select) return;
@@ -1107,6 +1055,7 @@ if (typeof module !== 'undefined' && module.exports) {
       });
     };
 
+    // Cargo é catálogo oficial GLOBAL, independente do Setor (Etapa 2 — sem gate cargo_setores).
     const updateMachineRequirement = () => {
       const selectedCargo = cargos.find((item) => String(item.id) === String(cargoSelect.value));
       const requiresMachine = !!selectedCargo?.requires_machine_description;
@@ -1127,102 +1076,79 @@ if (typeof module !== 'undefined' && module.exports) {
       updateBenefits();
     };
 
-    const updateCargoOptions = ({ preserveSelection = true, preferredValue = '' } = {}) => {
-      const setorId = String(setorSelect.value || '');
-      const cargoState = resolveSolicitacaoCargoState({
-        cargos,
-        setorId,
-        selectedCargoId: cargoSelect.value,
-        preserveSelection,
-        preferredValue,
-      });
+    // Centro de Custo depende só do Setor resolvido (nunca do Cargo): opcional quando o Setor não
+    // tem nenhum cadastrado, obrigatório e restrito àquele Setor quando tiver.
+    const renderCentroOptions = (setorId) => {
+      if (!centroSelect) return;
+      const lista = resolveCentrosCustoParaSetor(contexto.centros_custo_by_setor, setorId);
+      if (lista.length === 0) {
+        centroSelect.innerHTML = '<option value="">Selecione</option>';
+        centroSelect.classList.add('hidden');
+        centroSelect.required = false;
+        centroSelect.value = '';
+        if (centroVazioMsg) centroVazioMsg.hidden = false;
+        if (centroLabel) centroLabel.textContent = 'Centro de custo';
+        return;
+      }
+      if (centroVazioMsg) centroVazioMsg.hidden = true;
+      if (centroLabel) centroLabel.textContent = 'Centro de custo *';
+      centroSelect.classList.remove('hidden');
+      centroSelect.required = true;
+      renderOptions(centroSelect, lista, centroSelect.value, (item) => `${item.codigo} - ${item.nome}`);
+    };
 
-      if (!setorId) {
-        renderOptions(cargoSelect, [], '', (item) => item.nome, {
-          emptyLabel: cargoState.placeholder,
-          keepPlaceholderEnabled: true,
-        });
-        cargoSelect.disabled = cargoState.disabled;
-        resetCargoValidity();
-        setCargoFeedbackState(cargoState.message);
-        updateMachineRequirement();
+    // Setor vem do contexto de Setores do Usuário SOLICITANTE (usuario_setores) — nunca de uma
+    // lista global. 0 -> bloqueia; 1 -> automático; vários -> o usuário escolhe entre os seus.
+    const renderSetorOptions = (preferredValue = '') => {
+      const estado = resolveSolicitanteSetorState(contexto.setores);
+      if (setorBloqueioWrap) setorBloqueioWrap.classList.toggle('hidden', !estado.bloqueado);
+      setorSelect.disabled = estado.bloqueado;
+
+      if (estado.bloqueado) {
+        setorSelect.innerHTML = '<option value="">Nenhum Setor configurado</option>';
+        renderCentroOptions('');
         return;
       }
 
-      if (cargoState.availableCargos.length === 0) {
-        renderOptions(cargoSelect, [], '', (item) => item.nome, {
-          emptyLabel: cargoState.placeholder,
-          keepPlaceholderEnabled: true,
-        });
-        cargoSelect.disabled = cargoState.disabled;
-        invalidateCargo(cargoState.invalidMessage || cargoState.message);
-        updateMachineRequirement();
-        return;
+      if (estado.opcoes.length === 1) {
+        setorSelect.innerHTML = '';
+        const unico = document.createElement('option');
+        unico.value = String(estado.opcoes[0].id);
+        unico.textContent = estado.opcoes[0].nome;
+        unico.selected = true;
+        setorSelect.appendChild(unico);
+      } else {
+        const previous = String(preferredValue || setorSelect.value || '');
+        renderOptions(
+          setorSelect,
+          estado.opcoes,
+          estado.opcoes.some((item) => String(item.id) === previous) ? previous : '',
+          (item) => `${item.nome}${item.principal ? ' — principal' : ''}`
+        );
       }
-
-      renderOptions(cargoSelect, cargoState.availableCargos, cargoState.selectedCargoId, (item) => item.nome);
-      cargoSelect.disabled = cargoState.disabled;
-      resetCargoValidity();
-      setCargoFeedbackState(cargoState.message);
-      updateMachineRequirement();
+      renderCentroOptions(setorSelect.value);
     };
 
-    const validateCargoSelection = ({ report = false } = {}) => {
+    const updateGestorOptions = () => {
+      // Gestor solicitante (legado) continua filtrado pelo Setor DA VAGA já escolhido — não
+      // depende do contexto do solicitante, só do valor atual do select de Setor.
+      if (!gestorSelect) return;
       const setorId = String(setorSelect.value || '');
-      const cargoId = String(cargoSelect.value || '');
-      const cargoState = resolveSolicitacaoCargoState({
-        cargos,
-        setorId,
-        selectedCargoId: cargoId,
-        preserveSelection: true,
-      });
-
-      if (!setorId) {
-        resetCargoValidity();
-        setCargoFeedbackState(cargoState.message);
-        if (report) {
-          setorSelect.reportValidity();
-        }
-        return false;
-      }
-
-      if (cargoState.availableCargos.length === 0) {
-        invalidateCargo(cargoState.invalidMessage || cargoState.message);
-        if (report) {
-          cargoSelect.reportValidity();
-        }
-        return false;
-      }
-
-      if (!cargoId || !cargoState.availableCargos.some((item) => String(item.id) === cargoId)) {
-        invalidateCargo('Selecione um cargo válido vinculado à área/departamento informado.');
-        if (report) {
-          cargoSelect.reportValidity();
-        }
-        return false;
-      }
-
-      resetCargoValidity();
-      setCargoFeedbackState('Cargo compatível com a área/departamento selecionado.');
-      return true;
-    };
-
-    const updateDependentSelects = ({ preserveCargoSelection = true, preferredCargoValue = '' } = {}) => {
-      const setorId = String(setorSelect.value || '');
-      updateCargoOptions({ preserveSelection: preserveCargoSelection, preferredValue: preferredCargoValue });
       renderOptions(
         gestorSelect,
         gestores.filter((item) => String(item.setor_id) === setorId),
-        gestorSelect ? gestorSelect.value : '',
+        gestorSelect.value,
         (item) => `${item.nome} - ${item.cargo_nome}`
       );
-      renderOptions(
-        centroSelect,
-        centros.filter((item) => String(item.setor_id) === setorId),
-        centroSelect.value,
-        (item) => `${item.codigo} - ${item.nome}`
-      );
-      validateCargoSelection();
+    };
+
+    const aplicarContexto = (novoContexto) => {
+      contexto = novoContexto && typeof novoContexto === 'object' ? novoContexto : contextoVazio;
+      if (cargoSolicitanteLabel) {
+        cargoSolicitanteLabel.textContent = contexto.cargo_rotulo ? `Cargo do solicitante: ${contexto.cargo_rotulo}` : '';
+      }
+      renderSetorOptions();
+      updateGestorOptions();
     };
 
     const updateTipoVaga = () => {
@@ -1241,23 +1167,41 @@ if (typeof module !== 'undefined' && module.exports) {
     };
 
     setorSelect.addEventListener('change', () => {
-      updateDependentSelects({ preserveCargoSelection: false });
+      renderCentroOptions(setorSelect.value);
+      updateGestorOptions();
     });
-    cargoSelect.addEventListener('change', () => {
-      updateMachineRequirement();
-      validateCargoSelection();
-    });
+    cargoSelect.addEventListener('change', updateMachineRequirement);
     root.querySelectorAll('[data-solicitacao-tipo-vaga="1"]').forEach((radio) => radio.addEventListener('change', updateTipoVaga));
     root.querySelectorAll('[data-solicitacao-orcamento="1"]').forEach((radio) => radio.addEventListener('change', updateOrcamento));
     root.querySelectorAll('[data-solicitacao-motivo-saida="1"]').forEach((radio) => radio.addEventListener('change', updateMotivoSaida));
+
+    if (solicitanteSelect) {
+      solicitanteSelect.addEventListener('change', () => {
+        const usuarioId = solicitanteSelect.value;
+        if (!usuarioId) return;
+        fetch(buildUrl(`/admin/solicitacoes-vaga/solicitante-contexto/${encodeURIComponent(usuarioId)}`), { credentials: 'same-origin' })
+          .then((response) => response.json())
+          .then((data) => {
+            if (data && data.ok) {
+              aplicarContexto(data.contexto);
+            }
+          })
+          .catch(() => {});
+      });
+    }
+
     form?.addEventListener('submit', (event) => {
-      if (!validateCargoSelection({ report: true })) {
+      const estado = resolveSolicitanteSetorState(contexto.setores);
+      if (estado.bloqueado) {
         event.preventDefault();
         event.stopPropagation();
+        window.alert('O usuário solicitante ainda não possui Setor de atuação configurado. Atualize o contexto organizacional do usuário antes de enviar.');
       }
     });
 
-    updateDependentSelects({ preserveCargoSelection: true, preferredCargoValue: initialCargoValue });
+    renderSetorOptions(setorValueInicial);
+    updateGestorOptions();
+    updateMachineRequirement();
     updateTipoVaga();
     updateOrcamento();
     updateMotivoSaida();

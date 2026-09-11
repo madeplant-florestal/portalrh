@@ -124,8 +124,56 @@ parâmetro vinculado (coercível), então não dispara `#1267`.
 
 Tela: bloco "Contexto organizacional" em `app/views/admin/usuarios/show.php` (Cargo principal /
 Setor principal / Setores adicionais), ícones SVG inline no padrão do `layouts/admin.php`. Rota
-`POST /admin/usuarios/{id}/contexto-organizacional` (admin-only). `pode_solicitar_vaga` e
-`aprovador_usuario_id` seguem intocados e independentes de cargo/setor.
+`POST /admin/usuarios/{id}/contexto-organizacional` — **admin + RH** desde a Etapa 2 (ver abaixo).
+`pode_solicitar_vaga` e `aprovador_usuario_id` seguem intocados e independentes de cargo/setor.
+
+## Solicitação de Vaga adaptada ao Contexto Organizacional (sprint 2026-09-11, Etapa 2)
+
+Com a Etapa 1 publicada, a Solicitação de Vaga passou a usar o contexto organizacional do usuário
+em vez de `usuario_colaboradores`/`cargo_setores`:
+
+- **Solicitante**: usuário comum é sempre a própria sessão — qualquer `solicitante_usuario_id` no
+  POST é **ignorado silenciosamente** (nunca erro que confirme a tentativa). Admin/RH/supervisor
+  pode abrir em nome de outro usuário elegível (ativo + `pode_solicitar_vaga=1`, ou ele próprio
+  Admin/RH/supervisor) — `SolicitacaoVaga::resolveSolicitanteUsuarioId()`. O aprovador da 1ª etapa
+  (`resolveApprover()`) passou a ser resolvido pelo **solicitante**, nunca mais pelo ator.
+- **Setor da vaga**: vem de `usuario_setores` do solicitante (`resolverSetorSolicitacao()`), nunca
+  de uma lista global nem de `usuario_colaboradores`. 0 Setores bloqueia a criação com mensagem
+  clara; 1 Setor resolve automaticamente (ignora o que vier no POST); vários exigem escolha entre
+  os autorizados. Todo `usuario_setores.setor_id` já é oficial por construção (Etapa 1).
+- **Cargo da vaga**: catálogo oficial do METADADOS
+  (`CatalogoMetadadosRepository::oficialPorId()`), **independente** do Setor e do Cargo do
+  solicitante — decisão explícita da Etapa 2: **sem gate `cargo_setores`** (removido de
+  `validateForSubmission()`; `SolicitacaoVaga::cargoBelongsToSetor()`/`setorHasAvailableCargos()`
+  foram apagados). A tabela/feature `cargo_setores` continua existindo para outros usos
+  (`AdminCargoSetoresController`), só deixou de ser consultada aqui.
+- **Centro de Custo**: `solicitacoes_vaga.centro_custo_id` ficou `NULL`-ável (migration
+  `2026-09-11-solicitacoes-vaga-centro-custo-opcional.sql`, dev only). Depende só do Setor
+  resolvido (`resolverCentroCusto()`): Setor sem Centro de Custo cadastrado → `NULL` aceito sem
+  bloqueio (é o caso de todos os Setores oficiais hoje); Setor com um ou mais cadastrados →
+  seleção continua obrigatória e restrita àquele Setor. `findAccessible()` passou a fazer
+  `LEFT JOIN centros_custo` (era `INNER JOIN`).
+- **Kanban**: `allForKanban()` trocou `INNER JOIN colaboradores` (gestor legado) por `LEFT JOIN` +
+  `COALESCE(g.nome, su.nome)` — mesmo padrão já usado em `allForUser()`/`findAccessible()`. Sem
+  isso, solicitações novas (gestor legado sempre `NULL`) sumiam do Kanban. Nenhuma outra regra do
+  Kanban (estágios, `status_fluxo`, `situacao_kanban_id`, histórico) foi alterada.
+- **Auditoria "solicitante × criador"**: decisão explícita — reaproveitar
+  `solicitacao_vaga_auditoria` (`actor_usuario_id` no evento `created`) em vez de criar
+  `criado_por_usuario_id`. `actor_usuario_id` é sempre quem executou a operação;
+  `solicitacoes_vaga.solicitante_usuario_id` é sempre quem é o solicitante de negócio — quando
+  Admin/RH cria em nome de outro, os dois divergem; no auto-atendimento, coincidem.
+- **RH ganhou acesso ao bloco de Contexto Organizacional** em `AdminUsuariosController` (`show`,
+  `vincularMetadados`, `updateContextoOrganizacional`, `buscarMetadados` → `admin`+`rh`) para poder
+  corrigir a ausência de Setor de um solicitante. O resto do CRUD de usuários (perfil, status,
+  senha, exclusão) continua **admin-only** — decisão explícita para não expandir a ACL de RH além
+  do necessário. A view usa uma flag `isAdminAtor` para esconder as seções fora do escopo de RH.
+- `formDependencies()` ganhou chaves aditivas (`cargos_oficiais`, `elegiveis_solicitantes`,
+  `pode_escolher_solicitante`, `solicitante_contexto`) — as chaves antigas (`setores`, `cargos`
+  com `setor_ids`) **não foram alteradas nem removidas**: continuam alimentando o filtro do Kanban
+  (`AdminSolicitacoesVagaKanbanController`), que não foi tocado nesta etapa.
+- Endpoint novo: `GET /admin/solicitacoes-vaga/solicitante-contexto/{usuarioId}` (admin/rh) —
+  JSON com Cargo/Setores/Centros de Custo do solicitante escolhido, usado via `fetch()` quando
+  Admin/RH troca o solicitante no formulário (mesmo padrão do autocomplete de vínculo METADADOS).
 
 ## Integração com METADADOS (sistema oficial de RH/DP, SQL Server)
 

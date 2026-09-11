@@ -42,7 +42,7 @@ class AdminSolicitacoesVagaController extends Controller
             'csrf' => Security::csrfToken(),
             'form' => $this->defaultFormValues(),
             'record' => null,
-            'dependencies' => SolicitacaoVaga::formDependencies($userId),
+            'dependencies' => SolicitacaoVaga::formDependencies($userId, $userId),
             'error' => '',
             'aviso' => $aviso,
             'canEditRh' => SolicitacaoVaga::userCanEditRh($role, $isSupervisor),
@@ -73,18 +73,41 @@ class AdminSolicitacoesVagaController extends Controller
             $id = SolicitacaoVaga::create($_POST, $userId, Security::clientIp());
             redirect('/admin/solicitacoes-vaga/' . $id . '?ok=' . urlencode('Solicitação de vaga enviada para aprovação.'));
         } catch (Throwable $e) {
+            $solicitanteTentado = ctype_digit((string)($_POST['solicitante_usuario_id'] ?? '')) ? (int)$_POST['solicitante_usuario_id'] : $userId;
             $this->view->render('admin/solicitacoes_vaga/form', [
                 'mode' => 'create',
                 'csrf' => Security::csrfToken(),
                 'form' => $this->sanitizeFormInput($_POST),
                 'record' => null,
-                'dependencies' => SolicitacaoVaga::formDependencies($userId),
+                'dependencies' => SolicitacaoVaga::formDependencies($userId, $solicitanteTentado),
                 'error' => $e->getMessage(),
                 'canEditRh' => SolicitacaoVaga::userCanEditRh($role, $isSupervisor),
                 'currentRole' => $role,
                 'currentUserId' => $userId,
             ], 'layouts/admin');
         }
+    }
+
+    /**
+     * Contexto organizacional (Cargo/Setores/Centros de Custo) do Usuário solicitante escolhido —
+     * usado via AJAX quando Admin/RH troca o "Solicitante" no formulário de criação. Usuário comum
+     * não troca solicitante, então não precisa deste endpoint (seu contexto já vem embutido).
+     */
+    public function solicitanteContexto(string $usuarioId): void
+    {
+        Auth::requireRole(['admin', 'rh', 'viewer']);
+        header('Content-Type: application/json; charset=UTF-8');
+
+        $role = Auth::role();
+        $isSupervisor = !empty($_SESSION['user_is_supervisor']);
+        if (!SolicitacaoVaga::userCanEditRh($role, $isSupervisor)) {
+            http_response_code(403);
+            echo json_encode(['ok' => false, 'error' => 'Sem permissão para consultar contexto de outro usuário.'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+
+        $contexto = SolicitacaoVaga::contextoOrganizacionalSolicitante((int)$usuarioId);
+        echo json_encode(['ok' => true, 'contexto' => $contexto], JSON_UNESCAPED_UNICODE);
     }
 
     public function show(string $id): void
@@ -110,7 +133,7 @@ class AdminSolicitacoesVagaController extends Controller
             'csrf' => Security::csrfToken(),
             'form' => $record,
             'record' => $record,
-            'dependencies' => SolicitacaoVaga::formDependencies($userId),
+            'dependencies' => SolicitacaoVaga::formDependencies($userId, $userId),
             'error' => Security::sanitizeString($_GET['erro'] ?? ''),
             'success' => Security::sanitizeString($_GET['ok'] ?? ''),
             'canEditRh' => SolicitacaoVaga::userCanEditRh($role, $isSupervisor),
@@ -259,6 +282,7 @@ class AdminSolicitacoesVagaController extends Controller
     private function defaultFormValues(): array
     {
         return [
+            'solicitante_usuario_id' => '',
             'setor_id' => '',
             'quantidade_vagas' => 1,
             'cargo_id' => '',

@@ -128,6 +128,7 @@ try {
     $router->get('/admin/solicitacoes-vaga/kanban', [AdminSolicitacoesVagaKanbanController::class, 'index']);
     $router->get('/admin/solicitacoes-vaga/nova', [AdminSolicitacoesVagaController::class, 'create']);
     $router->post('/admin/solicitacoes-vaga/nova', [AdminSolicitacoesVagaController::class, 'store']);
+    $router->get('/admin/solicitacoes-vaga/solicitante-contexto/{usuarioId}', [AdminSolicitacoesVagaController::class, 'solicitanteContexto']);
     $router->get('/admin/solicitacoes-vaga/{id}', [AdminSolicitacoesVagaController::class, 'show']);
     $router->post('/admin/solicitacoes-vaga/{id}/aprovar-lider', [AdminSolicitacoesVagaController::class, 'approveLeader']);
     $router->post('/admin/solicitacoes-vaga/{id}/aprovar-rh', [AdminSolicitacoesVagaController::class, 'approveRh']);

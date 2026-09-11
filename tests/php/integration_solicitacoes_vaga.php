@@ -5,11 +5,10 @@ SolicitacaoVaga::ensureSchema();
 
 $pdo = Database::conn();
 $createdId = null;
-$originalUserLink = null;
-$userLinkTouched = false;
 $adminUser = null;
 $actorVagaAccessTouched = false;
 $originalActorVagaAccess = null;
+$usuarioSetorConcedido = null;
 $cleanup = [
     'vagas' => [],
     'centros' => [],
@@ -43,178 +42,67 @@ try {
         ->execute([$approverId, (int)$adminUser['id']]);
     $actorVagaAccessTouched = true;
 
-    $deps = SolicitacaoVaga::formDependencies((int)$adminUser['id']);
-    if (empty($deps['setores'])) {
-        $stmt = $pdo->prepare("INSERT INTO setores (nome, slug, ativo) VALUES (?, ?, 1)");
-        $stmt->execute(['SETOR TESTE INTEGRACAO', 'setor-teste-integracao']);
-        $cleanup['setores'][] = (int)$pdo->lastInsertId();
-    }
-    if (empty($deps['cargos'])) {
-        $stmt = $pdo->prepare("INSERT INTO cargos (nome, slug, ativo) VALUES (?, ?, 1)");
-        $stmt->execute(['CARGO TESTE INTEGRACAO', 'cargo-teste-integracao']);
-        $cleanup['cargos'][] = (int)$pdo->lastInsertId();
-    }
-    $deps = SolicitacaoVaga::formDependencies((int)$adminUser['id']);
+    // ---- Sprint Solicitação de Vaga Etapa 2 (Contexto Organizacional) ------
+    // Cargo oficial e Setor oficial são independentes; o Setor da vaga vem do contexto do
+    // SOLICITANTE (usuario_setores), não de `usuario_colaboradores`/gestor. Cria fixtures oficiais
+    // dedicadas e concede o Setor ao ator via INSERT direto (não via
+    // UsuarioContextoOrganizacionalService::definirContextoManual, que substituiria as linhas
+    // MANUAL já existentes do usuário real usado como ator neste teste).
+    $sufixo = substr(md5(uniqid('', true)), 0, 5);
+    $pdo->prepare('INSERT INTO setores (codigo_setor, nome, slug, ativo, origem_metadados) VALUES (?, ?, ?, 1, ?)')
+        ->execute(['ZI' . $sufixo, 'SETOR TESTE INTEGRACAO ' . $sufixo, 'setor-teste-integracao-' . $sufixo, 'RHMADEPLANT']);
+    $setorId = (int)$pdo->lastInsertId();
+    $cleanup['setores'][] = $setorId;
 
-    $gestor = null;
+    $pdo->prepare('INSERT INTO cargos (codigo_cargo, nome, slug, ativo, origem_metadados) VALUES (?, ?, ?, 1, ?)')
+        ->execute(['ZI' . $sufixo, 'CARGO TESTE INTEGRACAO ' . $sufixo, 'cargo-teste-integracao-' . $sufixo, 'RHMADEPLANT']);
+    $cargoId = (int)$pdo->lastInsertId();
+    $cleanup['cargos'][] = $cargoId;
+
+    $pdo->prepare('INSERT INTO centros_custo (setor_id, codigo, nome, ativo) VALUES (?, ?, ?, 1)')
+        ->execute([$setorId, 'CCTI' . $sufixo, 'Centro de custo teste ' . $sufixo]);
+    $centroId = (int)$pdo->lastInsertId();
+    $cleanup['centros'][] = $centroId;
+
+    $pdo->prepare("INSERT IGNORE INTO usuario_setores (usuario_id, setor_id, principal, origem) VALUES (?, ?, 0, 'MANUAL')")
+        ->execute([(int)$adminUser['id'], $setorId]);
+    $usuarioSetorConcedido = ['usuario_id' => (int)$adminUser['id'], 'setor_id' => $setorId];
+
+    $deps = SolicitacaoVaga::formDependencies((int)$adminUser['id'], (int)$adminUser['id']);
     $cargo = null;
-    $centro = null;
-    $setorId = 0;
-    foreach ($deps['gestores'] as $gestorCandidate) {
-        $candidateSetorId = (int)$gestorCandidate['setor_id'];
-        $candidateCargo = null;
-        foreach ($deps['cargos'] as $item) {
-            if (in_array($candidateSetorId, array_map('intval', $item['setor_ids'] ?? []), true)) {
-                $candidateCargo = $item;
-                break;
-            }
-        }
-        if (!$candidateCargo) {
-            continue;
-        }
-
-        $candidateCentro = null;
-        foreach ($deps['centros_custo'] as $item) {
-            if ((int)$item['setor_id'] === $candidateSetorId) {
-                $candidateCentro = $item;
-                break;
-            }
-        }
-        if (!$candidateCentro) {
-            continue;
-        }
-
-        $gestor = $gestorCandidate;
-        $cargo = $candidateCargo;
-        $centro = $candidateCentro;
-        $setorId = $candidateSetorId;
-        break;
-    }
-    if (!$gestor || !$cargo || !$centro || $setorId <= 0) {
-        $linkStmt = $pdo->prepare("SELECT * FROM usuario_colaboradores WHERE usuario_id = ? LIMIT 1");
-        $linkStmt->execute([(int)$adminUser['id']]);
-        $originalUserLink = $linkStmt->fetch(PDO::FETCH_ASSOC) ?: null;
-
-        $candidateStmt = $pdo->query(
-            "SELECT c.id, c.setor_id, c.cargo_id
-             FROM colaboradores c
-             LEFT JOIN usuario_colaboradores uc ON uc.colaborador_id = c.id
-             WHERE c.ativo = 1 AND c.setor_id IS NOT NULL AND c.cargo_id IS NOT NULL
-               AND (uc.id IS NULL OR uc.usuario_id = " . (int)$adminUser['id'] . ")
-             ORDER BY c.id ASC
-             LIMIT 1"
-        );
-        $candidate = $candidateStmt->fetch(PDO::FETCH_ASSOC);
-        if (!$candidate) {
-            $fallbackSetorId = !empty($deps['setores']) ? (int)$deps['setores'][0]['id'] : (($cleanup['setores'][0] ?? 0) ?: 0);
-            $fallbackCargoId = !empty($deps['cargos']) ? (int)$deps['cargos'][0]['id'] : (($cleanup['cargos'][0] ?? 0) ?: 0);
-            if ($fallbackSetorId <= 0 || $fallbackCargoId <= 0) {
-                throw new RuntimeException('Nenhuma combinação válida de gestor, setor, cargo e centro de custo foi encontrada para o teste.');
-            }
-
-            $stmt = $pdo->prepare(
-                "INSERT INTO colaboradores (nome, slug, cargo_id, empresa_id, setor_id, ativo)
-                 VALUES (?, ?, ?, NULL, ?, 1)"
-            );
-            $stmt->execute([
-                'COLABORADOR TESTE INTEGRACAO',
-                'colaborador-teste-integracao-' . time(),
-                $fallbackCargoId,
-                $fallbackSetorId,
-            ]);
-            $newColaboradorId = (int)$pdo->lastInsertId();
-            $cleanup['colaboradores'][] = $newColaboradorId;
-            $candidate = [
-                'id' => $newColaboradorId,
-                'setor_id' => $fallbackSetorId,
-                'cargo_id' => $fallbackCargoId,
-            ];
-        }
-
-        $setorId = (int)$candidate['setor_id'];
-        $pdo->prepare("INSERT IGNORE INTO cargo_setores (cargo_id, setor_id) VALUES (?, ?)")->execute([(int)$candidate['cargo_id'], $setorId]);
-        $pdo->prepare(
-            "INSERT IGNORE INTO centros_custo (setor_id, codigo, nome, ativo)
-             VALUES (?, ?, ?, 1)"
-        )->execute([$setorId, sprintf('CC-TST-%03d', $setorId), 'Centro de custo teste ' . $setorId]);
-        $centroId = (int)$pdo->lastInsertId();
-        if ($centroId > 0) {
-            $cleanup['centros'][] = $centroId;
-        }
-
-        if ($originalUserLink) {
-            $pdo->prepare(
-                "UPDATE usuario_colaboradores
-                 SET colaborador_id = ?, is_gestor = 1, is_rh = ?, pode_solicitar_vaga = 1, ativo = 1
-                 WHERE id = ?"
-            )->execute([
-                (int)$candidate['id'],
-                strtolower((string)$adminUser['role']) === 'rh' ? 1 : 0,
-                (int)$originalUserLink['id'],
-            ]);
-        } else {
-            $pdo->prepare(
-                "INSERT INTO usuario_colaboradores (usuario_id, colaborador_id, is_gestor, is_rh, pode_solicitar_vaga, lider_colaborador_id, ativo)
-                 VALUES (?, ?, 1, ?, 1, NULL, 1)"
-            )->execute([
-                (int)$adminUser['id'],
-                (int)$candidate['id'],
-                strtolower((string)$adminUser['role']) === 'rh' ? 1 : 0,
-            ]);
-        }
-        $userLinkTouched = true;
-
-        foreach ($deps['cargos'] as $item) {
-            if ((int)$item['id'] === (int)$candidate['cargo_id']) {
-                $cargo = $item;
-                break;
-            }
-        }
-        foreach ($deps['centros_custo'] as $item) {
-            if ((int)$item['setor_id'] === $setorId) {
-                $centro = $item;
-                break;
-            }
-        }
-
-        $gestor = [
-            'colaborador_id' => (int)$candidate['id'],
-            'setor_id' => $setorId,
-        ];
-
-        if (!$cargo || !$centro || $setorId <= 0) {
-            throw new RuntimeException('Não foi possível preparar um vínculo mínimo de gestor para o teste.');
-        }
-    }
-
-    $beneficios = $deps['beneficios_by_cargo'][(int)$cargo['id']] ?? [];
-    $competenciasTecnicas = $deps['competencias']['tecnica'] ?? [];
-    $competenciasComportamentais = $deps['competencias']['comportamental'] ?? [];
-    $colaboradorContratado = null;
-    foreach ($deps['colaboradores'] as $colaborador) {
-        if ((int)$colaborador['id'] !== (int)$gestor['colaborador_id']) {
-            $colaboradorContratado = $colaborador;
+    foreach ($deps['cargos_oficiais'] as $item) {
+        if ((int)$item['id'] === $cargoId) {
+            $cargo = $item;
             break;
         }
     }
-    if (!$colaboradorContratado && !empty($deps['colaboradores'][0])) {
-        $colaboradorContratado = $deps['colaboradores'][0];
+    if (!$cargo) {
+        throw new RuntimeException('Cargo oficial de teste não apareceu em cargos_oficiais().');
     }
+
+    $colaboradorContratado = $pdo->query('SELECT id, nome FROM colaboradores ORDER BY id ASC LIMIT 1')->fetch(PDO::FETCH_ASSOC);
     if (!$colaboradorContratado) {
-        throw new RuntimeException('Nenhum colaborador disponível para validar o controle interno RH.');
+        $pdo->prepare('INSERT INTO colaboradores (nome, slug, cargo_id) VALUES (?, ?, ?)')
+            ->execute(['COLABORADOR TESTE INTEGRACAO ' . $sufixo, 'colaborador-teste-integracao-' . $sufixo, $cargoId]);
+        $novoColaboradorId = (int)$pdo->lastInsertId();
+        $cleanup['colaboradores'][] = $novoColaboradorId;
+        $colaboradorContratado = ['id' => $novoColaboradorId, 'nome' => 'COLABORADOR TESTE INTEGRACAO ' . $sufixo];
     }
+
+    $beneficios = $deps['beneficios_by_cargo'][$cargoId] ?? [];
+    $competenciasTecnicas = $deps['competencias']['tecnica'] ?? [];
+    $competenciasComportamentais = $deps['competencias']['comportamental'] ?? [];
 
     $payload = [
         'setor_id' => $setorId,
         'quantidade_vagas' => 1,
-        'cargo_id' => (int)$cargo['id'],
+        'cargo_id' => $cargoId,
         'maquina_operada' => !empty($cargo['requires_machine_description']) ? 'Harvester' : '',
-        'gestor_solicitante_colaborador_id' => (int)$gestor['colaborador_id'],
         'tipo_vaga' => 'nova_posicao',
         'tipo_contratacao' => 'clt',
         'salario_previsto' => 'R$ ' . number_format((float)$cargo['salario_min'], 2, ',', '.'),
         'beneficio_ids' => array_slice(array_map(static fn(array $row): int => (int)$row['id'], $beneficios), 0, 2),
-        'centro_custo_id' => (int)$centro['id'],
+        'centro_custo_id' => $centroId,
         'previsto_orcamento' => '1',
         'jornada_trabalho' => '44h semanais',
         'escala' => '5x2',
@@ -237,18 +125,23 @@ try {
     }
 
     // Segurança: o solicitante persistido é SEMPRE o usuário autenticado (parâmetro do backend),
-    // nunca um id vindo do formulário.
+    // nunca um id vindo do formulário — a menos que o ator seja Admin/RH/supervisor escolhendo
+    // OUTRO usuário elegível (Etapa 2); aqui o ator não pediu outro solicitante, então é ele mesmo.
     $solicitanteRow = (int)$pdo->query('SELECT solicitante_usuario_id FROM solicitacoes_vaga WHERE id = ' . (int)$createdId)->fetchColumn();
     if ($solicitanteRow !== (int)$adminUser['id']) {
         throw new RuntimeException('O solicitante deveria ser o usuário autenticado.');
     }
+    // Adulteração: um id de usuário inexistente enviado no POST é rejeitado (Etapa 2 valida o
+    // usuário-alvo mesmo quando o ator tem permissão para agir em nome de outro).
     $payloadAdulterado = array_merge($payload, ['solicitante_usuario_id' => 999999]);
-    $idAdulterado = SolicitacaoVaga::create($payloadAdulterado, (int)$adminUser['id'], '127.0.0.1');
-    $solicitanteAdulterado = (int)$pdo->query('SELECT solicitante_usuario_id FROM solicitacoes_vaga WHERE id = ' . (int)$idAdulterado)->fetchColumn();
-    $pdo->prepare('DELETE FROM vagas WHERE solicitacao_vaga_id = ?')->execute([$idAdulterado]);
-    $pdo->prepare('DELETE FROM solicitacoes_vaga WHERE id = ?')->execute([$idAdulterado]);
-    if ($solicitanteAdulterado !== (int)$adminUser['id']) {
-        throw new RuntimeException('Tentativa de adulterar o solicitante pelo POST deveria ter sido ignorada.');
+    $adulteracaoRejeitada = false;
+    try {
+        SolicitacaoVaga::create($payloadAdulterado, (int)$adminUser['id'], '127.0.0.1');
+    } catch (\InvalidArgumentException $e) {
+        $adulteracaoRejeitada = stripos($e->getMessage(), 'não foi encontrado') !== false || stripos($e->getMessage(), 'não tem permissão') !== false;
+    }
+    if (!$adulteracaoRejeitada) {
+        throw new RuntimeException('Tentativa de adulterar o solicitante com um id inexistente deveria ser rejeitada.');
     }
 
     // Autorização canônica (migration 2026-09-09): `usuarios.pode_solicitar_vaga`. Um usuário
@@ -368,24 +261,9 @@ try {
         $stmt = $pdo->prepare('DELETE FROM solicitacoes_vaga WHERE id = ?');
         $stmt->execute([$createdId]);
     }
-    if ($userLinkTouched) {
-        if ($originalUserLink) {
-            $pdo->prepare(
-                "UPDATE usuario_colaboradores
-                 SET colaborador_id = ?, is_gestor = ?, is_rh = ?, pode_solicitar_vaga = ?, lider_colaborador_id = ?, ativo = ?
-                 WHERE id = ?"
-            )->execute([
-                (int)$originalUserLink['colaborador_id'],
-                (int)$originalUserLink['is_gestor'],
-                (int)$originalUserLink['is_rh'],
-                (int)($originalUserLink['pode_solicitar_vaga'] ?? 0),
-                $originalUserLink['lider_colaborador_id'] !== null ? (int)$originalUserLink['lider_colaborador_id'] : null,
-                (int)$originalUserLink['ativo'],
-                (int)$originalUserLink['id'],
-            ]);
-        } else {
-            $pdo->prepare('DELETE FROM usuario_colaboradores WHERE usuario_id = ?')->execute([(int)$adminUser['id']]);
-        }
+    if ($usuarioSetorConcedido !== null) {
+        $pdo->prepare('DELETE FROM usuario_setores WHERE usuario_id = ? AND setor_id = ?')
+            ->execute([$usuarioSetorConcedido['usuario_id'], $usuarioSetorConcedido['setor_id']]);
     }
     foreach ($cleanup['centros'] as $centroId) {
         $pdo->prepare('DELETE FROM centros_custo WHERE id = ?')->execute([(int)$centroId]);

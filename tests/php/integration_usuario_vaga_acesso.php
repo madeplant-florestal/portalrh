@@ -43,20 +43,21 @@ $limparSolicitacao = static function (int $id) use ($pdo): void {
 };
 
 try {
-    // ---- fixtures estruturais -------------------------------------------
-    $pdo->prepare('INSERT INTO setores (nome, slug, ativo) VALUES (?, ?, 1)')->execute(['SETOR ' . $mk, 'setor-' . strtolower($mk)]);
+    // ---- fixtures estruturais ---------------------------------------------
+    // Setor/Cargo OFICIAIS (com codigo_*) — desde a Sprint Solicitação de Vaga Etapa 2, o Setor da
+    // vaga vem do contexto do solicitante (usuario_setores) e o Cargo exige catálogo oficial; não
+    // há mais gate por cargo_setores.
+    $pdo->prepare('INSERT INTO setores (codigo_setor, nome, slug, ativo, origem_metadados) VALUES (?, ?, ?, 1, ?)')
+        ->execute(['ZZS' . substr($mk, -5), 'SETOR ' . $mk, 'setor-' . strtolower($mk), 'RHMADEPLANT']);
     $setorId = (int)$pdo->lastInsertId();
     $criados['setores'][] = $setorId;
 
-    $pdo->prepare('INSERT INTO cargos (nome, slug, ativo) VALUES (?, ?, 1)')->execute(['CARGO ' . $mk, 'cargo-' . strtolower($mk)]);
+    $pdo->prepare('INSERT INTO cargos (codigo_cargo, nome, slug, ativo, origem_metadados) VALUES (?, ?, ?, 1, ?)')
+        ->execute(['ZZC' . substr($mk, -5), 'CARGO ' . $mk, 'cargo-' . strtolower($mk), 'RHMADEPLANT']);
     $cargoId = (int)$pdo->lastInsertId();
     $criados['cargos'][] = $cargoId;
-    $pdo->prepare('INSERT IGNORE INTO cargo_setores (cargo_id, setor_id) VALUES (?, ?)')->execute([$cargoId, $setorId]);
-
-    $pdo->prepare('INSERT INTO centros_custo (setor_id, codigo, nome, ativo) VALUES (?, ?, ?, 1)')
-        ->execute([$setorId, 'CC' . substr($mk, -6), 'CC ' . $mk]);
-    $centroId = (int)$pdo->lastInsertId();
-    $criados['centros'][] = $centroId;
+    // Setor sem Centro de Custo cadastrado (caso real dos Setores oficiais hoje) ->
+    // `centro_custo_id` é opcional/NULL na Solicitação (ver resolverCentroCusto()).
 
     $pdo->prepare(
         'INSERT INTO colaboradores_metadados
@@ -69,9 +70,13 @@ try {
     $criados['metadados'][] = $metadadosId;
 
     $senha = password_hash('irrelevante', PASSWORD_BCRYPT);
-    $mkUser = static function (string $sufixo, string $role) use ($pdo, $emailMk, $senha, &$criados): int {
+    $contextoService = new UsuarioContextoOrganizacionalService();
+    $mkUser = static function (string $sufixo, string $role) use ($pdo, $emailMk, $senha, $setorId, $contextoService, &$criados): int {
         $id = User::create('USR ' . $sufixo, str_replace('@', "+{$sufixo}@", $emailMk), $senha, $role);
         User::setActiveStatus($id, true);
+        // Contexto organizacional (Etapa 2): 1 Setor oficial de atuação -> resolução automática
+        // do Setor da vaga. `usuario_setores` é removida em cascata quando o usuário é apagado.
+        $contextoService->definirContextoManual($id, null, $setorId, []);
         $criados['usuarios'][] = $id;
         return $id;
     };
@@ -79,7 +84,7 @@ try {
     $payloadBase = [
         'setor_id' => $setorId, 'quantidade_vagas' => 1, 'cargo_id' => $cargoId,
         'tipo_vaga' => 'nova_posicao', 'tipo_contratacao' => 'pj',
-        'salario_previsto' => 'R$ 5.000,00', 'centro_custo_id' => $centroId,
+        'salario_previsto' => 'R$ 5.000,00',
         'previsto_orcamento' => '1', 'jornada_trabalho' => '44h semanais',
         'escolaridade_minima' => 'medio', 'nivel_responsabilidade' => 'operacional', 'urgencia' => 'media',
         'data_prevista_inicio' => date('d/m/Y', strtotime('+30 days')),
@@ -204,11 +209,13 @@ try {
         $pdo->prepare('DELETE FROM cargo_setores WHERE cargo_id = ?')->execute([(int)$id]);
         $pdo->prepare('DELETE FROM cargos WHERE id = ?')->execute([(int)$id]);
     }
-    foreach ($criados['setores'] as $id) {
-        $pdo->prepare('DELETE FROM setores WHERE id = ?')->execute([(int)$id]);
-    }
+    // Usuários ANTES de Setores: `usuario_setores` (Etapa 2) tem FK RESTRICT em setor_id e só é
+    // removida em cascata quando o próprio usuário é apagado.
     foreach ($criados['usuarios'] as $id) {
         $pdo->prepare('DELETE FROM usuarios WHERE id = ?')->execute([(int)$id]);
+    }
+    foreach ($criados['setores'] as $id) {
+        $pdo->prepare('DELETE FROM setores WHERE id = ?')->execute([(int)$id]);
     }
     foreach ($criados['metadados'] as $id) {
         $pdo->prepare('DELETE FROM colaboradores_metadados WHERE id = ?')->execute([(int)$id]);

@@ -254,6 +254,24 @@ class User
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
+
+    /**
+     * Usuários elegíveis para serem o SOLICITANTE de uma vaga aberta por outra pessoa (Admin/RH
+     * "em nome de outro" — Sprint Solicitação de Vaga, Etapa 2). Ativo + `pode_solicitar_vaga = 1`,
+     * ou já intrinsecamente autorizado por ser Admin/RH/supervisor — mesmo critério usado em
+     * `SolicitacaoVaga::resolveApprover()`/`canCreate()`.
+     */
+    public static function candidatosSolicitante(): array
+    {
+        $stmt = Database::conn()->query(
+            "SELECT id, nome, email, role FROM usuarios
+             WHERE email_verified_at IS NOT NULL
+               AND (pode_solicitar_vaga = 1 OR role IN ('admin', 'rh') OR is_supervisor = 1)
+             ORDER BY nome ASC"
+        );
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
     /**
      * Domínio de Solicitação de Vaga (migration 2026-09-09-usuarios-dominio-vagas.sql):
      * autorização (`pode_solicitar_vaga`, fonte canônica) + aprovador/líder imediato

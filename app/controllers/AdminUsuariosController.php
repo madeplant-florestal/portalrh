@@ -130,9 +130,15 @@ class AdminUsuariosController extends Controller
         redirect('/admin/usuarios');
     }
 
+    /**
+     * Detalhe do usuário. Admin gerencia tudo. RH (Sprint Solicitação de Vaga — Etapa 2) recebe
+     * acesso restrito ao bloco de Contexto Organizacional (Cargo/Setores/vínculo METADADOS) desta
+     * mesma tela — NÃO ganha CRUD completo de usuário. A view usa `isAdminAtor` para esconder as
+     * seções fora desse escopo (Solicitação de Vagas / status / senha).
+     */
     public function show(string $id): void
     {
-        Auth::requireRole(['admin']);
+        Auth::requireRole(['admin', 'rh']);
         SchemaManager::ensure();
         $user = User::findById((int)$id);
         if (!$user) {
@@ -158,9 +164,16 @@ class AdminUsuariosController extends Controller
             'contexto' => $contextoService->contextoDoUsuario((int)$user->id),
             'cargosOficiais' => (new CatalogoMetadadosRepository('cargos'))->listarOficiais(),
             'setoresOficiais' => (new CatalogoMetadadosRepository('setores'))->listarOficiais(),
+            'isAdminAtor' => $this->isAdminAtor(),
             'flashError' => Security::sanitizeString($_GET['erro'] ?? ''),
             'flashSuccess' => Security::sanitizeString($_GET['ok'] ?? ''),
         ], 'layouts/admin');
+    }
+
+    /** Admin (ou supervisor protegido) — distingue de RH, que só administra Contexto Organizacional. */
+    private function isAdminAtor(): bool
+    {
+        return strtolower((string)Auth::role()) === 'admin' || !empty($_SESSION['user_is_supervisor']);
     }
 
     /**
@@ -200,10 +213,13 @@ class AdminUsuariosController extends Controller
         redirect($back . '?ok=' . urlencode('Acesso a Solicitação de Vagas atualizado.'));
     }
 
-    /** Vincula (ação administrativa explícita) o usuário a um contrato oficial do METADADOS. */
+    /**
+     * Vincula (ação administrativa explícita) o usuário a um contrato oficial do METADADOS.
+     * Admin e RH (Sprint Solicitação de Vaga — Etapa 2, bloco de Contexto Organizacional).
+     */
     public function vincularMetadados(string $id): void
     {
-        Auth::requireRole(['admin']);
+        Auth::requireRole(['admin', 'rh']);
         SchemaManager::ensure();
         if (!Security::csrfCheck($_POST['csrf'] ?? '')) {
             http_response_code(400);
@@ -250,10 +266,11 @@ class AdminUsuariosController extends Controller
      * Salva o contexto organizacional do usuário: Cargo principal + Setor principal + Setores
      * adicionais, sempre a partir dos catálogos OFICIAIS do METADADOS. Campos herdados de um
      * contrato vinculado ficam travados (a validação final é do Service).
+     * Admin e RH podem gerenciar — este é exatamente o bloco liberado para RH na Etapa 2.
      */
     public function updateContextoOrganizacional(string $id): void
     {
-        Auth::requireRole(['admin']);
+        Auth::requireRole(['admin', 'rh']);
         SchemaManager::ensure();
         if (!Security::csrfCheck($_POST['csrf'] ?? '')) {
             http_response_code(400);
@@ -296,10 +313,13 @@ class AdminUsuariosController extends Controller
         redirect($back . '?ok=' . urlencode('Contexto organizacional atualizado.'));
     }
 
-    /** Busca JSON de contratos oficiais ATIVOS para o autocomplete do vínculo METADADOS. Sem CPF. */
+    /**
+     * Busca JSON de contratos oficiais ATIVOS para o autocomplete do vínculo METADADOS. Sem CPF.
+     * Admin e RH (mesmo escopo de `vincularMetadados`).
+     */
     public function buscarMetadados(): void
     {
-        Auth::requireRole(['admin']);
+        Auth::requireRole(['admin', 'rh']);
         header('Content-Type: application/json; charset=UTF-8');
         $q = Security::sanitizeString($_GET['q'] ?? '');
         if (mb_strlen($q) < 2) {

@@ -114,7 +114,7 @@ class SolicitacaoVaga
             motivo_saida_outros_encrypted TEXT NULL,
             tipo_contratacao ENUM('clt','temporario','terceiro','pj') NOT NULL,
             salario_previsto DECIMAL(12,2) NOT NULL,
-            centro_custo_id INT NOT NULL,
+            centro_custo_id INT NULL,
             previsto_orcamento TINYINT(1) NOT NULL,
             justificativa_orcamento_encrypted TEXT NULL,
             jornada_trabalho VARCHAR(80) NOT NULL,
@@ -222,11 +222,15 @@ class SolicitacaoVaga
         self::seedReferenceData($pdo);
     }
 
-    public static function formDependencies(?int $currentUserId = null): array
+    public static function formDependencies(?int $actorUserId = null, ?int $solicitanteUsuarioId = null): array
     {
         self::ensureSchema();
         $pdo = Database::conn();
 
+        // Lista GLOBAL (todos os Setores/Cargos ativos, oficiais + legados) — usada pelo filtro do
+        // Kanban (AdminSolicitacoesVagaKanbanController), que precisa continuar filtrando
+        // solicitações históricas por qualquer Setor/Cargo já usado. NÃO é a lista do select de
+        // Setor/Cargo do formulário de criação (essa é `solicitante_contexto`/`cargos_oficiais`).
         $setores = $pdo->query("SELECT id, nome FROM setores WHERE ativo = 1 ORDER BY nome ASC")->fetchAll(PDO::FETCH_ASSOC);
         $cargos = $pdo->query(
             "SELECT c.id, c.nome,
@@ -237,6 +241,10 @@ class SolicitacaoVaga
              WHERE c.ativo = 1
              ORDER BY c.nome ASC"
         )->fetchAll(PDO::FETCH_ASSOC);
+        $faixaPorCargo = [];
+        foreach ($cargos as $row) {
+            $faixaPorCargo[(int)$row['id']] = ['min' => (float)$row['salario_min'], 'max' => (float)$row['salario_max']];
+        }
 
         $cargoSetores = [];
         $stmtCargoSetores = $pdo->query("SELECT cargo_id, setor_id FROM cargo_setores");
@@ -306,7 +314,29 @@ class SolicitacaoVaga
             ];
         }
 
-        $currentAccess = $currentUserId ? self::userAccessProfile($currentUserId) : null;
+        $currentAccess = $actorUserId ? self::userAccessProfile($actorUserId) : null;
+
+        // ---- Etapa 2 (Contexto Organizacional) — só o necessário para o NOVO fluxo -------------
+        // Cargo oficial do METADADOS, independente de Setor (sem `setor_ids`/gate `cargo_setores`).
+        $cargosOficiais = array_map(function (array $row) use ($faixaPorCargo): array {
+            $id = (int)$row['id'];
+            $rotulo = trim((string)($row['descricao_oficial'] ?? '')) !== '' ? (string)$row['descricao_oficial'] : (string)$row['nome'];
+            $faixa = $faixaPorCargo[$id] ?? ['min' => 0.0, 'max' => 0.0];
+            return [
+                'id' => $id,
+                'nome' => $rotulo,
+                'salario_min' => $faixa['min'],
+                'salario_max' => $faixa['max'],
+                'requires_machine_description' => self::cargoRequiresMachine($rotulo),
+            ];
+        }, (new CatalogoMetadadosRepository('cargos'))->listarOficiais());
+
+        $podeEscolherSolicitante = $currentAccess !== null && (
+            in_array(strtolower($currentAccess['role']), ['admin', 'rh'], true) || $currentAccess['is_supervisor'] === 1
+        );
+        $elegiveisSolicitantes = $podeEscolherSolicitante ? User::candidatosSolicitante() : [];
+
+        $solicitanteContexto = self::contextoOrganizacionalSolicitante($solicitanteUsuarioId ?? $actorUserId ?? 0);
 
         return [
             'setores' => array_map(static function (array $row): array {
@@ -323,6 +353,7 @@ class SolicitacaoVaga
                     'requires_machine_description' => self::cargoRequiresMachine($row['nome']),
                 ];
             }, $cargos),
+            'cargos_oficiais' => $cargosOficiais,
             'centros_custo' => array_map(static function (array $row): array {
                 return [
                     'id' => (int)$row['id'],
@@ -365,6 +396,75 @@ class SolicitacaoVaga
                 'pos_graduacao' => 'Pós-graduação',
             ],
             'current_access' => $currentAccess,
+            'pode_escolher_solicitante' => $podeEscolherSolicitante,
+            'elegiveis_solicitantes' => array_map(static function (array $row): array {
+                return ['id' => (int)$row['id'], 'nome' => $row['nome']];
+            }, $elegiveisSolicitantes),
+            'solicitante_contexto' => $solicitanteContexto,
+        ];
+    }
+
+
+    /**
+     * Contexto organizacional do usuário SOLICITANTE, no vocabulário da Solicitação de Vaga:
+     * Cargo (informativo), Setores de atuação oficiais (com o principal identificado) e os
+     * Centros de Custo de cada um. Alimenta tanto a renderização inicial do formulário quanto o
+     * endpoint JSON usado quando Admin/RH troca o Usuário solicitante.
+     *
+     * Reaproveita UsuarioContextoOrganizacionalService (Etapa 1) — não duplica a leitura de
+     * `usuario_setores`.
+     *
+     * @return array{
+     *   usuario_id:int, nome:?string, cargo_rotulo:?string,
+     *   setores:array<int, array{id:int, nome:string, principal:bool}>,
+     *   centros_custo_by_setor:array<int, array<int, array{id:int, codigo:string, nome:string}>>,
+     *   bloqueado_sem_setor:bool
+     * }
+     */
+    public static function contextoOrganizacionalSolicitante(int $usuarioId): array
+    {
+        $usuario = $usuarioId > 0 ? User::findById($usuarioId) : null;
+        if ($usuario === null) {
+            return [
+                'usuario_id' => $usuarioId,
+                'nome' => null,
+                'cargo_rotulo' => null,
+                'setores' => [],
+                'centros_custo_by_setor' => [],
+                'bloqueado_sem_setor' => true,
+            ];
+        }
+
+        $ctx = (new UsuarioContextoOrganizacionalService())->contextoDoUsuario($usuarioId);
+
+        $setores = [];
+        if ($ctx['setor_principal'] !== null) {
+            $setores[] = [
+                'id' => (int)$ctx['setor_principal']['setor_id'],
+                'nome' => (string)$ctx['setor_principal']['rotulo'],
+                'principal' => true,
+            ];
+        }
+        foreach ($ctx['setores_adicionais'] as $adicional) {
+            $setores[] = [
+                'id' => (int)$adicional['setor_id'],
+                'nome' => (string)$adicional['rotulo'],
+                'principal' => false,
+            ];
+        }
+
+        $centrosPorSetor = [];
+        foreach ($setores as $setor) {
+            $centrosPorSetor[$setor['id']] = self::centrosCustoDoSetor($setor['id']);
+        }
+
+        return [
+            'usuario_id' => $usuarioId,
+            'nome' => $usuario->nome,
+            'cargo_rotulo' => $ctx['cargo_rotulo'],
+            'setores' => $setores,
+            'centros_custo_by_setor' => $centrosPorSetor,
+            'bloqueado_sem_setor' => $setores === [],
         ];
     }
 
@@ -435,7 +535,7 @@ class SolicitacaoVaga
                 INNER JOIN setores s ON s.id = sv.setor_id
                 INNER JOIN cargos c ON c.id = sv.cargo_id
                 INNER JOIN usuarios su ON su.id = sv.solicitante_usuario_id
-                INNER JOIN centros_custo cc ON cc.id = sv.centro_custo_id
+                LEFT JOIN centros_custo cc ON cc.id = sv.centro_custo_id
                 LEFT JOIN colaboradores g ON g.id = sv.gestor_solicitante_colaborador_id
                 LEFT JOIN colaboradores sub ON sub.id = sv.colaborador_substituido_id
                 LEFT JOIN colaboradores lider ON lider.id = sv.lider_imediato_colaborador_id
@@ -479,6 +579,12 @@ class SolicitacaoVaga
     /**
      * Listagem para o Kanban de Solicitações de Vaga (situação operacional), independente do
      * status_fluxo de aprovação. Mesma restrição de acesso por linha usada em allForUser().
+     *
+     * `gestor_solicitante_colaborador_id` é LEFT JOIN (Etapa 2 — Contexto Organizacional):
+     * solicitações novas nascem com esse campo legado NULL e não podem desaparecer do Kanban por
+     * isso. A identidade/exibição do solicitante prioriza `solicitante_usuario_id`
+     * (`COALESCE(g.nome, su.nome)`, mesmo padrão de allForUser()/findAccessible()); o vínculo com
+     * o colaborador fica só como compatibilidade histórica para registros antigos.
      */
     public static function allForKanban(?int $currentUserId, ?string $currentRole, bool $isSupervisor, array $filters = []): array
     {
@@ -487,12 +593,14 @@ class SolicitacaoVaga
 
         $sql = "SELECT sv.id, sv.quantidade_vagas, sv.situacao_kanban_id, sv.created_at,
                        sv.setor_id, sv.cargo_id, sv.gestor_solicitante_colaborador_id,
-                       s.nome AS setor_nome, c.nome AS cargo_nome, g.nome AS gestor_nome,
+                       s.nome AS setor_nome, c.nome AS cargo_nome,
+                       COALESCE(g.nome, su.nome) AS gestor_nome,
                        st.nome AS situacao_nome, st.slug AS situacao_slug, st.cor AS situacao_cor
                 FROM solicitacoes_vaga sv
                 INNER JOIN setores s ON s.id = sv.setor_id
                 INNER JOIN cargos c ON c.id = sv.cargo_id
-                INNER JOIN colaboradores g ON g.id = sv.gestor_solicitante_colaborador_id
+                INNER JOIN usuarios su ON su.id = sv.solicitante_usuario_id
+                LEFT JOIN colaboradores g ON g.id = sv.gestor_solicitante_colaborador_id
                 LEFT JOIN solicitacao_vaga_stages st ON st.id = sv.situacao_kanban_id
                 LEFT JOIN solicitacao_vaga_aprovacoes ap_lider ON ap_lider.solicitacao_id = sv.id AND ap_lider.etapa = 'lider_imediato'
                 WHERE 1=1";
@@ -590,11 +698,13 @@ class SolicitacaoVaga
     {
         self::ensureSchema();
         $normalized = self::validateForSubmission($input, $actorUserId);
+        $solicitanteUsuarioId = $normalized['solicitante_usuario_id'];
 
-        // Aprovador da 1ª etapa vem de `usuarios.aprovador_usuario_id` do solicitante — nunca
-        // de inferência por cargo/setor/METADADOS. Pode lançar InvalidArgumentException (usuário
-        // comum autorizado sem aprovador configurado) ANTES de qualquer persistência.
-        $approver = self::resolveApprover($actorUserId);
+        // Aprovador da 1ª etapa vem de `usuarios.aprovador_usuario_id` do SOLICITANTE — nunca do
+        // ator (quando Admin/RH abre em nome de outro) nem de inferência por cargo/setor/METADADOS.
+        // Já resolvido dentro de validateForSubmission() (guarda de autorização, checado antes de
+        // qualquer validação de campo) — reaproveitado aqui, sem nova consulta.
+        $approver = $normalized['approver'];
         $etapaLiderDispensada = (bool)$approver['etapa_lider_dispensada'];
         $statusInicial = $etapaLiderDispensada ? self::STATUS_PENDENTE_RH : self::STATUS_PENDENTE_LIDER;
 
@@ -630,7 +740,7 @@ class SolicitacaoVaga
                 $normalized['cargo_id'],
                 self::encryptNullable($normalized['maquina_operada']),
                 $normalized['gestor_solicitante_colaborador_id'],
-                $actorUserId,
+                $solicitanteUsuarioId,
                 $normalized['tipo_vaga'],
                 $normalized['colaborador_substituido_id'],
                 $normalized['data_desligamento'],
@@ -664,7 +774,14 @@ class SolicitacaoVaga
             self::syncCompetencies($solicitacaoId, $normalized['competencia_comportamental_ids'], self::TIPO_COMPETENCIA_COMPORTAMENTAL);
             self::seedApprovalRows($solicitacaoId, $approver['usuario_id'], $etapaLiderDispensada, $actorUserId);
 
-            self::logAudit($solicitacaoId, $actorUserId, 'created', null, null, 'Solicitação criada', $ip);
+            // Auditoria: `actor_usuario_id` é sempre quem EXECUTOU a operação (pode ser o próprio
+            // solicitante ou um Admin/RH agindo em nome de outro) — é essa linha que distingue
+            // "quem solicitou" (`solicitacoes_vaga.solicitante_usuario_id`) de "quem cadastrou"
+            // (decisão da Etapa 2: reaproveitar a auditoria em vez de nova coluna).
+            $descricaoCriacao = $solicitanteUsuarioId !== $actorUserId
+                ? 'Solicitação criada em nome do usuário solicitante'
+                : 'Solicitação criada';
+            self::logAudit($solicitacaoId, $actorUserId, 'created', null, null, $descricaoCriacao, $ip);
             if ($etapaLiderDispensada) {
                 self::logAudit(
                     $solicitacaoId,
@@ -879,14 +996,42 @@ class SolicitacaoVaga
 
     private static function validateForSubmission(array $input, int $actorUserId): array
     {
-        $setorId = self::requiredEntityId($input['setor_id'] ?? null, 'setores', 'Área / Departamento');
+        // Identidade do solicitante (Etapa 2 — Contexto Organizacional): usuário comum sempre é
+        // ele mesmo; Admin/RH/supervisor pode abrir em nome de outro usuário elegível. Nunca
+        // confia em IDs arbitrários — `resolveSolicitanteUsuarioId` valida autorização e elegibilidade.
+        $solicitanteUsuarioId = self::resolveSolicitanteUsuarioId($input, $actorUserId);
+
+        // Guarda de autorização do SOLICITANTE (ativo, `pode_solicitar_vaga`, aprovador
+        // configurado) — checado ANTES de qualquer validação de campo, para que um bloqueio de
+        // autorização real nunca fique mascarado por uma mensagem de "cargo/setor inválido".
+        // Defesa em profundidade: independe da tela, nunca infere por cargo/setor/METADADOS.
+        $approver = self::resolveApprover($solicitanteUsuarioId);
+
+        // Cargo da vaga: catálogo OFICIAL do METADADOS, independente do Cargo do solicitante e sem
+        // gate de `cargo_setores` (decisão de negócio da Etapa 2 — Cargo e Setor são selecionados
+        // de forma independente na Solicitação de Vaga).
         $cargoId = self::requiredEntityId($input['cargo_id'] ?? null, 'cargos', 'Cargo');
-        $centroCustoId = self::requiredEntityId($input['centro_custo_id'] ?? null, 'centros_custo', 'Centro de custo');
+        $cargoOficial = (new CatalogoMetadadosRepository('cargos'))->oficialPorId($cargoId);
+        if ($cargoOficial === null) {
+            throw new InvalidArgumentException('Selecione um Cargo do catálogo oficial do METADADOS. Cargos legados não podem ser usados em novas solicitações.');
+        }
+        $cargoNomeReferencia = trim((string)($cargoOficial['descricao_oficial'] ?? '')) !== ''
+            ? (string)$cargoOficial['descricao_oficial']
+            : (string)$cargoOficial['nome'];
+
+        // Setor da vaga: vem do contexto organizacional do SOLICITANTE (`usuario_setores`), nunca
+        // de um id arbitrário do POST. 0 Setores -> bloqueia; 1 -> automático; vários -> exige
+        // escolha entre os autorizados.
+        $setorId = self::resolverSetorSolicitacao($solicitanteUsuarioId, $input['setor_id'] ?? null);
+
+        // Centro de custo depende só do Setor resolvido: obrigatório apenas se o Setor já tiver
+        // Centro de Custo cadastrado (decisão de negócio da Etapa 2 — não inventa a partir do Setor).
+        $centroCustoId = self::resolverCentroCusto($setorId, $input['centro_custo_id'] ?? null);
 
         // `gestor_solicitante_colaborador_id` é OPCIONAL e apenas contexto legado (migration
-        // 2026-09-09): a identidade do solicitante é sempre `solicitante_usuario_id` da sessão.
-        // Se enviado, valida-se só a existência do colaborador — sem exigir `usuario_colaboradores`,
-        // sem `is_gestor`, sem trava de setor, sem inferência.
+        // 2026-09-09): a identidade do solicitante é sempre `solicitante_usuario_id` (resolvido
+        // acima). Se enviado, valida-se só a existência do colaborador — sem exigir
+        // `usuario_colaboradores`, sem `is_gestor`, sem trava de setor, sem inferência.
         $gestorColaboradorId = null;
         $rawGestor = trim((string)($input['gestor_solicitante_colaborador_id'] ?? ''));
         if ($rawGestor !== '') {
@@ -932,23 +1077,6 @@ class SolicitacaoVaga
             throw new InvalidArgumentException('Informe o salário previsto em formato monetário válido.');
         }
 
-        $setor = self::findSimple('setores', $setorId);
-        $cargo = self::findSimple('cargos', $cargoId);
-        $centro = self::findSimple('centros_custo', $centroCustoId);
-        if (!$setor || !$cargo || !$centro) {
-            throw new InvalidArgumentException('Não foi possível validar os vínculos obrigatórios do formulário.');
-        }
-
-        if (!self::cargoBelongsToSetor($cargoId, $setorId)) {
-            if (!self::setorHasAvailableCargos($setorId)) {
-                throw new InvalidArgumentException('Nenhum cargo disponível para este setor. Revise o vínculo entre cargos e área/departamento antes de enviar a solicitação.');
-            }
-            throw new InvalidArgumentException('Selecione um cargo válido vinculado à área/departamento informado.');
-        }
-        if ((int)$centro['setor_id'] !== $setorId) {
-            throw new InvalidArgumentException('O centro de custo informado não pertence à área selecionada.');
-        }
-
         $faixa = self::salaryRangeForCargo($cargoId);
         if ($faixa && ($salarioPrevisto < (float)$faixa['salario_min'] || $salarioPrevisto > (float)$faixa['salario_max'])) {
             throw new InvalidArgumentException(sprintf(
@@ -959,10 +1087,10 @@ class SolicitacaoVaga
         }
 
         $maquinaOperada = trim((string)($input['maquina_operada'] ?? ''));
-        if (self::cargoRequiresMachine((string)$cargo['nome']) && $maquinaOperada === '') {
+        if (self::cargoRequiresMachine($cargoNomeReferencia) && $maquinaOperada === '') {
             throw new InvalidArgumentException('Descreva a máquina a ser operada para cargos de Operador de Máquinas Florestais.');
         }
-        if (!self::cargoRequiresMachine((string)$cargo['nome'])) {
+        if (!self::cargoRequiresMachine($cargoNomeReferencia)) {
             $maquinaOperada = '';
         }
 
@@ -1027,6 +1155,8 @@ class SolicitacaoVaga
         }
 
         return [
+            'solicitante_usuario_id' => $solicitanteUsuarioId,
+            'approver' => $approver,
             'setor_id' => $setorId,
             'quantidade_vagas' => $quantidadeVagas,
             'cargo_id' => $cargoId,
@@ -1057,6 +1187,112 @@ class SolicitacaoVaga
             'urgencia' => $urgencia,
             'data_limite_fechamento' => $dataLimiteFechamento,
         ];
+    }
+
+
+    /**
+     * Identidade do solicitante da vaga (Etapa 2 — Contexto Organizacional dos Usuários).
+     *
+     * Usuário comum: é sempre ele mesmo — qualquer `solicitante_usuario_id` enviado no POST é
+     * IGNORADO silenciosamente (nunca aceito, nunca gera erro que confirme a tentativa — §17: "não
+     * aceitar solicitante_usuario_id arbitrário vindo do POST... usar a sessão"). Admin/RH/
+     * supervisor: pode abrir em nome de outro usuário elegível (ativo e `pode_solicitar_vaga = 1`,
+     * ou ele próprio RH/Admin/supervisor) — aí sim, um alvo inválido gera erro explícito.
+     */
+    private static function resolveSolicitanteUsuarioId(array $input, int $actorUserId): int
+    {
+        $actorAccess = self::userAccessProfile($actorUserId);
+        if ($actorAccess === null) {
+            throw new InvalidArgumentException('Usuário autenticado não encontrado.');
+        }
+
+        $raw = trim((string)($input['solicitante_usuario_id'] ?? ''));
+        if ($raw === '' || !ctype_digit($raw) || (int)$raw === $actorUserId) {
+            return $actorUserId;
+        }
+        $solicitanteId = (int)$raw;
+
+        $actorPodeAgirPorOutro = in_array(strtolower($actorAccess['role']), ['admin', 'rh'], true)
+            || $actorAccess['is_supervisor'] === 1;
+        if (!$actorPodeAgirPorOutro) {
+            // Usuário comum tentando forjar outro solicitante: ignora e usa a própria sessão.
+            return $actorUserId;
+        }
+
+        $alvo = self::userAccessProfile($solicitanteId);
+        if ($alvo === null) {
+            throw new InvalidArgumentException('O usuário solicitante selecionado não foi encontrado.');
+        }
+        if ((int)$alvo['ativo'] !== 1) {
+            throw new InvalidArgumentException('O usuário solicitante selecionado está inativo.');
+        }
+        $alvoElegivel = in_array(strtolower($alvo['role']), ['admin', 'rh'], true)
+            || $alvo['is_supervisor'] === 1
+            || (int)$alvo['pode_solicitar_vaga'] === 1;
+        if (!$alvoElegivel) {
+            throw new InvalidArgumentException('O usuário selecionado não está autorizado a solicitar vagas (habilite "Pode solicitar vaga" no cadastro dele antes de continuar).');
+        }
+
+        return $solicitanteId;
+    }
+
+    /**
+     * Setor da vaga a partir do contexto organizacional do SOLICITANTE (`usuario_setores`) — nunca
+     * de um id arbitrário do POST. Toda linha em `usuario_setores` já é oficial por construção
+     * (UsuarioContextoOrganizacionalService só grava `setor_id` com `codigo_setor` preenchido).
+     *
+     * 0 Setores -> bloqueia a criação. 1 Setor -> automático (ignora o que veio no POST). Vários ->
+     * exige que o Setor informado esteja entre os autorizados do solicitante.
+     */
+    private static function resolverSetorSolicitacao(int $solicitanteUsuarioId, $setorIdInformado): int
+    {
+        $setoresDoSolicitante = (new UsuarioContextoOrganizacionalService())->setoresDoUsuario($solicitanteUsuarioId);
+        if ($setoresDoSolicitante === []) {
+            throw new InvalidArgumentException('O usuário solicitante ainda não possui Setor de atuação configurado. Atualize o contexto organizacional do usuário antes de criar a vaga.');
+        }
+
+        $idsPermitidos = array_map(static fn (array $s): int => (int)$s['setor_id'], $setoresDoSolicitante);
+        if (count($idsPermitidos) === 1) {
+            return $idsPermitidos[0];
+        }
+
+        $informado = self::nullableInt($setorIdInformado);
+        if ($informado === null || !in_array($informado, $idsPermitidos, true)) {
+            throw new InvalidArgumentException('Selecione um Setor entre os Setores de atuação do usuário solicitante.');
+        }
+        return $informado;
+    }
+
+    /**
+     * Centro de custo depende só do Setor resolvido (Etapa 2): se o Setor não tiver nenhum Centro
+     * de Custo cadastrado, `NULL` é aceito sem bloqueio (não inventa a partir do Setor). Se tiver,
+     * a seleção continua obrigatória e restrita àquele Setor.
+     */
+    private static function resolverCentroCusto(int $setorId, $centroCustoInformado): ?int
+    {
+        $disponiveis = self::centrosCustoDoSetor($setorId);
+        if ($disponiveis === []) {
+            return null;
+        }
+
+        $ids = array_map(static fn (array $c): int => (int)$c['id'], $disponiveis);
+        $informado = self::nullableInt($centroCustoInformado);
+        if ($informado === null || !in_array($informado, $ids, true)) {
+            throw new InvalidArgumentException('Selecione um Centro de Custo válido para o Setor informado.');
+        }
+        return $informado;
+    }
+
+    /** @return array<int, array{id:int, codigo:string, nome:string}> */
+    private static function centrosCustoDoSetor(int $setorId): array
+    {
+        $stmt = Database::conn()->prepare(
+            'SELECT id, codigo, nome FROM centros_custo WHERE setor_id = ? AND ativo = 1 ORDER BY nome ASC'
+        );
+        $stmt->execute([$setorId]);
+        return array_map(static function (array $row): array {
+            return ['id' => (int)$row['id'], 'codigo' => (string)$row['codigo'], 'nome' => (string)$row['nome']];
+        }, $stmt->fetchAll(PDO::FETCH_ASSOC));
     }
 
     private static function seedReferenceData(PDO $pdo): void
@@ -1591,27 +1827,6 @@ class SolicitacaoVaga
         return array_map(static function (array $row): array {
             return ['id' => (int)$row['id'], 'nome' => $row['nome']];
         }, Beneficio::allActive());
-    }
-
-    private static function cargoBelongsToSetor(int $cargoId, int $setorId): bool
-    {
-        $stmt = Database::conn()->prepare(
-            "SELECT COUNT(*) FROM cargo_setores WHERE cargo_id = ? AND setor_id = ?"
-        );
-        $stmt->execute([$cargoId, $setorId]);
-        return (int)$stmt->fetchColumn() > 0;
-    }
-
-    private static function setorHasAvailableCargos(int $setorId): bool
-    {
-        $stmt = Database::conn()->prepare(
-            "SELECT COUNT(*)
-             FROM cargo_setores cs
-             INNER JOIN cargos c ON c.id = cs.cargo_id
-             WHERE cs.setor_id = ? AND c.ativo = 1"
-        );
-        $stmt->execute([$setorId]);
-        return (int)$stmt->fetchColumn() > 0;
     }
 
     private static function salaryRangeForCargo(int $cargoId): ?array

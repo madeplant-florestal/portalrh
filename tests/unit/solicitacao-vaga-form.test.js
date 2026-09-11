@@ -1,49 +1,45 @@
 const assert = require('node:assert/strict');
-const { resolveSolicitacaoCargoState } = require('../../public/assets/admin.js');
+const { resolveSolicitanteSetorState, resolveCentrosCustoParaSetor } = require('../../public/assets/admin.js');
 
-const cargos = [
-  { id: 10, nome: 'Auxiliar Administrativo', setor_ids: [1] },
-  { id: 11, nome: 'Analista Financeiro', setor_ids: [1, 2] },
-  { id: 12, nome: 'Supervisor de Produção', setor_ids: [3] },
-];
+// Sprint Solicitação de Vaga — Etapa 2 (Contexto Organizacional dos Usuários): Cargo e Setor são
+// selecionados de forma independente (sem gate cargo_setores); o Setor vem do contexto de Setores
+// do Usuário solicitante (usuario_setores).
 
-const primeiroSetor = resolveSolicitacaoCargoState({
-  cargos,
-  setorId: 1,
-  selectedCargoId: '',
-  preserveSelection: false,
-});
-assert.equal(primeiroSetor.availableCargos.length, 2);
-assert.deepEqual(primeiroSetor.availableCargos.map((item) => item.id), [10, 11]);
-assert.equal(primeiroSetor.disabled, false);
-assert.equal(primeiroSetor.selectedCargoId, '');
+// 0 Setores -> bloqueia.
+const semSetor = resolveSolicitanteSetorState([]);
+assert.equal(semSetor.bloqueado, true);
+assert.deepEqual(semSetor.opcoes, []);
+assert.equal(semSetor.valorInicial, '');
 
-const trocaDeSetor = resolveSolicitacaoCargoState({
-  cargos,
-  setorId: 2,
-  selectedCargoId: '',
-  preserveSelection: false,
-});
-assert.equal(trocaDeSetor.availableCargos.length, 1);
-assert.deepEqual(trocaDeSetor.availableCargos.map((item) => item.id), [11]);
+// 1 Setor -> automático (não bloqueado, valor inicial já preenchido).
+const umSetor = resolveSolicitanteSetorState([{ id: 7, nome: 'LOGISTICA', principal: true }]);
+assert.equal(umSetor.bloqueado, false);
+assert.equal(umSetor.opcoes.length, 1);
+assert.equal(umSetor.valorInicial, '7');
 
-const trocaComCargoPreSelecionado = resolveSolicitacaoCargoState({
-  cargos,
-  setorId: 3,
-  selectedCargoId: 11,
-  preserveSelection: false,
-});
-assert.equal(trocaComCargoPreSelecionado.selectedCargoId, '');
-assert.deepEqual(trocaComCargoPreSelecionado.availableCargos.map((item) => item.id), [12]);
+// Vários Setores -> não bloqueado, usuário escolhe (sem valor pré-definido).
+const variosSetores = resolveSolicitanteSetorState([
+  { id: 1, nome: 'RECURSOS HUMANOS', principal: true },
+  { id: 9, nome: 'TECNOLOGIA DA INFORMACAO', principal: false },
+]);
+assert.equal(variosSetores.bloqueado, false);
+assert.equal(variosSetores.opcoes.length, 2);
+assert.equal(variosSetores.valorInicial, '');
 
-const setorSemCargos = resolveSolicitacaoCargoState({
-  cargos,
-  setorId: 99,
-  selectedCargoId: '',
-  preserveSelection: false,
-});
-assert.equal(setorSemCargos.disabled, true);
-assert.equal(setorSemCargos.placeholder, 'Nenhum cargo disponível para este setor');
-assert.equal(setorSemCargos.invalidMessage, 'Nenhum cargo disponível para este setor.');
+// Entrada inválida (não-array) é tratada como lista vazia -> bloqueado.
+assert.equal(resolveSolicitanteSetorState(undefined).bloqueado, true);
+assert.equal(resolveSolicitanteSetorState(null).bloqueado, true);
+
+// Centro de Custo depende só do Setor (nunca do Cargo).
+const centrosPorSetor = {
+  1: [{ id: 100, codigo: 'CC-001', nome: 'RH Matriz' }],
+  9: [],
+};
+assert.deepEqual(resolveCentrosCustoParaSetor(centrosPorSetor, '1'), [{ id: 100, codigo: 'CC-001', nome: 'RH Matriz' }]);
+assert.deepEqual(resolveCentrosCustoParaSetor(centrosPorSetor, 1), [{ id: 100, codigo: 'CC-001', nome: 'RH Matriz' }]);
+assert.deepEqual(resolveCentrosCustoParaSetor(centrosPorSetor, '9'), []);
+assert.deepEqual(resolveCentrosCustoParaSetor(centrosPorSetor, '999'), []);
+assert.deepEqual(resolveCentrosCustoParaSetor(null, '1'), []);
+assert.deepEqual(resolveCentrosCustoParaSetor(undefined, ''), []);
 
 console.log('OK unit solicitacao-vaga-form');

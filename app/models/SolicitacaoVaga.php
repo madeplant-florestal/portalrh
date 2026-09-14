@@ -230,7 +230,8 @@ class SolicitacaoVaga
         // Lista GLOBAL (todos os Setores/Cargos ativos, oficiais + legados) — usada pelo filtro do
         // Kanban (AdminSolicitacoesVagaKanbanController), que precisa continuar filtrando
         // solicitações históricas por qualquer Setor/Cargo já usado. NÃO é a lista do select de
-        // Setor/Cargo do formulário de criação (essa é `solicitante_contexto`/`cargos_oficiais`).
+        // Setor/Cargo do formulário de criação (essa é `solicitante_contexto`, incluindo
+        // `cargos_por_setor` — matriz `cargo_setores_metadados`).
         $setores = $pdo->query("SELECT id, nome FROM setores WHERE ativo = 1 ORDER BY nome ASC")->fetchAll(PDO::FETCH_ASSOC);
         $cargos = $pdo->query(
             "SELECT c.id, c.nome,
@@ -241,10 +242,6 @@ class SolicitacaoVaga
              WHERE c.ativo = 1
              ORDER BY c.nome ASC"
         )->fetchAll(PDO::FETCH_ASSOC);
-        $faixaPorCargo = [];
-        foreach ($cargos as $row) {
-            $faixaPorCargo[(int)$row['id']] = ['min' => (float)$row['salario_min'], 'max' => (float)$row['salario_max']];
-        }
 
         $cargoSetores = [];
         $stmtCargoSetores = $pdo->query("SELECT cargo_id, setor_id FROM cargo_setores");
@@ -316,20 +313,10 @@ class SolicitacaoVaga
 
         $currentAccess = $actorUserId ? self::userAccessProfile($actorUserId) : null;
 
-        // ---- Etapa 2 (Contexto Organizacional) — só o necessário para o NOVO fluxo -------------
-        // Cargo oficial do METADADOS, independente de Setor (sem `setor_ids`/gate `cargo_setores`).
-        $cargosOficiais = array_map(function (array $row) use ($faixaPorCargo): array {
-            $id = (int)$row['id'];
-            $rotulo = trim((string)($row['descricao_oficial'] ?? '')) !== '' ? (string)$row['descricao_oficial'] : (string)$row['nome'];
-            $faixa = $faixaPorCargo[$id] ?? ['min' => 0.0, 'max' => 0.0];
-            return [
-                'id' => $id,
-                'nome' => $rotulo,
-                'salario_min' => $faixa['min'],
-                'salario_max' => $faixa['max'],
-                'requires_machine_description' => self::cargoRequiresMachine($rotulo),
-            ];
-        }, (new CatalogoMetadadosRepository('cargos'))->listarOficiais());
+        // Etapa "matriz oficial Cargo x Setor": o select de Cargo do formulário de criação NÃO usa
+        // mais uma lista global de Cargos oficiais — depende do Setor escolhido, via
+        // `solicitante_contexto.cargos_por_setor` (matriz `cargo_setores_metadados`), calculado
+        // logo abaixo. `$faixaPorCargo` continua usado só pela lista GLOBAL legada (Kanban).
 
         $podeEscolherSolicitante = $currentAccess !== null && (
             in_array(strtolower($currentAccess['role']), ['admin', 'rh'], true) || $currentAccess['is_supervisor'] === 1
@@ -353,7 +340,6 @@ class SolicitacaoVaga
                     'requires_machine_description' => self::cargoRequiresMachine($row['nome']),
                 ];
             }, $cargos),
-            'cargos_oficiais' => $cargosOficiais,
             'centros_custo' => array_map(static function (array $row): array {
                 return [
                     'id' => (int)$row['id'],
@@ -407,9 +393,10 @@ class SolicitacaoVaga
 
     /**
      * Contexto organizacional do usuário SOLICITANTE, no vocabulário da Solicitação de Vaga:
-     * Cargo (informativo), Setores de atuação oficiais (com o principal identificado) e os
-     * Centros de Custo de cada um. Alimenta tanto a renderização inicial do formulário quanto o
-     * endpoint JSON usado quando Admin/RH troca o Usuário solicitante.
+     * Cargo (informativo — NUNCA define o Cargo da vaga), Setores de atuação oficiais (com o
+     * principal identificado), os Cargos oficiais vinculados a cada um desses Setores na matriz
+     * `cargo_setores_metadados` e os Centros de Custo de cada um. Alimenta tanto a renderização
+     * inicial do formulário quanto o endpoint JSON usado quando Admin/RH troca o solicitante.
      *
      * Reaproveita UsuarioContextoOrganizacionalService (Etapa 1) — não duplica a leitura de
      * `usuario_setores`.
@@ -417,6 +404,7 @@ class SolicitacaoVaga
      * @return array{
      *   usuario_id:int, nome:?string, cargo_rotulo:?string,
      *   setores:array<int, array{id:int, nome:string, principal:bool}>,
+     *   cargos_por_setor:array<int, array<int, array{id:int, nome:string, salario_min:float, salario_max:float, requires_machine_description:bool}>>,
      *   centros_custo_by_setor:array<int, array<int, array{id:int, codigo:string, nome:string}>>,
      *   bloqueado_sem_setor:bool
      * }
@@ -430,6 +418,7 @@ class SolicitacaoVaga
                 'nome' => null,
                 'cargo_rotulo' => null,
                 'setores' => [],
+                'cargos_por_setor' => [],
                 'centros_custo_by_setor' => [],
                 'bloqueado_sem_setor' => true,
             ];
@@ -453,6 +442,9 @@ class SolicitacaoVaga
             ];
         }
 
+        $setorIds = array_column($setores, 'id');
+        $cargosPorSetor = (new CargoSetorMetadadosRepository())->cargosPorSetores($setorIds);
+
         $centrosPorSetor = [];
         foreach ($setores as $setor) {
             $centrosPorSetor[$setor['id']] = self::centrosCustoDoSetor($setor['id']);
@@ -463,6 +455,7 @@ class SolicitacaoVaga
             'nome' => $usuario->nome,
             'cargo_rotulo' => $ctx['cargo_rotulo'],
             'setores' => $setores,
+            'cargos_por_setor' => $cargosPorSetor,
             'centros_custo_by_setor' => $centrosPorSetor,
             'bloqueado_sem_setor' => $setores === [],
         ];
@@ -1007,22 +1000,22 @@ class SolicitacaoVaga
         // Defesa em profundidade: independe da tela, nunca infere por cargo/setor/METADADOS.
         $approver = self::resolveApprover($solicitanteUsuarioId);
 
-        // Cargo da vaga: catálogo OFICIAL do METADADOS, independente do Cargo do solicitante e sem
-        // gate de `cargo_setores` (decisão de negócio da Etapa 2 — Cargo e Setor são selecionados
-        // de forma independente na Solicitação de Vaga).
-        $cargoId = self::requiredEntityId($input['cargo_id'] ?? null, 'cargos', 'Cargo');
-        $cargoOficial = (new CatalogoMetadadosRepository('cargos'))->oficialPorId($cargoId);
-        if ($cargoOficial === null) {
-            throw new InvalidArgumentException('Selecione um Cargo do catálogo oficial do METADADOS. Cargos legados não podem ser usados em novas solicitações.');
-        }
-        $cargoNomeReferencia = trim((string)($cargoOficial['descricao_oficial'] ?? '')) !== ''
-            ? (string)$cargoOficial['descricao_oficial']
-            : (string)$cargoOficial['nome'];
-
         // Setor da vaga: vem do contexto organizacional do SOLICITANTE (`usuario_setores`), nunca
         // de um id arbitrário do POST. 0 Setores -> bloqueia; 1 -> automático; vários -> exige
         // escolha entre os autorizados.
         $setorId = self::resolverSetorSolicitacao($solicitanteUsuarioId, $input['setor_id'] ?? null);
+
+        // Cargo da vaga: matriz OFICIAL Cargo x Setor (`cargo_setores_metadados`, espelho técnico
+        // do METADADOS) — "Setor selecionado -> lista/valida SOMENTE os Cargos oficialmente
+        // vinculados àquele Setor". Setor sem nenhum Cargo oficial bloqueia (sem fallback para o
+        // catálogo completo de 184 Cargos). Nunca consulta a tabela legada `cargo_setores`. O
+        // Cargo do solicitante (contexto organizacional dele) é só informativo — nunca define o
+        // Cargo da vaga.
+        $cargoId = self::resolverCargoDaVaga($setorId, $input['cargo_id'] ?? null);
+        $cargo = self::findSimple('cargos', $cargoId);
+        $cargoNomeReferencia = $cargo !== null && trim((string)($cargo['descricao_oficial'] ?? '')) !== ''
+            ? (string)$cargo['descricao_oficial']
+            : (string)($cargo['nome'] ?? '');
 
         // Centro de custo depende só do Setor resolvido: obrigatório apenas se o Setor já tiver
         // Centro de Custo cadastrado (decisão de negócio da Etapa 2 — não inventa a partir do Setor).
@@ -1259,6 +1252,28 @@ class SolicitacaoVaga
         $informado = self::nullableInt($setorIdInformado);
         if ($informado === null || !in_array($informado, $idsPermitidos, true)) {
             throw new InvalidArgumentException('Selecione um Setor entre os Setores de atuação do usuário solicitante.');
+        }
+        return $informado;
+    }
+
+
+    /**
+     * Cargo da vaga a partir da matriz OFICIAL Cargo x Setor (`cargo_setores_metadados`, espelho
+     * técnico do METADADOS — nunca a tabela legada `cargo_setores`). "Setor selecionado -> lista
+     * SOMENTE os Cargos oficialmente vinculados àquele Setor." Setor sem nenhum Cargo oficial na
+     * matriz bloqueia a criação — sem fallback para o catálogo completo de Cargos.
+     */
+    private static function resolverCargoDaVaga(int $setorId, $cargoIdInformado): int
+    {
+        $cargosDoSetor = (new CargoSetorMetadadosRepository())->cargosPorSetor($setorId);
+        if ($cargosDoSetor === []) {
+            throw new InvalidArgumentException('Nenhum Cargo oficial está associado a este Setor no METADADOS.');
+        }
+
+        $idsPermitidos = array_column($cargosDoSetor, 'id');
+        $informado = self::nullableInt($cargoIdInformado);
+        if ($informado === null || !in_array($informado, $idsPermitidos, true)) {
+            throw new InvalidArgumentException('Selecione um Cargo vinculado ao Setor selecionado.');
         }
         return $informado;
     }
@@ -1956,7 +1971,8 @@ class SolicitacaoVaga
         }
     }
 
-    private static function cargoRequiresMachine(string $cargoName): bool
+    /** Público: reaproveitado por CargoSetorMetadadosRepository ao montar as opções de Cargo por Setor. */
+    public static function cargoRequiresMachine(string $cargoName): bool
     {
         $normalized = self::normalize($cargoName);
         return str_contains($normalized, 'operador de maquina florestal')

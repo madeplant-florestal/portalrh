@@ -64,20 +64,26 @@ try {
     $centroId = (int)$pdo->lastInsertId();
     $cleanup['centros'][] = $centroId;
 
+    // Correção de direção (2026-09-14): Cargo agora depende do Setor via a matriz oficial
+    // (cargo_setores_metadados, espelho técnico do METADADOS) — sem esse vínculo, este Cargo/Setor
+    // de fixture seria rejeitado por SolicitacaoVaga::create() mais abaixo.
+    $pdo->prepare('INSERT INTO cargo_setores_metadados (cargo_id, setor_id, origem_metadados, sincronizado_em) VALUES (?, ?, ?, NOW())')
+        ->execute([$cargoId, $setorId, 'RHCONTRATOS']);
+
     $pdo->prepare("INSERT IGNORE INTO usuario_setores (usuario_id, setor_id, principal, origem) VALUES (?, ?, 0, 'MANUAL')")
         ->execute([(int)$adminUser['id'], $setorId]);
     $usuarioSetorConcedido = ['usuario_id' => (int)$adminUser['id'], 'setor_id' => $setorId];
 
     $deps = SolicitacaoVaga::formDependencies((int)$adminUser['id'], (int)$adminUser['id']);
     $cargo = null;
-    foreach ($deps['cargos_oficiais'] as $item) {
+    foreach ((new CargoSetorMetadadosRepository())->cargosPorSetor($setorId) as $item) {
         if ((int)$item['id'] === $cargoId) {
             $cargo = $item;
             break;
         }
     }
     if (!$cargo) {
-        throw new RuntimeException('Cargo oficial de teste não apareceu em cargos_oficiais().');
+        throw new RuntimeException('Cargo oficial de teste não apareceu na matriz Cargo x Setor (cargo_setores_metadados) para o Setor de teste.');
     }
 
     $colaboradorContratado = $pdo->query('SELECT id, nome FROM colaboradores ORDER BY id ASC LIMIT 1')->fetch(PDO::FETCH_ASSOC);

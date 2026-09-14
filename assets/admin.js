@@ -1,7 +1,7 @@
-// Sprint Solicitação de Vaga — Etapa 2 (Contexto Organizacional dos Usuários): Cargo oficial e
-// Setor oficial são selecionados de forma INDEPENDENTE (decisão de negócio da Etapa 2 — sem gate
-// `cargo_setores`). O Setor da vaga vem do contexto de Setores do Usuário solicitante
-// (`usuario_setores`), nunca de uma lista global nem filtrado pelo Cargo escolhido.
+// Sprint Solicitação de Vaga — matriz oficial Cargo x Setor (espelho técnico do METADADOS,
+// `cargo_setores_metadados`): Setor selecionado -> só os Cargos oficialmente vinculados àquele
+// Setor na matriz aparecem no select. O Setor da vaga vem do contexto de Setores do Usuário
+// solicitante (`usuario_setores`), nunca de uma lista global.
 const resolveSolicitanteSetorState = (setores) => {
   const lista = Array.isArray(setores) ? setores : [];
   if (lista.length === 0) {
@@ -17,6 +17,14 @@ const resolveSolicitanteSetorState = (setores) => {
 // nenhum cadastrado, obrigatório e restrito àquele Setor quando tiver.
 const resolveCentrosCustoParaSetor = (centrosPorSetor, setorId) => {
   const mapa = centrosPorSetor && typeof centrosPorSetor === 'object' ? centrosPorSetor : {};
+  const lista = mapa[setorId] ?? mapa[String(setorId)];
+  return Array.isArray(lista) ? lista : [];
+};
+
+// Cargo agora depende do Setor via a matriz oficial (cargo_setores_metadados): lista vazia =
+// nenhum Cargo oficial associado àquele Setor no METADADOS (bloqueio, nunca fallback pra todos).
+const resolveCargosParaSetor = (cargosPorSetor, setorId) => {
+  const mapa = cargosPorSetor && typeof cargosPorSetor === 'object' ? cargosPorSetor : {};
   const lista = mapa[setorId] ?? mapa[String(setorId)];
   return Array.isArray(lista) ? lista : [];
 };
@@ -106,6 +114,7 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     resolveSolicitanteSetorState,
     resolveCentrosCustoParaSetor,
+    resolveCargosParaSetor,
     validateCollaboratorImportFile,
     summarizeCollaboratorImportResult,
   };
@@ -952,6 +961,7 @@ if (typeof module !== 'undefined' && module.exports) {
     const setorSelect = root.querySelector('[data-solicitacao-setor="1"]');
     const setorBloqueioWrap = root.querySelector('[data-solicitacao-setor-bloqueio="1"]');
     const cargoSelect = root.querySelector('[data-solicitacao-cargo="1"]');
+    const cargoBloqueioWrap = root.querySelector('[data-solicitacao-cargo-bloqueio="1"]');
     const gestorSelect = root.querySelector('[data-solicitacao-gestor="1"]');
     const centroSelect = root.querySelector('[data-solicitacao-centro-custo="1"]');
     const centroLabel = root.querySelector('[data-solicitacao-centro-label="1"]');
@@ -978,7 +988,7 @@ if (typeof module !== 'undefined' && module.exports) {
     }
     if (!payload) return;
 
-    const cargos = Array.isArray(payload.cargos) ? payload.cargos : [];
+    let cargosAtuais = [];
     const gestores = Array.isArray(payload.gestores) ? payload.gestores : [];
     const beneficiosByCargo = payload.beneficios_by_cargo || {};
     const contextoVazio = { usuario_id: 0, nome: null, cargo_rotulo: null, setores: [], centros_custo_by_setor: {}, bloqueado_sem_setor: true };
@@ -1055,9 +1065,11 @@ if (typeof module !== 'undefined' && module.exports) {
       });
     };
 
-    // Cargo é catálogo oficial GLOBAL, independente do Setor (Etapa 2 — sem gate cargo_setores).
+    // Cargo agora é restrito ao Setor pela matriz oficial (cargo_setores_metadados) — a lista
+    // disponível é sempre a do Setor atualmente selecionado (cargosAtuais), nunca um catálogo
+    // global de Cargos.
     const updateMachineRequirement = () => {
-      const selectedCargo = cargos.find((item) => String(item.id) === String(cargoSelect.value));
+      const selectedCargo = cargosAtuais.find((item) => String(item.id) === String(cargoSelect.value));
       const requiresMachine = !!selectedCargo?.requires_machine_description;
       toggleBooleanSection(maquinaWrap, maquinaInput, requiresMachine);
       if (faixaLabel) {
@@ -1097,6 +1109,30 @@ if (typeof module !== 'undefined' && module.exports) {
       renderOptions(centroSelect, lista, centroSelect.value, (item) => `${item.codigo} - ${item.nome}`);
     };
 
+    // Cargo depende do Setor pela matriz oficial (cargo_setores_metadados): Setor sem nenhum
+    // Cargo vinculado no METADADOS bloqueia o campo com o aviso oficial — nunca cai para a lista
+    // completa de Cargos.
+    const renderCargoOptions = (setorId) => {
+      if (!cargoSelect) return;
+      cargosAtuais = resolveCargosParaSetor(contexto.cargos_por_setor, setorId);
+      if (cargosAtuais.length === 0) {
+        cargoSelect.innerHTML = '<option value="">Selecione</option>';
+        cargoSelect.classList.add('hidden');
+        cargoSelect.required = false;
+        cargoSelect.disabled = true;
+        cargoSelect.value = '';
+        if (cargoBloqueioWrap) cargoBloqueioWrap.classList.remove('hidden');
+        updateMachineRequirement();
+        return;
+      }
+      if (cargoBloqueioWrap) cargoBloqueioWrap.classList.add('hidden');
+      cargoSelect.classList.remove('hidden');
+      cargoSelect.required = true;
+      cargoSelect.disabled = false;
+      renderOptions(cargoSelect, cargosAtuais, cargoSelect.value, (item) => item.nome);
+      updateMachineRequirement();
+    };
+
     // Setor vem do contexto de Setores do Usuário SOLICITANTE (usuario_setores) — nunca de uma
     // lista global. 0 -> bloqueia; 1 -> automático; vários -> o usuário escolhe entre os seus.
     const renderSetorOptions = (preferredValue = '') => {
@@ -1107,6 +1143,7 @@ if (typeof module !== 'undefined' && module.exports) {
       if (estado.bloqueado) {
         setorSelect.innerHTML = '<option value="">Nenhum Setor configurado</option>';
         renderCentroOptions('');
+        renderCargoOptions('');
         return;
       }
 
@@ -1127,6 +1164,7 @@ if (typeof module !== 'undefined' && module.exports) {
         );
       }
       renderCentroOptions(setorSelect.value);
+      renderCargoOptions(setorSelect.value);
     };
 
     const updateGestorOptions = () => {
@@ -1147,6 +1185,9 @@ if (typeof module !== 'undefined' && module.exports) {
       if (cargoSolicitanteLabel) {
         cargoSolicitanteLabel.textContent = contexto.cargo_rotulo ? `Cargo do solicitante: ${contexto.cargo_rotulo}` : '';
       }
+      // Trocar de solicitante troca o contexto de Setores/Cargos disponíveis — nunca preservar um
+      // Cargo selecionado sob o contexto anterior.
+      cargoSelect.value = '';
       renderSetorOptions();
       updateGestorOptions();
     };
@@ -1167,7 +1208,11 @@ if (typeof module !== 'undefined' && module.exports) {
     };
 
     setorSelect.addEventListener('change', () => {
+      // Troca de Setor sempre limpa o Cargo previamente selecionado — a matriz é por Setor, um
+      // Cargo válido no Setor anterior pode não existir (ou existir por coincidência) no novo.
+      cargoSelect.value = '';
       renderCentroOptions(setorSelect.value);
+      renderCargoOptions(setorSelect.value);
       updateGestorOptions();
     });
     cargoSelect.addEventListener('change', updateMachineRequirement);
@@ -1196,6 +1241,12 @@ if (typeof module !== 'undefined' && module.exports) {
         event.preventDefault();
         event.stopPropagation();
         window.alert('O usuário solicitante ainda não possui Setor de atuação configurado. Atualize o contexto organizacional do usuário antes de enviar.');
+        return;
+      }
+      if (cargosAtuais.length === 0) {
+        event.preventDefault();
+        event.stopPropagation();
+        window.alert('Nenhum Cargo oficial está associado a este Setor no METADADOS.');
       }
     });
 

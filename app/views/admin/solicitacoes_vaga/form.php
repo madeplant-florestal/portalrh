@@ -9,14 +9,15 @@ $competencias = $dependencies['competencias'] ?? ['tecnica' => [], 'comportament
 $beneficiosByCargo = $dependencies['beneficios_by_cargo'] ?? [];
 $schoolOptions = $dependencies['escolaridades'] ?? [];
 
-// Etapa 2 (Contexto Organizacional dos Usuários) — Cargo é catálogo oficial GLOBAL (independente
-// de Setor); Setor vem do CONTEXTO DO SOLICITANTE (usuario_setores), nunca de uma lista global.
-$cargosOficiais = $dependencies['cargos_oficiais'] ?? [];
+// Matriz oficial Cargo x Setor (`cargo_setores_metadados`, espelho técnico do METADADOS):
+// "Setor selecionado -> lista SOMENTE os Cargos oficialmente vinculados àquele Setor." Setor vem
+// do CONTEXTO DO SOLICITANTE (usuario_setores), nunca de uma lista global. A tabela legada
+// `cargo_setores` NÃO participa deste fluxo.
 $podeEscolherSolicitante = !empty($dependencies['pode_escolher_solicitante']);
 $elegiveisSolicitantes = $dependencies['elegiveis_solicitantes'] ?? [];
 $solicitanteContexto = $dependencies['solicitante_contexto'] ?? [
     'usuario_id' => 0, 'nome' => null, 'cargo_rotulo' => null,
-    'setores' => [], 'centros_custo_by_setor' => [], 'bloqueado_sem_setor' => true,
+    'setores' => [], 'cargos_por_setor' => [], 'centros_custo_by_setor' => [], 'bloqueado_sem_setor' => true,
 ];
 $setoresSolicitante = $solicitanteContexto['setores'] ?? [];
 
@@ -80,6 +81,12 @@ $defaultSetorId = (int)($form['setor_id'] ?? 0);
 $defaultGestorId = (int)($form['gestor_solicitante_colaborador_id'] ?? 0);
 $aviso = $aviso ?? '';
 
+// Setor "atual" para a renderização inicial do servidor (JS reajusta ao trocar Setor/solicitante):
+// 1 Setor -> automático; vários -> só se já veio selecionado (reenvio com erro). Cargo e Centro de
+// Custo iniciais dependem deste mesmo Setor.
+$setorInicialId = $defaultSetorId ?: (count($setoresSolicitante) === 1 ? (int)$setoresSolicitante[0]['id'] : 0);
+$cargosInicial = $solicitanteContexto['cargos_por_setor'][$setorInicialId] ?? [];
+
 $benefitCatalog = [];
 foreach ($beneficiosByCargo as $benefitItems) {
     foreach ($benefitItems as $item) {
@@ -106,7 +113,6 @@ $canApproveRh = $isShow
 $canEditRhSection = $isShow && $canEditRh && in_array((string)($record['status_fluxo'] ?? ''), ['aprovada', 'concluida'], true);
 
 $payload = [
-    'cargos' => $cargosOficiais,
     'gestores' => $gestores,
     'beneficios_by_cargo' => $beneficiosByCargo,
     'solicitante_contexto' => $solicitanteContexto,
@@ -195,13 +201,16 @@ $payload = [
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700">Cargo *</label>
-            <select name="cargo_id" class="mt-1 w-full rounded border px-3 py-2" data-solicitacao-cargo="1" aria-describedby="solicitacao-cargo-faixa" required>
+            <div class="<?= $cargosInicial === [] ? '' : 'hidden' ?> mt-1 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" data-solicitacao-cargo-bloqueio="1">
+              Nenhum Cargo oficial está associado a este Setor no METADADOS.
+            </div>
+            <select name="cargo_id" class="<?= $cargosInicial === [] ? 'hidden' : '' ?> mt-1 w-full rounded border px-3 py-2" data-solicitacao-cargo="1" aria-describedby="solicitacao-cargo-faixa" <?= $cargosInicial === [] ? 'disabled' : 'required' ?>>
               <option value="">Selecione</option>
-              <?php foreach ($cargosOficiais as $cargo): ?>
+              <?php foreach ($cargosInicial as $cargo): ?>
                 <option value="<?= (int)$cargo['id'] ?>" <?= (int)($form['cargo_id'] ?? 0) === (int)$cargo['id'] ? 'selected' : '' ?>><?= Security::e($cargo['nome']) ?></option>
               <?php endforeach; ?>
             </select>
-            <p class="mt-1 text-xs text-gray-500">Catálogo oficial do METADADOS — independente do Cargo do solicitante.</p>
+            <p class="mt-1 text-xs text-gray-500">Somente Cargos oficialmente vinculados ao Setor selecionado (matriz do METADADOS). O Cargo do solicitante é só contexto — não define o Cargo da vaga.</p>
             <p id="solicitacao-cargo-faixa" class="mt-1 text-xs text-gray-500" data-solicitacao-faixa-label="1" aria-live="polite"></p>
           </div>
           <?php if ($mostrarGestor): ?>
@@ -294,10 +303,7 @@ $payload = [
             <label class="block text-sm font-medium text-gray-700">Salário previsto *</label>
             <input type="text" name="salario_previsto" value="<?= Security::e($form['salario_previsto'] ?? '') ?>" class="mt-1 w-full rounded border px-3 py-2" placeholder="R$ 0,00" required data-mask-money="1" data-solicitacao-salario="1">
           </div>
-          <?php
-            $centroInicialSetorId = $defaultSetorId ?: (count($setoresSolicitante) === 1 ? (int)$setoresSolicitante[0]['id'] : 0);
-            $centrosInicial = $solicitanteContexto['centros_custo_by_setor'][$centroInicialSetorId] ?? [];
-          ?>
+          <?php $centrosInicial = $solicitanteContexto['centros_custo_by_setor'][$setorInicialId] ?? []; ?>
           <div>
             <label class="block text-sm font-medium text-gray-700" data-solicitacao-centro-label="1">Centro de custo<?= $centrosInicial !== [] ? ' *' : '' ?></label>
             <select name="centro_custo_id" class="mt-1 w-full rounded border px-3 py-2 <?= $centrosInicial === [] ? 'hidden' : '' ?>" data-solicitacao-centro-custo="1" <?= $centrosInicial !== [] ? 'required' : '' ?>>

@@ -59,6 +59,12 @@ try {
     // Setor sem Centro de Custo cadastrado (caso real dos Setores oficiais hoje) ->
     // `centro_custo_id` é opcional/NULL na Solicitação (ver resolverCentroCusto()).
 
+    // Correção de direção (2026-09-14): Cargo agora depende do Setor via a matriz oficial
+    // (cargo_setores_metadados, espelho técnico do METADADOS) — sem esse vínculo, este Cargo/Setor
+    // de fixture seria rejeitado por SolicitacaoVaga::create() mais abaixo.
+    $pdo->prepare('INSERT INTO cargo_setores_metadados (cargo_id, setor_id, origem_metadados, sincronizado_em) VALUES (?, ?, ?, NOW())')
+        ->execute([$cargoId, $setorId, 'RHCONTRATOS']);
+
     $pdo->prepare(
         'INSERT INTO colaboradores_metadados
             (identificador, codigo_empresa, codigo_unidade, numero_contrato, codigo_pessoa,

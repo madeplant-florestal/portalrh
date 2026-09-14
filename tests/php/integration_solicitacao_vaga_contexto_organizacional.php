@@ -11,13 +11,26 @@
  *   8  Admin cria em nome de outro usuário autorizado
  *   9  RH cria em nome de outro, com a ACL atual
  *   10 solicitante inativo é rejeitado (ao ser escolhido por Admin/RH)
- *   11 Cargo legado não pode ser usado na vaga
+ *   11 Cargo nunca vinculado na matriz oficial é rejeitado (aqui, o Cargo legado)
  *   14 histórico antigo com gestor_solicitante_colaborador_id continua funcionando
  *   16 Kanban continua funcionando (LEFT JOIN — solicitação nova com gestor NULL aparece)
  *   18 auditoria diferencia solicitante de criador
  *   H1-H3 Centro de Custo: opcional sem cadastro, obrigatório com cadastro, rejeita de outro Setor
  *   H4/H5 Kanban: solicitação nova (gestor NULL) e histórico legado (gestor preenchido) visíveis
  *   H6/H7 Admin/RH criando em nome de outro: solicitante correto + auditoria do operador
+ *
+ * Correção de direção (2026-09-14 — "METADADOS é a fonte absoluta de Cargo x Setor"): a Etapa 2
+ * tratava Cargo como catálogo GLOBAL independente do Setor; essa regra foi REVERTIDA. A regra
+ * vigente é "Setor selecionado -> lista/valida SOMENTE os Cargos oficialmente vinculados àquele
+ * Setor na matriz `cargo_setores_metadados`" (espelho técnico do METADADOS, nunca a tabela legada
+ * `cargo_setores`). Os itens abaixo travam essa regra explicitamente:
+ *   M1 a matriz não tem NENHUMA linha herdada da tabela legada cargo_setores (fontes independentes)
+ *   M2 cada Setor lista exatamente os Cargos vinculados a ele na matriz — nem mais, nem menos
+ *   M3 um Cargo vinculado a outro Setor é rejeitado pelo backend (cross-Setor)
+ *   M4 Setor sem nenhum Cargo oficial na matriz bloqueia com a mensagem oficial exata
+ *   M5 validateForSubmission()/resolverCargoDaVaga() não executam nenhum SQL contra cargo_setores
+ *      (a legada) e resolverCargoDaVaga() usa CargoSetorMetadadosRepository como única fonte
+ *   M6 Cargo legado (sem codigo_cargo) nunca aparece vinculado na matriz, em nenhum Setor
  *
  * Sem rollback de transação (create() tem transação própria) — fixtures marcadas e removidas no
  * finally, como os demais testes de Solicitação de Vaga/Usuários.
@@ -45,7 +58,7 @@ $check = static function (bool $cond, string $msg) use (&$falhas): void {
 
 $mk = 'ZZSV2_' . substr(md5(uniqid('', true)), 0, 6);
 $sfx = strtolower($mk);
-$criados = ['solicitacoes' => [], 'usuarios' => [], 'centros' => [], 'cargos' => [], 'setores' => [], 'colaboradores' => []];
+$criados = ['solicitacoes' => [], 'usuarios' => [], 'centros' => [], 'cargos' => [], 'setores' => [], 'colaboradores' => [], 'vinculos' => []];
 
 $limparSolicitacao = static function (int $id) use ($pdo): void {
     foreach (['solicitacao_vaga_aprovacoes', 'solicitacao_vaga_beneficios', 'solicitacao_vaga_competencias', 'solicitacao_vaga_auditoria'] as $t) {
@@ -84,9 +97,23 @@ try {
     $setorC = $novoSetor('ZC' . substr($sfx, -6), 'setor-c'); // isolado, só para o teste H3 (centro de outro Setor)
     $setorLegado = $novoSetor(null, 'setor-legado');
     $cargoOficial = $novoCargo('ZC' . substr($sfx, -6), 'cargo-oficial');
+    $cargoSoA = $novoCargo('ZD' . substr($sfx, -6), 'cargo-so-a'); // matriz: vinculado SOMENTE ao Setor A
     $cargoLegado = $novoCargo(null, 'cargo-legado');
     $centroA1 = $novoCentro($setorA, 'A1');
     $centroA2 = $novoCentro($setorA, 'A2');
+
+    $novoVinculoMatriz = static function (int $cargoId, int $setorId) use ($pdo, &$criados): void {
+        $pdo->prepare('INSERT INTO cargo_setores_metadados (cargo_id, setor_id, origem_metadados, sincronizado_em) VALUES (?,?,?,NOW())')
+            ->execute([$cargoId, $setorId, 'RHCONTRATOS']);
+        $criados['vinculos'][] = [$cargoId, $setorId];
+    };
+    // Matriz oficial Cargo x Setor (cargo_setores_metadados) desta suíte — nenhuma linha vem/usa a
+    // tabela legada cargo_setores: $cargoOficial vinculado a Setor A e Setor B (mantém os cenários
+    // já existentes funcionando); $cargoSoA vinculado SOMENTE ao Setor A (prova rejeição
+    // cross-Setor); $cargoLegado e $setorC ficam DE PROPÓSITO sem nenhum vínculo.
+    $novoVinculoMatriz($cargoOficial, $setorA);
+    $novoVinculoMatriz($cargoOficial, $setorB);
+    $novoVinculoMatriz($cargoSoA, $setorA);
 
     $senha = password_hash('irrelevante', PASSWORD_BCRYPT);
     $contextoService = new UsuarioContextoOrganizacionalService();
@@ -135,6 +162,11 @@ try {
     User::setVagaAccess($solicitanteAlvo, true, $aprovador);
     $contextoService->definirContextoManual($solicitanteAlvo, null, $setorB, []);
 
+    // Setor C fica DE PROPÓSITO sem nenhum Cargo vinculado na matriz — usado no cenário M4.
+    $uSetorC = $novoUsuario('setorc', 'viewer');
+    User::setVagaAccess($uSetorC, true, $aprovador);
+    $contextoService->definirContextoManual($uSetorC, null, $setorC, []);
+
     // ---- 4: usuário sem Setor é bloqueado ---------------------------------
     $bloqueouSemSetor = false;
     try {
@@ -170,14 +202,70 @@ try {
     $criados['solicitacoes'][] = $idUmSetor;
     $check((int)$pdo->query("SELECT setor_id FROM solicitacoes_vaga WHERE id = {$idUmSetor}")->fetchColumn() === $setorB, '5 usuário com 1 Setor usa sempre aquele Setor, mesmo com outro postado');
 
-    // ---- 11: Cargo legado não pode ser usado ------------------------------
+    // ---- 11: Cargo nunca vinculado na matriz é recusado --------------------
     $cargoLegadoRecusado = false;
     try {
         SolicitacaoVaga::create(array_merge($payloadBase, ['cargo_id' => $cargoLegado]), $uUmSetor, '127.0.0.1');
     } catch (InvalidArgumentException $e) {
-        $cargoLegadoRecusado = stripos($e->getMessage(), 'catálogo oficial') !== false;
+        $cargoLegadoRecusado = stripos($e->getMessage(), 'vinculado ao Setor') !== false;
     }
-    $check($cargoLegadoRecusado, '11 Cargo legado (sem codigo_cargo) é recusado');
+    $check($cargoLegadoRecusado, '11 Cargo legado (sem codigo_cargo, nunca vinculado na matriz) é recusado');
+
+    // ---- M1-M6: matriz oficial Cargo x Setor (cargo_setores_metadados) -----
+    $corpoDoMetodo = static function (string $metodo): string {
+        $reflexao = new ReflectionMethod('SolicitacaoVaga', $metodo);
+        $arquivo = new SplFileObject($reflexao->getFileName());
+        $arquivo->seek($reflexao->getStartLine() - 1);
+        $corpo = '';
+        while ($arquivo->key() < $reflexao->getEndLine()) {
+            $corpo .= $arquivo->current();
+            $arquivo->next();
+        }
+        return $corpo;
+    };
+
+    $qtdLegadoOficial = (int)$pdo->query("SELECT COUNT(*) FROM cargo_setores WHERE cargo_id IN ({$cargoOficial}, {$cargoSoA})")->fetchColumn();
+    $check($qtdLegadoOficial === 0, 'M1 pré-condição: cargoOficial/cargoSoA têm ZERO vínculo na tabela legada cargo_setores (matriz é fonte independente)');
+
+    $repoMatriz = new CargoSetorMetadadosRepository();
+    $cargosDoSetorA = array_column($repoMatriz->cargosPorSetor($setorA), 'id');
+    $cargosDoSetorB = array_column($repoMatriz->cargosPorSetor($setorB), 'id');
+    $check(in_array($cargoOficial, $cargosDoSetorA, true) && in_array($cargoSoA, $cargosDoSetorA, true), 'M2 Setor A lista os dois Cargos oficialmente vinculados a ele (cargoOficial e cargoSoA)');
+    $check(!in_array($cargoLegado, $cargosDoSetorA, true), 'M2 Setor A NÃO lista o Cargo legado (nunca vinculado na matriz)');
+    $check(in_array($cargoOficial, $cargosDoSetorB, true) && !in_array($cargoSoA, $cargosDoSetorB, true), 'M2 Setor B lista só o Cargo vinculado a ele (cargoOficial) — não o cargoSoA, vinculado apenas ao Setor A');
+
+    $idCargoEmSetorA = SolicitacaoVaga::create(array_merge($payloadBase, ['setor_id' => $setorA, 'centro_custo_id' => $centroA1]), $uVarios, '127.0.0.1');
+    $criados['solicitacoes'][] = $idCargoEmSetorA;
+    $idCargoEmSetorB = SolicitacaoVaga::create(array_merge($payloadBase, ['setor_id' => $setorB]), $uVarios, '127.0.0.1');
+    $criados['solicitacoes'][] = $idCargoEmSetorB;
+    $cargoNoA = (int)$pdo->query("SELECT cargo_id FROM solicitacoes_vaga WHERE id = {$idCargoEmSetorA}")->fetchColumn();
+    $cargoNoB = (int)$pdo->query("SELECT cargo_id FROM solicitacoes_vaga WHERE id = {$idCargoEmSetorB}")->fetchColumn();
+    $check($cargoNoA === $cargoOficial && $cargoNoB === $cargoOficial, 'M2 (reforço) o Cargo oficial vinculado aos dois Setores é aceito em ambos');
+
+    $cargoForaDoSetor = false;
+    try {
+        SolicitacaoVaga::create(array_merge($payloadBase, ['setor_id' => $setorB, 'cargo_id' => $cargoSoA]), $uVarios, '127.0.0.1');
+    } catch (InvalidArgumentException $e) {
+        $cargoForaDoSetor = stripos($e->getMessage(), 'vinculado ao Setor') !== false;
+    }
+    $check($cargoForaDoSetor, 'M3 Cargo vinculado a outro Setor (cargoSoA, só Setor A, usado no Setor B) é rejeitado pelo backend');
+
+    $setorSemCargo = false;
+    try {
+        SolicitacaoVaga::create($payloadBase, $uSetorC, '127.0.0.1');
+    } catch (InvalidArgumentException $e) {
+        $setorSemCargo = $e->getMessage() === 'Nenhum Cargo oficial está associado a este Setor no METADADOS.';
+    }
+    $check($setorSemCargo, 'M4 Setor sem nenhum Cargo oficial na matriz (Setor C) bloqueia com a mensagem oficial exata');
+
+    foreach (['validateForSubmission', 'resolverCargoDaVaga'] as $metodo) {
+        // A palavra `cargo_setores` ainda pode aparecer em COMENTÁRIO explicativo — a trava real é
+        // não haver mais SQL (FROM/JOIN/INTO) contra a tabela legada (case i, sem o sufixo _metadados).
+        $check(!preg_match('/(FROM|JOIN|INTO)\s+cargo_setores\b(?!_metadados)/i', $corpoDoMetodo($metodo)), "M5 {$metodo}() não executa nenhum SQL contra a tabela legada cargo_setores");
+    }
+    $check(str_contains($corpoDoMetodo('resolverCargoDaVaga'), 'CargoSetorMetadadosRepository'), 'M5 resolverCargoDaVaga() usa CargoSetorMetadadosRepository (espelho técnico do METADADOS) como única fonte');
+
+    $check(!$repoMatriz->existeVinculo($cargoLegado, $setorA) && !$repoMatriz->existeVinculo($cargoLegado, $setorB), 'M6 Cargo legado (sem codigo_cargo) nunca aparece vinculado na matriz, em nenhum Setor');
 
     // ---- H1/H2/H3: Centro de Custo -----------------------------------------
     $check((int)$pdo->query("SELECT centro_custo_id IS NULL FROM solicitacoes_vaga WHERE id = {$idUmSetor}")->fetchColumn() === 1, 'H1 Setor sem Centro de Custo -> centro_custo_id NULL aceito, sem bloqueio');
@@ -288,6 +376,11 @@ try {
     // (FK SET NULL) só se resolvem sozinhos quando o próprio usuário é removido (cascade/set null).
     foreach ($criados['usuarios'] as $id) {
         $pdo->prepare('DELETE FROM usuarios WHERE id = ?')->execute([(int)$id]);
+    }
+    // cargo_setores_metadados também cai em cascade ao apagar cargos/setores (FK ON DELETE CASCADE),
+    // mas a limpeza explícita segue o mesmo padrão de cargo_setores logo abaixo.
+    foreach ($criados['vinculos'] as [$vinculoCargoId, $vinculoSetorId]) {
+        $pdo->prepare('DELETE FROM cargo_setores_metadados WHERE cargo_id = ? AND setor_id = ?')->execute([(int)$vinculoCargoId, (int)$vinculoSetorId]);
     }
     foreach ($criados['cargos'] as $id) {
         $pdo->prepare('DELETE FROM cargo_setores WHERE cargo_id = ?')->execute([(int)$id]);

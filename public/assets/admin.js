@@ -29,6 +29,23 @@ const resolveCargosParaSetor = (cargosPorSetor, setorId) => {
   return Array.isArray(lista) ? lista : [];
 };
 
+// Fallback administrativo (correção 2026-09-14, §3): ausência de relação na matriz não significa
+// incompatibilidade — só que o METADADOS ainda não tem a informação (ex.: MANUTENÇÃO,
+// RHQUADROLOTCARGO vazia). Setor sem NENHUMA relação -> Admin/RH/supervisor master ATOR pode
+// escolher qualquer Cargo oficial do catálogo (nunca cria vínculo); usuário comum continua
+// bloqueado (podeFallback=false ou catálogo de fallback vazio).
+const resolveCargosComFallback = (cargosPorSetor, setorId, podeFallback, cargosFallback) => {
+  const doSetor = resolveCargosParaSetor(cargosPorSetor, setorId);
+  if (doSetor.length > 0) {
+    return { cargos: doSetor, usaFallback: false };
+  }
+  const fallback = Array.isArray(cargosFallback) ? cargosFallback : [];
+  if (podeFallback && fallback.length > 0) {
+    return { cargos: fallback, usaFallback: true };
+  }
+  return { cargos: [], usaFallback: false };
+};
+
 const validateCollaboratorImportFile = (file) => {
   const fileName = String(file?.name || '').trim();
   if (!fileName) {
@@ -115,6 +132,7 @@ if (typeof module !== 'undefined' && module.exports) {
     resolveSolicitanteSetorState,
     resolveCentrosCustoParaSetor,
     resolveCargosParaSetor,
+    resolveCargosComFallback,
     validateCollaboratorImportFile,
     summarizeCollaboratorImportResult,
   };
@@ -962,6 +980,7 @@ if (typeof module !== 'undefined' && module.exports) {
     const setorBloqueioWrap = root.querySelector('[data-solicitacao-setor-bloqueio="1"]');
     const cargoSelect = root.querySelector('[data-solicitacao-cargo="1"]');
     const cargoBloqueioWrap = root.querySelector('[data-solicitacao-cargo-bloqueio="1"]');
+    const cargoFallbackAvisoWrap = root.querySelector('[data-solicitacao-cargo-fallback-aviso="1"]');
     const gestorSelect = root.querySelector('[data-solicitacao-gestor="1"]');
     const centroSelect = root.querySelector('[data-solicitacao-centro-custo="1"]');
     const centroLabel = root.querySelector('[data-solicitacao-centro-label="1"]');
@@ -991,6 +1010,10 @@ if (typeof module !== 'undefined' && module.exports) {
     let cargosAtuais = [];
     const gestores = Array.isArray(payload.gestores) ? payload.gestores : [];
     const beneficiosByCargo = payload.beneficios_by_cargo || {};
+    // Fallback administrativo (correção 2026-09-14, §3): fixo por carregamento de página — depende
+    // do ATOR autenticado, nunca do solicitante escolhido, então não muda ao trocar de solicitante.
+    const podeFallbackCargoAdministrativo = !!payload.pode_fallback_cargo_administrativo;
+    const cargosFallbackAdministrativo = Array.isArray(payload.cargos_fallback_administrativo) ? payload.cargos_fallback_administrativo : [];
     const contextoVazio = { usuario_id: 0, nome: null, cargo_rotulo: null, setores: [], centros_custo_by_setor: {}, bloqueado_sem_setor: true };
     let contexto = payload.solicitante_contexto && typeof payload.solicitante_contexto === 'object' ? payload.solicitante_contexto : contextoVazio;
     const setorValueInicial = String(setorSelect.value || '');
@@ -1109,12 +1132,13 @@ if (typeof module !== 'undefined' && module.exports) {
       renderOptions(centroSelect, lista, centroSelect.value, (item) => `${item.codigo} - ${item.nome}`);
     };
 
-    // Cargo depende do Setor pela matriz oficial (cargo_setores_metadados): Setor sem nenhum
-    // Cargo vinculado no METADADOS bloqueia o campo com o aviso oficial — nunca cai para a lista
-    // completa de Cargos.
+    // Cargo depende do Setor pela matriz oficial (cargo_setores_metadados). Setor sem nenhuma
+    // relação: fallback administrativo (§3) libera o catálogo completo de Cargos oficiais só para
+    // Admin/RH/supervisor master ATOR (nunca cria vínculo); usuário comum continua bloqueado.
     const renderCargoOptions = (setorId) => {
       if (!cargoSelect) return;
-      cargosAtuais = resolveCargosParaSetor(contexto.cargos_por_setor, setorId);
+      const resolvido = resolveCargosComFallback(contexto.cargos_por_setor, setorId, podeFallbackCargoAdministrativo, cargosFallbackAdministrativo);
+      cargosAtuais = resolvido.cargos;
       if (cargosAtuais.length === 0) {
         cargoSelect.innerHTML = '<option value="">Selecione</option>';
         cargoSelect.classList.add('hidden');
@@ -1122,10 +1146,12 @@ if (typeof module !== 'undefined' && module.exports) {
         cargoSelect.disabled = true;
         cargoSelect.value = '';
         if (cargoBloqueioWrap) cargoBloqueioWrap.classList.remove('hidden');
+        if (cargoFallbackAvisoWrap) cargoFallbackAvisoWrap.classList.add('hidden');
         updateMachineRequirement();
         return;
       }
       if (cargoBloqueioWrap) cargoBloqueioWrap.classList.add('hidden');
+      if (cargoFallbackAvisoWrap) cargoFallbackAvisoWrap.classList.toggle('hidden', !resolvido.usaFallback);
       cargoSelect.classList.remove('hidden');
       cargoSelect.required = true;
       cargoSelect.disabled = false;

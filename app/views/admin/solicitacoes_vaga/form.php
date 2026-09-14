@@ -21,6 +21,14 @@ $solicitanteContexto = $dependencies['solicitante_contexto'] ?? [
 ];
 $setoresSolicitante = $solicitanteContexto['setores'] ?? [];
 
+// Fallback administrativo (correção 2026-09-14, §3): Setor sem NENHUMA relação na matriz oficial
+// (METADADOS incompleto — ex.: MANUTENÇÃO) não bloqueia Admin/RH/supervisor master ATOR — eles
+// podem escolher qualquer Cargo oficial do catálogo para aquela solicitação específica (nunca cria
+// vínculo em cargo_setores_metadados). Usuário comum continua bloqueado. Depende do ATOR
+// autenticado (`pode_escolher_solicitante`), nunca do solicitante representado.
+$podeFallbackCargoAdministrativo = !empty($dependencies['pode_fallback_cargo_administrativo']);
+$cargosFallbackAdministrativo = $dependencies['cargos_fallback_administrativo'] ?? [];
+
 $tipoVagaLabels = [
     'nova_posicao' => 'Nova posição',
     'substituicao' => 'Substituição',
@@ -85,7 +93,9 @@ $aviso = $aviso ?? '';
 // 1 Setor -> automático; vários -> só se já veio selecionado (reenvio com erro). Cargo e Centro de
 // Custo iniciais dependem deste mesmo Setor.
 $setorInicialId = $defaultSetorId ?: (count($setoresSolicitante) === 1 ? (int)$setoresSolicitante[0]['id'] : 0);
-$cargosInicial = $solicitanteContexto['cargos_por_setor'][$setorInicialId] ?? [];
+$cargosDoSetorInicial = $solicitanteContexto['cargos_por_setor'][$setorInicialId] ?? [];
+$usaFallbackCargoInicial = $setorInicialId > 0 && $cargosDoSetorInicial === [] && $podeFallbackCargoAdministrativo;
+$cargosInicial = $usaFallbackCargoInicial ? $cargosFallbackAdministrativo : $cargosDoSetorInicial;
 
 $benefitCatalog = [];
 foreach ($beneficiosByCargo as $benefitItems) {
@@ -116,6 +126,8 @@ $payload = [
     'gestores' => $gestores,
     'beneficios_by_cargo' => $beneficiosByCargo,
     'solicitante_contexto' => $solicitanteContexto,
+    'pode_fallback_cargo_administrativo' => $podeFallbackCargoAdministrativo,
+    'cargos_fallback_administrativo' => $cargosFallbackAdministrativo,
 ];
 ?>
 <div class="responsive-panel max-w-6xl" data-solicitacao-vaga-form="1">
@@ -203,6 +215,9 @@ $payload = [
             <label class="block text-sm font-medium text-gray-700">Cargo *</label>
             <div class="<?= $cargosInicial === [] ? '' : 'hidden' ?> mt-1 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" data-solicitacao-cargo-bloqueio="1">
               Nenhum Cargo oficial está associado a este Setor no METADADOS.
+            </div>
+            <div class="<?= $usaFallbackCargoInicial ? '' : 'hidden' ?> mt-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800" data-solicitacao-cargo-fallback-aviso="1">
+              O METADADOS ainda não possui vínculos Cargo × Setor cadastrados para este Setor. Como usuário RH/Administrativo, você pode selecionar um Cargo oficial para a solicitação.
             </div>
             <select name="cargo_id" class="<?= $cargosInicial === [] ? 'hidden' : '' ?> mt-1 w-full rounded border px-3 py-2" data-solicitacao-cargo="1" aria-describedby="solicitacao-cargo-faixa" <?= $cargosInicial === [] ? 'disabled' : 'required' ?>>
               <option value="">Selecione</option>

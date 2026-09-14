@@ -2,12 +2,14 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const adminJsModule = require('../../public/assets/admin.js');
-const { resolveSolicitanteSetorState, resolveCentrosCustoParaSetor, resolveCargosParaSetor } = adminJsModule;
+const { resolveSolicitanteSetorState, resolveCentrosCustoParaSetor, resolveCargosParaSetor, resolveCargosComFallback } = adminJsModule;
 
 // Sprint Solicitação de Vaga — matriz oficial Cargo x Setor (espelho técnico do METADADOS,
 // `cargo_setores_metadados`): Setor selecionado -> só os Cargos oficialmente vinculados àquele
-// Setor aparecem; Setor sem nenhum Cargo vinculado bloqueia o campo (nunca cai para todos os
-// Cargos). O Setor da vaga vem do contexto de Setores do Usuário solicitante (usuario_setores).
+// Setor aparecem. Setor sem NENHUM Cargo vinculado: usuário comum é bloqueado; Admin/RH/supervisor
+// master ATOR ganha um fallback administrativo (correção 2026-09-14, §3) para o catálogo completo
+// de Cargos oficiais — nunca para usuário comum, nunca incluindo Cargo legado. O Setor da vaga vem
+// do contexto de Setores do Usuário solicitante (usuario_setores).
 
 // 0 Setores -> bloqueia.
 const semSetor = resolveSolicitanteSetorState([]);
@@ -48,8 +50,9 @@ assert.deepEqual(resolveCentrosCustoParaSetor(undefined, ''), []);
 
 // ---------------------------------------------------------------------------
 // Cargo depende do Setor via a matriz oficial (cargo_setores_metadados): cada Setor só expõe os
-// Cargos oficialmente vinculados a ele no METADADOS; Setor sem nenhum vínculo -> lista vazia
-// (bloqueio na UI), nunca um fallback para o catálogo completo de Cargos.
+// Cargos oficialmente vinculados a ele no METADADOS; Setor sem nenhum vínculo -> lista vazia (a
+// decisão de fallback administrativo vive em resolveCargosComFallback, abaixo — esta função pura
+// nunca decide fallback sozinha).
 const cargosPorSetor = {
   4: [
     { id: 200, nome: 'TECNICO DE INFORMATICA', salario_min: 2000, salario_max: 3000, requires_machine_description: false },
@@ -63,6 +66,45 @@ assert.deepEqual(resolveCargosParaSetor(cargosPorSetor, '6'), []);
 assert.deepEqual(resolveCargosParaSetor(cargosPorSetor, '999'), [], 'Setor sem entrada na matriz -> lista vazia, não erro');
 assert.deepEqual(resolveCargosParaSetor(null, '4'), []);
 assert.deepEqual(resolveCargosParaSetor(undefined, ''), []);
+
+// ---------------------------------------------------------------------------
+// Fallback administrativo (correção 2026-09-14, §3): Setor sem NENHUMA relação na matriz não
+// bloqueia Admin/RH/supervisor master ATOR — libera o catálogo completo de Cargos oficiais só
+// para aquela solicitação. Usuário comum (podeFallback=false) continua bloqueado.
+const cargosFallback = [
+  { id: 900, nome: 'MECANICO', salario_min: 2000, salario_max: 3000, requires_machine_description: false },
+  { id: 901, nome: 'SOLDADOR', salario_min: 2200, salario_max: 3200, requires_machine_description: false },
+];
+
+// Setor COM matriz -> usa a matriz, ignora o fallback mesmo se disponível.
+assert.deepEqual(
+  resolveCargosComFallback(cargosPorSetor, '4', true, cargosFallback),
+  { cargos: cargosPorSetor[4], usaFallback: false }
+);
+
+// Setor SEM matriz + ator pode fallback + catálogo de fallback não vazio -> usa o fallback.
+assert.deepEqual(
+  resolveCargosComFallback(cargosPorSetor, '6', true, cargosFallback),
+  { cargos: cargosFallback, usaFallback: true }
+);
+
+// Setor SEM matriz + usuário comum (podeFallback=false) -> continua bloqueado, sem fallback.
+assert.deepEqual(
+  resolveCargosComFallback(cargosPorSetor, '6', false, cargosFallback),
+  { cargos: [], usaFallback: false }
+);
+
+// Setor SEM matriz + ator pode fallback, mas catálogo de fallback vazio -> continua bloqueado.
+assert.deepEqual(
+  resolveCargosComFallback(cargosPorSetor, '6', true, []),
+  { cargos: [], usaFallback: false }
+);
+
+// Setor sem entrada nenhuma na matriz (nunca visto) se comporta como Setor vazio.
+assert.deepEqual(
+  resolveCargosComFallback(cargosPorSetor, '999', true, cargosFallback),
+  { cargos: cargosFallback, usaFallback: true }
+);
 
 // ---------------------------------------------------------------------------
 // Regressão travada (correção de direção 2026-09-14): a versão anterior (Etapa 2 / hotfix

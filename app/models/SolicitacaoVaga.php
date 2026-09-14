@@ -325,6 +325,44 @@ class SolicitacaoVaga
 
         $solicitanteContexto = self::contextoOrganizacionalSolicitante($solicitanteUsuarioId ?? $actorUserId ?? 0);
 
+        // Fallback administrativo (correção 2026-09-14, §3): quando um Setor não tem NENHUMA
+        // relação na matriz oficial (METADADOS incompleto — ex.: MANUTENÇÃO), Admin/RH/supervisor
+        // master ATOR pode escolher qualquer Cargo oficial do catálogo. Mesma condição de
+        // `$podeEscolherSolicitante` (é sempre o ATOR, nunca o solicitante representado) — só o
+        // rótulo muda para deixar a regra explícita no payload. Lista vazia para usuário comum.
+        $podeFallbackCargoAdministrativo = $podeEscolherSolicitante;
+        $cargosFallbackAdministrativo = [];
+        if ($podeFallbackCargoAdministrativo) {
+            $oficiais = (new CatalogoMetadadosRepository('cargos'))->listarOficiais();
+            $idsOficiais = array_column($oficiais, 'id');
+            $faixaPorId = [];
+            if ($idsOficiais !== []) {
+                $placeholders = implode(',', array_fill(0, count($idsOficiais), '?'));
+                $stmtFaixas = $pdo->prepare(
+                    "SELECT cargo_id, salario_min, salario_max FROM cargo_faixas_salariais
+                     WHERE ativo = 1 AND cargo_id IN ({$placeholders})"
+                );
+                $stmtFaixas->execute($idsOficiais);
+                foreach ($stmtFaixas->fetchAll(PDO::FETCH_ASSOC) as $faixa) {
+                    $faixaPorId[(int)$faixa['cargo_id']] = $faixa;
+                }
+            }
+            foreach ($oficiais as $oficial) {
+                $rotulo = trim((string)($oficial['descricao_oficial'] ?? '')) !== ''
+                    ? (string)$oficial['descricao_oficial']
+                    : (string)$oficial['nome'];
+                $faixa = $faixaPorId[(int)$oficial['id']] ?? null;
+                $cargosFallbackAdministrativo[] = [
+                    'id' => (int)$oficial['id'],
+                    'nome' => $rotulo,
+                    'salario_min' => (float)($faixa['salario_min'] ?? 0),
+                    'salario_max' => (float)($faixa['salario_max'] ?? 0),
+                    'requires_machine_description' => self::cargoRequiresMachine($rotulo),
+                ];
+            }
+            usort($cargosFallbackAdministrativo, static fn (array $a, array $b) => strcmp($a['nome'], $b['nome']));
+        }
+
         return [
             'setores' => array_map(static function (array $row): array {
                 return ['id' => (int)$row['id'], 'nome' => $row['nome']];
@@ -387,6 +425,8 @@ class SolicitacaoVaga
                 return ['id' => (int)$row['id'], 'nome' => $row['nome']];
             }, $elegiveisSolicitantes),
             'solicitante_contexto' => $solicitanteContexto,
+            'pode_fallback_cargo_administrativo' => $podeFallbackCargoAdministrativo,
+            'cargos_fallback_administrativo' => $cargosFallbackAdministrativo,
         ];
     }
 
@@ -1007,11 +1047,17 @@ class SolicitacaoVaga
 
         // Cargo da vaga: matriz OFICIAL Cargo x Setor (`cargo_setores_metadados`, espelho técnico
         // do METADADOS) — "Setor selecionado -> lista/valida SOMENTE os Cargos oficialmente
-        // vinculados àquele Setor". Setor sem nenhum Cargo oficial bloqueia (sem fallback para o
-        // catálogo completo de 184 Cargos). Nunca consulta a tabela legada `cargo_setores`. O
-        // Cargo do solicitante (contexto organizacional dele) é só informativo — nunca define o
-        // Cargo da vaga.
-        $cargoId = self::resolverCargoDaVaga($setorId, $input['cargo_id'] ?? null);
+        // vinculados àquele Setor". Nunca consulta a tabela legada `cargo_setores`. O Cargo do
+        // solicitante (contexto organizacional dele) é só informativo — nunca define o Cargo da
+        // vaga. Fallback administrativo (§3 da correção 2026-09-14): quando o Setor ainda não tem
+        // NENHUMA relação na matriz (METADADOS incompleto, ex.: MANUTENÇÃO), Admin/RH/supervisor
+        // master ATOR pode escolher qualquer Cargo oficial do catálogo; usuário comum continua
+        // bloqueado. Depende do ATOR (quem opera), nunca do solicitante representado.
+        $atorAccess = self::userAccessProfile($actorUserId);
+        $atorPodeFallbackAdministrativo = $atorAccess !== null && (
+            in_array(strtolower($atorAccess['role']), ['admin', 'rh'], true) || (int)$atorAccess['is_supervisor'] === 1
+        );
+        $cargoId = self::resolverCargoDaVaga($setorId, $input['cargo_id'] ?? null, $atorPodeFallbackAdministrativo);
         $cargo = self::findSimple('cargos', $cargoId);
         $cargoNomeReferencia = $cargo !== null && trim((string)($cargo['descricao_oficial'] ?? '')) !== ''
             ? (string)$cargo['descricao_oficial']
@@ -1260,20 +1306,36 @@ class SolicitacaoVaga
     /**
      * Cargo da vaga a partir da matriz OFICIAL Cargo x Setor (`cargo_setores_metadados`, espelho
      * técnico do METADADOS — nunca a tabela legada `cargo_setores`). "Setor selecionado -> lista
-     * SOMENTE os Cargos oficialmente vinculados àquele Setor." Setor sem nenhum Cargo oficial na
-     * matriz bloqueia a criação — sem fallback para o catálogo completo de Cargos.
+     * SOMENTE os Cargos oficialmente vinculados àquele Setor."
+     *
+     * Fallback administrativo (correção 2026-09-14, §3): ausência de relação na matriz não
+     * significa incompatibilidade — só que o METADADOS ainda não tem a informação (ex.:
+     * MANUTENÇÃO, RHQUADROLOTCARGO vazia). Quando o Setor não tem NENHUMA relação, Admin/RH/
+     * supervisor master ATOR (nunca o solicitante representado) pode escolher qualquer Cargo
+     * oficial do catálogo (`codigo_cargo IS NOT NULL`, ativo); usuário comum continua bloqueado
+     * com a mensagem de matriz incompleta. Nunca cria vínculo em `cargo_setores_metadados` —
+     * a seleção vale só para esta solicitação.
      */
-    private static function resolverCargoDaVaga(int $setorId, $cargoIdInformado): int
+    private static function resolverCargoDaVaga(int $setorId, $cargoIdInformado, bool $atorPodeFallbackAdministrativo): int
     {
         $cargosDoSetor = (new CargoSetorMetadadosRepository())->cargosPorSetor($setorId);
-        if ($cargosDoSetor === []) {
+        if ($cargosDoSetor !== []) {
+            $idsPermitidos = array_column($cargosDoSetor, 'id');
+            $informado = self::nullableInt($cargoIdInformado);
+            if ($informado === null || !in_array($informado, $idsPermitidos, true)) {
+                throw new InvalidArgumentException('Selecione um Cargo vinculado ao Setor selecionado.');
+            }
+            return $informado;
+        }
+
+        if (!$atorPodeFallbackAdministrativo) {
             throw new InvalidArgumentException('Nenhum Cargo oficial está associado a este Setor no METADADOS.');
         }
 
-        $idsPermitidos = array_column($cargosDoSetor, 'id');
+        $idsOficiais = array_column((new CatalogoMetadadosRepository('cargos'))->listarOficiais(), 'id');
         $informado = self::nullableInt($cargoIdInformado);
-        if ($informado === null || !in_array($informado, $idsPermitidos, true)) {
-            throw new InvalidArgumentException('Selecione um Cargo vinculado ao Setor selecionado.');
+        if ($informado === null || !in_array($informado, $idsOficiais, true)) {
+            throw new InvalidArgumentException('Selecione um Cargo oficial do catálogo do METADADOS.');
         }
         return $informado;
     }

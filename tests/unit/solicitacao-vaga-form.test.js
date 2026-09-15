@@ -107,6 +107,71 @@ assert.deepEqual(
 );
 
 // ---------------------------------------------------------------------------
+// Investigação "BUG 2 isolado na camada JavaScript" (2026-09-14): formas alternativas de
+// "Setor sem matriz" que o backend PODE, em tese, produzir — chave ausente, `undefined`, `null`,
+// `[]` explícito — todas precisam ser tratadas como matriz ausente (nunca como "matriz existe
+// mas está vazia" de um jeito que trave o fallback).
+const cargosPorSetorFormasVazias = {
+  '6': [],
+  '7': undefined,
+  '8': null,
+};
+for (const setorId of ['6', '7', '8', '999']) {
+  assert.deepEqual(
+    resolveCargosComFallback(cargosPorSetorFormasVazias, setorId, true, cargosFallback),
+    { cargos: cargosFallback, usaFallback: true },
+    `Setor ${setorId} sem matriz (forma: ${JSON.stringify(cargosPorSetorFormasVazias[setorId])}) -> fallback administrativo`
+  );
+  assert.deepEqual(
+    resolveCargosComFallback(cargosPorSetorFormasVazias, setorId, false, cargosFallback),
+    { cargos: [], usaFallback: false },
+    `Setor ${setorId} sem matriz + usuário comum -> bloqueio, nunca fallback`
+  );
+}
+
+// Estrutura REAL obtida diretamente de SolicitacaoVaga::contextoOrganizacionalSolicitante() para
+// uma fixture Fabiane-like com RH (matriz não verificada aqui) + um Setor "MANUTENÇÃO" (codigo_setor
+// '12') sem nenhuma linha em cargo_setores_metadados — dump literal do JSON gerado pelo backend,
+// não uma forma fabricada à mão. As chaves vêm como STRING (JSON não tem chave numérica).
+const cargosPorSetorReal = { '964': [], '963': [] };
+const setorManutencaoIdReal = '963';
+assert.deepEqual(
+  resolveCargosComFallback(cargosPorSetorReal, setorManutencaoIdReal, true, cargosFallback),
+  { cargos: cargosFallback, usaFallback: true },
+  'Estrutura real (dump do backend) para MANUTENÇÃO sem matriz -> fallback administrativo'
+);
+
+// Ator administrativo + troca de solicitante: podeFallback/cargosFallback são constantes do ATOR
+// (nunca recalculadas ao trocar solicitante) — chamar resolveCargosComFallback duas vezes com
+// cargosPorSetor DIFERENTES (simulando dois solicitantes distintos) mas os MESMOS podeFallback/
+// cargosFallback precisa continuar habilitando o fallback nas duas.
+const cargosPorSetorSolicitanteA = { '10': [] };
+const cargosPorSetorSolicitanteB = { '20': [] };
+assert.deepEqual(
+  resolveCargosComFallback(cargosPorSetorSolicitanteA, '10', true, cargosFallback),
+  { cargos: cargosFallback, usaFallback: true },
+  'ator admin + solicitante A + Setor sem matriz -> fallback'
+);
+assert.deepEqual(
+  resolveCargosComFallback(cargosPorSetorSolicitanteB, '20', true, cargosFallback),
+  { cargos: cargosFallback, usaFallback: true },
+  'mesmo ator (podeFallback/cargosFallback inalterados) + solicitante B diferente + Setor sem matriz -> fallback continua disponível'
+);
+
+// Troca de Setor: sem matriz -> fallback; com matriz -> matriz prevalece (nunca mistura as duas
+// respostas nem preserva o resultado da chamada anterior).
+assert.deepEqual(
+  resolveCargosComFallback(cargosPorSetor, '6', true, cargosFallback),
+  { cargos: cargosFallback, usaFallback: true },
+  'troca de Setor (1): sem matriz -> fallback'
+);
+assert.deepEqual(
+  resolveCargosComFallback(cargosPorSetor, '4', true, cargosFallback),
+  { cargos: cargosPorSetor['4'], usaFallback: false },
+  'troca de Setor (2): Setor com matriz -> matriz prevalece, cargo anterior (fallback) não vaza'
+);
+
+// ---------------------------------------------------------------------------
 // Regressão travada (correção de direção 2026-09-14): a versão anterior (Etapa 2 / hotfix
 // 2026-09-11) tratava Cargo como catálogo GLOBAL independente do Setor. Essa regra foi revertida
 // — o nome/mensagem antigos abaixo NUNCA podem voltar, e `resolveCargosParaSetor` precisa

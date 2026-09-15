@@ -124,6 +124,17 @@ try {
     sort($idsDeps);
     $check($idsDeps === $esperadoFabiane, 'B formDependencies(ator=Fabio, solicitante=Fabiane) devolve o contexto da Fabiane, não o do ator');
 
+    // ---- E: primeira renderização (PHP) == recarga via AJAX (mesma chamada) -
+    // Correção 2026-09-14 ("contexto inicial incorreto"): formaliza que o backend NÃO tem
+    // nenhuma diferença de comportamento entre a primeira renderização do formulário
+    // (formDependencies, usada por AdminSolicitacoesVagaController::create()) e a recarga via
+    // endpoint AJAX (contextoOrganizacionalSolicitante, usada por ::solicitanteContexto()) — os
+    // dois caminhos chamam exatamente o mesmo método com o mesmo argumento e devolvem o mesmo
+    // resultado. Se o formulário aparentar mostrar um contexto desatualizado na primeira troca de
+    // solicitante, a causa não pode estar aqui: está na camada de rede/DOM do navegador.
+    $ctxViaAjaxDireto = SolicitacaoVaga::contextoOrganizacionalSolicitante($fabiane);
+    $check($deps['solicitante_contexto'] === $ctxViaAjaxDireto, 'E formDependencies()->solicitante_contexto é byte-a-byte igual ao retorno direto de contextoOrganizacionalSolicitante() para o mesmo solicitante — nenhuma divergência entre 1ª renderização e recarga AJAX');
+
     // ---- C: alternância Fabio -> Fabiane -> Fabio, sem resíduo --------------
     $volta1 = SolicitacaoVaga::contextoOrganizacionalSolicitante($fabio);
     $idsVolta1 = array_column($volta1['setores'], 'id');

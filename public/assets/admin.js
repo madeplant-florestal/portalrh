@@ -1246,18 +1246,47 @@ if (typeof module !== 'undefined' && module.exports) {
     root.querySelectorAll('[data-solicitacao-orcamento="1"]').forEach((radio) => radio.addEventListener('change', updateOrcamento));
     root.querySelectorAll('[data-solicitacao-motivo-saida="1"]').forEach((radio) => radio.addEventListener('change', updateMotivoSaida));
 
+    // Correção 2026-09-14 (contexto inicial incorreto): a versão anterior tinha duas lacunas que
+    // podiam deixar o contexto do solicitante ANTERIOR visível sob o nome do novo, sem nenhum
+    // sinal de erro — (1) uma falha de rede/parse era engolida em silêncio (`.catch(() => {})`),
+    // mantendo o contexto antigo; (2) duas trocas em sequência podiam ter suas respostas chegando
+    // fora de ordem, aplicando um contexto já desatualizado por cima do mais recente. A correção:
+    // um token de sequência ignora qualquer resposta que não seja mais a mais recente pedida, e
+    // uma falha (rede ou resposta inválida) tenta de novo uma vez antes de bloquear
+    // explicitamente — nunca mascarar com dados antigos, nunca depender de o usuário perceber e
+    // trocar de novo manualmente.
+    let solicitanteContextoSequencia = 0;
+    const carregarContextoDoSolicitante = (usuarioId) => {
+      const sequenciaDestaChamada = ++solicitanteContextoSequencia;
+      const tentar = (tentativa) => {
+        fetch(buildUrl(`/admin/solicitacoes-vaga/solicitante-contexto/${encodeURIComponent(usuarioId)}`), { credentials: 'same-origin' })
+          .then((response) => {
+            if (!response.ok) throw new Error(`http-${response.status}`);
+            return response.json();
+          })
+          .then((data) => {
+            if (sequenciaDestaChamada !== solicitanteContextoSequencia) return;
+            if (!data || !data.ok) throw new Error('resposta-invalida');
+            aplicarContexto(data.contexto);
+          })
+          .catch(() => {
+            if (sequenciaDestaChamada !== solicitanteContextoSequencia) return;
+            if (tentativa < 2) {
+              tentar(tentativa + 1);
+              return;
+            }
+            aplicarContexto(contextoVazio);
+            window.alert('Não foi possível carregar o contexto organizacional deste usuário. Selecione-o novamente.');
+          });
+      };
+      tentar(1);
+    };
+
     if (solicitanteSelect) {
       solicitanteSelect.addEventListener('change', () => {
         const usuarioId = solicitanteSelect.value;
         if (!usuarioId) return;
-        fetch(buildUrl(`/admin/solicitacoes-vaga/solicitante-contexto/${encodeURIComponent(usuarioId)}`), { credentials: 'same-origin' })
-          .then((response) => response.json())
-          .then((data) => {
-            if (data && data.ok) {
-              aplicarContexto(data.contexto);
-            }
-          })
-          .catch(() => {});
+        carregarContextoDoSolicitante(usuarioId);
       });
     }
 

@@ -149,6 +149,22 @@ try {
     }
     $check($bloqueouComum, '8 usuário comum continua bloqueado em Setor sem matriz (sem fallback)');
 
+    // ---- correção 2026-09-14 ("fallback não ativado"): ATOR diferente do SOLICITANTE ----------
+    // A permissão de fallback pertence ao ATOR autenticado, NUNCA ao perfil/role do solicitante
+    // representado. $comum (role=viewer, sem is_supervisor) é o SOLICITANTE em todos os casos
+    // abaixo — só o ATOR muda — provando que o papel do solicitante nunca entra nessa decisão.
+    $idAdminPorComum = SolicitacaoVaga::create(array_merge($payloadBase, ['setor_id' => $setorSemMatriz, 'cargo_id' => $cargoOficialB, 'solicitante_usuario_id' => $comum]), $admin, '127.0.0.1');
+    $criados['solicitacoes'][] = $idAdminPorComum;
+    $check((int)$pdo->query("SELECT cargo_id FROM solicitacoes_vaga WHERE id = {$idAdminPorComum}")->fetchColumn() === $cargoOficialB, 'ATOR Admin + solicitante diferente (comum, role=viewer) + Setor sem matriz -> fallback habilitado (decide pelo ATOR)');
+
+    $idRhPorComum = SolicitacaoVaga::create(array_merge($payloadBase, ['setor_id' => $setorSemMatriz, 'cargo_id' => $cargoOficialA, 'solicitante_usuario_id' => $comum]), $rh, '127.0.0.1');
+    $criados['solicitacoes'][] = $idRhPorComum;
+    $check((int)$pdo->query("SELECT cargo_id FROM solicitacoes_vaga WHERE id = {$idRhPorComum}")->fetchColumn() === $cargoOficialA, 'ATOR RH + solicitante diferente (comum, role=viewer) + Setor sem matriz -> fallback habilitado (decide pelo ATOR)');
+
+    $idSupervisorPorComum = SolicitacaoVaga::create(array_merge($payloadBase, ['setor_id' => $setorSemMatriz, 'cargo_id' => $cargoOficialB, 'solicitante_usuario_id' => $comum]), $supervisor, '127.0.0.1');
+    $criados['solicitacoes'][] = $idSupervisorPorComum;
+    $check((int)$pdo->query("SELECT cargo_id FROM solicitacoes_vaga WHERE id = {$idSupervisorPorComum}")->fetchColumn() === $cargoOficialB, 'ATOR Supervisor master + solicitante diferente (comum, role=viewer) + Setor sem matriz -> fallback habilitado (decide pelo ATOR)');
+
     // ---- 9: fallback nunca inclui Cargo sem codigo_cargo -----------------------------------
     $deps = SolicitacaoVaga::formDependencies($admin, $admin);
     $idsFallback = array_column($deps['cargos_fallback_administrativo'], 'id');
@@ -180,6 +196,60 @@ try {
     $idAdminComMatriz = SolicitacaoVaga::create(array_merge($payloadBase, ['setor_id' => $setorComMatriz, 'cargo_id' => $cargoOficialA]), $admin, '127.0.0.1');
     $criados['solicitacoes'][] = $idAdminComMatriz;
     $check((int)$pdo->query("SELECT cargo_id FROM solicitacoes_vaga WHERE id = {$idAdminComMatriz}")->fetchColumn() === $cargoOficialA, '13 Admin: Cargo vinculado ao Setor com matriz é aceito normalmente');
+
+    // ---- 14: fluxo real completo, em escala (investigação "BUG 2 confirmado em produção",
+    // 2026-09-14) — payload inicial -> troca de solicitante (contexto via AJAX) -> Setor sem
+    // matriz -> resolução de Cargo, com um catálogo oficial de tamanho realista (60 Cargos, não
+    // só 2-3 como nos cenários acima) para descartar qualquer efeito de escala que os cenários
+    // menores não exerçam. Reproduz literalmente ATOR=Admin (role=admin, is_supervisor=1, como o
+    // Fabio real) + SOLICITANTE diferente (como a Fabiane real) + MANUTENÇÃO (Setor sem matriz).
+    $pdo->prepare('UPDATE usuarios SET is_supervisor = 1 WHERE id = ?')->execute([$admin]);
+    $cargosEscala = [];
+    for ($i = 0; $i < 60; $i++) {
+        $cargosEscala[] = $novoCargo('ZE' . str_pad((string)$i, 4, '0', STR_PAD_LEFT) . substr($sfx, -2), "cargo-escala-{$i}");
+    }
+    $fabianeFixture = $novoUsuario('fabiane-fixture', 'viewer');
+    User::setVagaAccess($fabianeFixture, true, $admin);
+    $contextoService->definirContextoManual($fabianeFixture, null, $setorSemMatriz, [$setorComMatriz]);
+
+    // Payload inicial (formDependencies, o que o controller create() envia na 1ª renderização):
+    // ator=admin, solicitante=admin (ainda ninguém escolhido) -> fallback já habilitado e com o
+    // catálogo em escala completo.
+    $depsInicial = SolicitacaoVaga::formDependencies($admin, $admin);
+    $check($depsInicial['pode_fallback_cargo_administrativo'] === true, '14 payload inicial: pode_fallback_cargo_administrativo=true para o ATOR admin/supervisor');
+    $idsFallbackEscala = array_column($depsInicial['cargos_fallback_administrativo'], 'id');
+    foreach ($cargosEscala as $cid) {
+        $check(in_array($cid, $idsFallbackEscala, true), "14 payload inicial: catálogo de fallback (escala) inclui cargo_id={$cid}");
+    }
+
+    // Contexto via AJAX (o que o endpoint solicitanteContexto() devolve ao trocar o Solicitante
+    // para a Fabiane) — deve ser exclusivamente dela, incluindo o Setor sem matriz.
+    $ctxAjaxFabiane = SolicitacaoVaga::contextoOrganizacionalSolicitante($fabianeFixture);
+    $idsSetoresFabiane = array_column($ctxAjaxFabiane['setores'], 'id');
+    $check(in_array($setorSemMatriz, $idsSetoresFabiane, true), '14 contexto AJAX da Fabiane inclui o Setor sem matriz (MANUTENÇÃO-like)');
+
+    // Payload recomputado após a troca de solicitante (equivalente ao que formDependencies()
+    // devolveria numa nova renderização/reenvio com erro, ator continua o mesmo) — o fallback
+    // continua vindo do ATOR, nunca é afetado pela troca de solicitante.
+    $depsAposTroca = SolicitacaoVaga::formDependencies($admin, $fabianeFixture);
+    $check($depsAposTroca['pode_fallback_cargo_administrativo'] === true, '14 após troca de solicitante: pode_fallback_cargo_administrativo continua true (pertence ao ATOR)');
+    $check(count($depsAposTroca['cargos_fallback_administrativo']) === count($depsInicial['cargos_fallback_administrativo']), '14 catálogo de fallback não muda de tamanho após a troca de solicitante');
+    $idsSetoresContextoTroca = array_column($depsAposTroca['solicitante_contexto']['setores'], 'id');
+    $check($idsSetoresContextoTroca === $idsSetoresFabiane, '14 solicitante_contexto após a troca é o da Fabiane (mesmo Setor sem matriz), não o do ator');
+
+    // Fluxo real completo: Admin (ator) cria em nome da Fabiane (solicitante), no Setor sem
+    // matriz, usando um Cargo do catálogo de fallback em escala -> aceito, nunca a mensagem de
+    // bloqueio de usuário comum.
+    $cargoEscolhidoEmEscala = $cargosEscala[30];
+    $idFluxoReal = SolicitacaoVaga::create(array_merge($payloadBase, [
+        'setor_id' => $setorSemMatriz,
+        'cargo_id' => $cargoEscolhidoEmEscala,
+        'solicitante_usuario_id' => $fabianeFixture,
+    ]), $admin, '127.0.0.1');
+    $criados['solicitacoes'][] = $idFluxoReal;
+    $rowFluxoReal = $pdo->query("SELECT solicitante_usuario_id, cargo_id FROM solicitacoes_vaga WHERE id = {$idFluxoReal}")->fetch(PDO::FETCH_ASSOC);
+    $check((int)$rowFluxoReal['solicitante_usuario_id'] === $fabianeFixture, '14 fluxo real: solicitante gravado é a Fabiane, não o Admin ator');
+    $check((int)$rowFluxoReal['cargo_id'] === $cargoEscolhidoEmEscala, '14 fluxo real: Cargo do fallback administrativo (catálogo em escala) é aceito e gravado — nunca a mensagem de bloqueio de usuário comum');
 
     if ($falhas !== []) {
         throw new RuntimeException(count($falhas) . ' verificação(ões) falharam.');

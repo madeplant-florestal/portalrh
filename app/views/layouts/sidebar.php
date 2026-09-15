@@ -104,10 +104,23 @@ $sidebarLinkClass = static function (array $paths = [], string $extra = '') use 
         <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 8V6h6v2"/><rect x="3" y="8" width="18" height="12" rx="2"/></svg>
         <span class="sidebar-link-label">Vagas</span>
       </a>
+      <?php
+        // Item de menu é só representação — a rota continua protegida no backend
+        // independentemente desta condição (AdminSolicitacoesVagaController/Kanban). Admin/RH/
+        // supervisor sempre veem o item (compatível com o comportamento anterior); demais usuários
+        // precisam de ao menos uma permissão do módulo, individual ou herdada de
+        // `pode_solicitar_vaga` (a migration/seed já converge as duas fontes).
+        $vePedidosDeVaga = Auth::role() === 'admin' || Auth::role() === 'rh' || !empty($_SESSION['user_is_supervisor'])
+            || Authorization::temPermissao('solicitacao_vaga.visualizar')
+            || Authorization::temPermissao('solicitacao_vaga.criar')
+            || Authorization::temPermissao('kanban_vagas.visualizar');
+      ?>
+      <?php if ($vePedidosDeVaga): ?>
       <a href="<?= $base ?>/admin/solicitacoes-vaga" class="sidebar-primary-link <?= $sidebarLinkClass(['/admin/solicitacoes-vaga']) ?>" data-admin-menu-close="1" title="Solicitações de vaga" aria-label="Solicitações de vaga">
         <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M8 6h10"/><path d="M8 12h10"/><path d="M8 18h10"/><path d="M4 6h.01"/><path d="M4 12h.01"/><path d="M4 18h.01"/></svg>
         <span class="sidebar-link-label">Solicitações de vaga</span>
       </a>
+      <?php endif; ?>
       <a href="<?= $base ?>/admin/movimentacoes-pessoal" class="sidebar-primary-link <?= $sidebarLinkClass(['/admin/movimentacoes-pessoal']) ?>" data-admin-menu-close="1" title="Movimentação de pessoal" aria-label="Movimentação de pessoal">
         <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M7 17V7"/><path d="M17 17V7"/><path d="M12 20V4"/><path d="M4 9h16"/><path d="M4 15h16"/></svg>
         <span class="sidebar-link-label">Movimentação de pessoal</span>

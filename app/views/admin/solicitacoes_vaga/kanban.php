@@ -50,7 +50,9 @@
 
   <div class="mb-4 flex flex-wrap items-center gap-3 text-xs text-gray-500">
     <span class="inline-flex items-center rounded-full bg-white px-3 py-1 shadow-sm ring-1 ring-gray-200"><?= (int)$stageCount ?> etapas monitoradas</span>
+    <?php if (!empty($podeMovimentar)): ?>
     <span class="inline-flex items-center rounded-full bg-white px-3 py-1 shadow-sm ring-1 ring-gray-200">Arraste e solte os cards para atualizar a situação operacional da vaga</span>
+    <?php endif; ?>
   </div>
 
   <div class="sv-kanban-board min-h-[26rem] overflow-x-auto md:min-h-[36rem]">
@@ -66,13 +68,17 @@
                     <div class="rounded-lg border border-dashed border-gray-300 bg-white/70 px-4 py-6 text-center text-xs text-gray-400">Nenhuma solicitação nesta etapa.</div>
                 <?php endif; ?>
                 <?php foreach ($col['items'] as $item): ?>
-                    <div class="group relative cursor-move rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-shadow hover:shadow-md" data-sv-kanban-card="1" draggable="true" data-sol-id="<?= (int)$item['id'] ?>">
+                    <div class="group relative rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-shadow hover:shadow-md <?= !empty($podeMovimentar) ? 'cursor-move' : '' ?>" data-sv-kanban-card="1" <?= !empty($podeMovimentar) ? 'draggable="true"' : '' ?> data-sol-id="<?= (int)$item['id'] ?>">
                         <h4 class="w-full truncate text-sm font-medium text-gray-900" title="<?= Security::e($item['cargo_nome']) ?>"><?= Security::e($item['cargo_nome']) ?></h4>
                         <p class="mt-1 text-xs text-gray-500">Área: <?= Security::e($item['setor_nome']) ?></p>
                         <p class="text-xs text-gray-500">Gestor: <?= Security::e($item['gestor_nome']) ?></p>
                         <p class="text-xs text-gray-500">Qtd. vagas: <?= (int)$item['quantidade_vagas'] ?></p>
                         <div class="mt-3 flex items-center justify-between gap-3">
+                            <?php if (!empty($podeAbrirDetalhes)): ?>
                             <a href="<?= $base ?>/admin/solicitacoes-vaga/<?= (int)$item['id'] ?>" class="text-xs font-medium text-ctgreen hover:text-ctdark hover:underline">Ver detalhes</a>
+                            <?php else: ?>
+                            <span></span>
+                            <?php endif; ?>
                             <span class="text-xs text-gray-400"><?= Security::e(date('d/m', strtotime((string)$item['created_at']))) ?></span>
                         </div>
                     </div>

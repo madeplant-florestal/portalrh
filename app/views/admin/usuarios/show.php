@@ -285,6 +285,49 @@ $isAdminAtor = !empty($isAdminAtor);
   </section>
 
   <?php if ($isAdminAtor): ?>
+  <?php
+    $catalogoPermissoes = $catalogoPermissoes ?? [];
+    $permissoesAtribuidas = $permissoesAtribuidas ?? [];
+    $rotuloModulo = [
+      'solicitacao_vaga' => 'Solicitação de Vagas',
+      'kanban_vagas' => 'Kanban de Vagas',
+    ];
+  ?>
+  <section class="mt-8 rounded-xl border border-gray-200 bg-gray-50 p-5">
+    <h3 class="text-lg font-semibold text-ctpblue">Permissões de acesso</h3>
+    <p class="mt-1 text-sm text-gray-500">
+      Controla o que este usuário pode fazer em cada módulo, independentemente do papel (Permissão)
+      dele. Administradores sempre têm acesso total; para os demais, só o que estiver marcado aqui.
+    </p>
+
+    <form action="<?= $base ?>/admin/usuarios/<?= (int)$user->id ?>/permissoes" method="post" class="mt-4 space-y-5">
+      <input type="hidden" name="csrf" value="<?= Security::e($csrf) ?>">
+
+      <?php foreach ($catalogoPermissoes as $modulo => $itens): ?>
+        <div>
+          <span class="block text-sm font-medium text-gray-700"><?= Security::e($rotuloModulo[$modulo] ?? ucfirst(str_replace('_', ' ', $modulo))) ?></span>
+          <div class="mt-2 grid gap-2 sm:grid-cols-2">
+            <?php foreach ($itens as $permissao): ?>
+              <label class="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm">
+                <input type="checkbox" name="permissao_ids[]" value="<?= (int)$permissao['id'] ?>"
+                       class="h-4 w-4 rounded border-gray-300"
+                       <?= in_array((int)$permissao['id'], $permissoesAtribuidas, true) ? 'checked' : '' ?>>
+                <span class="text-gray-800"><?= Security::e((string)$permissao['nome']) ?></span>
+              </label>
+            <?php endforeach; ?>
+          </div>
+        </div>
+      <?php endforeach; ?>
+      <?php if ($catalogoPermissoes === []): ?>
+        <p class="text-sm text-gray-500">Nenhuma permissão cadastrada.</p>
+      <?php endif; ?>
+
+      <button class="bg-ctgreen text-white px-4 py-2 rounded hover:bg-ctdark text-sm">Salvar permissões</button>
+    </form>
+  </section>
+  <?php endif; ?>
+
+  <?php if ($isAdminAtor): ?>
   <div class="responsive-form-actions mt-6">
     <form action="<?= $base ?>/admin/usuarios/<?= (int)$user->id ?>/status" method="post">
       <input type="hidden" name="csrf" value="<?= Security::e($csrf) ?>">

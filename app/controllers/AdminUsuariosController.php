@@ -165,6 +165,8 @@ class AdminUsuariosController extends Controller
             'cargosOficiais' => (new CatalogoMetadadosRepository('cargos'))->listarOficiais(),
             'setoresOficiais' => (new CatalogoMetadadosRepository('setores'))->listarOficiais(),
             'isAdminAtor' => $this->isAdminAtor(),
+            'catalogoPermissoes' => Authorization::catalogoPorModulo(),
+            'permissoesAtribuidas' => Authorization::idsAtribuidos((int)$user->id),
             'flashError' => Security::sanitizeString($_GET['erro'] ?? ''),
             'flashSuccess' => Security::sanitizeString($_GET['ok'] ?? ''),
         ], 'layouts/admin');
@@ -311,6 +313,49 @@ class AdminUsuariosController extends Controller
             redirect($back . '?erro=' . urlencode((string)($result['error'] ?? 'Falha ao salvar o contexto organizacional.')));
         }
         redirect($back . '?ok=' . urlencode('Contexto organizacional atualizado.'));
+    }
+
+    /**
+     * Salva as PERMISSÕES INDIVIDUAIS do usuário (Sprint "Controle de Acesso por Permissões
+     * Individuais"). Substitui o conjunto de `usuario_permissoes` do usuário pelos IDs recebidos —
+     * `Authorization::sincronizar()` valida contra o catálogo (só aceita permissão existente e
+     * ativa) e nunca duplica. Exclusivo de Admin: é o mecanismo de autorização em si, não o
+     * contexto organizacional (que RH também administra).
+     */
+    public function updatePermissoes(string $id): void
+    {
+        Auth::requireRole(['admin']);
+        SchemaManager::ensure();
+        if (!Security::csrfCheck($_POST['csrf'] ?? '')) {
+            http_response_code(400);
+            echo 'Falha na verificação de segurança (CSRF).';
+            return;
+        }
+        $target = User::findById((int)$id);
+        if (!$target) {
+            http_response_code(404);
+            echo 'Usuário não encontrado';
+            return;
+        }
+        $actor = User::findById((int)($_SESSION['user_id'] ?? 0));
+        if (!User::canManageUser($actor, $target)) {
+            http_response_code(403);
+            echo 'Operação não permitida.';
+            return;
+        }
+
+        $idsRecebidos = array_map(
+            static fn ($v): int => (int)$v,
+            (array)($_POST['permissao_ids'] ?? [])
+        );
+        $result = Authorization::sincronizar((int)$id, $idsRecebidos);
+
+        $back = '/admin/usuarios/' . (int)$id;
+        if (!($result['ok'] ?? false)) {
+            redirect($back . '?erro=' . urlencode((string)($result['error'] ?? 'Falha ao salvar as permissões de acesso.')));
+        }
+        AuditLog::log($actor?->id, (int)$id, 'permissoes_update', 'total=' . (int)($result['total'] ?? 0), Security::clientIp());
+        redirect($back . '?ok=' . urlencode('Permissões de acesso atualizadas.'));
     }
 
     /**

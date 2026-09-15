@@ -32,6 +32,7 @@ require_once __DIR__ . '/Cipher.php';
 require_once __DIR__ . '/DateHelper.php';
 require_once __DIR__ . '/Phone.php';
 require_once __DIR__ . '/Auth.php';
+require_once __DIR__ . '/Authorization.php';
 require_once __DIR__ . '/View.php';
 require_once __DIR__ . '/Controller.php';
 require_once __DIR__ . '/AdminCatalogosController.php';

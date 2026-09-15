@@ -175,6 +175,7 @@ try {
     $router->post('/admin/usuarios/{id}/vaga-acesso', [AdminUsuariosController::class, 'updateVagaAcesso']);
     $router->post('/admin/usuarios/{id}/metadados-vinculo', [AdminUsuariosController::class, 'vincularMetadados']);
     $router->post('/admin/usuarios/{id}/contexto-organizacional', [AdminUsuariosController::class, 'updateContextoOrganizacional']);
+    $router->post('/admin/usuarios/{id}/permissoes', [AdminUsuariosController::class, 'updatePermissoes']);
     $router->post('/admin/usuarios/{id}/excluir', [AdminUsuariosController::class, 'delete']);
 
     $router->dispatch();

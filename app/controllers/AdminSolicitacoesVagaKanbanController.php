@@ -39,6 +39,12 @@ class AdminSolicitacoesVagaKanbanController extends Controller
 
         $dependencies = SolicitacaoVaga::formDependencies($userId);
 
+        // Flags só de representação (draggable/link) — o backend (move()/show()) já valida a
+        // permissão de novo, independentemente do que a tela desenha aqui.
+        $podeEditarRh = SolicitacaoVaga::userCanEditRh($role, $isSupervisor);
+        $podeMovimentar = $podeEditarRh || Authorization::temPermissao('kanban_vagas.movimentar');
+        $podeAbrirDetalhes = $podeEditarRh || Authorization::temPermissao('kanban_vagas.detalhes');
+
         $this->view->render('admin/solicitacoes_vaga/kanban', [
             'kanban' => $kanban,
             'stageCount' => count($stages),
@@ -47,6 +53,8 @@ class AdminSolicitacoesVagaKanbanController extends Controller
             'gestores' => $dependencies['gestores'],
             'filters' => $filters,
             'csrf' => Security::csrfToken(),
+            'podeMovimentar' => $podeMovimentar,
+            'podeAbrirDetalhes' => $podeAbrirDetalhes,
         ], 'layouts/admin');
     }
 
@@ -76,6 +84,17 @@ class AdminSolicitacoesVagaKanbanController extends Controller
         $userId = (int)($_SESSION['user_id'] ?? 0);
         $role = Auth::role();
         $isSupervisor = !empty($_SESSION['user_is_supervisor']);
+
+        // Permissão individual (Sprint "Permissões Individuais"): mover card do Kanban exige
+        // `kanban_vagas.movimentar` — ter acesso ao Kanban (visualizar/detalhes) NÃO implica poder
+        // movimentar. Admin/RH/supervisor mantêm o acesso que já tinham hoje (nenhuma regressão);
+        // demais usuários (ex.: Gestor) só passam daqui com a permissão concedida explicitamente.
+        SchemaManager::ensure();
+        if (!SolicitacaoVaga::userCanEditRh($role, $isSupervisor) && !Authorization::usuarioTemPermissao($userId, 'kanban_vagas.movimentar')) {
+            http_response_code(403);
+            echo json_encode(['error' => 'Seu usuário não tem permissão para movimentar cards do Kanban.']);
+            return;
+        }
 
         // Reaproveita a mesma checagem de acesso por linha do restante do módulo — gestor só
         // movimenta solicitações onde é solicitante ou aprovador designado.

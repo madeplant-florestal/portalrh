@@ -96,6 +96,32 @@ class SchemaManager
             CONSTRAINT fk_usuario_setores_usuario FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE,
             CONSTRAINT fk_usuario_setores_setor FOREIGN KEY (setor_id) REFERENCES setores(id) ON DELETE RESTRICT
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+        // Permissões individuais (migration 2026-09-15-permissoes-individuais.sql). Fonte efetiva
+        // de autorização funcional para módulos novos — ver app/core/Authorization.php.
+        $pdo->exec("CREATE TABLE IF NOT EXISTS permissoes (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            codigo VARCHAR(80) NOT NULL,
+            modulo VARCHAR(40) NOT NULL,
+            nome VARCHAR(120) NOT NULL,
+            descricao VARCHAR(255) NULL,
+            ordem INT NOT NULL DEFAULT 0,
+            ativo TINYINT(1) NOT NULL DEFAULT 1,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uk_permissoes_codigo (codigo),
+            KEY idx_permissoes_modulo (modulo)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+        $pdo->exec("CREATE TABLE IF NOT EXISTS usuario_permissoes (
+            usuario_id INT NOT NULL,
+            permissao_id INT NOT NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (usuario_id, permissao_id),
+            KEY idx_usuario_permissoes_permissao (permissao_id),
+            CONSTRAINT fk_usuario_permissoes_usuario FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+            CONSTRAINT fk_usuario_permissoes_permissao FOREIGN KEY (permissao_id) REFERENCES permissoes(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     }
 }
 

@@ -4,14 +4,18 @@ class AdminSolicitacoesVagaController extends Controller
     public function index(): void
     {
         Auth::requireRole(['admin', 'rh', 'viewer']);
+        $userId = (int)($_SESSION['user_id'] ?? 0);
+        $role = Auth::role();
+        $isSupervisor = !empty($_SESSION['user_is_supervisor']);
         $this->view->render('admin/solicitacoes_vaga/index', [
-            'items' => SolicitacaoVaga::allForUser(
-                (int)($_SESSION['user_id'] ?? 0),
-                Auth::role(),
-                !empty($_SESSION['user_is_supervisor'])
-            ),
+            'items' => SolicitacaoVaga::allForUser($userId, $role, $isSupervisor),
             'flashError' => Security::sanitizeString($_GET['erro'] ?? ''),
             'flashSuccess' => Security::sanitizeString($_GET['ok'] ?? ''),
+            // Botões são só representação — as rotas continuam protegidas no backend
+            // independentemente destas flags (canCreate() / Kanban::move()).
+            'podeCriarSolicitacao' => $this->canCreate($userId, $role, $isSupervisor),
+            'vePodeKanban' => SolicitacaoVaga::userCanEditRh($role, $isSupervisor)
+                || Authorization::temPermissao('kanban_vagas.visualizar'),
         ], 'layouts/admin');
     }
 
@@ -267,6 +271,15 @@ class AdminSolicitacoesVagaController extends Controller
 
         // RH / Admin / supervisor sempre podem abrir Solicitação de Vaga.
         if (SolicitacaoVaga::userCanEditRh($role, $isSupervisor)) {
+            return true;
+        }
+
+        // Permissão individual (Sprint "Permissões Individuais", migration
+        // 2026-09-15-permissoes-individuais.sql) — caminho ADITIVO: nunca remove o acesso já
+        // concedido por `pode_solicitar_vaga`, apenas soma uma nova via de autorização (ex.: Gestor
+        // sem o flag legado, mas com a permissão individual concedida na Tela de Usuários).
+        SchemaManager::ensure();
+        if (Authorization::usuarioTemPermissao($userId, 'solicitacao_vaga.criar')) {
             return true;
         }
 

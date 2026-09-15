@@ -251,6 +251,38 @@ Controller
 - Rotas públicas de auth (`/login`, `/admin/login`, `/forgot-password`, `/reset-password/{token}`
   e variantes `/admin/*`) são as únicas isentas do gate de sessão em `index.php`.
 
+### Permissões individuais (módulos novos)
+
+Desde a Sprint "Controle de Acesso por Permissões Individuais" (migration
+`2026-09-15-permissoes-individuais.sql`), a fonte efetiva de autorização **funcional** de um módulo
+NOVO não é mais um booleano por módulo em `usuarios` — é a permissão individual do usuário.
+
+- Tabelas: `permissoes` (catálogo, código único `modulo.acao`, ex.: `solicitacao_vaga.criar`,
+  `kanban_vagas.movimentar`) e `usuario_permissoes` (N:N usuário↔permissão, PK composta, sem
+  duplicidade possível).
+- `app/core/Authorization.php` é o resolver ÚNICO: `Authorization::temPermissao('codigo')` (usuário
+  da sessão) / `Authorization::usuarioTemPermissao($id, 'codigo')` (usuário arbitrário) /
+  `Authorization::requirePermissao('codigo')` (mesma convenção de 403 de `Auth::requireRole()` —
+  `http_response_code(403); echo 'Acesso negado'; exit;`). Cacheia por processo (1 request).
+- **Bypass de Admin existe em UM ÚNICO PONTO**: dentro de `Authorization::usuarioTemPermissao()`.
+  Nunca replique `if role === 'admin'` em controllers/views para decidir permissão individual.
+  `role = 'rh'` e `is_supervisor = 1` **não** dão bypass — para esses usuários a autorização de
+  módulos novos depende de permissão individual como qualquer outro usuário.
+- Registrar um módulo novo: adicionar linhas em `permissoes` via `INSERT IGNORE` num seed de
+  migration (nunca uma coluna nova em `usuarios`) e chamar `Authorization::usuarioTemPermissao()`/
+  `temPermissao()` no controller antes de qualquer ação protegida. `SchemaManager::ensure()` cria
+  as duas tabelas como rede de segurança (mesmo padrão de `usuario_setores`).
+- UI (menu, botões) usa a mesma API só para ESCONDER — nunca é a defesa real; toda rota protegida
+  valida a permissão de novo no backend, usando a convenção 403 já existente.
+- `Authorization::catalogoPorModulo()` / `idsAtribuidos()` / `sincronizar()` alimentam a seção
+  "Permissões de acesso" da Tela de Usuários (`admin/usuarios/show.php`).
+- Compatibilidade: `usuarios.pode_solicitar_vaga` continua existindo (não é removida) só para não
+  quebrar o que já dependia dela; o seed da migration concede `solicitacao_vaga.criar` a todo
+  usuário que já tinha `pode_solicitar_vaga = 1`. Módulos novos não devem usá-la.
+- Autorização (pode executar esta ação?) é independente de regra de negócio/estado do registro
+  (pode executar ESTA ação NESTE registro AGORA?) — ambas continuam necessárias; a permissão nunca
+  substitui uma validação de estado já existente (ex.: `SolicitacaoVaga::moveKanbanStage()`).
+
 ## Auditoria
 
 - `AuditLog::log($actorUserId, $targetUserId, $action, $details, $ip)` grava em

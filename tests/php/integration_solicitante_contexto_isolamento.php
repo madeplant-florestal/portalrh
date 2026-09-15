@@ -27,6 +27,10 @@
  *      + 5 adicionais, como a Fabiane) — após o vínculo, releitura fresca confirma
  *      `colaborador_metadados_id` persistido, Cargo/Setor principal herdados e TRAVADOS, e os
  *      adicionais MANUAIS preservados.
+ *   F: isolamento total entre 4 usuários genéricos (nunca só Fabio/Fabiane) na sequência
+ *      A -> B -> C -> D -> A (D é um usuário externo/manual, sem vínculo METADADOS): cada
+ *      consulta devolve exclusivamente usuario_id, Cargo, Setor principal, Setores adicionais e
+ *      cargos_por_setor de quem foi pedido — nunca resíduo do usuário anterior.
  *
  * Sem rollback de transação (create()/vincularMetadados() têm transação própria) — fixtures
  * marcadas e removidas no finally, como os demais testes de Solicitação de Vaga/Usuários.
@@ -174,6 +178,72 @@ try {
     foreach ($ctxDepois['setores_adicionais'] as $adicional) {
         $check($adicional['origem'] === 'MANUAL', 'D adicional setor_id=' . $adicional['setor_id'] . ' continua origem MANUAL');
     }
+
+    // ---- F: isolamento total entre 4 usuários genéricos, sequência A -> B -> C -> D -> A -------
+    // Requisito explícito: não testar apenas Fabio/Fabiane. D representa um usuário externo/
+    // manual (sem vínculo METADADOS, `colaborador_metadados_id IS NULL`) com contexto oficial
+    // configurado inteiramente pelo Portal — o mesmo mecanismo usado para todos os demais aqui.
+    $setorA = $novoSetor('setor-a-f');
+    $setorB = $novoSetor('setor-b-f');
+    $setorBExtra = $novoSetor('setor-b-extra-f');
+    $setorC = $novoSetor('setor-c-f');
+    $setorD = $novoSetor('setor-d-f');
+    $cargoA = $novoCargo('cargo-a-f');
+    $cargoB = $novoCargo('cargo-b-f');
+    $cargoC = $novoCargo('cargo-c-f');
+    $cargoD = $novoCargo('cargo-d-f');
+
+    $usuarioA = $novoUsuario('usuario-a-f', 'viewer');
+    $svc->definirContextoManual($usuarioA, $cargoA, $setorA, []);
+    $usuarioB = $novoUsuario('usuario-b-f', 'viewer');
+    $svc->definirContextoManual($usuarioB, $cargoB, $setorB, [$setorBExtra]);
+    $usuarioC = $novoUsuario('usuario-c-f', 'viewer');
+    $svc->definirContextoManual($usuarioC, $cargoC, $setorC, []);
+    $usuarioD = $novoUsuario('usuario-d-f', 'viewer');
+    $svc->definirContextoManual($usuarioD, $cargoD, $setorD, []);
+
+    $cargoRotuloDe = static function (int $cargoId) use ($pdo): string {
+        $row = $pdo->query("SELECT nome, descricao_oficial FROM cargos WHERE id = {$cargoId}")->fetch(PDO::FETCH_ASSOC);
+        return trim((string)($row['descricao_oficial'] ?? '')) !== '' ? $row['descricao_oficial'] : $row['nome'];
+    };
+
+    $especificacoes = [
+        'A' => ['usuario' => $usuarioA, 'cargo' => $cargoA, 'setorPrincipal' => $setorA, 'adicionais' => []],
+        'B' => ['usuario' => $usuarioB, 'cargo' => $cargoB, 'setorPrincipal' => $setorB, 'adicionais' => [$setorBExtra]],
+        'C' => ['usuario' => $usuarioC, 'cargo' => $cargoC, 'setorPrincipal' => $setorC, 'adicionais' => []],
+        'D' => ['usuario' => $usuarioD, 'cargo' => $cargoD, 'setorPrincipal' => $setorD, 'adicionais' => []],
+    ];
+
+    $verificarContextoIsolado = static function (string $rotulo, array $spec) use ($check, $cargoRotuloDe): void {
+        $ctx = SolicitacaoVaga::contextoOrganizacionalSolicitante($spec['usuario']);
+        $check($ctx['usuario_id'] === $spec['usuario'], "F [{$rotulo}] usuario_id retornado é exatamente o pedido");
+        $check($ctx['cargo_rotulo'] === $cargoRotuloDe($spec['cargo']), "F [{$rotulo}] Cargo do solicitante é o do próprio usuário");
+        $principal = null;
+        $idsAdicionais = [];
+        foreach ($ctx['setores'] as $setor) {
+            if ($setor['principal']) {
+                $principal = $setor['id'];
+            } else {
+                $idsAdicionais[] = $setor['id'];
+            }
+        }
+        sort($idsAdicionais);
+        $esperadoAdicionais = $spec['adicionais'];
+        sort($esperadoAdicionais);
+        $check($principal === $spec['setorPrincipal'], "F [{$rotulo}] Setor principal é o do próprio usuário");
+        $check($idsAdicionais === $esperadoAdicionais, "F [{$rotulo}] Setores adicionais são exatamente os do próprio usuário — nenhum resíduo de outro");
+        $check(array_key_exists((string)$spec['setorPrincipal'], $ctx['cargos_por_setor']), "F [{$rotulo}] cargos_por_setor contém o Setor principal do próprio usuário");
+    };
+
+    // Sequência A -> B -> C -> D -> A: cada passo isolado, sem estado compartilhado entre chamadas.
+    $verificarContextoIsolado('A', $especificacoes['A']);
+    $verificarContextoIsolado('B', $especificacoes['B']);
+    $verificarContextoIsolado('C', $especificacoes['C']);
+    $verificarContextoIsolado('D', $especificacoes['D']);
+    $verificarContextoIsolado('A (volta)', $especificacoes['A']);
+
+    $usuarioDFresco = User::findById($usuarioD);
+    $check($usuarioDFresco !== null && $usuarioDFresco->colaborador_metadados_id === null, 'F [D] usuário externo/manual sem vínculo METADADOS (colaborador_metadados_id IS NULL)');
 
     if ($falhas !== []) {
         throw new RuntimeException(count($falhas) . ' verificação(ões) falharam.');

@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const adminJsModule = require('../../public/assets/admin.js');
-const { resolveSolicitanteSetorState, resolveCentrosCustoParaSetor, resolveCargosParaSetor, resolveCargosComFallback, deveResincronizarContextoDoSolicitante } = adminJsModule;
+const { resolveSolicitanteSetorState, resolveCentrosCustoParaSetor, resolveCargosParaSetor, resolveCargosComFallback } = adminJsModule;
 
 // Sprint Solicitação de Vaga — matriz oficial Cargo x Setor (espelho técnico do METADADOS,
 // `cargo_setores_metadados`): Setor selecionado -> só os Cargos oficialmente vinculados àquele
@@ -172,85 +172,28 @@ assert.deepEqual(
 );
 
 // ---------------------------------------------------------------------------
-// Correção "contexto inicial incorreto" (2026-09-14, validado em produção com cache desativado):
-// reproduz literalmente o caso real — payload/contexto inicial de um usuário, <select> de
-// Solicitante restaurado pelo navegador em OUTRO valor, sem 'change'. `deveResincronizarContexto
-// DoSolicitante` decide SE é preciso buscar de novo (Cenários 1-3 da investigação); quem busca
-// continua sendo sempre `carregarContextoDoSolicitante()` — token de sequência, retry e bloqueio
-// em falha persistente são preservados sem alteração nesta correção.
+// Correção DEFINITIVA (2026-09-14): as tentativas anteriores de reconciliar duas fontes de estado
+// (contexto embutido no payload inicial x valor do <select>) via `DOMContentLoaded`, `pageshow` e
+// `setTimeout(0)` foram REMOVIDAS. `deveResincronizarContextoDoSolicitante` não existe mais — o
+// formulário de Nova Solicitação nunca mais usa o `solicitante_contexto` embutido como fonte
+// operacional; o carregamento inicial (quando há <select> de Solicitante) SEMPRE busca o contexto
+// do `usuario_id` atualmente selecionado via `carregarContextoDoSolicitante()`, a mesma função já
+// usada na troca manual (token de sequência + validação de identidade da resposta + retry +
+// bloqueio em falha persistente — nada disso foi alterado). Trava explícita: os nomes/técnicas
+// abaixo não podem voltar.
+assert.equal('deveResincronizarContextoDoSolicitante' in adminJsModule, false, 'deveResincronizarContextoDoSolicitante não pode voltar — o carregamento inicial não compara mais duas fontes de estado, sempre busca do endpoint');
+for (const arquivo of ['../../assets/admin.js', '../../public/assets/admin.js']) {
+  const conteudo = fs.readFileSync(path.join(__dirname, arquivo), 'utf8');
+  assert.equal(conteudo.includes('deveResincronizarContextoDoSolicitante'), false, `${arquivo} não pode conter deveResincronizarContextoDoSolicitante (remendo de timing removido)`);
+  assert.equal(/addEventListener\(\s*['"]pageshow['"]/.test(conteudo), false, `${arquivo} não pode reintroduzir listener de 'pageshow' para sincronizar o solicitante (remendo de timing removido)`);
+}
 
-// Cenário 1 — payload/contexto = Fabio (usuario_id=1), <select> restaurado em Fabiane ("76"):
-// precisa detectar a divergência e recarregar o usuário 76.
-assert.equal(
-  deveResincronizarContextoDoSolicitante('76', 1),
-  true,
-  'Cenário 1: payload Fabio (usuario_id=1) + select restaurado em Fabiane (76) -> precisa resincronizar'
-);
-
-// Cenário 2 — payload/contexto = Fabiane (76), <select> também em Fabiane (76): já sincronizados,
-// nenhuma requisição adicional.
-assert.equal(
-  deveResincronizarContextoDoSolicitante('76', '76'),
-  false,
-  'Cenário 2: payload Fabiane (76) + select Fabiane (76) -> já sincronizados, sem requisição adicional'
-);
-
-// Cenário 3 — payload/contexto = Fabiane (76), <select> restaurado em Fabio ("1"): precisa
-// detectar a divergência e recarregar o usuário 1 (o valor do <select> sempre prevalece).
-assert.equal(
-  deveResincronizarContextoDoSolicitante('1', 76),
-  true,
-  'Cenário 3: payload Fabiane (76) + select restaurado em Fabio (1) -> precisa resincronizar para carregar o Fabio'
-);
-
-// <select> sem valor (Setor bloqueado / nenhum candidato elegível) -> nada para resincronizar.
-assert.equal(
-  deveResincronizarContextoDoSolicitante('', 1),
-  false,
-  '<select> sem valor -> nada para resincronizar'
-);
-
-// Caso normal (sem restauração do navegador): payload e select já concordam desde o início.
-assert.equal(
-  deveResincronizarContextoDoSolicitante('1', 1),
-  false,
-  'payload e select já concordam desde o início -> sem requisição adicional'
-);
-
-// Cenários 4-6 (troca rápida com token de sequência, retry em falha, bloqueio em falha
-// persistente) dependem de fetch/DOM reais e continuam cobertos pela MESMA implementação de
-// `carregarContextoDoSolicitante()` já testada/validada em produção nesta sprint — esta correção
-// não a modifica, apenas passa a chamá-la também na inicialização (via
-// `deveResincronizarContextoDoSolicitante`), não só no evento 'change'. Sem jsdom neste projeto,
-// a mecânica de fetch/DOM não é unit-testável em isolamento (mesma convenção já adotada para o
-// restante da inicialização do formulário).
-
-// Restauração TARDIA (evidência de produção, 2026-09-14): o navegador pode restaurar o <select>
-// DEPOIS que a checagem de DOMContentLoaded (e até de `pageshow`) já rodou e considerou tudo
-// sincronizado — a mesma função pura, chamada de novo por uma verificação tardia controlada pela
-// aplicação (`setTimeout(...,0)`), precisa detectar a divergência mesmo tendo passado limpo antes.
-// T0: select e contexto nascem iguais (1) -> primeira checagem (DOMContentLoaded) não reage.
-assert.equal(
-  deveResincronizarContextoDoSolicitante('1', 1),
-  false,
-  'restauração tardia — T0: select=1 e contexto=1 (ainda sincronizados) -> primeira checagem não reage'
-);
-// T1: o navegador troca o <select> silenciosamente para 76, sem 'change'. T2: a verificação
-// tardia lê o valor ATUAL do select (nunca um valor capturado em T0) e detecta a divergência ->
-// manda carregar o contexto 76 (nunca mantém o 1).
-assert.equal(
-  deveResincronizarContextoDoSolicitante('76', 1),
-  true,
-  'restauração tardia — T1/T2: navegador troca o select para 76 em silêncio -> verificação tardia detecta e carrega 76'
-);
-// T3: depois da resposta de carregarContextoDoSolicitante(76), contexto.usuario_id passa a 76 —
-// uma NOVA verificação tardia (ex.: se o setTimeout rodasse de novo, ou uma chamada por 'change'
-// concorrente já resolvida) não deve gerar segunda requisição: select e contexto já concordam.
-assert.equal(
-  deveResincronizarContextoDoSolicitante('76', 76),
-  false,
-  'restauração tardia — T3: depois do contexto atualizado para 76, nova verificação não gera requisição duplicada'
-);
+// A mecânica de fetch/DOM (token de sequência, validação de identidade da resposta, retry,
+// bloqueio em falha persistente, sequência A -> B -> C -> D -> A, resposta fora de ordem) não é
+// unit-testável em isolamento sem jsdom neste projeto — mesma convenção já adotada para o restante
+// da inicialização do formulário. A cobertura equivalente no backend (isolamento total entre
+// múltiplos usuários solicitantes, incluindo um usuário sem vínculo METADADOS) está em
+// tests/php/integration_solicitante_contexto_isolamento.php.
 
 // ---------------------------------------------------------------------------
 // Regressão travada (correção de direção 2026-09-14): a versão anterior (Etapa 2 / hotfix
@@ -266,6 +209,7 @@ const stringsProibidas = [
   'resolveSolicitacaoCargoState',
   'Nenhum cargo disponível para este setor',
   'Selecione uma área/departamento primeiro',
+  '[SolicitacaoVaga] sincronizacao do solicitante',
 ];
 for (const arquivo of ['../../assets/admin.js', '../../public/assets/admin.js']) {
   const conteudo = fs.readFileSync(path.join(__dirname, arquivo), 'utf8');

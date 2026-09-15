@@ -46,18 +46,6 @@ const resolveCargosComFallback = (cargosPorSetor, setorId, podeFallback, cargosF
   return { cargos: [], usaFallback: false };
 };
 
-// Correção "contexto inicial incorreto" (2026-09-14, validado em produção com cache desativado):
-// o navegador pode restaurar/preencher o <select> de Solicitante com um valor diferente do
-// `contexto.usuario_id` embutido pelo servidor (restauração de estado de formulário, autofill,
-// back-forward cache) SEM disparar 'change' — a aplicação nunca pode assumir que os dois sempre
-// coincidem na inicialização. Decide apenas SE é preciso buscar de novo; quem busca é sempre
-// carregarContextoDoSolicitante(), nunca um 'change' artificial.
-const deveResincronizarContextoDoSolicitante = (valorSelectAtual, usuarioIdContexto) => {
-  const valor = String(valorSelectAtual || '');
-  if (valor === '') return false;
-  return valor !== String(usuarioIdContexto ?? '');
-};
-
 const validateCollaboratorImportFile = (file) => {
   const fileName = String(file?.name || '').trim();
   if (!fileName) {
@@ -145,7 +133,6 @@ if (typeof module !== 'undefined' && module.exports) {
     resolveCentrosCustoParaSetor,
     resolveCargosParaSetor,
     resolveCargosComFallback,
-    deveResincronizarContextoDoSolicitante,
     validateCollaboratorImportFile,
     summarizeCollaboratorImportResult,
   };
@@ -1259,15 +1246,18 @@ if (typeof module !== 'undefined' && module.exports) {
     root.querySelectorAll('[data-solicitacao-orcamento="1"]').forEach((radio) => radio.addEventListener('change', updateOrcamento));
     root.querySelectorAll('[data-solicitacao-motivo-saida="1"]').forEach((radio) => radio.addEventListener('change', updateMotivoSaida));
 
-    // Correção 2026-09-14 (contexto inicial incorreto): a versão anterior tinha duas lacunas que
-    // podiam deixar o contexto do solicitante ANTERIOR visível sob o nome do novo, sem nenhum
-    // sinal de erro — (1) uma falha de rede/parse era engolida em silêncio (`.catch(() => {})`),
-    // mantendo o contexto antigo; (2) duas trocas em sequência podiam ter suas respostas chegando
-    // fora de ordem, aplicando um contexto já desatualizado por cima do mais recente. A correção:
-    // um token de sequência ignora qualquer resposta que não seja mais a mais recente pedida, e
-    // uma falha (rede ou resposta inválida) tenta de novo uma vez antes de bloquear
-    // explicitamente — nunca mascarar com dados antigos, nunca depender de o usuário perceber e
-    // trocar de novo manualmente.
+    // Correção definitiva (2026-09-14): `solicitante_usuario_id` (o valor ATUAL do <select>) é a
+    // ÚNICA identidade operacional do Solicitante — Cargo/Setores SEMPRE vêm de uma busca a este
+    // endpoint, nunca do `solicitante_contexto` embutido no payload inicial (que passou a ser só
+    // informativo/compatibilidade). Elimina a tentativa de reconciliar duas fontes de estado
+    // (a causa raiz de toda a investigação anterior de timing/pageshow/setTimeout).
+    //
+    // Proteções mantidas:
+    //   - token de sequência: ignora qualquer resposta que não seja mais a mais recente pedida;
+    //   - validação de identidade: só aplica a resposta se `resposta.usuario_id` ainda corresponder
+    //     ao valor ATUAL do <select> (segunda barreira, independente do token);
+    //   - retry automático (1x) em falha de rede/parse;
+    //   - falha persistente NUNCA restaura o contexto anterior — bloqueia explicitamente e avisa.
     let solicitanteContextoSequencia = 0;
     const carregarContextoDoSolicitante = (usuarioId) => {
       const sequenciaDestaChamada = ++solicitanteContextoSequencia;
@@ -1279,7 +1269,9 @@ if (typeof module !== 'undefined' && module.exports) {
           })
           .then((data) => {
             if (sequenciaDestaChamada !== solicitanteContextoSequencia) return;
-            if (!data || !data.ok) throw new Error('resposta-invalida');
+            if (!data || !data.ok || !data.contexto) throw new Error('resposta-invalida');
+            const selecaoAtual = solicitanteSelect ? String(solicitanteSelect.value || '') : '';
+            if (selecaoAtual && String(data.contexto.usuario_id) !== selecaoAtual) return;
             aplicarContexto(data.contexto);
           })
           .catch(() => {
@@ -1298,6 +1290,9 @@ if (typeof module !== 'undefined' && module.exports) {
     if (solicitanteSelect) {
       solicitanteSelect.addEventListener('change', () => {
         const usuarioId = solicitanteSelect.value;
+        // Bloqueia campos dependentes IMEDIATAMENTE — nunca deixa Cargo/Setor do solicitante
+        // anterior visível enquanto a busca do novo estiver em andamento.
+        aplicarContexto(contextoVazio);
         if (!usuarioId) return;
         carregarContextoDoSolicitante(usuarioId);
       });
@@ -1318,54 +1313,24 @@ if (typeof module !== 'undefined' && module.exports) {
       }
     });
 
-    // Correção "contexto inicial incorreto" (2026-09-14): o servidor embute `contexto` para o
-    // `solicitante_usuario_id` do GET inicial, mas o navegador pode restaurar/preencher o
-    // <select> com um valor DIFERENTE sem disparar 'change'. Nunca renderizar Cargo/Setores do
-    // contexto embutido sob um nome diferente — se o valor real do <select> divergir, o valor do
-    // <select> prevalece como identidade visual e o contexto correspondente é carregado antes de
-    // qualquer renderização de Cargo/Setor, reaproveitando a mesma função robusta da troca manual
-    // (token de sequência + retry + bloqueio em falha persistente). Reaproveitada também em toda
-    // `pageshow` (recarga normal e bfcache — ver comentário abaixo) — nunca lógica duplicada.
-    const sincronizarContextoComSolicitanteSelecionado = () => {
-      // Lê SEMPRE o valor atual no momento da chamada — nunca um valor capturado antes — porque o
-      // objetivo é detectar uma troca silenciosa feita pelo navegador depois de uma checagem
-      // anterior já ter passado.
-      const selectUsuarioId = solicitanteSelect ? solicitanteSelect.value : '';
-      const contextoUsuarioId = contexto.usuario_id;
-      const resincronizar = !!(solicitanteSelect && deveResincronizarContextoDoSolicitante(selectUsuarioId, contextoUsuarioId));
-      // Diagnóstico temporário (2026-09-14) — sem dados pessoais, só os dois ids e a decisão.
-      // Remover após confirmar em produção que a verificação tardia está capturando a divergência.
-      console.log('[SolicitacaoVaga] sincronizacao do solicitante', { selectUsuarioId, contextoUsuarioId, resincronizar });
-      if (resincronizar) {
-        carregarContextoDoSolicitante(selectUsuarioId);
-        return;
-      }
+    if (solicitanteSelect && solicitanteSelect.value) {
+      // Nova Solicitação com Solicitante escolhível (Admin/RH/supervisor master): o carregamento
+      // inicial SEMPRE busca o contexto do usuário atualmente selecionado no <select> — nunca
+      // assume que o `solicitante_contexto` embutido no payload já corresponde a ele. Uma
+      // requisição inicial é aceitável e preferível a manter duas fontes de estado concorrentes.
+      aplicarContexto(contextoVazio);
+      carregarContextoDoSolicitante(solicitanteSelect.value);
+    } else {
+      // Sem <select> de Solicitante (usuário comum, autosserviço): ator e solicitante são sempre
+      // o mesmo, sem ambiguidade de identidade — e o endpoint é bloqueado (403) para quem não
+      // pode escolher outro solicitante. O contexto embutido é a única fonte possível aqui.
       renderSetorOptions(setorValueInicial);
       updateGestorOptions();
       updateMachineRequirement();
-    };
-
-    sincronizarContextoComSolicitanteSelecionado();
+    }
     updateTipoVaga();
     updateOrcamento();
     updateMotivoSaida();
-
-    // `pageshow` dispara em TODA carga de página (não só bfcache) e sempre depois de `load` —
-    // mais tarde que `DOMContentLoaded`. Mantido como camada adicional (evidência de produção
-    // 2026-09-14 mostrou que sozinho não bastou, mas não custa nada mantê-lo — é idempotente).
-    window.addEventListener('pageshow', () => {
-      sincronizarContextoComSolicitanteSelecionado();
-    });
-
-    // Verificação tardia determinística (2026-09-14): nem `DOMContentLoaded` nem `pageshow`
-    // capturaram, em produção, a restauração do <select> feita pelo navegador — ela pode ocorrer
-    // depois de ambos. Uma única macrotask adicional (controlada pela própria aplicação, não por
-    // um evento do navegador cujo timing real se mostrou não confiável) garante mais uma checagem
-    // — sempre lendo o valor ATUAL do <select> nesse momento. Idempotente: se já estiver
-    // sincronizado (por 'change', pageshow ou execução anterior desta mesma função), não gera
-    // requisição nova. Deliberadamente uma única chamada — sem polling, sem intervalo, sem
-    // MutationObserver.
-    window.setTimeout(sincronizarContextoComSolicitanteSelecionado, 0);
   };
 
   const initMovimentacaoPessoalForm = () => {

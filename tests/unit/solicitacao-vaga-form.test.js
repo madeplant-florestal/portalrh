@@ -225,6 +225,24 @@ assert.equal(
 // a mecânica de fetch/DOM não é unit-testável em isolamento (mesma convenção já adotada para o
 // restante da inicialização do formulário).
 
+// Restauração TARDIA (evidência de produção, 2026-09-14): o navegador pode restaurar o <select>
+// DEPOIS que a checagem de DOMContentLoaded já rodou e considerou tudo sincronizado — a mesma
+// função pura precisa detectar a divergência numa SEGUNDA checagem (a que roda em `pageshow`,
+// sempre depois de `load`), mesmo tendo passado limpo na primeira.
+// T0/T1: select e contexto nascem iguais (1) -> primeira checagem (DOMContentLoaded) não reage.
+assert.equal(
+  deveResincronizarContextoDoSolicitante('1', 1),
+  false,
+  'restauração tardia — T0/T1: select=1 e contexto=1 (ainda sincronizados) -> primeira checagem não reage'
+);
+// T2: o navegador troca o <select> silenciosamente para 76, sem 'change' -> segunda checagem
+// (pageshow) precisa detectar a divergência e mandar carregar o contexto 76 (nunca manter o 1).
+assert.equal(
+  deveResincronizarContextoDoSolicitante('76', 1),
+  true,
+  'restauração tardia — T2: navegador troca o select para 76 em silêncio -> segunda checagem detecta e carrega 76'
+);
+
 // ---------------------------------------------------------------------------
 // Regressão travada (correção de direção 2026-09-14): a versão anterior (Etapa 2 / hotfix
 // 2026-09-11) tratava Cargo como catálogo GLOBAL independente do Setor. Essa regra foi revertida

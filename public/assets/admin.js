@@ -1324,8 +1324,8 @@ if (typeof module !== 'undefined' && module.exports) {
     // contexto embutido sob um nome diferente — se o valor real do <select> divergir, o valor do
     // <select> prevalece como identidade visual e o contexto correspondente é carregado antes de
     // qualquer renderização de Cargo/Setor, reaproveitando a mesma função robusta da troca manual
-    // (token de sequência + retry + bloqueio em falha persistente). Reaproveitada também em
-    // `pageshow` (bfcache) — nunca lógica duplicada.
+    // (token de sequência + retry + bloqueio em falha persistente). Reaproveitada também em toda
+    // `pageshow` (recarga normal e bfcache — ver comentário abaixo) — nunca lógica duplicada.
     const sincronizarContextoComSolicitanteSelecionado = () => {
       if (solicitanteSelect && deveResincronizarContextoDoSolicitante(solicitanteSelect.value, contexto.usuario_id)) {
         carregarContextoDoSolicitante(solicitanteSelect.value);
@@ -1341,12 +1341,17 @@ if (typeof module !== 'undefined' && module.exports) {
     updateOrcamento();
     updateMotivoSaida();
 
-    // Retorno via histórico/back-forward cache: a página (inclusive este estado JS) pode voltar
-    // congelada de antes de uma navegação — garante de novo select===contexto, nunca lógica nova.
-    window.addEventListener('pageshow', (event) => {
-      if (event.persisted) {
-        sincronizarContextoComSolicitanteSelecionado();
-      }
+    // Timing comprovado em produção (2026-09-14, DevTools com cache desativado): o navegador pode
+    // restaurar o valor do <select> DEPOIS do `DOMContentLoaded` (quando a checagem acima roda),
+    // sem disparar 'change' — a checagem em `DOMContentLoaded` via `defer` pode rodar cedo demais
+    // e ver select===contexto momentos antes de o navegador sobrescrever o <select> em silêncio.
+    // `pageshow` dispara em TODA carga de página (não só bfcache) e sempre depois de `load` —
+    // estritamente mais tarde que `DOMContentLoaded` — dando ao navegador tempo de concluir
+    // qualquer restauração de formulário antes de checarmos de novo. Sem guarda de
+    // `event.persisted` de propósito: precisa disparar em toda `pageshow` (recarga normal
+    // incluída), não só no retorno via bfcache.
+    window.addEventListener('pageshow', () => {
+      sincronizarContextoComSolicitanteSelecionado();
     });
   };
 

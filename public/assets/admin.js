@@ -46,6 +46,18 @@ const resolveCargosComFallback = (cargosPorSetor, setorId, podeFallback, cargosF
   return { cargos: [], usaFallback: false };
 };
 
+// Correção "contexto inicial incorreto" (2026-09-14, validado em produção com cache desativado):
+// o navegador pode restaurar/preencher o <select> de Solicitante com um valor diferente do
+// `contexto.usuario_id` embutido pelo servidor (restauração de estado de formulário, autofill,
+// back-forward cache) SEM disparar 'change' — a aplicação nunca pode assumir que os dois sempre
+// coincidem na inicialização. Decide apenas SE é preciso buscar de novo; quem busca é sempre
+// carregarContextoDoSolicitante(), nunca um 'change' artificial.
+const deveResincronizarContextoDoSolicitante = (valorSelectAtual, usuarioIdContexto) => {
+  const valor = String(valorSelectAtual || '');
+  if (valor === '') return false;
+  return valor !== String(usuarioIdContexto ?? '');
+};
+
 const validateCollaboratorImportFile = (file) => {
   const fileName = String(file?.name || '').trim();
   if (!fileName) {
@@ -133,6 +145,7 @@ if (typeof module !== 'undefined' && module.exports) {
     resolveCentrosCustoParaSetor,
     resolveCargosParaSetor,
     resolveCargosComFallback,
+    deveResincronizarContextoDoSolicitante,
     validateCollaboratorImportFile,
     summarizeCollaboratorImportResult,
   };
@@ -1305,12 +1318,36 @@ if (typeof module !== 'undefined' && module.exports) {
       }
     });
 
-    renderSetorOptions(setorValueInicial);
-    updateGestorOptions();
-    updateMachineRequirement();
+    // Correção "contexto inicial incorreto" (2026-09-14): o servidor embute `contexto` para o
+    // `solicitante_usuario_id` do GET inicial, mas o navegador pode restaurar/preencher o
+    // <select> com um valor DIFERENTE sem disparar 'change'. Nunca renderizar Cargo/Setores do
+    // contexto embutido sob um nome diferente — se o valor real do <select> divergir, o valor do
+    // <select> prevalece como identidade visual e o contexto correspondente é carregado antes de
+    // qualquer renderização de Cargo/Setor, reaproveitando a mesma função robusta da troca manual
+    // (token de sequência + retry + bloqueio em falha persistente). Reaproveitada também em
+    // `pageshow` (bfcache) — nunca lógica duplicada.
+    const sincronizarContextoComSolicitanteSelecionado = () => {
+      if (solicitanteSelect && deveResincronizarContextoDoSolicitante(solicitanteSelect.value, contexto.usuario_id)) {
+        carregarContextoDoSolicitante(solicitanteSelect.value);
+        return;
+      }
+      renderSetorOptions(setorValueInicial);
+      updateGestorOptions();
+      updateMachineRequirement();
+    };
+
+    sincronizarContextoComSolicitanteSelecionado();
     updateTipoVaga();
     updateOrcamento();
     updateMotivoSaida();
+
+    // Retorno via histórico/back-forward cache: a página (inclusive este estado JS) pode voltar
+    // congelada de antes de uma navegação — garante de novo select===contexto, nunca lógica nova.
+    window.addEventListener('pageshow', (event) => {
+      if (event.persisted) {
+        sincronizarContextoComSolicitanteSelecionado();
+      }
+    });
   };
 
   const initMovimentacaoPessoalForm = () => {

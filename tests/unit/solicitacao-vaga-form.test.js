@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const adminJsModule = require('../../public/assets/admin.js');
-const { resolveSolicitanteSetorState, resolveCentrosCustoParaSetor, resolveCargosParaSetor, resolveCargosComFallback } = adminJsModule;
+const { resolveSolicitanteSetorState, resolveCentrosCustoParaSetor, resolveCargosParaSetor, resolveCargosComFallback, deveResincronizarContextoDoSolicitante } = adminJsModule;
 
 // Sprint Solicitação de Vaga — matriz oficial Cargo x Setor (espelho técnico do METADADOS,
 // `cargo_setores_metadados`): Setor selecionado -> só os Cargos oficialmente vinculados àquele
@@ -170,6 +170,60 @@ assert.deepEqual(
   { cargos: cargosPorSetor['4'], usaFallback: false },
   'troca de Setor (2): Setor com matriz -> matriz prevalece, cargo anterior (fallback) não vaza'
 );
+
+// ---------------------------------------------------------------------------
+// Correção "contexto inicial incorreto" (2026-09-14, validado em produção com cache desativado):
+// reproduz literalmente o caso real — payload/contexto inicial de um usuário, <select> de
+// Solicitante restaurado pelo navegador em OUTRO valor, sem 'change'. `deveResincronizarContexto
+// DoSolicitante` decide SE é preciso buscar de novo (Cenários 1-3 da investigação); quem busca
+// continua sendo sempre `carregarContextoDoSolicitante()` — token de sequência, retry e bloqueio
+// em falha persistente são preservados sem alteração nesta correção.
+
+// Cenário 1 — payload/contexto = Fabio (usuario_id=1), <select> restaurado em Fabiane ("76"):
+// precisa detectar a divergência e recarregar o usuário 76.
+assert.equal(
+  deveResincronizarContextoDoSolicitante('76', 1),
+  true,
+  'Cenário 1: payload Fabio (usuario_id=1) + select restaurado em Fabiane (76) -> precisa resincronizar'
+);
+
+// Cenário 2 — payload/contexto = Fabiane (76), <select> também em Fabiane (76): já sincronizados,
+// nenhuma requisição adicional.
+assert.equal(
+  deveResincronizarContextoDoSolicitante('76', '76'),
+  false,
+  'Cenário 2: payload Fabiane (76) + select Fabiane (76) -> já sincronizados, sem requisição adicional'
+);
+
+// Cenário 3 — payload/contexto = Fabiane (76), <select> restaurado em Fabio ("1"): precisa
+// detectar a divergência e recarregar o usuário 1 (o valor do <select> sempre prevalece).
+assert.equal(
+  deveResincronizarContextoDoSolicitante('1', 76),
+  true,
+  'Cenário 3: payload Fabiane (76) + select restaurado em Fabio (1) -> precisa resincronizar para carregar o Fabio'
+);
+
+// <select> sem valor (Setor bloqueado / nenhum candidato elegível) -> nada para resincronizar.
+assert.equal(
+  deveResincronizarContextoDoSolicitante('', 1),
+  false,
+  '<select> sem valor -> nada para resincronizar'
+);
+
+// Caso normal (sem restauração do navegador): payload e select já concordam desde o início.
+assert.equal(
+  deveResincronizarContextoDoSolicitante('1', 1),
+  false,
+  'payload e select já concordam desde o início -> sem requisição adicional'
+);
+
+// Cenários 4-6 (troca rápida com token de sequência, retry em falha, bloqueio em falha
+// persistente) dependem de fetch/DOM reais e continuam cobertos pela MESMA implementação de
+// `carregarContextoDoSolicitante()` já testada/validada em produção nesta sprint — esta correção
+// não a modifica, apenas passa a chamá-la também na inicialização (via
+// `deveResincronizarContextoDoSolicitante`), não só no evento 'change'. Sem jsdom neste projeto,
+// a mecânica de fetch/DOM não é unit-testável em isolamento (mesma convenção já adotada para o
+// restante da inicialização do formulário).
 
 // ---------------------------------------------------------------------------
 // Regressão travada (correção de direção 2026-09-14): a versão anterior (Etapa 2 / hotfix

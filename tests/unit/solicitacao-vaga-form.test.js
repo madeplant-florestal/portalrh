@@ -226,21 +226,30 @@ assert.equal(
 // restante da inicialização do formulário).
 
 // Restauração TARDIA (evidência de produção, 2026-09-14): o navegador pode restaurar o <select>
-// DEPOIS que a checagem de DOMContentLoaded já rodou e considerou tudo sincronizado — a mesma
-// função pura precisa detectar a divergência numa SEGUNDA checagem (a que roda em `pageshow`,
-// sempre depois de `load`), mesmo tendo passado limpo na primeira.
-// T0/T1: select e contexto nascem iguais (1) -> primeira checagem (DOMContentLoaded) não reage.
+// DEPOIS que a checagem de DOMContentLoaded (e até de `pageshow`) já rodou e considerou tudo
+// sincronizado — a mesma função pura, chamada de novo por uma verificação tardia controlada pela
+// aplicação (`setTimeout(...,0)`), precisa detectar a divergência mesmo tendo passado limpo antes.
+// T0: select e contexto nascem iguais (1) -> primeira checagem (DOMContentLoaded) não reage.
 assert.equal(
   deveResincronizarContextoDoSolicitante('1', 1),
   false,
-  'restauração tardia — T0/T1: select=1 e contexto=1 (ainda sincronizados) -> primeira checagem não reage'
+  'restauração tardia — T0: select=1 e contexto=1 (ainda sincronizados) -> primeira checagem não reage'
 );
-// T2: o navegador troca o <select> silenciosamente para 76, sem 'change' -> segunda checagem
-// (pageshow) precisa detectar a divergência e mandar carregar o contexto 76 (nunca manter o 1).
+// T1: o navegador troca o <select> silenciosamente para 76, sem 'change'. T2: a verificação
+// tardia lê o valor ATUAL do select (nunca um valor capturado em T0) e detecta a divergência ->
+// manda carregar o contexto 76 (nunca mantém o 1).
 assert.equal(
   deveResincronizarContextoDoSolicitante('76', 1),
   true,
-  'restauração tardia — T2: navegador troca o select para 76 em silêncio -> segunda checagem detecta e carrega 76'
+  'restauração tardia — T1/T2: navegador troca o select para 76 em silêncio -> verificação tardia detecta e carrega 76'
+);
+// T3: depois da resposta de carregarContextoDoSolicitante(76), contexto.usuario_id passa a 76 —
+// uma NOVA verificação tardia (ex.: se o setTimeout rodasse de novo, ou uma chamada por 'change'
+// concorrente já resolvida) não deve gerar segunda requisição: select e contexto já concordam.
+assert.equal(
+  deveResincronizarContextoDoSolicitante('76', 76),
+  false,
+  'restauração tardia — T3: depois do contexto atualizado para 76, nova verificação não gera requisição duplicada'
 );
 
 // ---------------------------------------------------------------------------

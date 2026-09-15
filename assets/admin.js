@@ -1327,8 +1327,17 @@ if (typeof module !== 'undefined' && module.exports) {
     // (token de sequência + retry + bloqueio em falha persistente). Reaproveitada também em toda
     // `pageshow` (recarga normal e bfcache — ver comentário abaixo) — nunca lógica duplicada.
     const sincronizarContextoComSolicitanteSelecionado = () => {
-      if (solicitanteSelect && deveResincronizarContextoDoSolicitante(solicitanteSelect.value, contexto.usuario_id)) {
-        carregarContextoDoSolicitante(solicitanteSelect.value);
+      // Lê SEMPRE o valor atual no momento da chamada — nunca um valor capturado antes — porque o
+      // objetivo é detectar uma troca silenciosa feita pelo navegador depois de uma checagem
+      // anterior já ter passado.
+      const selectUsuarioId = solicitanteSelect ? solicitanteSelect.value : '';
+      const contextoUsuarioId = contexto.usuario_id;
+      const resincronizar = !!(solicitanteSelect && deveResincronizarContextoDoSolicitante(selectUsuarioId, contextoUsuarioId));
+      // Diagnóstico temporário (2026-09-14) — sem dados pessoais, só os dois ids e a decisão.
+      // Remover após confirmar em produção que a verificação tardia está capturando a divergência.
+      console.log('[SolicitacaoVaga] sincronizacao do solicitante', { selectUsuarioId, contextoUsuarioId, resincronizar });
+      if (resincronizar) {
+        carregarContextoDoSolicitante(selectUsuarioId);
         return;
       }
       renderSetorOptions(setorValueInicial);
@@ -1341,18 +1350,22 @@ if (typeof module !== 'undefined' && module.exports) {
     updateOrcamento();
     updateMotivoSaida();
 
-    // Timing comprovado em produção (2026-09-14, DevTools com cache desativado): o navegador pode
-    // restaurar o valor do <select> DEPOIS do `DOMContentLoaded` (quando a checagem acima roda),
-    // sem disparar 'change' — a checagem em `DOMContentLoaded` via `defer` pode rodar cedo demais
-    // e ver select===contexto momentos antes de o navegador sobrescrever o <select> em silêncio.
     // `pageshow` dispara em TODA carga de página (não só bfcache) e sempre depois de `load` —
-    // estritamente mais tarde que `DOMContentLoaded` — dando ao navegador tempo de concluir
-    // qualquer restauração de formulário antes de checarmos de novo. Sem guarda de
-    // `event.persisted` de propósito: precisa disparar em toda `pageshow` (recarga normal
-    // incluída), não só no retorno via bfcache.
+    // mais tarde que `DOMContentLoaded`. Mantido como camada adicional (evidência de produção
+    // 2026-09-14 mostrou que sozinho não bastou, mas não custa nada mantê-lo — é idempotente).
     window.addEventListener('pageshow', () => {
       sincronizarContextoComSolicitanteSelecionado();
     });
+
+    // Verificação tardia determinística (2026-09-14): nem `DOMContentLoaded` nem `pageshow`
+    // capturaram, em produção, a restauração do <select> feita pelo navegador — ela pode ocorrer
+    // depois de ambos. Uma única macrotask adicional (controlada pela própria aplicação, não por
+    // um evento do navegador cujo timing real se mostrou não confiável) garante mais uma checagem
+    // — sempre lendo o valor ATUAL do <select> nesse momento. Idempotente: se já estiver
+    // sincronizado (por 'change', pageshow ou execução anterior desta mesma função), não gera
+    // requisição nova. Deliberadamente uma única chamada — sem polling, sem intervalo, sem
+    // MutationObserver.
+    window.setTimeout(sincronizarContextoComSolicitanteSelecionado, 0);
   };
 
   const initMovimentacaoPessoalForm = () => {

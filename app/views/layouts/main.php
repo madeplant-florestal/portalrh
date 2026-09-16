@@ -10,7 +10,7 @@
   <meta name="robots" content="noindex,nofollow">
   <?php endif; ?>
   <title>RH Madeplant</title>
-  <link rel="stylesheet" href="<?= $base ?>/assets/tailwind.css?v=<?= urlencode(Config::app()['version'] ?? '') ?>">
+  <link rel="stylesheet" href="<?= $base ?>/assets/tailwind.css?v=<?= urlencode(Config::assetVersion('assets/tailwind.css')) ?>">
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     body { font-family: 'Montserrat', system-ui, -apple-system, sans-serif; }
@@ -38,9 +38,9 @@
       }
     }
   </style>
-  <script src="<?= $base ?>/assets/phone-utils.js?v=<?= urlencode(Config::app()['version'] ?? '') ?>" defer></script>
-  <script src="<?= $base ?>/assets/share-utils.js?v=<?= urlencode(Config::app()['version'] ?? '') ?>" defer></script>
-  <script src="<?= $base ?>/assets/public.js?v=<?= urlencode(Config::app()['version'] ?? '') ?>" defer></script>
+  <script src="<?= $base ?>/assets/phone-utils.js?v=<?= urlencode(Config::assetVersion('assets/phone-utils.js')) ?>" defer></script>
+  <script src="<?= $base ?>/assets/share-utils.js?v=<?= urlencode(Config::assetVersion('assets/share-utils.js')) ?>" defer></script>
+  <script src="<?= $base ?>/assets/public.js?v=<?= urlencode(Config::assetVersion('assets/public.js')) ?>" defer></script>
 </head>
 <body class="min-h-screen bg-gray-50">
   <?php 

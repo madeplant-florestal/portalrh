@@ -7,7 +7,7 @@
   <meta name="app-base" content="<?= Security::e($base ?? '') ?>">
   <meta name="csrf-token" content="<?= Security::e(Security::csrfToken()) ?>">
   <title>RH Madeplant - Painel</title>
-  <link rel="stylesheet" href="<?= $base ?>/assets/tailwind.css?v=<?= urlencode(Config::app()['version'] ?? '') ?>">
+  <link rel="stylesheet" href="<?= $base ?>/assets/tailwind.css?v=<?= urlencode(Config::assetVersion('assets/tailwind.css')) ?>">
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     body { font-family: 'Montserrat', system-ui, -apple-system, sans-serif; }
@@ -70,8 +70,8 @@
       }
     }
   </style>
-  <script src="<?= $base ?>/assets/phone-utils.js?v=<?= urlencode(Config::app()['version'] ?? '') ?>" defer></script>
-  <script src="<?= $base ?>/assets/admin.js?v=<?= urlencode(Config::app()['version'] ?? '') ?>" defer></script>
+  <script src="<?= $base ?>/assets/phone-utils.js?v=<?= urlencode(Config::assetVersion('assets/phone-utils.js')) ?>" defer></script>
+  <script src="<?= $base ?>/assets/admin.js?v=<?= urlencode(Config::assetVersion('assets/admin.js')) ?>" defer></script>
 </head>
 <body class="app-shell min-h-screen bg-gray-50" data-admin-shell="1">
   <header class="app-header" data-admin-header="1">

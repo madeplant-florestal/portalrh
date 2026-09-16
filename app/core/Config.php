@@ -117,6 +117,30 @@ class Config
         ];
     }
 
+    /**
+     * Cache-busting por ARQUIVO para assets estáticos servidos por `/assets/*` (tailwind.css,
+     * admin.js, phone-utils.js, etc.) — a URL só muda quando o arquivo físico publicado muda,
+     * nunca por deploy/request. Substitui o antigo esquema de `?v=<versão fixa de config/build.php>`
+     * (esse stamp era gerado uma vez e nunca regenerado a cada deploy, então navegadores/CDN
+     * continuavam servindo uma cópia em cache mesmo depois do arquivo mudar — ver
+     * docs/claude/riscos-conhecidos.md, "cache-busting congelado").
+     *
+     * Lê `filemtime()` do arquivo REALMENTE servido em `public/assets/...` (a cópia publicada —
+     * `assets/...` na raiz é só a fonte editada pelo desenvolvedor). Se o arquivo não existir por
+     * algum motivo, cai de volta no stamp de `app()['version']` em vez de quebrar a página.
+     */
+    public static function assetVersion(string $relativePath): string
+    {
+        $file = BASE_PATH . '/public/' . ltrim($relativePath, '/');
+        if (is_file($file)) {
+            $mtime = filemtime($file);
+            if ($mtime !== false) {
+                return (string)$mtime;
+            }
+        }
+        return (string)(self::app()['version'] ?? '1');
+    }
+
     private static function detectEnv(string $configured): string
     {
         $configured = strtolower(trim($configured));

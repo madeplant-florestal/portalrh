@@ -283,6 +283,31 @@ NOVO não é mais um booleano por módulo em `usuarios` — é a permissão indi
   (pode executar ESTA ação NESTE registro AGORA?) — ambas continuam necessárias; a permissão nunca
   substitui uma validação de estado já existente (ex.: `SolicitacaoVaga::moveKanbanStage()`).
 
+### Mensagens do processo seletivo
+
+Desde a Sprint "Módulo de Mensagens" (migration `2026-09-16-mensagens.sql`), o **Portal é a fonte
+oficial** dos textos das mensagens automáticas de Recrutamento e Seleção — o n8n não deve manter
+cópia própria do texto.
+
+- `mensagens` (`app/models/Mensagem.php`): um template por linha, identificado por um **código
+  técnico estável** (`codigo`, ex.: `convocacao_entrevista_rh`) — nunca gerado a partir do título,
+  nunca editável pela interface depois de criado (só título/descrição/conteúdo/ativo mudam).
+- Placeholders são texto legível `[Variável]` dentro do próprio `conteudo` (ex.: `[Nome]`,
+  `[Data]`) — não há coluna de banco por variável. `app/services/MensagemService.php` detecta
+  (`detectarPlaceholders()`) e renderiza (`renderizar()`/`renderizarConteudo()`) por substituição
+  de string pura — nunca `eval`, nunca template engine. Placeholder sem valor é reportado em
+  `placeholders_pendentes` e permanece visível no texto — nunca é apagado silenciosamente.
+  `renderizar()` só resolve mensagens `ativo = 1`.
+- Permissões (`mensagens.visualizar/criar/editar`) seguem o mecanismo `Authorization` acima —
+  mesmo catálogo `permissoes`, mesmo bypass central de Admin, sem atalho por `role`/`is_supervisor`.
+- Adicionar um template novo: `INSERT IGNORE INTO mensagens (codigo, titulo, conteudo, ...)` num
+  seed de migration (mesmo padrão de `2026-09-16-mensagens-seed.sql`) — nunca via schema novo,
+  mesmo que o template use um placeholder inédito.
+- Fluxo futuro (não implementado nesta sprint): `Portal resolve o template → Portal envia a
+  mensagem já renderizada → n8n → Evolution API → WhatsApp`. O Kanban de Recrutamento ainda não
+  dispara nada automaticamente a partir de `mensagens` — essa integração fica para uma sprint curta
+  separada (coleta dos dados no modal de movimentação → `MensagemService::renderizar()` → webhook).
+
 ## Auditoria
 
 - `AuditLog::log($actorUserId, $targetUserId, $action, $details, $ip)` grava em

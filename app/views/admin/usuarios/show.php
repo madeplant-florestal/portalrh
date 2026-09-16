@@ -291,6 +291,7 @@ $isAdminAtor = !empty($isAdminAtor);
     $rotuloModulo = [
       'solicitacao_vaga' => 'Solicitação de Vagas',
       'kanban_vagas' => 'Kanban de Vagas',
+      'mensagens' => 'Mensagens',
     ];
   ?>
   <section class="mt-8 rounded-xl border border-gray-200 bg-gray-50 p-5">

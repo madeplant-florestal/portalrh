@@ -46,6 +46,42 @@ const resolveCargosComFallback = (cargosPorSetor, setorId, podeFallback, cargosF
   return { cargos: [], usaFallback: false };
 };
 
+// Módulo de Mensagens do processo seletivo — placeholders são texto legível `[Nome]` dentro do
+// próprio conteúdo do template (nenhuma coluna de banco por variável, ver
+// app/services/MensagemService.php, cuja lógica de detecção/substituição é espelhada aqui só para
+// a pré-visualização client-side; a fonte de verdade da renderização operacional é o backend).
+const detectarPlaceholdersMensagem = (conteudo) => {
+  const texto = String(conteudo || '');
+  const regex = /\[([^[\]]+)\]/g;
+  const vistos = new Set();
+  const ordenados = [];
+  let match = regex.exec(texto);
+  while (match !== null) {
+    const nome = match[1].trim();
+    if (nome && !vistos.has(nome)) {
+      vistos.add(nome);
+      ordenados.push(nome);
+    }
+    match = regex.exec(texto);
+  }
+  return ordenados;
+};
+
+const renderizarPreviaMensagem = (conteudo, valores = {}) => {
+  const placeholders = detectarPlaceholdersMensagem(conteudo);
+  let texto = String(conteudo || '');
+  const pendentes = [];
+  placeholders.forEach((nome) => {
+    const valor = valores[nome];
+    if (valor === undefined || valor === null || String(valor).trim() === '') {
+      pendentes.push(nome);
+      return;
+    }
+    texto = texto.split(`[${nome}]`).join(String(valor));
+  });
+  return { texto, placeholders, pendentes };
+};
+
 const validateCollaboratorImportFile = (file) => {
   const fileName = String(file?.name || '').trim();
   if (!fileName) {
@@ -135,6 +171,8 @@ if (typeof module !== 'undefined' && module.exports) {
     resolveCargosComFallback,
     validateCollaboratorImportFile,
     summarizeCollaboratorImportResult,
+    detectarPlaceholdersMensagem,
+    renderizarPreviaMensagem,
   };
 }
 
@@ -1514,6 +1552,77 @@ if (typeof module !== 'undefined' && module.exports) {
     updateCalculatedValues();
   };
 
+  // Módulo de Mensagens — detecta `[Placeholder]` no textarea em tempo real e oferece uma
+  // pré-visualização opcional (valores de exemplo digitados aqui não são enviados/salvos; o
+  // <textarea> `conteudo` continua sendo o único dado submetido no POST).
+  const initMensagemForm = () => {
+    const textarea = document.querySelector('[data-mensagem-conteudo="1"]');
+    if (!textarea) return;
+
+    const placeholdersEl = document.querySelector('[data-mensagem-placeholders="1"]');
+    const previewWrap = document.querySelector('[data-mensagem-preview-wrap="1"]');
+    const previewInputsEl = document.querySelector('[data-mensagem-preview-inputs="1"]');
+    const previewTextEl = document.querySelector('[data-mensagem-preview-text="1"]');
+    const valoresExemplo = {};
+
+    const atualizarPreviewTexto = () => {
+      if (!previewTextEl) return;
+      previewTextEl.textContent = renderizarPreviaMensagem(textarea.value, valoresExemplo).texto;
+    };
+
+    const atualizar = () => {
+      const placeholders = detectarPlaceholdersMensagem(textarea.value);
+
+      if (placeholdersEl) {
+        placeholdersEl.innerHTML = '';
+        if (placeholders.length === 0) {
+          const vazio = document.createElement('span');
+          vazio.className = 'text-sm text-gray-400';
+          vazio.textContent = 'Nenhum placeholder identificado.';
+          placeholdersEl.appendChild(vazio);
+        } else {
+          placeholders.forEach((nome) => {
+            const badge = document.createElement('span');
+            badge.className = 'inline-flex items-center rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs font-medium text-green-700';
+            badge.textContent = `[${nome}]`;
+            placeholdersEl.appendChild(badge);
+          });
+        }
+      }
+
+      if (previewWrap) {
+        previewWrap.hidden = placeholders.length === 0;
+      }
+
+      if (previewInputsEl) {
+        previewInputsEl.innerHTML = '';
+        placeholders.forEach((nome) => {
+          const label = document.createElement('label');
+          label.className = 'block text-xs text-gray-600';
+          const span = document.createElement('span');
+          span.textContent = nome;
+          const input = document.createElement('input');
+          input.type = 'text';
+          input.className = 'mt-1 w-full rounded border px-2 py-1 text-sm';
+          input.placeholder = `Valor de exemplo para ${nome}`;
+          input.value = valoresExemplo[nome] || '';
+          input.addEventListener('input', () => {
+            valoresExemplo[nome] = input.value;
+            atualizarPreviewTexto();
+          });
+          label.appendChild(span);
+          label.appendChild(input);
+          previewInputsEl.appendChild(label);
+        });
+      }
+
+      atualizarPreviewTexto();
+    };
+
+    textarea.addEventListener('input', atualizar);
+    atualizar();
+  };
+
   document.addEventListener('DOMContentLoaded', () => {
     initAutoSubmit();
     initConfirmations();
@@ -1522,6 +1631,7 @@ if (typeof module !== 'undefined' && module.exports) {
     initCollaboratorImport();
     initSolicitacaoVagaForm();
     initMovimentacaoPessoalForm();
+    initMensagemForm();
     initAiAnalyze();
     initKanban();
     initSolicitacaoVagaKanban();

@@ -164,6 +164,12 @@ try {
     $router->post('/admin/beneficios/editar/{id}', [AdminBeneficiosController::class, 'update']);
     $router->post('/admin/beneficios/excluir/{id}', [AdminBeneficiosController::class, 'delete']);
 
+    $router->get('/admin/mensagens', [AdminMensagensController::class, 'index']);
+    $router->get('/admin/mensagens/novo', [AdminMensagensController::class, 'create']);
+    $router->post('/admin/mensagens/novo', [AdminMensagensController::class, 'store']);
+    $router->get('/admin/mensagens/editar/{id}', [AdminMensagensController::class, 'edit']);
+    $router->post('/admin/mensagens/editar/{id}', [AdminMensagensController::class, 'update']);
+
     $router->get('/admin/usuarios', [AdminUsuariosController::class, 'index']);
     $router->get('/admin/usuarios/novo', [AdminUsuariosController::class, 'create']);
     $router->get('/admin/usuarios/metadados/buscar', [AdminUsuariosController::class, 'buscarMetadados']);

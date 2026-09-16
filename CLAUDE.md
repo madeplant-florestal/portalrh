@@ -107,14 +107,33 @@ Exceção: perguntas informativas ou continuação de um plano já aprovado não
 Detalhamento por tipo de tarefa (feature nova, refatoração, bugfix) e checklists completos
 (revisão, banco, deploy, segurança, performance, testes) estão na documentação sob demanda abaixo.
 
-## 6. Serena
+## 6. Serena — navegação e análise de código (Serena First)
 
-Para investigação do código, **priorize a Serena** e suas ferramentas semânticas (símbolos,
-referências, implementações, diagnósticos, edição). Evite leitura integral de arquivos, buscas
-textuais amplas ou varredura do repositório quando a Serena puder responder semanticamente. Use
-ferramentas tradicionais (grep/leitura) quando a análise for de conteúdo textual não indexável por
-símbolos (SQL bruto, configuração, texto de views/documentação) ou a Serena genuinamente não
-cobrir o que é preciso.
+Neste projeto, o Serena/LSP é a ferramenta **prioritária** para navegação e compreensão de código
+estruturado. Antes de usar `Glob`, `Grep` ou leitura integral de arquivo para investigar código,
+priorize as ferramentas semânticas do Serena para: localizar classes, métodos, funções e
+propriedades; compreender estrutura de símbolos; localizar referências e chamadores; identificar
+dependências entre símbolos; localizar implementações relacionadas.
+
+**Fluxo preferencial:** Serena → símbolo relevante → referências necessárias → leitura só do
+trecho/arquivo realmente necessário → implementação → validação do alterado.
+**Evitar:** Glob → grep amplo → leitura de vários arquivos completos → nova busca → releitura dos
+mesmos arquivos.
+
+Regras:
+1. Não leia um arquivo PHP inteiro quando o Serena conseguir localizar diretamente o símbolo.
+2. Não faça busca textual global para achar referências de método/classe quando o Serena resolver
+   semanticamente.
+3. Depois de localizar o símbolo, leia só o contexto necessário para implementar com segurança.
+4. Não releia arquivos já compreendidos na mesma tarefa sem necessidade concreta.
+5. `Read`/`Grep`/`Glob` continuam a ferramenta certa para: SQL e migrations, templates/views,
+   documentação, configuração, JS sem cobertura semântica suficiente, CSS, textos, investigação de
+   strings literais, e qualquer arquivo que o Serena/LSP não interprete adequadamente.
+6. Se o Serena não resolver uma investigação, use imediatamente a ferramenta tradicional
+   apropriada — não insista inutilmente.
+7. Para alterações localizadas: inspecione só o necessário, implemente e valide o alterado.
+8. Não faça auditoria ampla do projeto antes de cada tarefa.
+9. Não carregue documentação extensa sem relação direta com a tarefa atual.
 
 ## 7. Documentação sob demanda
 

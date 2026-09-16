@@ -12,6 +12,11 @@ class AdminSolicitacoesVagaKanbanController extends Controller
     public function index(): void
     {
         Auth::requireRole(['admin', 'rh', 'viewer']);
+        // Capacidade (Sprint "Permissões Individuais") — não confundir com escopo de registro.
+        // Acessar o Kanban exige `kanban_vagas.visualizar` de verdade: bypass central só para
+        // Admin (dentro de Authorization); `role = rh` e `is_supervisor = 1` NÃO dão acesso
+        // automático — precisam da permissão individual concedida na Tela de Usuários.
+        Authorization::requirePermissao('kanban_vagas.visualizar');
 
         $userId = (int)($_SESSION['user_id'] ?? 0);
         $role = Auth::role();
@@ -40,10 +45,11 @@ class AdminSolicitacoesVagaKanbanController extends Controller
         $dependencies = SolicitacaoVaga::formDependencies($userId);
 
         // Flags só de representação (draggable/link) — o backend (move()/show()) já valida a
-        // permissão de novo, independentemente do que a tela desenha aqui.
-        $podeEditarRh = SolicitacaoVaga::userCanEditRh($role, $isSupervisor);
-        $podeMovimentar = $podeEditarRh || Authorization::temPermissao('kanban_vagas.movimentar');
-        $podeAbrirDetalhes = $podeEditarRh || Authorization::temPermissao('kanban_vagas.detalhes');
+        // permissão de novo, independentemente do que a tela desenha aqui. Sem bypass de
+        // role/is_supervisor: só a permissão individual (Admin já entra pelo bypass central de
+        // Authorization).
+        $podeMovimentar = Authorization::usuarioTemPermissao($userId, 'kanban_vagas.movimentar');
+        $podeAbrirDetalhes = Authorization::usuarioTemPermissao($userId, 'kanban_vagas.detalhes');
 
         $this->view->render('admin/solicitacoes_vaga/kanban', [
             'kanban' => $kanban,
@@ -87,10 +93,11 @@ class AdminSolicitacoesVagaKanbanController extends Controller
 
         // Permissão individual (Sprint "Permissões Individuais"): mover card do Kanban exige
         // `kanban_vagas.movimentar` — ter acesso ao Kanban (visualizar/detalhes) NÃO implica poder
-        // movimentar. Admin/RH/supervisor mantêm o acesso que já tinham hoje (nenhuma regressão);
-        // demais usuários (ex.: Gestor) só passam daqui com a permissão concedida explicitamente.
-        SchemaManager::ensure();
-        if (!SolicitacaoVaga::userCanEditRh($role, $isSupervisor) && !Authorization::usuarioTemPermissao($userId, 'kanban_vagas.movimentar')) {
+        // movimentar. SEM bypass de `role`/`is_supervisor` aqui: só o bypass central de Admin
+        // (dentro de Authorization) e a permissão individual. RH/supervisor que hoje movimentavam
+        // cards pela role antiga precisam receber `kanban_vagas.movimentar` explicitamente na Tela
+        // de Usuários para continuar podendo.
+        if (!Authorization::usuarioTemPermissao($userId, 'kanban_vagas.movimentar')) {
             http_response_code(403);
             echo json_encode(['error' => 'Seu usuário não tem permissão para movimentar cards do Kanban.']);
             return;

@@ -14,8 +14,10 @@ class AdminSolicitacoesVagaController extends Controller
             // Botões são só representação — as rotas continuam protegidas no backend
             // independentemente destas flags (canCreate() / Kanban::move()).
             'podeCriarSolicitacao' => $this->canCreate($userId, $role, $isSupervisor),
-            'vePodeKanban' => SolicitacaoVaga::userCanEditRh($role, $isSupervisor)
-                || Authorization::temPermissao('kanban_vagas.visualizar'),
+            // Sem bypass de role/is_supervisor: acessar o Kanban agora exige a permissão de
+            // verdade (Admin já entra pelo bypass central de Authorization) — o botão não pode
+            // aparecer para quem o backend vai rejeitar em seguida.
+            'vePodeKanban' => Authorization::temPermissao('kanban_vagas.visualizar'),
         ], 'layouts/admin');
     }
 

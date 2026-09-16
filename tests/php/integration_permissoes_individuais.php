@@ -17,7 +17,14 @@
  *   - compatibilidade: usuário com `pode_solicitar_vaga = 1` recebe `solicitacao_vaga.criar` ao
  *     rodar o seed idempotente (2026-09-15-permissoes-individuais-seed.sql);
  *   - `Authorization::sincronizar()` (Tela de Usuários): adiciona, remove, nunca duplica, rejeita
- *     ID inexistente/inativo.
+ *     ID inexistente/inativo;
+ *   - CAPACIDADE (acessar o módulo Kanban) é independente de ESCOPO DE REGISTRO (quais
+ *     solicitações um usuário pode ver): `AdminSolicitacoesVagaKanbanController::index()` exige de
+ *     verdade `kanban_vagas.visualizar` no backend (não só esconde o botão/menu) — Admin pelo
+ *     bypass central, RH/Supervisor só com a permissão concedida individualmente; `move()` não tem
+ *     mais bypass de `role`/`is_supervisor`, só Admin (central) + `kanban_vagas.movimentar`. Um
+ *     aprovador sem nenhuma permissão de Kanban continua acessando a Solicitação específica que
+ *     precisa aprovar (via `findAccessible()`, inalterado), mas não o Kanban.
  */
 
 require __DIR__ . '/../../app/core/bootstrap.php';
@@ -37,7 +44,15 @@ $check = static function (bool $cond, string $msg) use (&$falhas): void {
 
 $mk = 'ZZPERM_' . substr(md5(uniqid('', true)), 0, 8);
 $emailMk = strtolower($mk) . '@teste.local';
-$criados = ['usuarios' => [], 'permissoes' => []];
+$criados = ['usuarios' => [], 'permissoes' => [], 'solicitacoes' => [], 'setores' => [], 'cargos' => []];
+
+$limparSolicitacao = static function (int $id) use ($pdo): void {
+    foreach (['solicitacao_vaga_aprovacoes', 'solicitacao_vaga_beneficios', 'solicitacao_vaga_competencias', 'solicitacao_vaga_auditoria'] as $t) {
+        $pdo->prepare("DELETE FROM {$t} WHERE solicitacao_id = ?")->execute([$id]);
+    }
+    $pdo->prepare('DELETE FROM vagas WHERE solicitacao_vaga_id = ?')->execute([$id]);
+    $pdo->prepare('DELETE FROM solicitacoes_vaga WHERE id = ?')->execute([$id]);
+};
 
 $senha = password_hash('irrelevante', PASSWORD_BCRYPT);
 $mkUser = static function (string $sufixo, string $role) use ($emailMk, $senha, &$criados): int {
@@ -52,6 +67,24 @@ $invocarCanCreate = static function (int $userId, ?string $role, bool $isSupervi
     $method = new ReflectionMethod(AdminSolicitacoesVagaController::class, 'canCreate');
     $method->setAccessible(true);
     return $method->invoke($controller, $userId, $role, $isSupervisor);
+};
+
+// `index()`/`move()` chamam http_response_code()+exit()/return em caso de bloqueio — não dá para
+// invocá-los diretamente num script de teste sem simular uma requisição HTTP completa (não há
+// harness disso neste projeto). Em vez de inventar um, seguimos o mesmo padrão já usado em
+// integration_solicitacao_vaga_contexto_organizacional.php: lê o CÓDIGO-FONTE do método via
+// reflexão e confirma que a checagem certa está lá — combinado com testar a condição em si
+// (Authorization::usuarioTemPermissao) isoladamente, cobre a mesma garantia sem exit() no meio do teste.
+$corpoDoMetodo = static function (string $classe, string $metodo): string {
+    $reflexao = new ReflectionMethod($classe, $metodo);
+    $arquivo = new SplFileObject($reflexao->getFileName());
+    $arquivo->seek($reflexao->getStartLine() - 1);
+    $corpo = '';
+    while ($arquivo->key() < $reflexao->getEndLine()) {
+        $corpo .= $arquivo->current();
+        $arquivo->next();
+    }
+    return $corpo;
 };
 
 // Aplica um arquivo .sql simples (sem procedures/triggers) removendo primeiro as linhas de
@@ -130,10 +163,73 @@ try {
     $check(Authorization::usuarioTemPermissao($gestorId, 'solicitacao_vaga.editar') === false, 'Gestor NÃO tem solicitacao_vaga.editar (não concedida)');
     $check(Authorization::usuarioTemPermissao($gestorId, 'solicitacao_vaga.cancelar') === false, 'Gestor NÃO tem solicitacao_vaga.cancelar (não concedida)');
 
-    // Reproduz a decisão REAL de AdminSolicitacoesVagaKanbanController::move(): bloqueia
-    // movimentação para quem não é admin/rh/supervisor e não tem kanban_vagas.movimentar.
-    $podeMoverGestor = SolicitacaoVaga::userCanEditRh('viewer', false) || Authorization::usuarioTemPermissao($gestorId, 'kanban_vagas.movimentar');
+    // Reproduz a decisão REAL de AdminSolicitacoesVagaKanbanController::move() — hoje SEM bypass
+    // de role/is_supervisor, só Authorization (Admin entra pelo bypass central dela).
+    $podeMoverGestor = Authorization::usuarioTemPermissao($gestorId, 'kanban_vagas.movimentar');
     $check($podeMoverGestor === false, 'Tentativa direta de mover card pelo Gestor é rejeitada pela mesma checagem usada em move() (backend, não só UI)');
+
+    // ---- 4b. Kanban: kanban_vagas.visualizar é gate REAL de index(), não só cosmético ----------
+    // Fonte-única do bypass de Admin é `Authorization` — nem role='rh' nem is_supervisor=1 dão
+    // acesso ao módulo Kanban por si só; RH/Supervisor sem a permissão são bloqueados, com ela
+    // acessam. Confirma também que `index()`/`move()` chamam a checagem certa no CÓDIGO (não só
+    // que a condição em si retorna o valor certo isoladamente).
+    $corpoIndex = $corpoDoMetodo(AdminSolicitacoesVagaKanbanController::class, 'index');
+    $check(str_contains($corpoIndex, "Authorization::requirePermissao('kanban_vagas.visualizar')"), "index() do Kanban chama Authorization::requirePermissao('kanban_vagas.visualizar') no código-fonte");
+
+    $corpoMove = $corpoDoMetodo(AdminSolicitacoesVagaKanbanController::class, 'move');
+    $check(str_contains($corpoMove, "kanban_vagas.movimentar"), 'move() do Kanban checa kanban_vagas.movimentar no código-fonte');
+    $check(!str_contains($corpoMove, 'userCanEditRh'), 'move() do Kanban NÃO tem mais bypass de role/is_supervisor (userCanEditRh) para movimentar — só Authorization');
+
+    $check(Authorization::usuarioTemPermissao($adminId, 'kanban_vagas.visualizar') === true, '(1) Admin acessa o Kanban pelo bypass central');
+
+    $check(Authorization::usuarioTemPermissao($rhId, 'kanban_vagas.visualizar') === false, '(2) RH sem kanban_vagas.visualizar é bloqueado (mesma checagem de index())');
+    $syncRh = Authorization::sincronizar($rhId, [(int)array_search('kanban_vagas.visualizar', $idsPermissao, true)]);
+    $check(($syncRh['ok'] ?? false) === true, 'concede kanban_vagas.visualizar ao RH para o próximo teste');
+    $check(Authorization::usuarioTemPermissao($rhId, 'kanban_vagas.visualizar') === true, '(3) RH COM kanban_vagas.visualizar concedida individualmente acessa o Kanban');
+    // Prova que role e permissão não se confundem: mesmo com a permissão de Kanban, RH continua
+    // sem kanban_vagas.movimentar (não foi essa a permissão concedida).
+    $check(Authorization::usuarioTemPermissao($rhId, 'kanban_vagas.movimentar') === false, 'RH com só kanban_vagas.visualizar continua sem poder movimentar (permissões são independentes)');
+
+    $check(Authorization::usuarioTemPermissao($supervisorId, 'kanban_vagas.visualizar') === false, '(4) Supervisor sem kanban_vagas.visualizar é bloqueado');
+
+    $check(Authorization::usuarioTemPermissao($gestorId, 'kanban_vagas.visualizar') === true, '(5) Gestor com kanban_vagas.visualizar concedida acessa o Kanban');
+    $check(Authorization::usuarioTemPermissao($gestorId, 'kanban_vagas.detalhes') === true, '(6) Gestor com kanban_vagas.detalhes consegue abrir os detalhes permitidos');
+    $check(Authorization::usuarioTemPermissao($gestorId, 'kanban_vagas.movimentar') === false, '(7) Gestor sem kanban_vagas.movimentar não movimenta (repetido aqui no contexto do gate de índex)');
+
+    // (9) Aprovador sem NENHUMA permissão de Kanban continua acessando a Solicitação específica
+    // que precisa aprovar (findAccessible — inalterado), mas não o módulo Kanban. Fixtures próprias
+    // de Setor/Cargo oficiais + vínculo na matriz (mesmo padrão de integration_usuario_vaga_acesso.php),
+    // não dependem de dado pré-existente em DEV.
+    $aprovadorSemKanbanId = $mkUser('aprovsemkb', 'viewer');
+    $pdo->prepare('INSERT INTO setores (codigo_setor, nome, slug, ativo, origem_metadados) VALUES (?, ?, ?, 1, ?)')
+        ->execute(['ZZS' . substr($mk, -5), 'SETOR ' . $mk, 'setor-' . strtolower($mk), 'RHMADEPLANT']);
+    $setorTeste = (int)$pdo->lastInsertId();
+    $criados['setores'][] = $setorTeste;
+
+    $pdo->prepare('INSERT INTO cargos (codigo_cargo, nome, slug, ativo, origem_metadados) VALUES (?, ?, ?, 1, ?)')
+        ->execute(['ZZC' . substr($mk, -5), 'CARGO ' . $mk, 'cargo-' . strtolower($mk), 'RHMADEPLANT']);
+    $cargoTeste = (int)$pdo->lastInsertId();
+    $criados['cargos'][] = $cargoTeste;
+
+    $pdo->prepare('INSERT INTO cargo_setores_metadados (cargo_id, setor_id, origem_metadados, sincronizado_em) VALUES (?, ?, ?, NOW())')
+        ->execute([$cargoTeste, $setorTeste, 'RHCONTRATOS']);
+
+    User::setVagaAccess($gestorId, true, $aprovadorSemKanbanId);
+    (new UsuarioContextoOrganizacionalService())->definirContextoManual($gestorId, null, $setorTeste, []);
+    $payloadTeste = [
+        'setor_id' => $setorTeste, 'quantidade_vagas' => 1, 'cargo_id' => $cargoTeste,
+        'tipo_vaga' => 'nova_posicao', 'tipo_contratacao' => 'pj', 'salario_previsto' => 'R$ 5.000,00',
+        'previsto_orcamento' => '1', 'jornada_trabalho' => '44h semanais',
+        'escolaridade_minima' => 'medio', 'nivel_responsabilidade' => 'operacional', 'urgencia' => 'media',
+        'data_prevista_inicio' => date('d/m/Y', strtotime('+30 days')),
+        'entregas_esperadas' => str_repeat('Entrega detalhada da funcao com pelo menos cem caracteres para passar na validacao de conteudo. ', 2),
+    ];
+    $idSolicitacaoTeste = SolicitacaoVaga::create($payloadTeste, $gestorId, '127.0.0.1');
+    $criados['solicitacoes'][] = $idSolicitacaoTeste;
+
+    $check(Authorization::usuarioTemPermissao($aprovadorSemKanbanId, 'kanban_vagas.visualizar') === false, '(9a) aprovador sem permissão nenhuma de Kanban não acessa o módulo Kanban');
+    $acessoAprovador = SolicitacaoVaga::findAccessible($idSolicitacaoTeste, $aprovadorSemKanbanId, 'viewer', false);
+    $check(is_array($acessoAprovador), '(9b) mas continua acessando, via findAccessible(), a Solicitação específica que precisa aprovar');
 
     // ---- 5. Usuário sem NENHUMA permissão -------------------------------------------------------
     $semPermId = $mkUser('semperm', 'viewer');
@@ -202,8 +298,22 @@ try {
     foreach ($criados['permissoes'] as $permId) {
         $pdo->prepare('UPDATE permissoes SET ativo = 1 WHERE id = ?')->execute([(int)$permId]);
     }
+    foreach ($criados['solicitacoes'] as $id) {
+        $limparSolicitacao((int)$id);
+    }
+    foreach ($criados['cargos'] as $id) {
+        $pdo->prepare('DELETE FROM cargo_setores_metadados WHERE cargo_id = ?')->execute([(int)$id]);
+    }
+    // Usuários ANTES de Setores: `usuario_setores` tem FK RESTRICT em setor_id e só é removida em
+    // cascata quando o próprio usuário é apagado (mesmo padrão de integration_usuario_vaga_acesso.php).
     foreach ($criados['usuarios'] as $id) {
         $pdo->prepare('DELETE FROM usuarios WHERE id = ?')->execute([(int)$id]);
+    }
+    foreach ($criados['cargos'] as $id) {
+        $pdo->prepare('DELETE FROM cargos WHERE id = ?')->execute([(int)$id]);
+    }
+    foreach ($criados['setores'] as $id) {
+        $pdo->prepare('DELETE FROM setores WHERE id = ?')->execute([(int)$id]);
     }
 }
 

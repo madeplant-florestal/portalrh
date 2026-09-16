@@ -40,6 +40,12 @@ if (!empty($colaborador['data_demissao']) && preg_match('/^\d{2}\/\d{2}\/\d{4}$/
   <?php if (!empty($error)): ?>
     <div class="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"><?= Security::e($error) ?></div>
   <?php endif; ?>
+  <?php if (!empty($flashError)): ?>
+    <div class="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"><?= Security::e($flashError) ?></div>
+  <?php endif; ?>
+  <?php if (!empty($flashSuccess)): ?>
+    <div class="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700"><?= Security::e($flashSuccess) ?></div>
+  <?php endif; ?>
 
   <div class="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
     <div class="text-lg font-semibold text-slate-900"><?= Security::e($colaborador['nome']) ?></div>
@@ -104,4 +110,64 @@ if (!empty($colaborador['data_demissao']) && preg_match('/^\d{2}\/\d{2}\/\d{4}$/
       <a href="<?= $base ?>/admin/colaboradores" class="text-sm font-medium text-ctpblue hover:text-ctgreen">Cancelar</a>
     </div>
   </form>
+
+  <?php if (!empty($podeVerIntegracao)): ?>
+  <?php
+    $integracaoStatus = strtolower((string)($colaborador['integracao_status'] ?? 'pendente'));
+    $integracaoData = '';
+    if (!empty($colaborador['integracao_data'])) {
+        $integracaoData = DateHelper::formatBrazilianDate((string)$colaborador['integracao_data']);
+    }
+  ?>
+  <div class="mt-8 rounded-xl border border-gray-200 bg-gray-50 p-5">
+    <h3 class="text-lg font-semibold text-ctpblue">Integração</h3>
+    <p class="mt-1 text-sm text-gray-500">Controle operacional do onboarding — informação do Portal, não faz parte do METADADOS.</p>
+
+    <?php if (!empty($podeEditarIntegracao)): ?>
+    <form action="<?= $base ?>/admin/colaboradores/<?= (int)$colaborador['id'] ?>/integracao" method="post" class="mt-4 space-y-4" data-integracao-form="1">
+      <input type="hidden" name="csrf" value="<?= Security::e($csrf) ?>">
+      <div>
+        <label class="block text-sm font-medium text-gray-700">Status</label>
+        <select name="integracao_status" class="mt-1 w-full rounded border px-3 py-2 text-sm" data-integracao-status="1">
+          <option value="pendente" <?= $integracaoStatus === 'pendente' ? 'selected' : '' ?>>Pendente</option>
+          <option value="realizada" <?= $integracaoStatus === 'realizada' ? 'selected' : '' ?>>Realizada</option>
+        </select>
+      </div>
+      <div data-integracao-campos="1" class="grid gap-4 md:grid-cols-2">
+        <div>
+          <label class="block text-sm font-medium text-gray-700">Data da integração</label>
+          <input type="text" name="integracao_data" value="<?= Security::e($integracaoData) ?>" class="mt-1 w-full rounded border px-3 py-2 text-sm" placeholder="DD/MM/AAAA" data-mask-date="1">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700">Responsável</label>
+          <select name="integracao_responsavel_usuario_id" class="mt-1 w-full rounded border px-3 py-2 text-sm">
+            <option value="">— Selecione —</option>
+            <?php foreach (($usuariosOptions ?? []) as $u): ?>
+              <option value="<?= (int)$u['id'] ?>" <?= (int)($colaborador['integracao_responsavel_usuario_id'] ?? 0) === (int)$u['id'] ? 'selected' : '' ?>><?= Security::e($u['nome']) ?></option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+      </div>
+      <p class="text-xs text-gray-500">Ao marcar "Realizada", data e responsável são obrigatórios. A data não precisa ser a de hoje — registre a data em que a integração realmente ocorreu.</p>
+      <button type="submit" class="rounded-lg bg-ctgreen px-4 py-3 text-sm font-medium text-white hover:bg-ctdark">Salvar integração</button>
+    </form>
+    <script>
+      (() => {
+        const select = document.querySelector('[data-integracao-status="1"]');
+        const campos = document.querySelector('[data-integracao-campos="1"]');
+        if (!select || !campos) return;
+        const sync = () => { campos.classList.toggle('hidden', select.value !== 'realizada'); };
+        select.addEventListener('change', sync);
+        sync();
+      })();
+    </script>
+    <?php else: ?>
+      <div class="mt-4 grid gap-3 sm:grid-cols-3 text-sm">
+        <div><span class="text-gray-500">Status:</span> <span class="font-medium text-gray-900"><?= $integracaoStatus === 'realizada' ? 'Realizada' : 'Pendente' ?></span></div>
+        <div><span class="text-gray-500">Data:</span> <span class="font-medium text-gray-900"><?= Security::e($integracaoData ?: '-') ?></span></div>
+        <div><span class="text-gray-500">Responsável:</span> <span class="font-medium text-gray-900"><?= Security::e((string)($colaborador['integracao_responsavel_nome'] ?? '-')) ?></span></div>
+      </div>
+    <?php endif; ?>
+  </div>
+  <?php endif; ?>
 </div>

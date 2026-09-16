@@ -121,11 +121,13 @@ class Colaborador
         }
 
         $stmt = Database::conn()->prepare(
-            'SELECT c.*, cg.nome AS cargo_nome, e.nome AS empresa_nome, s.nome AS setor_nome
+            'SELECT c.*, cg.nome AS cargo_nome, e.nome AS empresa_nome, s.nome AS setor_nome,
+                    ur.nome AS integracao_responsavel_nome
              FROM colaboradores c
              INNER JOIN cargos cg ON cg.id = c.cargo_id
              LEFT JOIN empresas e ON e.id = c.empresa_id
              LEFT JOIN setores s ON s.id = c.setor_id
+             LEFT JOIN usuarios ur ON ur.id = c.integracao_responsavel_usuario_id
              WHERE c.id = ?
              LIMIT 1'
         );
@@ -300,7 +302,71 @@ class Colaborador
         if (class_exists('MovimentacaoPessoal')) {
             MovimentacaoPessoal::ensureSchema();
         }
+        self::ensureIntegracaoColumns();
         self::$schemaEnsured = true;
+    }
+
+    /**
+     * Integração (onboarding) do colaborador — Sprint "Integração do Colaborador" (migration
+     * 2026-09-16-integracao-colaborador.sql). Informação OPERACIONAL do Portal, nunca escrita no
+     * METADADOS nem em `colaboradores_metadados` — `colaboradores` já é a extensão operacional
+     * local usada para dados equivalentes (salário, admissão, demissão etc., ver
+     * `updateRhData()`). Rede de segurança para ambientes onde a migration ainda não rodou (não
+     * há runner de migrations neste projeto — ver CLAUDE.md §3.7).
+     */
+    private static function ensureIntegracaoColumns(): void
+    {
+        $pdo = Database::conn();
+        $existe = $pdo->query(
+            "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE()"
+            . " AND TABLE_NAME = 'colaboradores' AND COLUMN_NAME = 'integracao_status'"
+        )->fetchColumn();
+        if ((int)$existe > 0) {
+            return;
+        }
+        $pdo->exec("ALTER TABLE colaboradores ADD COLUMN integracao_status ENUM('pendente', 'realizada') NOT NULL DEFAULT 'pendente' AFTER motivo_rescisao");
+        $pdo->exec('ALTER TABLE colaboradores ADD COLUMN integracao_data DATE NULL AFTER integracao_status');
+        $pdo->exec('ALTER TABLE colaboradores ADD COLUMN integracao_responsavel_usuario_id INT NULL AFTER integracao_data');
+    }
+
+    /**
+     * Pendente: data/responsável podem ficar vazios. Realizada: EXIGE os dois — não presume a
+     * data atual (o RH pode estar registrando uma integração ocorrida anteriormente); o backend
+     * aceita a data informada, a interface só sugere a data atual como conveniência.
+     *
+     * @return array{ok:bool,error?:string}
+     */
+    public static function updateIntegracao(int $id, array $data): array
+    {
+        self::ensureRhSchema();
+        if (!self::find($id)) {
+            return ['ok' => false, 'error' => 'Colaborador não encontrado.'];
+        }
+
+        $status = strtolower(trim((string)($data['integracao_status'] ?? 'pendente')));
+        if (!in_array($status, ['pendente', 'realizada'], true)) {
+            return ['ok' => false, 'error' => 'Status de integração inválido.'];
+        }
+
+        $dataIntegracao = null;
+        $responsavelId = null;
+        if ($status === 'realizada') {
+            $dataIntegracao = DateHelper::toDatabaseDate($data['integracao_data'] ?? '');
+            if ($dataIntegracao === null) {
+                return ['ok' => false, 'error' => 'Informe a data da integração no formato DD/MM/AAAA.'];
+            }
+            $responsavelId = ctype_digit((string)($data['integracao_responsavel_usuario_id'] ?? '')) ? (int)$data['integracao_responsavel_usuario_id'] : 0;
+            if ($responsavelId <= 0 || !User::findById($responsavelId)) {
+                return ['ok' => false, 'error' => 'Selecione um responsável válido pela integração.'];
+            }
+        }
+
+        $stmt = Database::conn()->prepare(
+            'UPDATE colaboradores SET integracao_status = ?, integracao_data = ?, integracao_responsavel_usuario_id = ? WHERE id = ?'
+        );
+        $stmt->execute([$status, $dataIntegracao, $responsavelId, $id]);
+
+        return ['ok' => true];
     }
 
     private static function parseMoney($value): ?float

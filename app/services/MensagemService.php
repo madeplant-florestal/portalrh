@@ -60,6 +60,10 @@ class MensagemService
             'nome' => 'Telefone para contato',
             'descricao' => 'Telefone de contato relacionado ao atendimento ou agendamento.',
         ],
+        'Link da Pesquisa' => [
+            'nome' => 'Link da pesquisa de experiência',
+            'descricao' => 'Link individual para o candidato responder à pesquisa de experiência do processo seletivo.',
+        ],
     ];
 
     /**

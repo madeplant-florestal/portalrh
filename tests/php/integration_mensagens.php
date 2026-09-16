@@ -126,7 +126,10 @@ try {
 
     // ---- Catálogo oficial de variáveis (ajuste "Catálogo e inserção assistida") -------------------
     $catalogoVariaveis = MensagemService::catalogoVariaveis();
-    $check(count($catalogoVariaveis) === 9, 'catálogo contém exatamente as 9 variáveis iniciais');
+    // >= 9 (não ===): o catálogo é extensível por design (ver §4/§17 da sprint de Mensagens) — a
+    // contagem EXATA por versão do catálogo é responsabilidade do teste da sprint que a introduziu
+    // (ex.: "Link da Pesquisa", 10ª variável, é travada em integration_pesquisa_experiencia.php).
+    $check(count($catalogoVariaveis) >= 9, 'catálogo contém ao menos as 9 variáveis iniciais desta sprint');
     $chavesEsperadas = ['Nome', 'Data', 'Horário', 'Responsável', 'Nome do Gestor', 'Local ou Link', 'Nome da Clínica', 'Endereço', 'Telefone'];
     $chavesCatalogo = array_column($catalogoVariaveis, 'chave');
     foreach ($chavesEsperadas as $chave) {

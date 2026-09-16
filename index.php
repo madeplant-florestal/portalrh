@@ -28,6 +28,11 @@ try {
     $router->get('/vaga/{id}', [HomeController::class, 'vaga']);
     $router->post('/candidatar/{id}', [HomeController::class, 'candidatar']);
 
+    // Pesquisa de Experiência do Candidato — página pública, sem login, acessada por token
+    // aleatório (nunca sequencial/derivado de CPF). Ver PesquisaExperienciaController.
+    $router->get('/experiencia/{token}', [PesquisaExperienciaController::class, 'show']);
+    $router->post('/experiencia/{token}', [PesquisaExperienciaController::class, 'store']);
+
     $router->post('/api/check-cpf', [ApiController::class, 'checkCpf']);
     $router->post('/api/pipeline/move', [AdminPipelineController::class, 'move']);
     $router->post('/api/solicitacoes-vaga/move', [AdminSolicitacoesVagaKanbanController::class, 'move']);
@@ -62,6 +67,9 @@ try {
     // usuário de login e define os papéis do Portal (é líder / pode solicitar vaga / líder imediato).
     $router->get('/admin/colaboradores/{id}/acesso', [AdminColaboradoresController::class, 'acesso']);
     $router->post('/admin/colaboradores/{id}/acesso', [AdminColaboradoresController::class, 'updateAcesso']);
+    // Integração (onboarding) do colaborador — Sprint "Integração do Colaborador". Dado
+    // operacional do Portal, nunca escrito no METADADOS.
+    $router->post('/admin/colaboradores/{id}/integracao', [AdminColaboradoresController::class, 'updateIntegracao']);
 
     $router->get('/admin/avaliacoes', [AdminAvaliacoesController::class, 'index']);
     $router->get('/admin/avaliacoes/novo', [AdminAvaliacoesController::class, 'create']);

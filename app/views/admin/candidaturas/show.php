@@ -207,4 +207,95 @@
     </div>
   </div>
   <?php endif; ?>
+
+  <!-- Histórico de Comunicação (Sprint "Histórico de Comunicação") -->
+  <?php if (!empty($podeVerComunicacoes)): ?>
+  <div class="mt-8 rounded bg-gray-50 p-6">
+    <h3 class="text-lg font-semibold text-ctpblue mb-4">Histórico de Comunicação</h3>
+    <?php if (empty($comunicacoes)): ?>
+      <p class="text-sm text-gray-500">Nenhuma comunicação registrada para este candidato ainda.</p>
+    <?php else: ?>
+    <div class="flow-root">
+      <ul role="list" class="-mb-8">
+        <?php foreach ($comunicacoes as $idx => $com): ?>
+        <?php
+          $situacaoLabel = ['preparada' => 'Preparada', 'enviada' => 'Enviada', 'erro' => 'Erro no envio'][$com['situacao']] ?? $com['situacao'];
+          $entregue = !empty($com['entregue_em']);
+          $visualizada = !empty($com['visualizada_em']);
+          $detalheId = 'comunicacao-conteudo-' . (int)$com['id'];
+        ?>
+        <li>
+          <div class="relative pb-8">
+            <?php if ($idx !== count($comunicacoes) - 1): ?>
+              <span class="absolute top-4 left-4 -ml-px h-full w-0.5 bg-gray-200" aria-hidden="true"></span>
+            <?php endif; ?>
+            <div class="relative flex gap-3">
+              <div>
+                <span class="h-8 w-8 rounded-full bg-ctlight flex items-center justify-center ring-8 ring-white">
+                  <svg class="h-5 w-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                </span>
+              </div>
+              <div class="flex min-w-0 flex-1 flex-col gap-2 pt-1.5 sm:flex-row sm:justify-between sm:gap-4">
+                <div class="min-w-0 flex-1">
+                  <p class="text-sm text-gray-700">
+                    <span class="font-medium text-gray-900"><?= Security::e((string)($com['mensagem_titulo'] ?? 'Comunicação')) ?></span>
+                    — <?= Security::e($situacaoLabel) ?>
+                    <?= $entregue ? ' · Entregue' : '' ?>
+                    <?= $visualizada ? ' · Visualizada' : '' ?>
+                  </p>
+                  <p class="mt-1 text-xs text-gray-500">
+                    Canal: <?= Security::e($com['canal']) ?>
+                    · Responsável: <?= Security::e($com['usuario_nome'] ?? ($com['origem'] === 'AUTOMATICA' ? 'Automático' : '-')) ?>
+                  </p>
+                  <button type="button" class="mt-2 text-xs font-medium text-ctpblue hover:text-ctgreen" data-toggle-target="<?= Security::e($detalheId) ?>" onclick="document.getElementById('<?= Security::e($detalheId) ?>').classList.toggle('hidden')">Ver conteúdo completo</button>
+                  <div id="<?= Security::e($detalheId) ?>" class="mt-2 hidden rounded border border-gray-200 bg-white p-3 text-sm text-gray-800 whitespace-pre-wrap"><?= Security::e((string)$com['conteudo']) ?></div>
+                  <?php if ($com['situacao'] === 'erro' && !empty($com['erro_mensagem'])): ?>
+                    <p class="mt-1 text-xs text-red-600">Erro: <?= Security::e((string)$com['erro_mensagem']) ?></p>
+                  <?php endif; ?>
+                </div>
+                <div class="text-sm text-gray-500 sm:text-right">
+                  <time datetime="<?= $com['created_at'] ?>"><?= date('d/m/Y H:i', strtotime((string)$com['created_at'])) ?></time>
+                </div>
+              </div>
+            </div>
+          </div>
+        </li>
+        <?php endforeach; ?>
+      </ul>
+    </div>
+    <?php endif; ?>
+  </div>
+  <?php endif; ?>
+
+  <!-- Pesquisa de Experiência (Sprint "Experiência do Candidato") -->
+  <?php if (!empty($podeVerPesquisa)): ?>
+  <div class="mt-8 rounded bg-gray-50 p-6">
+    <h3 class="text-lg font-semibold text-ctpblue mb-4">Pesquisa de Experiência</h3>
+    <?php if (empty($pesquisa) || empty($pesquisa['respondida_em'])): ?>
+      <p class="text-sm text-gray-500">O candidato ainda não respondeu à pesquisa de experiência.</p>
+    <?php else: ?>
+      <p class="text-xs text-gray-500 mb-3">Respondida em <?= date('d/m/Y H:i', strtotime((string)$pesquisa['respondida_em'])) ?></p>
+      <div class="grid gap-3 sm:grid-cols-3">
+        <div class="rounded border border-gray-200 bg-white p-3">
+          <div class="text-xs text-gray-500">Clareza das informações</div>
+          <div class="mt-1 text-lg font-semibold text-ctpblue"><?= (int)$pesquisa['nota_clareza'] ?> / 5</div>
+        </div>
+        <div class="rounded border border-gray-200 bg-white p-3">
+          <div class="text-xs text-gray-500">Tempo de retorno</div>
+          <div class="mt-1 text-lg font-semibold text-ctpblue"><?= (int)$pesquisa['nota_tempo_retorno'] ?> / 5</div>
+        </div>
+        <div class="rounded border border-gray-200 bg-white p-3">
+          <div class="text-xs text-gray-500">Atendimento recebido</div>
+          <div class="mt-1 text-lg font-semibold text-ctpblue"><?= (int)$pesquisa['nota_atendimento'] ?> / 5</div>
+        </div>
+      </div>
+      <?php if (!empty($pesquisa['comentarios'])): ?>
+        <div class="mt-3">
+          <div class="text-xs text-gray-500">Comentários</div>
+          <div class="mt-1 rounded border border-gray-200 bg-white p-3 text-sm text-gray-800 whitespace-pre-wrap"><?= Security::e((string)$pesquisa['comentarios']) ?></div>
+        </div>
+      <?php endif; ?>
+    <?php endif; ?>
+  </div>
+  <?php endif; ?>
 </div>

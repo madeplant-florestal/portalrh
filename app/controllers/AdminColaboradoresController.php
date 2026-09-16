@@ -63,11 +63,57 @@ class AdminColaboradoresController extends Controller
             return;
         }
 
+        // Seção "Integração" (Sprint "Integração do Colaborador") é permission-gated de verdade:
+        // sem a permissão, o campo nem é passado à view — não é só esconder HTML.
+        $podeVerIntegracao = Authorization::temPermissao('integracao_colaborador.visualizar');
+        if (!$podeVerIntegracao) {
+            unset($colaborador['integracao_status'], $colaborador['integracao_data'], $colaborador['integracao_responsavel_usuario_id'], $colaborador['integracao_responsavel_nome']);
+        }
+
         $this->view->render('admin/colaboradores/rh-form', [
             'csrf' => Security::csrfToken(),
             'colaborador' => $colaborador,
             'error' => '',
+            'podeVerIntegracao' => $podeVerIntegracao,
+            'podeEditarIntegracao' => Authorization::temPermissao('integracao_colaborador.editar'),
+            'usuariosOptions' => User::candidatosAprovador(0),
+            'flashError' => Security::sanitizeString($_GET['erro'] ?? ''),
+            'flashSuccess' => Security::sanitizeString($_GET['ok'] ?? ''),
         ], 'layouts/admin');
+    }
+
+    /**
+     * Integração (onboarding) do colaborador — Sprint "Integração do Colaborador". Dado
+     * operacional do Portal, nunca escrito no METADADOS/colaboradores_metadados.
+     */
+    public function updateIntegracao(string $id): void
+    {
+        Auth::requireRole(['admin', 'rh']);
+        Authorization::requirePermissao('integracao_colaborador.editar');
+        if (!Security::csrfCheck($_POST['csrf'] ?? '')) {
+            http_response_code(400);
+            echo 'CSRF inválido';
+            return;
+        }
+
+        $colaborador = Colaborador::find((int)$id);
+        if (!$colaborador) {
+            http_response_code(404);
+            echo 'Colaborador não encontrado.';
+            return;
+        }
+
+        $payload = [
+            'integracao_status' => Security::sanitizeString($_POST['integracao_status'] ?? 'pendente'),
+            'integracao_data' => Security::sanitizeString($_POST['integracao_data'] ?? ''),
+            'integracao_responsavel_usuario_id' => Security::sanitizeString($_POST['integracao_responsavel_usuario_id'] ?? ''),
+        ];
+        $result = Colaborador::updateIntegracao((int)$id, $payload);
+        if (!($result['ok'] ?? false)) {
+            redirect('/admin/colaboradores/rh/editar/' . (int)$id . '?erro=' . urlencode((string)($result['error'] ?? 'Falha ao salvar a integração.')));
+        }
+
+        redirect('/admin/colaboradores/rh/editar/' . (int)$id . '?ok=' . urlencode('Integração do colaborador atualizada.'));
     }
 
     public function updateRh(string $id): void

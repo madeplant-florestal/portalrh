@@ -30,11 +30,25 @@ class AdminCandidaturasController extends Controller
         $historico = Candidatura::getHistorico((int)$id);
         $stages = PipelineStage::all();
         $csrf = Security::csrfToken();
+
+        // Seções novas (Sprint "Histórico de Comunicação + Experiência do Candidato") são
+        // permission-gated de verdade: sem a permissão, nem os dados são buscados — não é só a
+        // view escondendo HTML.
+        $podeVerComunicacoes = Authorization::temPermissao('comunicacoes.visualizar');
+        $comunicacoes = $podeVerComunicacoes ? Comunicacao::allByCandidatura((int)$id) : [];
+
+        $podeVerPesquisa = Authorization::temPermissao('pesquisa_experiencia.visualizar');
+        $pesquisa = $podeVerPesquisa ? PesquisaExperiencia::findByCandidatura((int)$id) : null;
+
         $this->view->render('admin/candidaturas/show', [
-            'c' => $c, 
-            'historico' => $historico, 
+            'c' => $c,
+            'historico' => $historico,
             'stages' => $stages,
-            'csrf' => $csrf
+            'csrf' => $csrf,
+            'podeVerComunicacoes' => $podeVerComunicacoes,
+            'comunicacoes' => $comunicacoes,
+            'podeVerPesquisa' => $podeVerPesquisa,
+            'pesquisa' => $pesquisa,
         ], 'layouts/admin');
     }
     

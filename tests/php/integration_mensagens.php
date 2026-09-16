@@ -10,6 +10,10 @@
  *   - os 7 templates iniciais existem com o texto fornecido preservado (emoji, multiline);
  *   - `MensagemService` detecta e renderiza placeholders `[Nome]`, reporta pendências sem
  *     silenciá-las, e só resolve mensagens ATIVAS;
+ *   - o CATÁLOGO oficial de variáveis (ajuste "Catálogo e inserção assistida") tem exatamente as
+ *     9 variáveis, e o Portal distingue placeholder RECONHECIDO (existe no catálogo) de
+ *     DESCONHECIDO (texto arbitrário entre colchetes) — nunca trata os dois como a mesma coisa;
+ *     backend rejeita mensagem ATIVA com placeholder desconhecido (nunca confia só no JS);
  *   - as 3 permissões (`mensagens.visualizar/criar/editar`) seguem o mesmo mecanismo central de
  *     `Authorization` da sprint anterior — Admin por bypass, RH sem acesso automático por role,
  *     sincronização na Tela de Usuários funcionando.
@@ -119,6 +123,81 @@ try {
     $multiplos = MensagemService::detectarPlaceholders('[Nome] tem entrevista em [Data] às [Horário] com [Responsável].');
     $check($multiplos === ['Nome', 'Data', 'Horário', 'Responsável'], 'múltiplos placeholders são detectados, na ordem de aparição, sem duplicar repetições');
     $check(MensagemService::detectarPlaceholders('Texto sem nenhum placeholder.') === [], 'texto sem placeholder retorna lista vazia');
+
+    // ---- Catálogo oficial de variáveis (ajuste "Catálogo e inserção assistida") -------------------
+    $catalogoVariaveis = MensagemService::catalogoVariaveis();
+    $check(count($catalogoVariaveis) === 9, 'catálogo contém exatamente as 9 variáveis iniciais');
+    $chavesEsperadas = ['Nome', 'Data', 'Horário', 'Responsável', 'Nome do Gestor', 'Local ou Link', 'Nome da Clínica', 'Endereço', 'Telefone'];
+    $chavesCatalogo = array_column($catalogoVariaveis, 'chave');
+    foreach ($chavesEsperadas as $chave) {
+        $check(in_array($chave, $chavesCatalogo, true), "catálogo contém a variável '{$chave}'");
+    }
+    foreach ($catalogoVariaveis as $item) {
+        $check(
+            !empty($item['placeholder']) && !empty($item['nome']) && !empty($item['descricao']),
+            "variável '{$item['chave']}' possui placeholder, nome amigável e descrição"
+        );
+        $check($item['placeholder'] === '[' . $item['chave'] . ']', "placeholder da variável '{$item['chave']}' está no formato [Chave]");
+    }
+
+    // Placeholder reconhecido vs desconhecido — nunca a mesma coisa.
+    $check(MensagemService::isPlaceholderReconhecido('Nome') === true, "'Nome' é reconhecido pelo catálogo");
+    $check(MensagemService::isPlaceholderReconhecido('Nome da Clínica') === true, "'Nome da Clínica' (com espaço/acento) é reconhecido pelo catálogo");
+    $check(MensagemService::isPlaceholderReconhecido('Local ou Link') === true, "'Local ou Link' (com espaços) é reconhecido pelo catálogo");
+    $check(MensagemService::isPlaceholderReconhecido('Primeiro Nome') === false, "'Primeiro Nome' NÃO é reconhecido — não está no catálogo");
+
+    $analise1 = MensagemService::analisarConteudo('Olá, [Nome]. Exame na [Nome da Clínica], em [Endereço].');
+    $check($analise1['reconhecidas'] === ['Nome', 'Nome da Clínica', 'Endereço'], 'analisarConteudo() reconhece múltiplas variáveis do catálogo, na ordem de aparição');
+    $check($analise1['desconhecidas'] === [], 'nenhuma variável desconhecida quando o texto só usa o catálogo');
+
+    $analise2 = MensagemService::analisarConteudo('Olá, [Primeiro Nome]. Sua vaga é [Cargo].');
+    $check($analise2['reconhecidas'] === [], '"[Primeiro Nome]"/"[Cargo]" não entram em reconhecidas');
+    $check($analise2['desconhecidas'] === ['Primeiro Nome', 'Cargo'], "'[Primeiro Nome]' e '[Cargo]' são identificados como DESCONHECIDOS, não como reconhecidos");
+
+    // Reconhecido sem valor = pendente. Desconhecido = categoria totalmente separada, nunca tratado
+    // como "só mais uma pendência".
+    $renderMisto = MensagemService::renderizarConteudo('Olá, [Nome]. Etapa: [Primeiro Nome].', ['Nome' => 'Ana']);
+    $check($renderMisto['placeholders_pendentes'] === [], "'[Nome]' tinha valor -> não fica pendente");
+    $check($renderMisto['placeholders_desconhecidos'] === ['Primeiro Nome'], "'[Primeiro Nome]' aparece em placeholders_desconhecidos, não em placeholders_pendentes");
+    $check(str_contains($renderMisto['texto'], '[Primeiro Nome]'), 'placeholder desconhecido nunca é substituído — permanece literal no texto');
+
+    // ---- Backend é a autoridade: mensagem ATIVA com placeholder desconhecido é rejeitada ---------
+    $tentativaAtiva = Mensagem::create([
+        'codigo' => $mkMk . '_ativa_invalida',
+        'titulo' => 'Teste ativo inválido',
+        'conteudo' => 'Olá, [Primeiro Nome].',
+        'ativo' => 1,
+    ]);
+    $check(($tentativaAtiva['ok'] ?? true) === false, 'Mensagem::create() REJEITA mensagem ATIVA com placeholder desconhecido');
+    $check(stripos((string)($tentativaAtiva['error'] ?? ''), 'Primeiro Nome') !== false, 'mensagem de erro identifica exatamente qual variável não é reconhecida');
+
+    // Mesmo conteúdo, mas INATIVA -> permitido (rascunho).
+    $rascunhoInativo = Mensagem::create([
+        'codigo' => $mkMk . '_rascunho',
+        'titulo' => 'Rascunho com variável desconhecida',
+        'conteudo' => 'Olá, [Primeiro Nome].',
+        'ativo' => 0,
+    ]);
+    $check(($rascunhoInativo['ok'] ?? false) === true, 'mensagem INATIVA com placeholder desconhecido é permitida como rascunho');
+    if ($rascunhoInativo['ok'] ?? false) {
+        $criados['mensagens'][] = (int)$rascunhoInativo['id'];
+    }
+
+    // update() aplica a mesma regra.
+    $tentativaUpdateAtivo = Mensagem::update($novoId, ['titulo' => 'x', 'conteudo' => 'Olá, [Cargo].', 'ativo' => 1]);
+    $check(($tentativaUpdateAtivo['ok'] ?? true) === false, 'Mensagem::update() também REJEITA ativar uma mensagem com placeholder desconhecido');
+
+    // Mensagem válida (só catálogo) continua salvando normalmente.
+    $valida = Mensagem::create([
+        'codigo' => $mkMk . '_valida',
+        'titulo' => 'Mensagem válida',
+        'conteudo' => 'Olá, [Nome]. Sua entrevista é [Data] às [Horário].',
+        'ativo' => 1,
+    ]);
+    $check(($valida['ok'] ?? false) === true, 'mensagem ATIVA usando só variáveis do catálogo salva normalmente');
+    if ($valida['ok'] ?? false) {
+        $criados['mensagens'][] = (int)$valida['id'];
+    }
 
     // ---- 6. Renderização substitui corretamente as variáveis --------------------------------------
     $render = MensagemService::renderizarConteudo('Olá, [Nome]. Sua entrevista é [Data].', ['Nome' => 'Ana', 'Data' => '20/09/2026']);

@@ -71,6 +71,11 @@ class Mensagem
         if (self::findByCodigo($codigo) !== null) {
             return ['ok' => false, 'error' => 'Já existe uma mensagem cadastrada com este código técnico.'];
         }
+        $ativo = !empty($data['ativo']);
+        $erroPlaceholders = self::erroPlaceholdersDesconhecidos($conteudo, $ativo);
+        if ($erroPlaceholders !== null) {
+            return ['ok' => false, 'error' => $erroPlaceholders];
+        }
 
         $stmt = Database::conn()->prepare(
             'INSERT INTO mensagens (codigo, titulo, descricao, conteudo, ativo) VALUES (?, ?, ?, ?, ?)'
@@ -80,7 +85,7 @@ class Mensagem
             $titulo,
             trim((string)($data['descricao'] ?? '')) !== '' ? trim((string)$data['descricao']) : null,
             $conteudo,
-            !empty($data['ativo']) ? 1 : 0,
+            $ativo ? 1 : 0,
         ]);
 
         return ['ok' => true, 'id' => (int)Database::conn()->lastInsertId()];
@@ -105,6 +110,11 @@ class Mensagem
         if (trim($conteudo) === '') {
             return ['ok' => false, 'error' => 'Informe o conteúdo da mensagem.'];
         }
+        $ativo = !empty($data['ativo']);
+        $erroPlaceholders = self::erroPlaceholdersDesconhecidos($conteudo, $ativo);
+        if ($erroPlaceholders !== null) {
+            return ['ok' => false, 'error' => $erroPlaceholders];
+        }
 
         $stmt = Database::conn()->prepare(
             'UPDATE mensagens SET titulo = ?, descricao = ?, conteudo = ?, ativo = ? WHERE id = ?'
@@ -113,11 +123,31 @@ class Mensagem
             $titulo,
             trim((string)($data['descricao'] ?? '')) !== '' ? trim((string)$data['descricao']) : null,
             $conteudo,
-            !empty($data['ativo']) ? 1 : 0,
+            $ativo ? 1 : 0,
             $id,
         ]);
 
         return ['ok' => true];
+    }
+
+    /**
+     * Autoridade de backend (nunca confiar só no JS — §10 da sprint): uma mensagem ATIVA nunca
+     * pode ser salva com placeholder fora do catálogo oficial (`MensagemService`) — o Portal não
+     * saberia de onde obter esse dado no envio real. Rascunho INATIVO é permitido com placeholder
+     * desconhecido (fica sinalizado na tela, mas não bloqueia salvar um trabalho em andamento).
+     */
+    private static function erroPlaceholdersDesconhecidos(string $conteudo, bool $ativo): ?string
+    {
+        if (!$ativo) {
+            return null;
+        }
+        $desconhecidos = MensagemService::analisarConteudo($conteudo)['desconhecidas'];
+        if ($desconhecidos === []) {
+            return null;
+        }
+        $lista = implode(', ', array_map(static fn (string $n): string => '[' . $n . ']', $desconhecidos));
+        return 'Esta mensagem está ativa e contém variável(is) não reconhecida(s): ' . $lista
+            . '. Use somente as Variáveis Automáticas disponíveis, ou desative a mensagem para salvar como rascunho.';
     }
 
     /**

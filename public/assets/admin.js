@@ -50,6 +50,10 @@ const resolveCargosComFallback = (cargosPorSetor, setorId, podeFallback, cargosF
 // próprio conteúdo do template (nenhuma coluna de banco por variável, ver
 // app/services/MensagemService.php, cuja lógica de detecção/substituição é espelhada aqui só para
 // a pré-visualização client-side; a fonte de verdade da renderização operacional é o backend).
+//
+// Catálogo OFICIAL de variáveis: nunca duplicado aqui — a página embute o catálogo do backend
+// (MensagemService::catalogoVariaveis()) como JSON e initMensagemForm() lê esse payload, então
+// estas funções recebem `catalogoNomes` de fora em vez de conhecer a lista sozinhas.
 const detectarPlaceholdersMensagem = (conteudo) => {
   const texto = String(conteudo || '');
   const regex = /\[([^[\]]+)\]/g;
@@ -67,11 +71,25 @@ const detectarPlaceholdersMensagem = (conteudo) => {
   return ordenados;
 };
 
-const renderizarPreviaMensagem = (conteudo, valores = {}) => {
-  const placeholders = detectarPlaceholdersMensagem(conteudo);
+// Separa os placeholders encontrados em RECONHECIDOS (existem no catálogo oficial) e
+// DESCONHECIDOS (texto arbitrário entre colchetes) — espelha MensagemService::analisarConteudo().
+// São situações diferentes e nunca devem ser misturadas numa lista só.
+const analisarPlaceholdersMensagem = (conteudo, catalogoNomes = []) => {
+  const todos = detectarPlaceholdersMensagem(conteudo);
+  const catalogoSet = new Set(Array.isArray(catalogoNomes) ? catalogoNomes : []);
+  const reconhecidas = [];
+  const desconhecidas = [];
+  todos.forEach((nome) => {
+    (catalogoSet.has(nome) ? reconhecidas : desconhecidas).push(nome);
+  });
+  return { reconhecidas, desconhecidas };
+};
+
+const renderizarPreviaMensagem = (conteudo, valores = {}, catalogoNomes = []) => {
+  const { reconhecidas, desconhecidas } = analisarPlaceholdersMensagem(conteudo, catalogoNomes);
   let texto = String(conteudo || '');
   const pendentes = [];
-  placeholders.forEach((nome) => {
+  reconhecidas.forEach((nome) => {
     const valor = valores[nome];
     if (valor === undefined || valor === null || String(valor).trim() === '') {
       pendentes.push(nome);
@@ -79,7 +97,21 @@ const renderizarPreviaMensagem = (conteudo, valores = {}) => {
     }
     texto = texto.split(`[${nome}]`).join(String(valor));
   });
-  return { texto, placeholders, pendentes };
+  return { texto, placeholders: reconhecidas, pendentes, desconhecidas };
+};
+
+// Insere `placeholder` em `conteudo` na posição [inicio, fim) — substitui só o texto
+// efetivamente selecionado (se houver), nunca o restante do conteúdo. Posições inválidas/ausentes
+// (cursor nunca posicionado, foco perdido) caem para o final do texto — nunca apagam nada.
+// Função pura (sem DOM) para ser testável isoladamente; initMensagemForm() aplica o resultado
+// no <textarea> real (value + seleção do cursor).
+const inserirPlaceholderNoTexto = (conteudo, inicio, fim, placeholder) => {
+  const texto = String(conteudo || '');
+  const valido = (n) => Number.isInteger(n) && n >= 0 && n <= texto.length;
+  const from = valido(inicio) ? inicio : texto.length;
+  const to = valido(fim) && fim >= from ? fim : from;
+  const novoTexto = texto.slice(0, from) + placeholder + texto.slice(to);
+  return { texto: novoTexto, cursor: from + placeholder.length };
 };
 
 const validateCollaboratorImportFile = (file) => {
@@ -172,7 +204,9 @@ if (typeof module !== 'undefined' && module.exports) {
     validateCollaboratorImportFile,
     summarizeCollaboratorImportResult,
     detectarPlaceholdersMensagem,
+    analisarPlaceholdersMensagem,
     renderizarPreviaMensagem,
+    inserirPlaceholderNoTexto,
   };
 }
 
@@ -1563,44 +1597,65 @@ if (typeof module !== 'undefined' && module.exports) {
     const previewWrap = document.querySelector('[data-mensagem-preview-wrap="1"]');
     const previewInputsEl = document.querySelector('[data-mensagem-preview-inputs="1"]');
     const previewTextEl = document.querySelector('[data-mensagem-preview-text="1"]');
+    const catalogoNode = document.querySelector('[data-mensagem-catalogo="1"]');
+    const inserirBotoes = Array.from(document.querySelectorAll('[data-mensagem-var-insert="1"]'));
     const valoresExemplo = {};
+
+    // Catálogo oficial embutido pelo backend (MensagemService::catalogoVariaveis()) — nunca uma
+    // lista própria do JS; se o payload não existir/parsear, trata tudo como desconhecido (mesma
+    // postura defensiva do backend: nunca fingir que reconhece uma variável).
+    let catalogo = [];
+    try {
+      catalogo = catalogoNode ? JSON.parse(catalogoNode.textContent || '[]') : [];
+    } catch {
+      catalogo = [];
+    }
+    if (!Array.isArray(catalogo)) catalogo = [];
+    const catalogoNomes = catalogo.map((item) => item.chave);
+    const rotuloPorChave = {};
+    catalogo.forEach((item) => { rotuloPorChave[item.chave] = item.nome; });
 
     const atualizarPreviewTexto = () => {
       if (!previewTextEl) return;
-      previewTextEl.textContent = renderizarPreviaMensagem(textarea.value, valoresExemplo).texto;
+      previewTextEl.textContent = renderizarPreviaMensagem(textarea.value, valoresExemplo, catalogoNomes).texto;
     };
 
     const atualizar = () => {
-      const placeholders = detectarPlaceholdersMensagem(textarea.value);
+      const { reconhecidas, desconhecidas } = analisarPlaceholdersMensagem(textarea.value, catalogoNomes);
 
       if (placeholdersEl) {
         placeholdersEl.innerHTML = '';
-        if (placeholders.length === 0) {
+        if (reconhecidas.length === 0 && desconhecidas.length === 0) {
           const vazio = document.createElement('span');
           vazio.className = 'text-sm text-gray-400';
-          vazio.textContent = 'Nenhum placeholder identificado.';
+          vazio.textContent = 'Nenhuma variável utilizada.';
           placeholdersEl.appendChild(vazio);
-        } else {
-          placeholders.forEach((nome) => {
-            const badge = document.createElement('span');
-            badge.className = 'inline-flex items-center rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs font-medium text-green-700';
-            badge.textContent = `[${nome}]`;
-            placeholdersEl.appendChild(badge);
-          });
         }
+        reconhecidas.forEach((nome) => {
+          const badge = document.createElement('span');
+          badge.className = 'inline-flex items-center rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs font-medium text-green-700';
+          badge.textContent = `${rotuloPorChave[nome] || nome} — [${nome}]`;
+          placeholdersEl.appendChild(badge);
+        });
+        desconhecidas.forEach((nome) => {
+          const badge = document.createElement('span');
+          badge.className = 'inline-flex items-center rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-800';
+          badge.textContent = `Variável não reconhecida: [${nome}]`;
+          placeholdersEl.appendChild(badge);
+        });
       }
 
       if (previewWrap) {
-        previewWrap.hidden = placeholders.length === 0;
+        previewWrap.hidden = reconhecidas.length === 0;
       }
 
       if (previewInputsEl) {
         previewInputsEl.innerHTML = '';
-        placeholders.forEach((nome) => {
+        reconhecidas.forEach((nome) => {
           const label = document.createElement('label');
           label.className = 'block text-xs text-gray-600';
           const span = document.createElement('span');
-          span.textContent = nome;
+          span.textContent = rotuloPorChave[nome] || nome;
           const input = document.createElement('input');
           input.type = 'text';
           input.className = 'mt-1 w-full rounded border px-2 py-1 text-sm';
@@ -1618,6 +1673,26 @@ if (typeof module !== 'undefined' && module.exports) {
 
       atualizarPreviewTexto();
     };
+
+    // Inserção assistida: insere `[Placeholder]` na posição do cursor (ou ao final, se o cursor
+    // nunca foi posicionado no textarea), mantém foco e reposiciona o cursor logo após o
+    // placeholder inserido, então atualiza badges + pré-visualização imediatamente.
+    inserirBotoes.forEach((botao) => {
+      botao.addEventListener('click', () => {
+        const placeholder = botao.getAttribute('data-placeholder') || '';
+        if (!placeholder) return;
+        const temSelecao = document.activeElement === textarea
+          && typeof textarea.selectionStart === 'number'
+          && typeof textarea.selectionEnd === 'number';
+        const inicio = temSelecao ? textarea.selectionStart : textarea.value.length;
+        const fim = temSelecao ? textarea.selectionEnd : textarea.value.length;
+        const resultado = inserirPlaceholderNoTexto(textarea.value, inicio, fim, placeholder);
+        textarea.value = resultado.texto;
+        textarea.focus();
+        textarea.setSelectionRange(resultado.cursor, resultado.cursor);
+        atualizar();
+      });
+    });
 
     textarea.addEventListener('input', atualizar);
     atualizar();

@@ -10,6 +10,18 @@ if ($basePath !== '' && strncmp($requestPath, $basePath, strlen($basePath)) === 
     $requestPath = substr($requestPath, strlen($basePath)) ?: '/';
 }
 $isCadastroOpen = preg_match('#^/admin/(empresas|setores|cargos|colaboradores|beneficios|usuarios|avaliacoes)#', $requestPath) === 1;
+// Menu é só representação (§5 do ajuste "Cobertura Completa de Permissões") — todo item aqui é
+// aditivo: mostra se o usuário JÁ tinha acesso pela role atual do módulo (replica exatamente o
+// gate real do controller, nunca remove) OU se recebeu a permissão nova individualmente. Backend
+// de cada controller segue inalterado nesta rodada (decisão aditiva confirmada explicitamente).
+$isAdminOuSupervisor = Auth::role() === 'admin' || !empty($_SESSION['user_is_supervisor']);
+$isStaff = $isAdminOuSupervisor || Auth::role() === 'rh';
+// Dashboard/Indicadores de RH/Candidaturas/Manual/Vagas/Movimentação de Pessoal/a maioria dos
+// filhos de Cadastros já são liberados por role a QUALQUER usuário autenticado
+// (`Auth::requireRole([..., 'viewer'])` nos controllers correspondentes) — gatear esses itens por
+// permissão seria um no-op hoje (role já cobre todo mundo), então ficam como já estavam. Só os
+// itens abaixo, cujo backend hoje é admin/rh (sem 'viewer'), ganham a condição aditiva real.
+$veAdminRh = static fn (string $codigo): bool => $isStaff || Authorization::temPermissao($codigo);
 $sidebarLinkClass = static function (array $paths = [], string $extra = '') use ($requestPath): string {
     $isActive = false;
     foreach ($paths as $path) {
@@ -58,20 +70,43 @@ $sidebarLinkClass = static function (array $paths = [], string $extra = '') use 
         <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="8" cy="8" r="3"/><circle cx="16" cy="12" r="3"/></svg>
         <span class="sidebar-link-label">Candidaturas</span>
       </a>
+      <?php if ($veAdminRh('pipeline.visualizar')): ?>
       <a href="<?= $base ?>/admin/pipeline" class="sidebar-primary-link <?= $sidebarLinkClass(['/admin/pipeline']) ?>" data-admin-menu-close="1" title="Pipeline Kanban" aria-label="Pipeline Kanban">
         <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path d="M15 3v18"/></svg>
         <span class="sidebar-link-label">Pipeline Kanban</span>
       </a>
+      <?php endif; ?>
+      <?php if ($veAdminRh('recruitment_webhooks.visualizar')): ?>
       <a href="<?= $base ?>/admin/recruitment-webhooks" class="sidebar-primary-link <?= $sidebarLinkClass(['/admin/recruitment-webhooks']) ?>" data-admin-menu-close="1" title="Webhooks do recrutamento" aria-label="Webhooks do recrutamento">
         <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 12h6"/><path d="M14 6h6"/><path d="M14 18h6"/><circle cx="10" cy="12" r="2"/><circle cx="14" cy="6" r="2"/><circle cx="14" cy="18" r="2"/><path d="M11.7 10.9l1.6-1.8"/><path d="M11.7 13.1l1.6 1.8"/></svg>
         <span class="sidebar-link-label">Webhooks do recrutamento</span>
       </a>
+      <?php endif; ?>
       <?php if (Authorization::temPermissao('mensagens.visualizar')): ?>
       <a href="<?= $base ?>/admin/mensagens" class="sidebar-primary-link <?= $sidebarLinkClass(['/admin/mensagens']) ?>" data-admin-menu-close="1" title="Mensagens" aria-label="Mensagens">
         <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
         <span class="sidebar-link-label">Mensagens</span>
       </a>
       <?php endif; ?>
+      <?php
+        // Cadastros é só um agrupador visual (§6 do ajuste) — não tem permissão própria. Aparece
+        // se pelo menos UM filho for visível; cada filho usa a MESMA regra aditiva dos itens
+        // principais. Empresas/Setores/Cargos/Benefícios/Avaliações já são liberados por role a
+        // qualquer usuário autenticado hoje (sem 'viewer' faltando) — continuam sempre visíveis,
+        // sem gate novo (gatear seria um no-op). Colaboradores é admin/rh só hoje — ganha o gate
+        // aditivo real. Usuários fica EXCLUSIVAMENTE admin/supervisor, deliberadamente sem
+        // permissão individual própria: é a própria tela que concede/edita permissões de todo
+        // mundo — dar a ela uma permissão comum abriria caminho para autoconcessão de acesso.
+        $veColaboradores = $veAdminRh('colaboradores.visualizar');
+        $veUsuarios = $isAdminOuSupervisor;
+        // Empresas/Setores/Cargos/Benefícios/Avaliações são sempre `true` hoje (role já libera
+        // qualquer autenticado) — por isso o grupo sempre aparece na prática; a expressão fica
+        // explícita (soma os 5 sempre-true + os 2 condicionais) para já valer no dia em que algum
+        // desses 5 ganhar um gate próprio, sem precisar reescrever esta condição.
+        $cadastrosFilhosVisiveis = [true, true, true, $veColaboradores, true, true, $veUsuarios];
+        $veCadastros = in_array(true, $cadastrosFilhosVisiveis, true);
+      ?>
+      <?php if ($veCadastros): ?>
       <details class="sidebar-group rounded-xl border border-white/10 bg-white/5" <?= $isCadastroOpen ? 'open' : '' ?> data-sidebar-group="1">
         <summary class="sidebar-link sidebar-primary-link sidebar-group-summary cursor-pointer list-none" title="Cadastros" aria-label="Cadastros">
           <span class="flex items-center gap-3">
@@ -90,22 +125,25 @@ $sidebarLinkClass = static function (array $paths = [], string $extra = '') use 
           <a href="<?= $base ?>/admin/cargos" class="sidebar-sub-link <?= $sidebarLinkClass(['/admin/cargos'], 'pl-10') ?>" data-admin-menu-close="1" title="Cargos" aria-label="Cargos">
             <span class="sidebar-link-label">Cargos</span>
           </a>
+          <?php if ($veColaboradores): ?>
           <a href="<?= $base ?>/admin/colaboradores" class="sidebar-sub-link <?= $sidebarLinkClass(['/admin/colaboradores'], 'pl-10') ?>" data-admin-menu-close="1" title="Colaboradores" aria-label="Colaboradores">
             <span class="sidebar-link-label">Colaboradores</span>
           </a>
+          <?php endif; ?>
           <a href="<?= $base ?>/admin/beneficios" class="sidebar-sub-link <?= $sidebarLinkClass(['/admin/beneficios'], 'pl-10') ?>" data-admin-menu-close="1" title="Benefícios" aria-label="Benefícios">
             <span class="sidebar-link-label">Benefícios</span>
           </a>
           <a href="<?= $base ?>/admin/avaliacoes" class="sidebar-sub-link <?= $sidebarLinkClass(['/admin/avaliacoes'], 'pl-10') ?>" data-admin-menu-close="1" title="Avaliações" aria-label="Avaliações">
             <span class="sidebar-link-label">Avaliações</span>
           </a>
-          <?php if (Auth::role() === 'admin' || !empty($_SESSION['user_is_supervisor'])): ?>
+          <?php if ($veUsuarios): ?>
             <a href="<?= $base ?>/admin/usuarios" class="sidebar-sub-link <?= $sidebarLinkClass(['/admin/usuarios'], 'pl-10') ?>" data-admin-menu-close="1" title="Usuários" aria-label="Usuários">
               <span class="sidebar-link-label">Usuários</span>
             </a>
           <?php endif; ?>
         </div>
       </details>
+      <?php endif; ?>
       <a href="<?= $base ?>/admin/vagas" class="sidebar-primary-link <?= $sidebarLinkClass(['/admin/vagas']) ?>" data-admin-menu-close="1" title="Vagas" aria-label="Vagas">
         <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 8V6h6v2"/><rect x="3" y="8" width="18" height="12" rx="2"/></svg>
         <span class="sidebar-link-label">Vagas</span>
@@ -131,10 +169,12 @@ $sidebarLinkClass = static function (array $paths = [], string $extra = '') use 
         <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M7 17V7"/><path d="M17 17V7"/><path d="M12 20V4"/><path d="M4 9h16"/><path d="M4 15h16"/></svg>
         <span class="sidebar-link-label">Movimentação de pessoal</span>
       </a>
+      <?php if ($veAdminRh('indicacoes.visualizar')): ?>
       <a href="<?= $base ?>/admin/indicacoes" class="sidebar-primary-link <?= $sidebarLinkClass(['/admin/indicacoes']) ?>" data-admin-menu-close="1" title="Programa de Indicações" aria-label="Programa de Indicações">
         <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3l3.1 6.3 7 .9-5 4.8 1.2 6.9L12 18.6 5.7 22l1.2-6.9-5-4.8 7-.9L12 3z"/></svg>
         <span class="sidebar-link-label">Programa de Indicações</span>
       </a>
+      <?php endif; ?>
       <a href="<?= Security::e($publicJobsUrl) ?>" target="_blank" rel="noopener noreferrer" class="sidebar-primary-link sidebar-link" data-admin-menu-close="1" title="Link vagas públicas" aria-label="Link vagas públicas">
         <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>
         <span class="sidebar-link-label">Link vagas públicas</span>

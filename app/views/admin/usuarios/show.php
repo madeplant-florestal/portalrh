@@ -9,7 +9,7 @@ $vinculoMetadados = $vinculoMetadados ?? null;
 // status da conta e senha continuam exclusivos de Admin/supervisor.
 $isAdminAtor = !empty($isAdminAtor);
 ?>
-<div class="responsive-panel max-w-2xl">
+<div class="responsive-panel">
   <div class="responsive-header">
     <h2 class="text-xl font-semibold text-ctpblue">Detalhes do usuário</h2>
     <a href="<?= $base ?>/admin/usuarios" class="text-ctpblue hover:text-ctgreen">Voltar</a>
@@ -22,7 +22,20 @@ $isAdminAtor = !empty($isAdminAtor);
     <div class="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700"><?= Security::e($flashSuccess) ?></div>
   <?php endif; ?>
 
-  <div class="mt-4 grid gap-4 text-sm md:grid-cols-2">
+  <!--
+    Ajuste "Tela de Usuários + Cobertura Completa de Permissões" (§9-11) + correção de largura:
+    reorganização de LAYOUT apenas — nenhum campo, regra de edição/trava ou endpoint mudou.
+    `.responsive-panel` (classe do projeto) já é `width:100%; max-width:100%` dentro de `.content`
+    (que por sua vez já ocupa 100% do espaço após a sidebar) — um `max-w-6xl` chegou a ser aplicado
+    aqui numa rodada anterior e SOBRESCREVIA essa largura fluida, causando a área vazia à direita em
+    telas largas. Removido: a página agora usa a mesma largura fluida de qualquer outra tela admin,
+    sem limite fixo em pixels. Desktop (lg: 1024px+) usa duas colunas num grid de 9 partes — esquerda
+    5/9 (~55%: Detalhes/Solicitação de Vagas/vínculo METADADOS), direita 4/9 (~45%: Contexto
+    Organizacional/Permissões de acesso); abaixo de lg, volta a 1 coluna, sem scroll horizontal.
+  -->
+  <div class="mt-6 grid gap-6 lg:grid-cols-9" data-usuario-detalhe-colunas="1">
+    <div class="lg:col-span-5 space-y-6" data-usuario-detalhe-coluna-esquerda="1">
+  <div class="grid gap-4 text-sm md:grid-cols-2">
     <div>
       <div class="text-gray-500">Nome completo</div>
       <div class="font-medium text-gray-900"><?= Security::e($user->nome) ?></div>
@@ -184,7 +197,9 @@ $isAdminAtor = !empty($isAdminAtor);
       <?php endif; ?>
     </div>
   </section>
+    </div>
 
+    <div class="lg:col-span-4 space-y-6" data-usuario-detalhe-coluna-direita="1">
   <?php
     $ctx = $contexto ?? [];
     $cargosOficiais = $cargosOficiais ?? [];
@@ -307,21 +322,23 @@ $isAdminAtor = !empty($isAdminAtor);
     <form action="<?= $base ?>/admin/usuarios/<?= (int)$user->id ?>/permissoes" method="post" class="mt-4 space-y-5">
       <input type="hidden" name="csrf" value="<?= Security::e($csrf) ?>">
 
-      <?php foreach ($catalogoPermissoes as $modulo => $itens): ?>
-        <div>
-          <span class="block text-sm font-medium text-gray-700"><?= Security::e($rotuloModulo[$modulo] ?? ucfirst(str_replace('_', ' ', $modulo))) ?></span>
-          <div class="mt-2 grid gap-2 sm:grid-cols-2">
-            <?php foreach ($itens as $permissao): ?>
-              <label class="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm">
-                <input type="checkbox" name="permissao_ids[]" value="<?= (int)$permissao['id'] ?>"
-                       class="h-4 w-4 rounded border-gray-300"
-                       <?= in_array((int)$permissao['id'], $permissoesAtribuidas, true) ? 'checked' : '' ?>>
-                <span class="text-gray-800"><?= Security::e((string)$permissao['nome']) ?></span>
-              </label>
-            <?php endforeach; ?>
+      <div class="divide-y divide-gray-200">
+        <?php foreach ($catalogoPermissoes as $modulo => $itens): ?>
+          <div class="flex flex-col gap-2 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:gap-4">
+            <span class="text-sm font-medium text-gray-700 sm:w-44 sm:shrink-0"><?= Security::e($rotuloModulo[$modulo] ?? ucfirst(str_replace('_', ' ', $modulo))) ?></span>
+            <div class="grid grid-cols-2 gap-x-4 gap-y-2 sm:flex sm:flex-1 sm:flex-wrap sm:gap-x-5 sm:gap-y-2">
+              <?php foreach ($itens as $permissao): ?>
+                <label class="flex items-center gap-2 text-sm text-gray-800">
+                  <input type="checkbox" name="permissao_ids[]" value="<?= (int)$permissao['id'] ?>"
+                         class="h-4 w-4 shrink-0 rounded border-gray-300"
+                         <?= in_array((int)$permissao['id'], $permissoesAtribuidas, true) ? 'checked' : '' ?>>
+                  <span><?= Security::e((string)$permissao['nome']) ?></span>
+                </label>
+              <?php endforeach; ?>
+            </div>
           </div>
-        </div>
-      <?php endforeach; ?>
+        <?php endforeach; ?>
+      </div>
       <?php if ($catalogoPermissoes === []): ?>
         <p class="text-sm text-gray-500">Nenhuma permissão cadastrada.</p>
       <?php endif; ?>
@@ -330,6 +347,8 @@ $isAdminAtor = !empty($isAdminAtor);
     </form>
   </section>
   <?php endif; ?>
+    </div>
+  </div>
 
   <?php if ($isAdminAtor): ?>
   <div class="responsive-form-actions mt-6">

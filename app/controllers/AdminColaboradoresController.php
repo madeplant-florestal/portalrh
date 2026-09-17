@@ -39,6 +39,7 @@ class AdminColaboradoresController extends Controller
         }
 
         $this->view->render('admin/colaboradores/index', [
+            'csrf' => Security::csrfToken(),
             'colaboradores' => $resultado['items'],
             'total' => $resultado['total'],
             'page' => $resultado['page'],
@@ -51,6 +52,43 @@ class AdminColaboradoresController extends Controller
             'flashError' => Security::sanitizeString($_GET['erro'] ?? ''),
             'flashSuccess' => Security::sanitizeString($_GET['ok'] ?? ''),
         ], 'layouts/admin');
+    }
+
+
+    /**
+     * Materializa (ou reaproveita, se já existir) a extensão local de um contrato oficial e
+     * prossegue para a funcionalidade solicitada — corrige o bloqueio "Sem extensão local" que
+     * impedia usar Acesso/Dados RH/Avaliações para um contrato oficial só porque nenhuma ação
+     * havia sido feita nele antes. Idempotente e nunca usa CPF (ver ColaboradorExtensaoLocalService).
+     */
+    public function materializarExtensaoLocal(string $metadadosId): void
+    {
+        Auth::requireRole(['admin', 'rh']);
+        if (!Security::csrfCheck($_POST['csrf'] ?? '')) {
+            http_response_code(400);
+            echo 'CSRF inválido';
+            return;
+        }
+
+        $resultado = ColaboradorExtensaoLocalService::obterOuCriar((int)$metadadosId);
+        if (!($resultado['ok'] ?? false)) {
+            redirect('/admin/colaboradores?erro=' . urlencode((string)($resultado['error'] ?? 'Não foi possível habilitar as ações locais para este contrato.')));
+        }
+
+        $localId = (int)$resultado['id'];
+        $proximo = Security::sanitizeString($_POST['proximo'] ?? '');
+        switch ($proximo) {
+            case 'acesso':
+                redirect('/admin/colaboradores/' . $localId . '/acesso');
+                break;
+            case 'avaliacoes':
+                redirect('/admin/avaliacoes?colaborador_id=' . $localId);
+                break;
+            case 'rh':
+            default:
+                redirect('/admin/colaboradores/rh/editar/' . $localId);
+                break;
+        }
     }
 
     public function editRh(string $id): void
@@ -203,12 +241,21 @@ class AdminColaboradoresController extends Controller
         ];
         $result = Colaborador::updateRhData((int)$id, $payload);
         if (!($result['ok'] ?? false)) {
-            $colaborador = array_merge($colaborador, $payload);
-            $this->view->render('admin/colaboradores/rh-form', [
-                'csrf' => Security::csrfToken(),
-                'colaborador' => $colaborador,
-                'error' => $result['error'] ?? 'Falha ao atualizar os dados de RH do colaborador.',
-            ], 'layouts/admin');
+            $dados = $this->buildEditRhViewData((int)$id);
+            if ($dados === null) {
+                http_response_code(404);
+                echo 'Colaborador não encontrado.';
+                return;
+            }
+            $dados['error'] = $result['error'] ?? 'Falha ao atualizar os dados de RH do colaborador.';
+            // Contrato oficial vinculado: os campos oficiais são somente leitura na view (vêm do
+            // espelho, nunca do POST); só "Código" pode refletir a tentativa do usuário.
+            if (!empty($dados['colaborador']['tem_extensao_oficial'])) {
+                $dados['colaborador']['codigo'] = $payload['codigo'];
+            } else {
+                $dados['colaborador'] = array_merge($dados['colaborador'], $payload);
+            }
+            $this->view->render('admin/colaboradores/rh-form', $dados, 'layouts/admin');
             return;
         }
 

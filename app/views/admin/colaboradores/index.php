@@ -262,7 +262,21 @@ $formatarSalario = static function ($valor): string {
                       <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
                     </a>
                   <?php else: ?>
-                    <span class="rounded-full bg-slate-50 px-3 py-1 text-xs font-medium text-slate-400" title="Este contrato ainda não tem extensão local em colaboradores; ações que dependem dela ficam indisponíveis.">Sem extensão local</span>
+                    <?php foreach (['acesso' => 'Acesso e liderança', 'rh' => 'Editar dados RH', 'avaliacoes' => 'Ver avaliações'] as $proximo => $rotulo): ?>
+                      <form action="<?= $base ?>/admin/colaboradores/materializar/<?= (int)$colaborador['id'] ?>" method="post">
+                        <input type="hidden" name="csrf" value="<?= Security::e($csrf) ?>">
+                        <input type="hidden" name="proximo" value="<?= $proximo ?>">
+                        <button type="submit" class="<?= $actionButtonClass ?>" title="<?= Security::e($rotulo) ?> (habilita a extensão local deste contrato)" aria-label="<?= Security::e($rotulo) ?>">
+                          <?php if ($proximo === 'acesso'): ?>
+                            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/></svg>
+                          <?php elseif ($proximo === 'rh'): ?>
+                            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
+                          <?php else: ?>
+                            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                          <?php endif; ?>
+                        </button>
+                      </form>
+                    <?php endforeach; ?>
                   <?php endif; ?>
                 </div>
               </td>
@@ -312,7 +326,21 @@ $formatarSalario = static function ($valor): string {
                 <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
               </a>
             <?php else: ?>
-              <span class="rounded-full bg-slate-50 px-3 py-1 text-xs font-medium text-slate-400">Sem extensão local</span>
+              <?php foreach (['acesso' => 'Acesso e liderança', 'rh' => 'Editar dados RH', 'avaliacoes' => 'Ver avaliações'] as $proximo => $rotulo): ?>
+                <form action="<?= $base ?>/admin/colaboradores/materializar/<?= (int)$colaborador['id'] ?>" method="post">
+                  <input type="hidden" name="csrf" value="<?= Security::e($csrf) ?>">
+                  <input type="hidden" name="proximo" value="<?= $proximo ?>">
+                  <button type="submit" class="<?= $actionButtonClass ?>" title="<?= Security::e($rotulo) ?> (habilita a extensão local deste contrato)" aria-label="<?= Security::e($rotulo) ?>">
+                    <?php if ($proximo === 'acesso'): ?>
+                      <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/></svg>
+                    <?php elseif ($proximo === 'rh'): ?>
+                      <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
+                    <?php else: ?>
+                      <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                    <?php endif; ?>
+                  </button>
+                </form>
+              <?php endforeach; ?>
             <?php endif; ?>
           </div>
         </div>

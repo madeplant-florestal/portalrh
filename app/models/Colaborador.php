@@ -137,6 +137,8 @@ class Colaborador
             return null;
         }
 
+        $row = self::mesclarComEspelhoOficial($row);
+
         $row['tempo_empresa_meses'] = self::monthsSince($row['data_admissao'] ?? null);
         $row['tempo_cargo_meses'] = self::monthsSince($row['data_inicio_cargo'] ?? null);
         $row['tempo_empresa_label'] = self::formatMonthsLabel((int)$row['tempo_empresa_meses']);
@@ -145,12 +147,85 @@ class Colaborador
         return $row;
     }
 
+    /**
+     * Quando o colaborador possui `metadados_id` (contrato oficial vinculado), sobrepõe os campos
+     * que existem oficialmente em `colaboradores_metadados` — a extensão local NUNCA concorre com
+     * o espelho oficial para esses campos (nome, cpf, salário, datas, motivo de rescisão, e os
+     * nomes de cargo/empresa/setor "de exibição", que passam a vir do texto oficial do METADADOS,
+     * mesma fonte já usada pela listagem em ColaboradorMetadadosConsultaRepository::paginate() —
+     * nunca resolvido de novo via cargo_id/empresa_id/setor_id local, que podem estar
+     * desatualizados). `codigo` (Portal-only, sem equivalente no METADADOS) e o vínculo
+     * operacional de Integração continuam exclusivamente locais.
+     *
+     * Marca `tem_extensao_oficial` para a view decidir quais campos exibir como somente leitura.
+     */
+    private static function mesclarComEspelhoOficial(array $colaborador): array
+    {
+        $colaborador['tem_extensao_oficial'] = false;
+
+        $metadadosId = $colaborador['metadados_id'] ?? null;
+        if ($metadadosId === null) {
+            return $colaborador;
+        }
+
+        $stmt = Database::conn()->prepare('SELECT * FROM colaboradores_metadados WHERE id = ? LIMIT 1');
+        $stmt->execute([(int)$metadadosId]);
+        $oficial = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($oficial === false) {
+            // metadados_id aponta para um contrato que não existe mais no espelho (não deveria
+            // ocorrer — FK ON DELETE RESTRICT — mas não presume nada se acontecer).
+            return $colaborador;
+        }
+
+        $colaborador['tem_extensao_oficial'] = true;
+        $colaborador['nome'] = $oficial['nome'];
+        $colaborador['cpf'] = $oficial['cpf'];
+        $colaborador['salario_atual'] = $oficial['salario_atual'];
+        $colaborador['data_admissao'] = $oficial['admissao'];
+        $colaborador['data_inicio_cargo'] = $oficial['data_inicio_cargo'];
+        $colaborador['data_nascimento'] = $oficial['nascimento'];
+        $colaborador['data_demissao'] = $oficial['demissao'];
+        $colaborador['motivo_rescisao'] = $oficial['motivo_rescisao_descricao'];
+        $colaborador['matricula'] = $oficial['numero_contrato'];
+        $colaborador['cargo_nome'] = $oficial['cargo'];
+        $colaborador['empresa_nome'] = $oficial['empresa'];
+        $colaborador['setor_nome'] = $oficial['setor'];
+
+        return $colaborador;
+    }
+
     public static function updateRhData(int $id, array $data): array
     {
         self::ensureRhSchema();
         $existing = self::find($id);
         if (!$existing) {
             return ['ok' => false, 'error' => 'Colaborador não encontrado.'];
+        }
+
+        // Contrato oficial vinculado: matrícula/CPF/salário/datas/motivo de rescisão vêm de
+        // colaboradores_metadados (ver mesclarComEspelhoOficial()) e não podem ser sobrescritos
+        // por este formulário — só `codigo` é exclusivamente local. Nunca confia no HTML da view
+        // para essa regra: mesmo que um POST antigo/forjado envie os outros campos, eles são
+        // ignorados aqui.
+        if (!empty($existing['tem_extensao_oficial'])) {
+            $codigo = trim((string)($data['codigo'] ?? ($existing['codigo'] ?? '')));
+            if ($codigo === '') {
+                return ['ok' => false, 'error' => 'Informe um código válido para o colaborador.'];
+            }
+
+            $empresaIdAtual = array_key_exists('empresa_id', $existing) && $existing['empresa_id'] !== null
+                ? (int)$existing['empresa_id']
+                : null;
+            $stmtCodigo = Database::conn()->prepare(
+                'SELECT id FROM colaboradores WHERE codigo = ? AND empresa_id <=> ? AND id <> ? LIMIT 1'
+            );
+            $stmtCodigo->execute([$codigo, $empresaIdAtual, $id]);
+            if ($stmtCodigo->fetch(PDO::FETCH_ASSOC)) {
+                return ['ok' => false, 'error' => 'Já existe outro colaborador cadastrado com esse código na mesma empresa.'];
+            }
+
+            Database::conn()->prepare('UPDATE colaboradores SET codigo = ? WHERE id = ?')->execute([$codigo, $id]);
+            return ['ok' => true];
         }
 
         $empresaId = array_key_exists('empresa_id', $existing) && $existing['empresa_id'] !== null

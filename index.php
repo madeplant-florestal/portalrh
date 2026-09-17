@@ -68,6 +68,9 @@ try {
     $router->post('/admin/indicadores-rh/sincronizar', [AdminMetadadosSyncController::class, 'solicitar']);
     $router->get('/admin/indicadores-rh/sincronizar/status', [AdminMetadadosSyncController::class, 'status']);
     $router->get('/admin/colaboradores', [AdminColaboradoresController::class, 'index']);
+    // Materialização sob demanda da extensão local de um contrato oficial — corrige o bloqueio
+    // "Sem extensão local" (idempotente, nunca por CPF, nunca escreve em colaboradores_metadados).
+    $router->post('/admin/colaboradores/materializar/{metadadosId}', [AdminColaboradoresController::class, 'materializarExtensaoLocal']);
     $router->get('/admin/colaboradores/rh/editar/{id}', [AdminColaboradoresController::class, 'editRh']);
     $router->post('/admin/colaboradores/rh/editar/{id}', [AdminColaboradoresController::class, 'updateRh']);
     // Acesso / Liderança do colaborador (sprint Solicitação/Publicação de Vagas): vincula o

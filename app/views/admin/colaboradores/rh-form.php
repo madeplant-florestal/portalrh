@@ -27,6 +27,14 @@ if (!empty($colaborador['data_demissao'])) {
 if (!empty($colaborador['data_demissao']) && preg_match('/^\d{2}\/\d{2}\/\d{4}$/', (string)$colaborador['data_demissao'])) {
     $dataDemissao = (string)$colaborador['data_demissao'];
 }
+
+// Contrato oficial vinculado (colaboradores.metadados_id): matrícula/CPF/salário/datas/motivo de
+// rescisão vêm do espelho colaboradores_metadados (ver Colaborador::mesclarComEspelhoOficial()) e
+// são exibidos somente leitura — nunca editáveis aqui, nunca concorrem com o valor oficial. Só
+// "Código" (sem equivalente no METADADOS) continua editável. Sem contrato oficial, o formulário
+// completo continua exatamente como antes (colaborador 100% local/manual, ex.: PJ/terceiro).
+$temExtensaoOficial = !empty($colaborador['tem_extensao_oficial']);
+$readonlyClass = 'mt-1 w-full rounded border bg-gray-50 px-3 py-2 text-gray-700';
 ?>
 <div class="responsive-panel max-w-3xl">
   <div class="responsive-header">
@@ -61,38 +69,73 @@ if (!empty($colaborador['data_demissao']) && preg_match('/^\d{2}\/\d{2}\/\d{4}$/
         <input type="text" name="codigo" value="<?= Security::e((string)($colaborador['codigo'] ?? '')) ?>" class="mt-1 w-full rounded border px-3 py-2" required>
       </div>
       <div>
-        <label class="block text-sm font-medium text-gray-700">Matrícula *</label>
-        <input type="text" name="matricula" value="<?= Security::e((string)($colaborador['matricula'] ?? '')) ?>" class="mt-1 w-full rounded border px-3 py-2" required>
+        <label class="block text-sm font-medium text-gray-700">Matrícula<?= $temExtensaoOficial ? ' (contrato oficial)' : ' *' ?></label>
+        <?php if ($temExtensaoOficial): ?>
+          <input type="text" value="<?= Security::e((string)($colaborador['matricula'] ?? '')) ?>" class="<?= $readonlyClass ?>" readonly>
+        <?php else: ?>
+          <input type="text" name="matricula" value="<?= Security::e((string)($colaborador['matricula'] ?? '')) ?>" class="mt-1 w-full rounded border px-3 py-2" required>
+        <?php endif; ?>
       </div>
       <div>
-        <label class="block text-sm font-medium text-gray-700">CPF</label>
-        <input type="text" name="cpf" value="<?= Security::e((string)($colaborador['cpf'] ?? '')) ?>" class="mt-1 w-full rounded border px-3 py-2" inputmode="numeric" maxlength="14" placeholder="Somente números ou CPF formatado">
+        <label class="block text-sm font-medium text-gray-700">CPF<?= $temExtensaoOficial ? ' (oficial)' : '' ?></label>
+        <?php if ($temExtensaoOficial): ?>
+          <input type="text" value="<?= Security::e((string)($colaborador['cpf'] ?? '')) ?>" class="<?= $readonlyClass ?>" readonly>
+        <?php else: ?>
+          <input type="text" name="cpf" value="<?= Security::e((string)($colaborador['cpf'] ?? '')) ?>" class="mt-1 w-full rounded border px-3 py-2" inputmode="numeric" maxlength="14" placeholder="Somente números ou CPF formatado">
+        <?php endif; ?>
       </div>
       <div>
-        <label class="block text-sm font-medium text-gray-700">Salário atual *</label>
-        <input type="text" name="salario_atual" value="<?= !empty($colaborador['salario_atual']) ? 'R$ ' . number_format((float)$colaborador['salario_atual'], 2, ',', '.') : '' ?>" class="mt-1 w-full rounded border px-3 py-2" data-mask-money="1" required>
+        <label class="block text-sm font-medium text-gray-700">Salário atual<?= $temExtensaoOficial ? ' (oficial)' : ' *' ?></label>
+        <?php if ($temExtensaoOficial): ?>
+          <input type="text" value="<?= !empty($colaborador['salario_atual']) ? 'R$ ' . number_format((float)$colaborador['salario_atual'], 2, ',', '.') : '' ?>" class="<?= $readonlyClass ?>" readonly>
+        <?php else: ?>
+          <input type="text" name="salario_atual" value="<?= !empty($colaborador['salario_atual']) ? 'R$ ' . number_format((float)$colaborador['salario_atual'], 2, ',', '.') : '' ?>" class="mt-1 w-full rounded border px-3 py-2" data-mask-money="1" required>
+        <?php endif; ?>
       </div>
       <div>
-        <label class="block text-sm font-medium text-gray-700">Data de admissão *</label>
-        <input type="text" name="data_admissao" value="<?= Security::e($dataAdmissao) ?>" class="mt-1 w-full rounded border px-3 py-2" placeholder="DD/MM/AAAA" data-mask-date="1" required>
+        <label class="block text-sm font-medium text-gray-700">Data de admissão<?= $temExtensaoOficial ? ' (oficial)' : ' *' ?></label>
+        <?php if ($temExtensaoOficial): ?>
+          <input type="text" value="<?= Security::e($dataAdmissao) ?>" class="<?= $readonlyClass ?>" readonly>
+        <?php else: ?>
+          <input type="text" name="data_admissao" value="<?= Security::e($dataAdmissao) ?>" class="mt-1 w-full rounded border px-3 py-2" placeholder="DD/MM/AAAA" data-mask-date="1" required>
+        <?php endif; ?>
       </div>
       <div>
-        <label class="block text-sm font-medium text-gray-700">Data de início no cargo *</label>
-        <input type="text" name="data_inicio_cargo" value="<?= Security::e($dataInicioCargo) ?>" class="mt-1 w-full rounded border px-3 py-2" placeholder="DD/MM/AAAA" data-mask-date="1" required>
+        <label class="block text-sm font-medium text-gray-700">Data de início no cargo<?= $temExtensaoOficial ? ' (oficial)' : ' *' ?></label>
+        <?php if ($temExtensaoOficial): ?>
+          <input type="text" value="<?= Security::e($dataInicioCargo) ?>" class="<?= $readonlyClass ?>" readonly>
+        <?php else: ?>
+          <input type="text" name="data_inicio_cargo" value="<?= Security::e($dataInicioCargo) ?>" class="mt-1 w-full rounded border px-3 py-2" placeholder="DD/MM/AAAA" data-mask-date="1" required>
+        <?php endif; ?>
       </div>
       <div>
-        <label class="block text-sm font-medium text-gray-700">Data de nascimento</label>
-        <input type="text" name="data_nascimento" value="<?= Security::e($dataNascimento) ?>" class="mt-1 w-full rounded border px-3 py-2" placeholder="DD/MM/AAAA" data-mask-date="1">
+        <label class="block text-sm font-medium text-gray-700">Data de nascimento<?= $temExtensaoOficial ? ' (oficial)' : '' ?></label>
+        <?php if ($temExtensaoOficial): ?>
+          <input type="text" value="<?= Security::e($dataNascimento) ?>" class="<?= $readonlyClass ?>" readonly>
+        <?php else: ?>
+          <input type="text" name="data_nascimento" value="<?= Security::e($dataNascimento) ?>" class="mt-1 w-full rounded border px-3 py-2" placeholder="DD/MM/AAAA" data-mask-date="1">
+        <?php endif; ?>
       </div>
       <div>
-        <label class="block text-sm font-medium text-gray-700">Data de demissão</label>
-        <input type="text" name="data_demissao" value="<?= Security::e($dataDemissao) ?>" class="mt-1 w-full rounded border px-3 py-2" placeholder="DD/MM/AAAA" data-mask-date="1">
+        <label class="block text-sm font-medium text-gray-700">Data de demissão<?= $temExtensaoOficial ? ' (oficial)' : '' ?></label>
+        <?php if ($temExtensaoOficial): ?>
+          <input type="text" value="<?= Security::e($dataDemissao) ?>" class="<?= $readonlyClass ?>" readonly>
+        <?php else: ?>
+          <input type="text" name="data_demissao" value="<?= Security::e($dataDemissao) ?>" class="mt-1 w-full rounded border px-3 py-2" placeholder="DD/MM/AAAA" data-mask-date="1">
+        <?php endif; ?>
       </div>
       <div class="md:col-span-2">
-        <label class="block text-sm font-medium text-gray-700">Motivo da rescisão</label>
-        <textarea name="motivo_rescisao" class="mt-1 w-full rounded border px-3 py-2" rows="3" placeholder="Informe o motivo quando houver demissão registrada"><?= Security::e((string)($colaborador['motivo_rescisao'] ?? '')) ?></textarea>
+        <label class="block text-sm font-medium text-gray-700">Motivo da rescisão<?= $temExtensaoOficial ? ' (oficial)' : '' ?></label>
+        <?php if ($temExtensaoOficial): ?>
+          <textarea class="<?= $readonlyClass ?>" rows="3" readonly><?= Security::e((string)($colaborador['motivo_rescisao'] ?? '')) ?></textarea>
+        <?php else: ?>
+          <textarea name="motivo_rescisao" class="mt-1 w-full rounded border px-3 py-2" rows="3" placeholder="Informe o motivo quando houver demissão registrada"><?= Security::e((string)($colaborador['motivo_rescisao'] ?? '')) ?></textarea>
+        <?php endif; ?>
       </div>
     </div>
+    <?php if ($temExtensaoOficial): ?>
+      <p class="text-xs text-gray-500">Matrícula, CPF, salário, datas e motivo da rescisão vêm do contrato oficial sincronizado do METADADOS e não podem ser alterados aqui. Só "Código" é uma informação exclusiva do Portal.</p>
+    <?php endif; ?>
 
     <div class="grid gap-4 md:grid-cols-2">
       <div>

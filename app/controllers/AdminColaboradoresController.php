@@ -56,30 +56,14 @@ class AdminColaboradoresController extends Controller
     public function editRh(string $id): void
     {
         Auth::requireRole(['admin', 'rh']);
-        $colaborador = Colaborador::find((int)$id);
-        if (!$colaborador) {
+        $dados = $this->buildEditRhViewData((int)$id);
+        if ($dados === null) {
             http_response_code(404);
             echo 'Colaborador não encontrado.';
             return;
         }
 
-        // Seção "Integração" (Sprint "Integração do Colaborador") é permission-gated de verdade:
-        // sem a permissão, o campo nem é passado à view — não é só esconder HTML.
-        $podeVerIntegracao = Authorization::temPermissao('integracao_colaborador.visualizar');
-        if (!$podeVerIntegracao) {
-            unset($colaborador['integracao_status'], $colaborador['integracao_data'], $colaborador['integracao_responsavel_usuario_id'], $colaborador['integracao_responsavel_nome']);
-        }
-
-        $this->view->render('admin/colaboradores/rh-form', [
-            'csrf' => Security::csrfToken(),
-            'colaborador' => $colaborador,
-            'error' => '',
-            'podeVerIntegracao' => $podeVerIntegracao,
-            'podeEditarIntegracao' => Authorization::temPermissao('integracao_colaborador.editar'),
-            'usuariosOptions' => User::candidatosAprovador(0),
-            'flashError' => Security::sanitizeString($_GET['erro'] ?? ''),
-            'flashSuccess' => Security::sanitizeString($_GET['ok'] ?? ''),
-        ], 'layouts/admin');
+        $this->view->render('admin/colaboradores/rh-form', $dados, 'layouts/admin');
     }
 
     /**
@@ -114,6 +98,80 @@ class AdminColaboradoresController extends Controller
         }
 
         redirect('/admin/colaboradores/rh/editar/' . (int)$id . '?ok=' . urlencode('Integração do colaborador atualizada.'));
+    }
+
+    /**
+     * Gera a Pesquisa de Integração para este colaborador (idempotente — ver
+     * PesquisaIntegracaoService::criarParaIntegracao()). Reaproveita a mesma permissão de escrita
+     * de Integração (`integracao_colaborador.editar`) — é a mesma operação administrativa, não
+     * uma capacidade nova. Renderiza a tela diretamente (em vez de redirecionar) para poder
+     * exibir o link gerado UMA ÚNICA VEZ — o token bruto não é recuperável depois (mesmo padrão
+     * de PasswordReset/PesquisaExperiencia).
+     */
+    public function gerarPesquisaIntegracao(string $id): void
+    {
+        Auth::requireRole(['admin', 'rh']);
+        Authorization::requirePermissao('integracao_colaborador.editar');
+        if (!Security::csrfCheck($_POST['csrf'] ?? '')) {
+            http_response_code(400);
+            echo 'CSRF inválido';
+            return;
+        }
+
+        $resultado = PesquisaIntegracaoService::criarParaIntegracao((int)$id);
+
+        $dados = $this->buildEditRhViewData((int)$id);
+        if ($dados === null) {
+            http_response_code(404);
+            echo 'Colaborador não encontrado.';
+            return;
+        }
+
+        if (!($resultado['ok'] ?? false)) {
+            $dados['error'] = (string)($resultado['error'] ?? 'Não foi possível gerar a pesquisa de integração.');
+        } elseif (!($resultado['ja_existia'] ?? true) && !empty($resultado['token'])) {
+            $baseUrl = rtrim((string)(Config::app()['base_url'] ?? ''), '/');
+            $dados['linkPesquisaIntegracaoGerado'] = $baseUrl . '/integracao/' . $resultado['token'];
+        }
+
+        $this->view->render('admin/colaboradores/rh-form', $dados, 'layouts/admin');
+    }
+
+    /**
+     * Dados da tela "Editar dados RH"/Integração — extraído para ser reaproveitado por editRh()
+     * (GET) e gerarPesquisaIntegracao() (POST, precisa re-renderizar a mesma tela).
+     */
+    private function buildEditRhViewData(int $id): ?array
+    {
+        $colaborador = Colaborador::find($id);
+        if (!$colaborador) {
+            return null;
+        }
+
+        // Seção "Integração" (Sprint "Integração do Colaborador") é permission-gated de verdade:
+        // sem a permissão, o campo nem é passado à view — não é só esconder HTML.
+        $podeVerIntegracao = Authorization::temPermissao('integracao_colaborador.visualizar');
+        if (!$podeVerIntegracao) {
+            unset($colaborador['integracao_status'], $colaborador['integracao_data'], $colaborador['integracao_responsavel_usuario_id'], $colaborador['integracao_responsavel_nome']);
+        }
+
+        $pesquisaIntegracao = null;
+        if ($podeVerIntegracao && strtolower((string)($colaborador['integracao_status'] ?? '')) === 'realizada' && !empty($colaborador['integracao_data'])) {
+            $pesquisaIntegracao = PesquisaIntegracao::findByColaboradorEData($id, (string)$colaborador['integracao_data']);
+        }
+
+        return [
+            'csrf' => Security::csrfToken(),
+            'colaborador' => $colaborador,
+            'error' => '',
+            'podeVerIntegracao' => $podeVerIntegracao,
+            'podeEditarIntegracao' => Authorization::temPermissao('integracao_colaborador.editar'),
+            'usuariosOptions' => User::candidatosAprovador(0),
+            'pesquisaIntegracao' => $pesquisaIntegracao,
+            'linkPesquisaIntegracaoGerado' => '',
+            'flashError' => Security::sanitizeString($_GET['erro'] ?? ''),
+            'flashSuccess' => Security::sanitizeString($_GET['ok'] ?? ''),
+        ];
     }
 
     public function updateRh(string $id): void

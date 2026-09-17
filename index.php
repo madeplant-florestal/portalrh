@@ -33,6 +33,12 @@ try {
     $router->get('/experiencia/{token}', [PesquisaExperienciaController::class, 'show']);
     $router->post('/experiencia/{token}', [PesquisaExperienciaController::class, 'store']);
 
+    // Pesquisa de Integração (onboarding) do Colaborador — página pública, sem login, acessada
+    // por token aleatório (nunca sequencial/derivado de CPF/ID/e-mail). Ver
+    // PesquisaIntegracaoController. Distinta de /experiencia (processo seletivo).
+    $router->get('/integracao/{token}', [PesquisaIntegracaoController::class, 'show']);
+    $router->post('/integracao/{token}', [PesquisaIntegracaoController::class, 'store']);
+
     $router->post('/api/check-cpf', [ApiController::class, 'checkCpf']);
     $router->post('/api/pipeline/move', [AdminPipelineController::class, 'move']);
     $router->post('/api/solicitacoes-vaga/move', [AdminSolicitacoesVagaKanbanController::class, 'move']);
@@ -71,6 +77,9 @@ try {
     // Integração (onboarding) do colaborador — Sprint "Integração do Colaborador". Dado
     // operacional do Portal, nunca escrito no METADADOS.
     $router->post('/admin/colaboradores/{id}/integracao', [AdminColaboradoresController::class, 'updateIntegracao']);
+    // Geração da Pesquisa de Integração (onboarding) — Sprint "Fundação do Dashboard de
+    // Integração". Só permitida quando a integração já está 'realizada'.
+    $router->post('/admin/colaboradores/{id}/pesquisa-integracao/gerar', [AdminColaboradoresController::class, 'gerarPesquisaIntegracao']);
 
     $router->get('/admin/avaliacoes', [AdminAvaliacoesController::class, 'index']);
     $router->get('/admin/avaliacoes/novo', [AdminAvaliacoesController::class, 'create']);

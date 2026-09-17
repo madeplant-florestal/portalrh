@@ -168,6 +168,38 @@ if (!empty($colaborador['data_demissao']) && preg_match('/^\d{2}\/\d{2}\/\d{4}$/
         <div><span class="text-gray-500">Responsável:</span> <span class="font-medium text-gray-900"><?= Security::e((string)($colaborador['integracao_responsavel_nome'] ?? '-')) ?></span></div>
       </div>
     <?php endif; ?>
+
+    <?php if ($integracaoStatus === 'realizada'): ?>
+      <div class="mt-6 border-t border-gray-200 pt-5">
+        <h4 class="text-sm font-semibold text-ctpblue">Pesquisa de Integração</h4>
+        <p class="mt-1 text-xs text-gray-500">Pesquisa de onboarding respondida pelo colaborador — fonte futura do NPS/Satisfação da Integração. Independente da Pesquisa de Experiência do processo seletivo.</p>
+
+        <?php if (empty($pesquisaIntegracao)): ?>
+          <p class="mt-2 text-sm text-gray-500">Nenhuma pesquisa gerada ainda para esta integração.</p>
+          <?php if (!empty($podeEditarIntegracao)): ?>
+            <form action="<?= $base ?>/admin/colaboradores/<?= (int)$colaborador['id'] ?>/pesquisa-integracao/gerar" method="post" class="mt-3">
+              <input type="hidden" name="csrf" value="<?= Security::e($csrf) ?>">
+              <button type="submit" class="rounded-lg bg-ctgreen px-4 py-2 text-sm font-medium text-white hover:bg-ctdark">Gerar pesquisa de integração</button>
+            </form>
+          <?php endif; ?>
+        <?php else: ?>
+          <?php if (!empty($linkPesquisaIntegracaoGerado)): ?>
+            <div class="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+              <p class="font-medium">Pesquisa gerada. Copie o link agora — por segurança, ele não pode ser recuperado depois desta tela:</p>
+              <input type="text" readonly value="<?= Security::e($linkPesquisaIntegracaoGerado) ?>" class="mt-2 w-full rounded border border-emerald-300 bg-white px-3 py-2 text-xs" onclick="this.select()">
+            </div>
+          <?php endif; ?>
+          <p class="mt-3 text-sm text-gray-700">
+            Status:
+            <span class="font-medium">
+              <?= !empty($pesquisaIntegracao['respondida_em'])
+                ? 'Respondida em ' . Security::e(date('d/m/Y H:i', strtotime((string)$pesquisaIntegracao['respondida_em'])))
+                : 'Aguardando resposta' ?>
+            </span>
+          </p>
+        <?php endif; ?>
+      </div>
+    <?php endif; ?>
   </div>
   <?php endif; ?>
 </div>

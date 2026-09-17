@@ -5,12 +5,14 @@ class AuthController extends Controller
     private const LOGIN_WINDOW_SECONDS = 600;
     private const LOGIN_LOCKOUT_SECONDS = 900;
 
+    /**
+     * Destino inicial resolvido de forma centralizada em Authorization::primeiraRotaAcessivel() —
+     * nunca assume que /admin (People Analytics) está disponível para todo usuário autenticado
+     * (exige dashboard.visualizar desde a correção deste problema).
+     */
     private function postLoginPath(): string
     {
-        if (class_exists('AdminController') && method_exists('AdminController', 'index')) {
-            return '/admin';
-        }
-        return '/login';
+        return Authorization::primeiraRotaAcessivel();
     }
 
     public function login(): void

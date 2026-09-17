@@ -156,4 +156,50 @@ class Authorization
         $stmt = Database::conn()->query('SELECT id FROM permissoes WHERE ativo = 1');
         return array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
     }
+
+    /**
+     * Resolução centralizada do destino inicial após login — usa a SESSÃO já estabelecida por
+     * `Auth::establishSession()`. `/admin` (People Analytics) exige `dashboard.visualizar` desde
+     * a correção deste problema: um usuário autenticado sem essa permissão não pode mais cair
+     * direto num 403 só por ter feito login. Nunca inventa permissão nova para isto — cada
+     * candidato abaixo usa exatamente a mesma condição de acesso já aplicada no controller/sidebar
+     * da rota correspondente, em ordem de especificidade (mais funcional primeiro), terminando
+     * numa rota aberta por role a admin/rh/viewer (garantida hoje, nunca gera loop de redirect).
+     */
+    public static function primeiraRotaAcessivel(): string
+    {
+        if (self::temPermissao('dashboard.visualizar')) {
+            return '/admin';
+        }
+        if (self::temPermissao('dashboard_recrutamento.visualizar')) {
+            return '/admin/dashboard-recrutamento';
+        }
+
+        $isAdminOuSupervisor = Auth::role() === 'admin' || !empty($_SESSION['user_is_supervisor']);
+        $isStaff = $isAdminOuSupervisor || Auth::role() === 'rh';
+
+        // Mesma condição de "Solicitações de vaga" já usada na sidebar ($vePedidosDeVaga) — é o
+        // destino funcionalmente mais relevante para um usuário (ex.: gestor) cujas únicas
+        // permissões são de Solicitação de Vaga/Kanban.
+        if (
+            $isStaff
+            || self::temPermissao('solicitacao_vaga.visualizar')
+            || self::temPermissao('solicitacao_vaga.criar')
+            || self::temPermissao('kanban_vagas.visualizar')
+        ) {
+            return '/admin/solicitacoes-vaga';
+        }
+
+        // Candidaturas (AdminCandidaturasController::index) é aberta por role a admin/rh/viewer
+        // sem nenhum gate de permissão individual hoje — cobre qualquer sessão autenticada válida
+        // (o papel é sempre um destes três, ver Auth::establishSession()).
+        if (in_array(Auth::role(), ['admin', 'rh', 'viewer'], true)) {
+            return '/admin/candidaturas';
+        }
+
+        // Rede de segurança final: Manual de Uso é aberto por role a qualquer sessão autenticada
+        // e nunca deveria ser necessário chegar aqui — evita loop de redirect caso surja um papel
+        // fora de admin/rh/viewer no futuro.
+        return '/admin/manual';
+    }
 }

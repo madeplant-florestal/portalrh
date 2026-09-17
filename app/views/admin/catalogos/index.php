@@ -89,7 +89,12 @@ $dangerButtonClass = 'inline-flex h-9 w-9 items-center justify-center rounded-lg
             <th class="p-3 text-left font-medium text-slate-500">Nome</th>
             <th class="p-3 text-left font-medium text-slate-500">Slug</th>
             <th class="p-3 text-left font-medium text-slate-500">Status</th>
-            <th class="p-3 text-left font-medium text-slate-500">Uso em colaboradores</th>
+            <?php if ($table === 'empresas'): ?>
+              <th class="p-3 text-left font-medium text-slate-500">Setores</th>
+              <th class="p-3 text-left font-medium text-slate-500">Colaboradores ativos</th>
+            <?php else: ?>
+              <th class="p-3 text-left font-medium text-slate-500">Uso em colaboradores</th>
+            <?php endif; ?>
             <th class="p-3 text-right font-medium text-slate-500">Ações</th>
           </tr>
         </thead>
@@ -104,7 +109,12 @@ $dangerButtonClass = 'inline-flex h-9 w-9 items-center justify-center rounded-lg
                   <?= $isActive ? 'Ativo' : 'Inativo' ?>
                 </span>
               </td>
-              <td class="p-3 text-slate-600"><?= (int)($item['usage_count'] ?? 0) ?></td>
+              <?php if ($table === 'empresas'): ?>
+                <td class="p-3 text-slate-600"><?= (int)($item['setores_count'] ?? 0) ?></td>
+                <td class="p-3 text-slate-600"><?= (int)($item['usage_count'] ?? 0) ?></td>
+              <?php else: ?>
+                <td class="p-3 text-slate-600"><?= (int)($item['usage_count'] ?? 0) ?></td>
+              <?php endif; ?>
               <td class="p-3">
                 <div class="flex justify-end gap-2">
                   <?php if ($canManage): ?>
@@ -126,7 +136,7 @@ $dangerButtonClass = 'inline-flex h-9 w-9 items-center justify-center rounded-lg
           <?php endforeach; ?>
           <?php if (empty($items)): ?>
             <tr>
-              <td colspan="5" class="p-6 text-center text-slate-500">Nenhum registro encontrado para os filtros informados.</td>
+              <td colspan="<?= $table === 'empresas' ? 6 : 5 ?>" class="p-6 text-center text-slate-500">Nenhum registro encontrado para os filtros informados.</td>
             </tr>
           <?php endif; ?>
         </tbody>
@@ -139,7 +149,12 @@ $dangerButtonClass = 'inline-flex h-9 w-9 items-center justify-center rounded-lg
         <div class="responsive-card">
           <div class="text-base font-semibold text-slate-900"><?= Security::e($item['nome']) ?></div>
           <div class="mt-1 text-sm text-slate-600">Slug: <?= Security::e($item['slug']) ?></div>
-          <div class="mt-1 text-sm text-slate-600">Vinculados: <?= (int)($item['usage_count'] ?? 0) ?></div>
+          <?php if ($table === 'empresas'): ?>
+            <div class="mt-1 text-sm text-slate-600">Setores: <?= (int)($item['setores_count'] ?? 0) ?></div>
+            <div class="mt-1 text-sm text-slate-600">Colaboradores ativos: <?= (int)($item['usage_count'] ?? 0) ?></div>
+          <?php else: ?>
+            <div class="mt-1 text-sm text-slate-600">Vinculados: <?= (int)($item['usage_count'] ?? 0) ?></div>
+          <?php endif; ?>
           <div class="mt-3">
             <span class="inline-flex rounded-full px-3 py-1 text-xs font-semibold <?= $isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600' ?>">
               <?= $isActive ? 'Ativo' : 'Inativo' ?>

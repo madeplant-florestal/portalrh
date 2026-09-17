@@ -60,6 +60,11 @@ class CadastroOrganizacional
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
         foreach ($rows as &$row) {
             $row['usage_count'] = self::usageCount($table, (int)($row['id'] ?? 0));
+            // Coluna extra só para Empresas — "Setores" é uma métrica diferente de
+            // "usage_count" (que agora é Colaboradores ativos, ver usageCount()).
+            if ($table === 'empresas') {
+                $row['setores_count'] = self::setoresVinculadosCount((int)($row['id'] ?? 0));
+            }
         }
 
         return $rows;
@@ -163,10 +168,11 @@ class CadastroOrganizacional
             return 0;
         }
 
-        if ($table === 'empresas' && self::tableExists('setores') && self::columnExists('setores', 'empresa_id')) {
-            $stmt = Database::conn()->prepare('SELECT COUNT(*) FROM setores WHERE empresa_id = ?');
-            $stmt->execute([$id]);
-            return (int)$stmt->fetchColumn();
+        // Empresa: fonte oficial é colaboradores_metadados (espelho do METADADOS), nunca a
+        // tabela local `colaboradores` nem `setores` (quantidade de Setores é uma métrica
+        // diferente — ver setoresVinculadosCount()). Ver docs/claude/riscos-conhecidos.md.
+        if ($table === 'empresas') {
+            return self::colaboradoresAtivosPorEmpresa($id);
         }
 
         if (!self::tableExists('colaboradores')) {
@@ -186,12 +192,11 @@ class CadastroOrganizacional
     private static function linkedCount(string $table): int
     {
         self::assertSupportedTable($table);
-        if ($table === 'empresas' && self::tableExists('setores') && self::columnExists('setores', 'empresa_id')) {
-            $stmt = Database::conn()->query(
-                'SELECT COUNT(DISTINCT empresa_id) FROM setores WHERE empresa_id IS NOT NULL'
-            );
 
-            return (int)$stmt->fetchColumn();
+        // Empresa: mesma fonte oficial de usageCount() — total de pessoas distintas com contrato
+        // ativo no espelho (não é soma das linhas por empresa, ver colaboradoresAtivosTotal()).
+        if ($table === 'empresas') {
+            return self::colaboradoresAtivosTotal();
         }
 
         if (!self::tableExists('colaboradores')) {
@@ -204,6 +209,69 @@ class CadastroOrganizacional
             $referenceColumn,
             $referenceColumn
         ));
+
+        return (int)$stmt->fetchColumn();
+    }
+
+    /**
+     * Colaboradores ATIVOS de uma Empresa — fonte oficial: `colaboradores_metadados` (espelho do
+     * METADADOS), casado com o catálogo local por `codigo_empresa` (código opaco, comparação
+     * exata). Conta PESSOAS distintas (`codigo_pessoa`), nunca contratos — uma pessoa com dois
+     * contratos ativos na mesma empresa (raro, mas possível) conta uma vez só.
+     *
+     * `COLLATE utf8mb4_general_ci` nos dois lados: `colaboradores_metadados` usa a collation do
+     * espelho (ex.: utf8mb4_0900_ai_ci/utf8mb4_uca1400_ai_ci), `empresas` usa utf8mb4_general_ci —
+     * sem o COLLATE explícito o JOIN falha com "Illegal mix of collations" no MariaDB de produção.
+     */
+    private static function colaboradoresAtivosPorEmpresa(int $empresaId): int
+    {
+        if ($empresaId <= 0 || !self::tableExists('colaboradores_metadados')) {
+            return 0;
+        }
+
+        $stmt = Database::conn()->prepare(
+            'SELECT COUNT(DISTINCT cm.codigo_pessoa)
+             FROM colaboradores_metadados cm
+             INNER JOIN empresas e
+               ON e.codigo_empresa COLLATE utf8mb4_general_ci = cm.codigo_empresa COLLATE utf8mb4_general_ci
+             WHERE cm.ativo = 1 AND e.id = ?'
+        );
+        $stmt->execute([$empresaId]);
+
+        return (int)$stmt->fetchColumn();
+    }
+
+    /**
+     * Total geral de pessoas com contrato ativo no espelho — calculado direto (nunca somando os
+     * valores por empresa: uma mesma pessoa pode ter contratos ativos em empresas diferentes, e
+     * pessoas sem `codigo_empresa` reconhecido no catálogo local não entrariam na soma).
+     */
+    private static function colaboradoresAtivosTotal(): int
+    {
+        if (!self::tableExists('colaboradores_metadados')) {
+            return 0;
+        }
+
+        $stmt = Database::conn()->query(
+            'SELECT COUNT(DISTINCT codigo_pessoa) FROM colaboradores_metadados WHERE ativo = 1'
+        );
+
+        return (int)$stmt->fetchColumn();
+    }
+
+    /**
+     * Quantidade de Setores cadastrados/vinculados a uma Empresa — métrica DIFERENTE de
+     * colaboradores (ver colaboradoresAtivosPorEmpresa()). Antes desta correção, este número era
+     * exibido incorretamente sob o rótulo "Uso em colaboradores"; agora vira uma coluna própria.
+     */
+    public static function setoresVinculadosCount(int $empresaId): int
+    {
+        if ($empresaId <= 0 || !self::tableExists('setores') || !self::columnExists('setores', 'empresa_id')) {
+            return 0;
+        }
+
+        $stmt = Database::conn()->prepare('SELECT COUNT(*) FROM setores WHERE empresa_id = ?');
+        $stmt->execute([$empresaId]);
 
         return (int)$stmt->fetchColumn();
     }

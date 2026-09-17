@@ -64,15 +64,29 @@ class SetorRepository
             $offset = ($page - 1) * $perPage;
         }
 
+        // Cargos e Colaboradores vêm exclusivamente das fontes oficiais do METADADOS:
+        //   - cargo_setores_metadados (nunca cargo_setores, legado);
+        //   - colaboradores_metadados, casado por codigo_setor (código opaco, comparação exata),
+        //     contando PESSOAS distintas com contrato ativo (nunca contratos, nunca
+        //     colaboradores.setor_id). Setor sem codigo_setor oficial nunca casa com nada — não
+        //     inventamos vínculo (NULL = NULL nunca é verdadeiro em SQL, mas o guard extra abaixo
+        //     deixa a regra explícita em vez de depender só desse comportamento implícito).
+        // COLLATE utf8mb4_general_ci dos dois lados: colaboradores_metadados usa a collation do
+        // espelho (utf8mb4_0900_ai_ci/utf8mb4_uca1400_ai_ci em produção), setores usa
+        // utf8mb4_general_ci — sem isso o JOIN falha com "Illegal mix of collations" no MariaDB.
         $sql = "SELECT s.id, s.nome, s.slug, s.ativo, s.created_at, s.empresa_id,
                        e.nome AS empresa_nome,
                        e.ativo AS empresa_ativa,
-                       COUNT(DISTINCT cs.cargo_id) AS cargos_vinculados,
-                       COUNT(DISTINCT c.id) AS colaboradores_vinculados
+                       COUNT(DISTINCT csm.cargo_id) AS cargos_vinculados,
+                       COUNT(DISTINCT cm.codigo_pessoa) AS colaboradores_vinculados
                 FROM setores s
                 LEFT JOIN empresas e ON e.id = s.empresa_id
-                LEFT JOIN cargo_setores cs ON cs.setor_id = s.id
-                LEFT JOIN colaboradores c ON c.setor_id = s.id
+                LEFT JOIN cargo_setores_metadados csm ON csm.setor_id = s.id
+                LEFT JOIN colaboradores_metadados cm
+                  ON cm.codigo_setor COLLATE utf8mb4_general_ci = s.codigo_setor COLLATE utf8mb4_general_ci
+                 AND cm.ativo = 1
+                 AND s.codigo_setor IS NOT NULL AND s.codigo_setor <> ''
+                 AND cm.codigo_setor IS NOT NULL AND cm.codigo_setor <> ''
                 {$whereSql}
                 GROUP BY s.id, s.nome, s.slug, s.ativo, s.created_at, s.empresa_id, e.nome, e.ativo
                 ORDER BY s.nome ASC
@@ -96,14 +110,21 @@ class SetorRepository
     {
         [$whereSql, $params] = $this->buildFilterSql($filters);
 
+        // Mesma fonte oficial de paginateAdmin() — ver comentário lá para o porquê de
+        // cargo_setores_metadados/colaboradores_metadados (nunca cargo_setores/colaboradores) e
+        // do COLLATE explícito no JOIN por codigo_setor.
         $sql = "SELECT s.id, s.nome, s.slug, s.ativo, s.created_at, s.empresa_id,
                        e.nome AS empresa_nome,
-                       COUNT(DISTINCT cs.cargo_id) AS cargos_vinculados,
-                       COUNT(DISTINCT c.id) AS colaboradores_vinculados
+                       COUNT(DISTINCT csm.cargo_id) AS cargos_vinculados,
+                       COUNT(DISTINCT cm.codigo_pessoa) AS colaboradores_vinculados
                 FROM setores s
                 LEFT JOIN empresas e ON e.id = s.empresa_id
-                LEFT JOIN cargo_setores cs ON cs.setor_id = s.id
-                LEFT JOIN colaboradores c ON c.setor_id = s.id
+                LEFT JOIN cargo_setores_metadados csm ON csm.setor_id = s.id
+                LEFT JOIN colaboradores_metadados cm
+                  ON cm.codigo_setor COLLATE utf8mb4_general_ci = s.codigo_setor COLLATE utf8mb4_general_ci
+                 AND cm.ativo = 1
+                 AND s.codigo_setor IS NOT NULL AND s.codigo_setor <> ''
+                 AND cm.codigo_setor IS NOT NULL AND cm.codigo_setor <> ''
                 {$whereSql}
                 GROUP BY s.id, s.nome, s.slug, s.ativo, s.created_at, s.empresa_id, e.nome
                 ORDER BY s.nome ASC";

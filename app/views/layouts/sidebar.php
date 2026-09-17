@@ -66,6 +66,12 @@ $sidebarLinkClass = static function (array $paths = [], string $extra = '') use 
         <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg>
         <span class="sidebar-link-label">Indicadores de RH</span>
       </a>
+      <?php if (Authorization::temPermissao('dashboard_recrutamento.visualizar')): ?>
+      <a href="<?= $base ?>/admin/dashboard-recrutamento" class="sidebar-primary-link <?= $sidebarLinkClass(['/admin/dashboard-recrutamento']) ?>" data-admin-menu-close="1" title="Dashboard de Recrutamento e Seleção" aria-label="Dashboard de Recrutamento e Seleção">
+        <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 3v18h18"/><path d="M8 17V11"/><path d="M13 17V7"/><path d="M18 17v-4"/></svg>
+        <span class="sidebar-link-label">Recrutamento e Seleção</span>
+      </a>
+      <?php endif; ?>
       <a href="<?= $base ?>/admin/candidaturas" class="sidebar-primary-link <?= $sidebarLinkClass(['/admin/candidaturas']) ?>" data-admin-menu-close="1" title="Candidaturas" aria-label="Candidaturas">
         <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="8" cy="8" r="3"/><circle cx="16" cy="12" r="3"/></svg>
         <span class="sidebar-link-label">Candidaturas</span>

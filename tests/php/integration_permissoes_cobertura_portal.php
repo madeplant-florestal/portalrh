@@ -156,7 +156,9 @@ try {
         $check(in_array($codigoAntigo, $existentes, true), "permissão já publicada '{$codigoAntigo}' continua no catálogo, sem regressão");
     }
     $totalAntigo = 15; // 4 solicitacao_vaga + 4 kanban_vagas + 3 mensagens + 1 comunicacoes + 1 pesquisa_experiencia + 2 integracao_colaborador
-    $check((int)$pdo->query('SELECT COUNT(*) FROM permissoes')->fetchColumn() === $totalAntigo + 42, 'total de permissões = 15 já existentes + 42 novas desta rodada, nenhuma removida/duplicada');
+    // >= (não ===): sprints seguintes adicionam permissões novas (ex.: dashboard_recrutamento.visualizar)
+    // sem remover nenhuma das 15+42 desta rodada — o teste continua provando "nada foi removido/duplicado".
+    $check((int)$pdo->query('SELECT COUNT(*) FROM permissoes')->fetchColumn() >= $totalAntigo + 42, 'total de permissões >= 15 já existentes + 42 desta rodada, nenhuma removida/duplicada');
 
     // ---- 15/16. Tela de Usuários / Contexto Organizacional / vínculo METADADOS: nenhum arquivo tocado
     $arquivosNaoTocados = [

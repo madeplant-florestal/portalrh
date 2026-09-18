@@ -7,13 +7,18 @@
  * Prova que:
  *   - a permissão dashboard.visualizar (catálogo já existente) exige o mecanismo central de
  *     Authorization — Admin via bypass, usuário via permissão individual, NUNCA por role sozinha;
- *   - Headcount Atual conta PESSOA distinta (codigo_pessoa), nunca contrato — duas linhas ativas da
- *     mesma pessoa contam uma vez;
- *   - Headcount só considera ativo = 1;
+ *   - Headcount Atual conta CONTRATO (unidade oficial dos indicadores corporativos de
+ *     Headcount/movimentação) — nunca COUNT(DISTINCT codigo_pessoa); uma mesma pessoa com dois
+ *     contratos oficiais válidos conta duas vezes, reaproveitando
+ *     RhIndicadoresService::headcountEm() (admissao<=data e demissao IS NULL OU demissao>=data);
  *   - Filtro de Empresa e de Setor isolam corretamente colaboradores_metadados;
  *   - Ausência de codigo_setor cai em "Setor não informado", nunca inferido de outra fonte;
- *   - Admissões no período deduplicam por pessoa (readmissão rápida não conta duas vezes);
+ *   - Admissões no período contam CONTRATO/evento (RhIndicadoresService::admissoesNoPeriodo()) —
+ *     duas admissões da mesma pessoa no período contam duas vezes, nunca deduplicadas;
  *   - Desligamentos no período são por EVENTO/contrato, não deduplicados por pessoa;
+ *   - Turnover Geral/Voluntário/Involuntário usam headcount por CONTRATO, com a âncora inicial
+ *     `início do período - 1 dia`, mesma convenção de Indicadores de RH;
+ *   - Colaboradores por Setor conta CONTRATOS ativos (pela flag `ativo`), não pessoas distintas;
  *   - Turnover Geral reaproveita RhIndicadoresService::taxaTurnover(), sem reimplementar a fórmula;
  *   - Turnover por Faixa Etária ignora desligamentos sem nascimento, e vira null (não 0 falso)
  *     quando nenhum desligamento do período é classificável;
@@ -155,8 +160,8 @@ try {
     $p6 = 'ZZP' . $suffix . '6';
     $p7 = 'ZZP' . $suffix . '7';
 
-    // P1: ativo, Empresa+Setor fixture, DOIS contratos (mesma pessoa) — prova que Headcount conta
-    // pessoa distinta, não contrato.
+    // P1: ativo, Empresa+Setor fixture, DOIS contratos (mesma pessoa) — os dois contam
+    // INDIVIDUALMENTE no Headcount (unidade oficial é o CONTRATO, nunca codigo_pessoa).
     $mkMetadados($p1, 'A', $hoje->modify('-800 days'), null, true, $empFixture, $setFixture);
     $mkMetadados($p1, 'B', $hoje->modify('-600 days'), null, true, $empFixture, $setFixture);
 
@@ -167,7 +172,8 @@ try {
     // P3: ativo, SEM codigo_setor — nunca inferido, cai em "Setor não informado".
     $mkMetadados($p3, 'A', $hoje->modify('-700 days'), null, true, $empFixture, null);
 
-    // P4: admissão DENTRO do período, em DOIS contratos (readmissão rápida) — Admissões dedup por pessoa.
+    // P4: admissão DENTRO do período, em DOIS contratos (readmissão rápida) — as duas admissões
+    // contam INDIVIDUALMENTE (unidade oficial é o contrato/evento, nunca deduplicado por pessoa).
     $mkMetadados($p4, 'A', $hoje->modify('-10 days'), null, true, $empFixture, $setFixture);
     $mkMetadados($p4, 'B', $hoje->modify('-8 days'), null, true, $empFixture, $setFixture);
 
@@ -189,15 +195,16 @@ try {
 
     $service = new PeopleAnalyticsService();
 
-    // ---- 2) Headcount: pessoa distinta, não contrato; só ativo = 1 ----------------------------
+    // ---- 2) Headcount: CONTRATO é a unidade oficial, não pessoa distinta ------------------------
     $painelEmp = $service->montarPainel(['codigo_empresa' => $empFixture], $inicio, $fim);
-    $check($painelEmp['headcount']['atual'] === 3, '(A) Headcount Atual = 3 (P1 dedup de 2 contratos, P3, P4 dedup de 2 contratos) — P2 e P5/P6 excluídos por ativo=0');
+    $check($painelEmp['headcount']['atual'] === 5, '(A) Headcount Atual = 5 contratos (P1: 2 + P3: 1 + P4: 2, cada contrato contado individualmente) — P2/P5/P6 excluídos por já terem demissao <= hoje');
 
     // ---- 3) Filtro de Setor isola corretamente (independente do filtro de Empresa) -------------
     $painelSetor = $service->montarPainel(['codigo_setor' => $setFixture], $inicio, $fim);
-    $check($painelSetor['headcount']['atual'] === 2, '(B/C) Filtro de Setor conta só P1+P4 (ativos com codigo_setor = fixture) — P3 fica de fora por não ter Setor');
+    $check($painelSetor['headcount']['atual'] === 4, '(B/C) Filtro de Setor conta 4 contratos ativos hoje (P1: 2 + P4: 2) — P2/P5/P6 (mesmo Setor) já desligados, P3 fica de fora por não ter Setor');
 
-    // ---- 4) "Setor não informado" nunca é inferido, aparece separado --------------------------
+    // ---- 4) "Setor não informado" nunca é inferido, aparece separado; distribuição por Setor conta
+    //         CONTRATOS ativos (flag `ativo`), não pessoas distintas ----------------------------
     $porSetor = $painelEmp['colaboradores_por_setor'];
     $itemSetorFixture = null;
     $itemSemSetor = null;
@@ -209,22 +216,35 @@ try {
             $itemSemSetor = $item;
         }
     }
-    $check($itemSetorFixture !== null && $itemSetorFixture['quantidade'] === 2, '(D) Colaboradores por Setor: setor fixture soma 2 pessoas ativas distintas (P1+P4)');
+    $check($itemSetorFixture !== null && $itemSetorFixture['quantidade'] === 4, '(D/7) Colaboradores por Setor: setor fixture soma 4 CONTRATOS ativos (P1: 2 + P4: 2) — não COUNT(DISTINCT codigo_pessoa)');
     $check($itemSemSetor !== null && $itemSemSetor['quantidade'] === 1, '(19) Colaboradores por Setor: "Setor não informado" = 1 (P3) — nunca redistribuído nem inferido');
 
-    // ---- 5) Admissões no período dedup por pessoa -----------------------------------------------
-    $check($painelEmp['admissoes']['periodo'] === 1, '(E) Admissões no período = 1 — P4 tem 2 contratos com admissão no período (readmissão), mas conta como 1 pessoa distinta');
+    // ---- 5) Admissões no período contam CONTRATO/evento, sem dedup por pessoa -------------------
+    $check($painelEmp['admissoes']['periodo'] === 2, '(E) Admissões no período = 2 — as DUAS admissões de P4 (readmissão rápida) contam individualmente, cada contrato admitido é uma admissão oficial');
 
-    // ---- 6) Desligamentos no período são por evento, NÃO deduplicados por pessoa ----------------
+    // ---- 6) Desligamentos no período são por evento, NÃO deduplicados por pessoa (regra mantida) -
     $check($painelEmp['desligamentos']['periodo'] === 3, '(F) Desligamentos no período = 3 eventos — P5 tem 2 contratos desligados no período (não deduplicados) + P6 = 3, P2 fica de fora (desligado antes do período)');
 
-    // ---- 7) Turnover Geral reaproveita RhIndicadoresService::taxaTurnover() ---------------------
+    // ---- 7) Turnover Geral reaproveita RhIndicadoresService::taxaTurnover(), headcount por
+    //         CONTRATO e âncora inicial "início do período - 1 dia" (mesma convenção de
+    //         Indicadores de RH) --------------------------------------------------------------
     $headcountInicio = $painelEmp['turnover']['headcount_inicio'];
     $headcountFim = $painelEmp['turnover']['headcount_fim'];
     $esperadoTurnover = RhIndicadoresService::taxaTurnover($painelEmp['desligamentos']['periodo'], $headcountInicio, $headcountFim);
     $check($painelEmp['turnover']['geral_percentual'] === $esperadoTurnover, '(G) Turnover Geral bate exatamente com RhIndicadoresService::taxaTurnover() — fórmula não duplicada');
-    $check($headcountInicio === 4, '(G-correlato) Headcount no início do período = 4 (P1, P3, P5, P6 já ativos em -30d) — P2 já tinha saído, P4 ainda não tinha entrado');
-    $check($headcountFim === 3, '(G-correlato) Headcount no fim do período = 3 (P1, P3, P4) — P5 e P6 já tinham saído até hoje');
+    $check($headcountFim === $painelEmp['headcount']['atual'], '(G-correlato) headcount_fim do Turnover é EXATAMENTE o mesmo valor do card Headcount Atual — mesma função, mesma data, nenhuma definição paralela dentro do próprio People Analytics');
+    $check($headcountInicio === 6, '(4/G-correlato) Headcount no início do período = 6 contratos (P1: 2, P3: 1, P5: 2, P6: 1, todos ativos em início-1 dia) — P2 já tinha saído antes disso, P4 ainda não tinha entrado');
+    $check($headcountFim === 5, '(G-correlato) Headcount no fim do período = 5 contratos (P1: 2, P3: 1, P4: 2) — P5 e P6 já tinham saído até hoje');
+
+    // ---- 7b) Fixture dedicada — uma única pessoa com DOIS contratos, isolada, prova direta e
+    //          inequívoca de que o Headcount NUNCA usa COUNT(DISTINCT codigo_pessoa) -------------
+    $empDuploFixture = 'ZZD' . $suffix;
+    $pDuplo = 'ZZP' . $suffix . 'DUP';
+    $mkMetadados($pDuplo, 'A', $hoje->modify('-500 days'), null, true, $empDuploFixture, null);
+    $mkMetadados($pDuplo, 'B', $hoje->modify('-15 days'), null, true, $empDuploFixture, null);
+    $painelDuplo = $service->montarPainel(['codigo_empresa' => $empDuploFixture], $inicio, $fim);
+    $check($painelDuplo['headcount']['atual'] === 2, '(4/A) Fixture dedicada: 1 pessoa com 2 contratos ativos isolada em empresa própria -> Headcount = 2, NUNCA 1 — prova direta contra regressão para COUNT(DISTINCT codigo_pessoa)');
+    $check($painelDuplo['admissoes']['periodo'] === 1, '(4/E) Mesma pessoa: só 1 dos 2 contratos foi admitido dentro do período -> Admissões = 1 (contrato B, admitido há 15 dias) — o outro (contrato A, há 500 dias) fica de fora por data, não por dedup de pessoa');
 
     // ---- 8) Turnover por Faixa Etária: ignora sem nascimento; null quando nada é classificável --
     $faixaEmp = $painelEmp['turnover']['faixa_etaria'];

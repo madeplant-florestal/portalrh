@@ -3,11 +3,19 @@
 /**
  * People Analytics — Tela Inicial/Dashboard principal do Portal RH.
  *
+ * Unidade oficial dos indicadores corporativos de Headcount/movimentação (Headcount Atual,
+ * Admissões, Desligamentos, Turnover Geral/Voluntário/Involuntário, Colaboradores por Setor): o
+ * CONTRATO do METADADOS — nunca pessoa distinta. Uma mesma pessoa pode ter múltiplos contratos
+ * oficiais válidos simultaneamente; eles não são deduplicados por `codigo_pessoa`. Reaproveita
+ * diretamente `RhIndicadoresService::headcountEm()`/`admissoesNoPeriodo()`/`taxaTurnover()` — a
+ * mesma semântica já consolidada em Indicadores de RH, nunca uma interpretação paralela. Quando um
+ * indicador futuro precisar ser baseado em PESSOA em vez de contrato, isso deve ser uma decisão
+ * explícita do negócio, documentada aqui — nunca inferida.
+ *
  * Convenção de indisponibilidade (mesma de outros dashboards desta geração): todo indicador que
  * não pode ser calculado com confiança chega aqui como `null` (nunca `0` falso) — a view decide a
  * legenda certa ("Dados insuficientes" para amostra zero, "Fonte ainda não disponível" para
- * estrutura inexistente, "Aguardando definição" para os dois indicadores de turnover
- * voluntário/involuntário — ver AMBIGUIDADE no relatório da sprint).
+ * estrutura inexistente).
  *
  * Fonte oficial para tudo que é dado cadastral/organizacional: `colaboradores_metadados`
  * (PeopleAnalyticsRepository). `colaboradores` (tabela local legada) só é usada para Integração —
@@ -63,10 +71,14 @@ class PeopleAnalyticsService
             'codigo_setor' => $codigoSetor,
         ]);
 
-        $headcountAtual = $this->contarAtivosDistintos($contratos);
-        $headcountInicio = $this->headcountDistinctoEm($contratos, $inicio);
-        $headcountFim = $this->headcountDistinctoEm($contratos, $fim);
-        $admissoes = $this->admissoesDistintasNoPeriodo($contratos, $inicio, $fim);
+        // Unidade oficial dos indicadores corporativos de Headcount/movimentação: CONTRATO do
+        // METADADOS (não pessoa distinta) — reaproveita a MESMA semântica consolidada em
+        // RhIndicadoresService (headcountEm/admissoesNoPeriodo/desligamentosNoPeriodo/
+        // taxaTurnover), nunca uma interpretação paralela. Uma mesma pessoa pode ter múltiplos
+        // contratos oficiais válidos — eles não são deduplicados por codigo_pessoa aqui.
+        $headcountFim = RhIndicadoresService::headcountEm($contratos, $fim);
+        $headcountInicio = RhIndicadoresService::headcountEm($contratos, $inicio->modify('-1 day'));
+        $admissoesContratos = RhIndicadoresService::admissoesNoPeriodo($contratos, $inicio, $fim);
         $desligamentos = $this->desligamentosNoPeriodo($contratos, $inicio, $fim);
         $turnoverGeral = RhIndicadoresService::taxaTurnover(count($desligamentos), $headcountInicio, $headcountFim);
         $voluntarios = $this->contarPorCodigosMotivo($desligamentos, self::CODIGOS_VOLUNTARIO);
@@ -91,10 +103,10 @@ class PeopleAnalyticsService
 
         return [
             'headcount' => [
-                'atual' => $headcountAtual,
+                'atual' => $headcountFim,
             ],
             'vagas' => $vagas,
-            'admissoes' => ['periodo' => $admissoes],
+            'admissoes' => ['periodo' => count($admissoesContratos)],
             'desligamentos' => ['periodo' => count($desligamentos)],
             'turnover' => [
                 'geral_percentual' => $turnoverGeral,
@@ -162,61 +174,6 @@ class PeopleAnalyticsService
             'fechadas_no_periodo' => (int)($vagasFechadas['total'] ?? 0),
             'empresa_sem_correspondencia' => false,
         ];
-    }
-
-    private function contarAtivosDistintos(array $contratos): int
-    {
-        $pessoas = [];
-        foreach ($contratos as $contrato) {
-            if ((int)($contrato['ativo'] ?? 0) === 1) {
-                $pessoas[(string)$contrato['codigo_pessoa']] = true;
-            }
-        }
-        return count($pessoas);
-    }
-
-    /**
-     * Headcount de PESSOAS distintas ativas numa data — reconstrói o histórico real a partir de
-     * admissão/demissão de cada contrato (nunca presume que o headcount atual valha para o
-     * passado). Deliberadamente NÃO reaproveita RhIndicadoresService::headcountEm(): aquele
-     * método conta CONTRATOS, este conta PESSOAS distintas (um contrato duplicado da mesma pessoa
-     * não pode contar duas vezes o Headcount).
-     */
-    private function headcountDistinctoEm(array $contratos, DateTimeImmutable $data): int
-    {
-        $pessoas = [];
-        foreach ($contratos as $contrato) {
-            if ($this->contratoAtivoEm($contrato, $data)) {
-                $pessoas[(string)$contrato['codigo_pessoa']] = true;
-            }
-        }
-        return count($pessoas);
-    }
-
-    private function contratoAtivoEm(array $contrato, DateTimeImmutable $data): bool
-    {
-        $admissao = $this->parseData($contrato['admissao'] ?? null);
-        if ($admissao === null || $admissao > $data) {
-            return false;
-        }
-        $demissao = $this->parseData($contrato['demissao'] ?? null);
-        return $demissao === null || $demissao >= $data;
-    }
-
-    /**
-     * PESSOAS distintas admitidas no período — uma mesma pessoa com dois contratos cujas
-     * admissões caem no mesmo período (readmissão rápida) conta uma vez só.
-     */
-    private function admissoesDistintasNoPeriodo(array $contratos, DateTimeImmutable $inicio, DateTimeImmutable $fim): int
-    {
-        $pessoas = [];
-        foreach ($contratos as $contrato) {
-            $admissao = $this->parseData($contrato['admissao'] ?? null);
-            if ($admissao !== null && $admissao >= $inicio && $admissao <= $fim) {
-                $pessoas[(string)$contrato['codigo_pessoa']] = true;
-            }
-        }
-        return count($pessoas);
     }
 
     /**
@@ -334,14 +291,14 @@ class PeopleAnalyticsService
         $semSetor = 0;
         foreach ($linhas as $linha) {
             $codigo = $linha['codigo_setor'] ?? null;
-            $pessoas = (int)($linha['pessoas'] ?? 0);
+            $contratos = (int)($linha['contratos'] ?? 0);
             if ($codigo === null || $codigo === '') {
-                $semSetor += $pessoas;
+                $semSetor += $contratos;
                 continue;
             }
             $comSetor[] = [
                 'label' => (string)($linha['nome_oficial'] ?? $codigo),
-                'quantidade' => $pessoas,
+                'quantidade' => $contratos,
             ];
         }
 

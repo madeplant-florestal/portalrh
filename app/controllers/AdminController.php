@@ -39,6 +39,20 @@ class AdminController extends Controller
             $opcoesFiltro = ['empresas' => [], 'setores' => []];
         }
 
+        // Mesma fonte/convenção de "Última atualização" do Indicadores de RH
+        // (AdminRhIndicadoresController::index()) — nunca deriva de updated_at de colaborador,
+        // nunca cria mecanismo novo de sincronização aqui.
+        $ultimaSincronizacao = null;
+        try {
+            $ultima = (new MetadadosSyncExecucaoRepository())->ultimaSincronizacaoValida();
+            if ($ultima !== null && !empty($ultima['concluido_em'])) {
+                $d = new DateTimeImmutable((string)$ultima['concluido_em']);
+                $ultimaSincronizacao = $d->format('d/m/Y') . ' às ' . $d->format('H:i');
+            }
+        } catch (Throwable $e) {
+            Logger::warning('Não foi possível ler a última sincronização do METADADOS', ['erro' => $e->getMessage()]);
+        }
+
         $this->view->render('admin/dashboard', [
             'painel' => $painel,
             'erro' => $erro,
@@ -51,6 +65,7 @@ class AdminController extends Controller
             ],
             'periodoInicio' => $inicio,
             'periodoFim' => $fim,
+            'ultimaSincronizacao' => $ultimaSincronizacao,
         ], 'layouts/admin');
     }
 

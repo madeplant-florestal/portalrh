@@ -13,6 +13,15 @@ require_once __DIR__ . '/partials/chart-helpers.php';
     <div>
       <h1 class="text-2xl font-bold tracking-tight text-slate-900">People Analytics</h1>
       <p class="mt-1 text-sm text-slate-500">Headcount, movimentação, turnover e processos de RH — consolidado a partir dos dados oficiais do Portal</p>
+      <?php if ($erro === null): ?>
+        <p class="mt-2 text-xs text-slate-500">
+          <?php if (!empty($ultimaSincronizacao)): ?>
+            Última atualização: <span class="font-semibold text-slate-700"><?= Security::e($ultimaSincronizacao) ?></span>
+          <?php else: ?>
+            Última atualização: <span class="font-semibold text-slate-700">—</span>
+          <?php endif; ?>
+        </p>
+      <?php endif; ?>
     </div>
   </section>
 
@@ -53,7 +62,7 @@ require_once __DIR__ . '/partials/chart-helpers.php';
     <div class="responsive-panel ring-1 ring-slate-200">
       <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Headcount Atual</p>
       <p class="mt-1 text-[1.75rem] font-bold leading-none text-slate-900"><?= number_format($painel['headcount']['atual'], 0, ',', '.') ?></p>
-      <p class="mt-1 text-xs text-slate-500">pessoas com contrato ativo</p>
+      <p class="mt-1 text-xs text-slate-500">contratos ativos hoje</p>
     </div>
     <div class="responsive-panel ring-1 ring-slate-200">
       <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Vagas Abertas</p>
@@ -68,7 +77,7 @@ require_once __DIR__ . '/partials/chart-helpers.php';
     <div class="responsive-panel ring-1 ring-slate-200">
       <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Admissões</p>
       <p class="mt-1 text-[1.75rem] font-bold leading-none text-slate-900"><?= number_format($painel['admissoes']['periodo'], 0, ',', '.') ?></p>
-      <p class="mt-1 text-xs text-slate-500">pessoas distintas no período</p>
+      <p class="mt-1 text-xs text-slate-500">contratos admitidos no período</p>
     </div>
     <div class="responsive-panel ring-1 ring-slate-200">
       <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Desligamentos</p>
@@ -126,9 +135,9 @@ require_once __DIR__ . '/partials/chart-helpers.php';
   <section class="grid grid-cols-1 gap-6 xl:grid-cols-2">
     <article class="responsive-panel ring-1 ring-slate-200">
       <h2 class="text-base font-bold text-slate-900">Colaboradores por Setor</h2>
-      <p class="text-xs text-slate-500">Pessoas ativas distintas, agrupadas pelo Setor oficial do METADADOS</p>
+      <p class="text-xs text-slate-500">Contratos ativos, agrupados pelo Setor oficial do METADADOS</p>
       <?php if ($painel['colaboradores_por_setor'] === []): ?>
-        <p class="mt-3 text-sm text-slate-500">Nenhum colaborador ativo para os filtros selecionados.</p>
+        <p class="mt-3 text-sm text-slate-500">Nenhum contrato ativo para os filtros selecionados.</p>
       <?php else: ?>
         <div class="mt-3 space-y-3">
           <?php $maxSetor = max(array_column($painel['colaboradores_por_setor'], 'quantidade')) ?: 1; ?>

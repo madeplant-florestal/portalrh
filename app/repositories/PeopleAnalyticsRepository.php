@@ -102,9 +102,10 @@ class PeopleAnalyticsRepository
     }
 
     /**
-     * Colaboradores ATIVOS distintos por Setor, resolvido pelo catálogo oficial local. Quem não
-     * tem `codigo_setor` no espelho entra em "Setor não informado" — nunca redistribuído, nunca
-     * inferido por cargo/centro de custo/cadastro legado.
+     * Contratos ATIVOS por Setor, resolvido pelo catálogo oficial local — unidade oficial é o
+     * CONTRATO (mesma convenção de Headcount/Admissões/Desligamentos desta tela), nunca pessoa
+     * distinta. Quem não tem `codigo_setor` no espelho entra em "Setor não informado" — nunca
+     * redistribuído, nunca inferido por cargo/centro de custo/cadastro legado.
      */
     public function distribuicaoAtivosPorSetor(array $filtros = []): array
     {
@@ -116,13 +117,13 @@ class PeopleAnalyticsRepository
         }
 
         $sql = "SELECT cm.codigo_setor, COALESCE(s.descricao_oficial, s.nome) AS nome_oficial,
-                       COUNT(DISTINCT cm.codigo_pessoa) AS pessoas
+                       COUNT(*) AS contratos
                 FROM colaboradores_metadados cm
                 LEFT JOIN setores s
                   ON s.codigo_setor COLLATE utf8mb4_general_ci = cm.codigo_setor COLLATE utf8mb4_general_ci
                 WHERE " . implode(' AND ', $where) . "
                 GROUP BY cm.codigo_setor, s.descricao_oficial, s.nome
-                ORDER BY pessoas DESC";
+                ORDER BY contratos DESC";
         $stmt = $this->connection()->prepare($sql);
         $stmt->execute($params);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);

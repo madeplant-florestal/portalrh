@@ -10,13 +10,23 @@ class AdminPesquisaReacaoIntegracaoController extends Controller
     public function index(): void
     {
         Auth::requireRole(['admin', 'rh', 'viewer']);
-        Authorization::requirePermissao('pesquisa_reacao_integracao.visualizar');
+        // Central de Pesquisas de Integração: dois blocos com permissões INDEPENDENTES — a Pesquisa
+        // de Reação (`pesquisa_reacao_integracao.visualizar`) e os resultados da Pesquisa de
+        // Integração via QR (`integracao_colaborador.visualizar`). Sem nenhuma das duas, 403.
+        $podeVerReacao = Authorization::temPermissao('pesquisa_reacao_integracao.visualizar');
+        $podeVerIntegracao = Authorization::temPermissao('integracao_colaborador.visualizar');
+        if (!$podeVerReacao && !$podeVerIntegracao) {
+            Authorization::requirePermissao('pesquisa_reacao_integracao.visualizar');
+        }
 
         $this->view->render('admin/pesquisa_reacao_integracao/index', [
-            'campanhas' => PesquisaReacaoCampanha::listarComContagem(),
-            'opcoesEmpresaSetor' => PesquisaReacaoCampanha::opcoesEmpresaSetor(),
+            'campanhas' => $podeVerReacao ? PesquisaReacaoCampanha::listarComContagem() : [],
+            'opcoesEmpresaSetor' => $podeVerReacao ? PesquisaReacaoCampanha::opcoesEmpresaSetor() : ['empresas' => [], 'setores' => []],
             'validadesRapidas' => PesquisaReacaoCampanha::VALIDADES_RAPIDAS,
-            'podeGerenciar' => Authorization::temPermissao('pesquisa_reacao_integracao.gerenciar'),
+            'podeVerReacao' => $podeVerReacao,
+            'podeVerIntegracao' => $podeVerIntegracao,
+            'resumoIntegracaoQr' => $podeVerIntegracao ? PesquisaIntegracaoResultadosService::resumoPorIntegracao() : [],
+            'podeGerenciar' => $podeVerReacao && Authorization::temPermissao('pesquisa_reacao_integracao.gerenciar'),
             'linkGerado' => null,
             'flashError' => Security::sanitizeString($_GET['erro'] ?? ''),
             'flashSuccess' => Security::sanitizeString($_GET['ok'] ?? ''),
@@ -42,6 +52,9 @@ class AdminPesquisaReacaoIntegracaoController extends Controller
             'campanhas' => PesquisaReacaoCampanha::listarComContagem(),
             'opcoesEmpresaSetor' => PesquisaReacaoCampanha::opcoesEmpresaSetor(),
             'validadesRapidas' => PesquisaReacaoCampanha::VALIDADES_RAPIDAS,
+            'podeVerReacao' => true,
+            'podeVerIntegracao' => Authorization::temPermissao('integracao_colaborador.visualizar'),
+            'resumoIntegracaoQr' => Authorization::temPermissao('integracao_colaborador.visualizar') ? PesquisaIntegracaoResultadosService::resumoPorIntegracao() : [],
             'podeGerenciar' => Authorization::temPermissao('pesquisa_reacao_integracao.gerenciar'),
             'linkGerado' => null,
             'flashError' => '',

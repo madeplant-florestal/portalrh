@@ -8,11 +8,11 @@
 $formValues = $formValues ?? [];
 $agora = new DateTimeImmutable('now');
 ?>
-<div class="responsive-panel space-y-6">
+<div class="responsive-panel space-y-8">
   <div class="responsive-header">
     <div>
-      <h2 class="text-xl font-semibold text-[#2B2E22]">Pesquisa de Reação — Treinamento de Integração</h2>
-      <p class="mt-1 text-sm text-[#5B5F4E]">Campanhas de link público para avaliação do Treinamento de Integração pelos colaboradores.</p>
+      <h2 class="text-xl font-semibold text-[#2B2E22]">Pesquisas de Integração</h2>
+      <p class="mt-1 text-sm text-[#5B5F4E]">Acompanhe as pesquisas aplicadas aos colaboradores e os resultados das integrações realizadas.</p>
     </div>
   </div>
 
@@ -22,6 +22,56 @@ $agora = new DateTimeImmutable('now');
   <?php if (!empty($flashSuccess)): ?>
     <div class="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700"><?= Security::e($flashSuccess) ?></div>
   <?php endif; ?>
+
+  <?php if (!empty($podeVerIntegracao)): ?>
+  <!-- BLOCO 1 — Pesquisa de Integração (respostas via QR Code). Instrumento próprio: NPS e notas NÃO
+       se misturam com os da Pesquisa de Reação abaixo. Visível só com integracao_colaborador.visualizar. -->
+  <section class="space-y-3" aria-labelledby="bloco-integracao-qr">
+    <div>
+      <h3 id="bloco-integracao-qr" class="text-base font-bold text-[#2B2E22]">Pesquisa de Integração — Respostas via QR Code</h3>
+      <p class="text-xs text-[#5B5F4E]">Resultados por data de integração. O QR Code e a abertura/encerramento da integração ficam em <a href="<?= $base ?>/admin/pesquisa-integracao-qr" class="text-[#3B4822] underline">Integração via QR Code</a>.</p>
+    </div>
+    <div class="responsive-table-wrap">
+      <table class="mobile-table-desktop min-w-full text-sm">
+        <thead>
+          <tr class="border-b text-left text-[#5B5F4E]">
+            <th class="p-3">Data da Integração</th>
+            <th class="p-3">Respostas</th>
+            <th class="p-3">NPS</th>
+            <th class="p-3">Promotores</th>
+            <th class="p-3">Neutros</th>
+            <th class="p-3">Detratores</th>
+            <th class="p-3">Ações</th>
+          </tr>
+        </thead>
+        <tbody>
+          <?php foreach (($resumoIntegracaoQr ?? []) as $r): ?>
+            <tr class="border-b">
+              <td class="p-3 text-[#2B2E22]"><?= Security::e(date('d/m/Y', strtotime((string)$r['data_integracao']))) ?></td>
+              <td class="p-3 text-[#2B2E22]"><?= (int)$r['total'] ?></td>
+              <td class="p-3 font-bold text-[#2B2E22]"><?= $r['nps'] === null ? '—' : Security::e(($r['nps'] > 0 ? '+' : '') . number_format((float)$r['nps'], 1, ',', '.')) ?></td>
+              <td class="p-3 text-[#2F7D5C]"><?= (int)$r['promotores'] ?></td>
+              <td class="p-3 text-[#8A6A3F]"><?= (int)$r['neutros'] ?></td>
+              <td class="p-3 text-[#B23B3B]"><?= (int)$r['detratores'] ?></td>
+              <td class="p-3"><a href="<?= $base ?>/admin/pesquisas-reacao-integracao/integracao/<?= Security::e((string)$r['data_integracao']) ?>/resultados" class="text-[#3B4822] hover:underline">Ver resultados</a></td>
+            </tr>
+          <?php endforeach; ?>
+          <?php if (empty($resumoIntegracaoQr)): ?>
+            <tr><td colspan="7" class="p-4 text-center text-[#5B5F4E]">Nenhuma resposta recebida via QR Code até o momento.</td></tr>
+          <?php endif; ?>
+        </tbody>
+      </table>
+    </div>
+  </section>
+  <?php endif; ?>
+
+  <?php if (!empty($podeVerReacao)): ?>
+  <!-- BLOCO 2 — Pesquisa de Reação (campanhas). Visível só com pesquisa_reacao_integracao.visualizar. -->
+  <section class="space-y-6" aria-labelledby="bloco-reacao">
+  <div>
+    <h3 id="bloco-reacao" class="text-base font-bold text-[#2B2E22]">Pesquisa de Reação — Treinamento de Integração</h3>
+    <p class="text-xs text-[#5B5F4E]">Campanhas de link público para avaliação do Treinamento de Integração pelos colaboradores.</p>
+  </div>
 
   <?php if (!empty($linkGerado)): ?>
     <div class="rounded-xl border border-[#A9B885] bg-[#F2F4EC] px-4 py-3">
@@ -137,4 +187,6 @@ $agora = new DateTimeImmutable('now');
       </tbody>
     </table>
   </div>
+  </section>
+  <?php endif; ?>
 </div>

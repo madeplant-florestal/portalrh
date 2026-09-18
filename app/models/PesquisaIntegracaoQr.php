@@ -16,16 +16,28 @@
 class PesquisaIntegracaoQr
 {
     /** Contrato ATIVO: flag do espelho + sem demissão já vencida. Nunca inclui CPF/nascimento no SELECT. */
-    private const SELECT_CONTRATO = "SELECT cm.id, cm.nome,
+    private const CAMPOS_CONTRATO = "cm.id, cm.nome,
                COALESCE(NULLIF(cm.empresa, ''), cm.codigo_empresa) AS empresa,
                COALESCE(
                  (SELECT COALESCE(c.descricao_oficial, c.nome) FROM cargos c
                    WHERE c.codigo_cargo COLLATE utf8mb4_general_ci = cm.codigo_cargo COLLATE utf8mb4_general_ci
                    LIMIT 1),
                  NULLIF(cm.cargo, '')
-               ) AS cargo
+               ) AS cargo";
+
+    private const SELECT_CONTRATO = "SELECT " . self::CAMPOS_CONTRATO . "
         FROM colaboradores_metadados cm
         WHERE cm.ativo = 1 AND (cm.demissao IS NULL OR cm.demissao >= CURDATE())";
+
+    /**
+     * Respostas ORIGINADAS PELO QR: linhas criadas por inserirResposta() — `colaborador_id` e
+     * `token_hash` NULL (o fluxo individual sempre grava os dois, PesquisaIntegracao::create()),
+     * `metadados_id` preenchido. `metadados_id IS NOT NULL` sozinho NÃO distingue a origem (pesquisas
+     * individuais de colaboradores com contrato oficial também o gravam). Limitação conhecida: uma
+     * pesquisa individual PENDENTE completada via QR (completarPesquisaPendente()) mantém
+     * colaborador_id/token e por isso fica fora deste conjunto — não há coluna de origem para ela.
+     */
+    private const FILTRO_ORIGEM_QR = 'p.colaborador_id IS NULL AND p.token_hash IS NULL AND p.metadados_id IS NOT NULL AND p.respondida_em IS NOT NULL';
 
     /**
      * Contratos ativos cujo CPF E data de nascimento coincidem simultaneamente.
@@ -115,5 +127,54 @@ class PesquisaIntegracaoQr
             $comentarios, $pesquisaId,
         ]);
         return $stmt->rowCount() > 0;
+    }
+
+
+    /** @return array<int,array{integracao_data_relacionada:string,nota_nps:int|string}> Uma linha por resposta QR (só data + NPS) — base do resumo por integração. */
+    public static function respostasQrParaResumo(): array
+    {
+        $stmt = Database::conn()->query(
+            'SELECT p.integracao_data_relacionada, p.nota_nps FROM pesquisas_integracao p WHERE ' . self::FILTRO_ORIGEM_QR
+        );
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /** @return array Respostas QR completas de UMA integração (data), mais recentes primeiro. */
+    public static function respostasQrDaIntegracao(string $dataIntegracao): array
+    {
+        $stmt = Database::conn()->prepare(
+            'SELECT p.metadados_id, p.nota_nps, p.nota_clareza, p.nota_acolhimento, p.nota_normas,
+                    p.nota_utilidade, p.nota_satisfacao_geral, p.comentarios, p.respondida_em
+             FROM pesquisas_integracao p
+             WHERE ' . self::FILTRO_ORIGEM_QR . ' AND p.integracao_data_relacionada = ?
+             ORDER BY p.respondida_em DESC, p.id DESC'
+        );
+        $stmt->execute([$dataIntegracao]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * Nome/Cargo/Empresa oficiais (espelho + catálogo de cargos) por id de contrato, INDEPENDENTE de
+     * o contrato ainda estar ativo (o respondente pode ter sido desligado depois). Nunca seleciona
+     * CPF/nascimento/salário.
+     *
+     * @param int[] $ids
+     * @return array<int,array{id:int,nome:string,empresa:?string,cargo:?string}> indexado por id
+     */
+    public static function contratosPorIds(array $ids): array
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $ids), static fn(int $i): bool => $i > 0)));
+        if ($ids === []) {
+            return [];
+        }
+        $stmt = Database::conn()->prepare(
+            'SELECT ' . self::CAMPOS_CONTRATO . ' FROM colaboradores_metadados cm WHERE cm.id IN (' . implode(',', array_fill(0, count($ids), '?')) . ')'
+        );
+        $stmt->execute($ids);
+        $porId = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $linha) {
+            $porId[(int)$linha['id']] = $linha;
+        }
+        return $porId;
     }
 }

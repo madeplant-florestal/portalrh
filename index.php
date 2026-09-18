@@ -213,6 +213,8 @@ try {
     $router->post('/admin/pesquisas-reacao-integracao', [AdminPesquisaReacaoIntegracaoController::class, 'store']);
     $router->post('/admin/pesquisas-reacao-integracao/{id}/desativar', [AdminPesquisaReacaoIntegracaoController::class, 'desativar']);
     $router->get('/admin/pesquisas-reacao-integracao/{id}/resultados', [AdminPesquisaReacaoIntegracaoController::class, 'resultados']);
+    // Resultados da Pesquisa de Integração (via QR) por data de integração — permissão da Integração.
+    $router->get('/admin/pesquisas-reacao-integracao/integracao/{data}/resultados', [AdminPesquisaIntegracaoResultadosController::class, 'resultados']);
 
     $router->get('/admin/pesquisa-integracao-qr', [AdminPesquisaIntegracaoQrController::class, 'index']);
     $router->post('/admin/pesquisa-integracao-qr/sessao', [AdminPesquisaIntegracaoQrController::class, 'abrir']);

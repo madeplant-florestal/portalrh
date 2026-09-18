@@ -225,4 +225,32 @@ if (!function_exists('dashboard_bar_row')) {
             . '<div class="dashboard-bar-grow-x h-2.5 rounded-full ' . $color . '" style="width: ' . dashboard_fmt($width) . '%"></div>'
             . '</div></div>';
     }
+
+
+if (!function_exists('dashboard_vertical_bars')) {
+    // Barras verticais para comparar N categorias (ex.: Headcount/Turnover por Empresa) — mesmo
+    // padrão visual/sem biblioteca externa de dashboard_bar_row, só em orientação vertical.
+    // $items: lista de ['label' => string, 'value' => float, 'display' => string]. $color é uma
+    // classe Tailwind estática (nunca gerada por concatenação de valor dinâmico, para o build do
+    // Tailwind conseguir detectar a classe em tempo de compilação).
+    function dashboard_vertical_bars(array $items, string $color, string $trackColor = 'bg-slate-100'): string
+    {
+        if ($items === []) {
+            return '';
+        }
+        $max = max(array_column($items, 'value')) ?: 1;
+        $bars = '';
+        foreach ($items as $item) {
+            $height = $max > 0 ? min(100, (max(0.0, (float)$item['value']) / $max) * 100) : 0;
+            $bars .= '<div class="flex w-20 flex-shrink-0 flex-col items-center gap-1.5" title="' . Security::e($item['label']) . ': ' . Security::e($item['display']) . '">'
+                . '<span class="text-xs font-semibold text-slate-700">' . Security::e($item['display']) . '</span>'
+                . '<div class="flex h-28 w-12 items-end rounded-md ' . $trackColor . '">'
+                . '<div class="dashboard-bar-grow-y w-full rounded-md ' . $color . '" style="height: ' . dashboard_fmt($height) . '%"></div>'
+                . '</div>'
+                . '<span class="line-clamp-2 min-h-[2.1em] w-full text-center text-[10px] font-medium leading-tight text-slate-500">' . Security::e($item['label']) . '</span>'
+                . '</div>';
+        }
+        return '<div class="flex items-end justify-center gap-3 overflow-x-auto pb-1">' . $bars . '</div>';
+    }
+}
 }

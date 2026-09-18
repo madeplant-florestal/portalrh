@@ -34,11 +34,16 @@ class PeopleAnalyticsRepository
      * Todos os contratos do espelho que atendem aos filtros de Empresa/Setor — sem filtro de
      * data (os cálculos de headcount histórico/turnover precisam do histórico completo de cada
      * contrato, não só do período exibido). Uma única consulta alimenta Headcount, Admissões,
-     * Desligamentos, Turnover Geral e Turnover por Faixa Etária — evita N+1.
+     * Desligamentos, Turnover Geral, Turnover por Faixa Etária e os agrupamentos por Empresa
+     * (Headcount/Turnover/Desligamentos por Empresa) — evita N+1.
+     *
+     * `codigo_empresa`/`empresa` (texto) reaproveitam exatamente a mesma fonte já usada em
+     * opcoesFiltro() — nunca a tabela local `empresas` do Recrutamento (catálogo de outra
+     * dimensão/geração, id-based, incompleto em relação ao universo do METADADOS).
      *
      * @param array $filtros Chaves aceitas: codigo_empresa, codigo_setor. Ausente/vazio = sem filtro.
      * @return array Cada item: codigo_pessoa, admissao, demissao, motivo_rescisao_codigo,
-     *               motivo_rescisao_descricao, nascimento, codigo_setor, ativo.
+     *               motivo_rescisao_descricao, nascimento, codigo_setor, ativo, codigo_empresa, empresa.
      */
     public function buscarContratos(array $filtros = []): array
     {
@@ -55,7 +60,8 @@ class PeopleAnalyticsRepository
         }
 
         $sql = 'SELECT codigo_pessoa, admissao, demissao, motivo_rescisao_codigo,
-                       motivo_rescisao_descricao, nascimento, codigo_setor, ativo
+                       motivo_rescisao_descricao, nascimento, codigo_setor, ativo,
+                       codigo_empresa, empresa
                 FROM colaboradores_metadados';
         if ($where !== []) {
             $sql .= ' WHERE ' . implode(' AND ', $where);

@@ -246,6 +246,84 @@ try {
     $check($painelDuplo['headcount']['atual'] === 2, '(4/A) Fixture dedicada: 1 pessoa com 2 contratos ativos isolada em empresa própria -> Headcount = 2, NUNCA 1 — prova direta contra regressão para COUNT(DISTINCT codigo_pessoa)');
     $check($painelDuplo['admissoes']['periodo'] === 1, '(4/E) Mesma pessoa: só 1 dos 2 contratos foi admitido dentro do período -> Admissões = 1 (contrato B, admitido há 15 dias) — o outro (contrato A, há 500 dias) fica de fora por data, não por dedup de pessoa');
 
+    // ---- 7c) Headcount/Turnover/Desligamentos por Empresa: mesma unidade (CONTRATO), mesma base
+    //          de headcount do card superior, mesma fórmula de Turnover (RhIndicadoresService),
+    //          nomes resolvidos do próprio METADADOS (nunca inventados) --------------------------
+    $setorMultiFixture = 'ZZM' . $suffix;
+    $empMA = 'ZZMA' . $suffix;
+    $empMB = 'ZZMB' . $suffix;
+    $pMA1 = 'ZZP' . $suffix . 'MA1';
+    $pMA1b = 'ZZP' . $suffix . 'MA1B';
+    $pMA2 = 'ZZP' . $suffix . 'MA2';
+    $pMB1 = 'ZZP' . $suffix . 'MB1';
+
+    // empMA contrato 1: ativo hoje, com o nome oficial da Empresa preenchido no METADADOS (coluna
+    // `empresa`) — prova que o rótulo do gráfico vem do próprio dado, nunca inventado.
+    $identificadorMA1 = 'ZZPA_' . $suffix . '_' . $pMA1 . '_A';
+    $pdo->prepare(
+        'INSERT INTO colaboradores_metadados (
+            identificador, codigo_empresa, codigo_unidade, numero_contrato, codigo_pessoa,
+            nome, empresa, admissao, codigo_setor, ativo, origem_metadados
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)'
+    )->execute([
+        $identificadorMA1, $empMA, 'ZZU' . $suffix, 'ZZC' . $pMA1 . 'A', $pMA1,
+        'ZZPA Fixture ' . $pMA1, 'Empresa Fixture ' . $suffix, $hoje->modify('-500 days')->format('Y-m-d'),
+        $setorMultiFixture, 'zzpa-teste',
+    ]);
+    $criados['metadados_identificadores'][] = $identificadorMA1;
+    // empMA contrato 2: ativo hoje, SEM nome de Empresa no METADADOS (label ainda cai no nome já
+    // resolvido para o código, vindo do outro contrato do mesmo codigo_empresa).
+    $mkMetadados($pMA1b, 'A', $hoje->modify('-450 days'), null, true, $empMA, $setorMultiFixture);
+    // empMA contrato 3: desligado DENTRO do período (único desligamento de empMA).
+    $mkMetadados($pMA2, 'A', $hoje->modify('-400 days'), $hoje->modify('-10 days'), false, $empMA, $setorMultiFixture);
+    // empMB: 1 contrato ativo hoje, sem nome de Empresa preenchido em nenhum contrato — label deve
+    // cair no próprio codigo_empresa (nunca um nome inventado).
+    $mkMetadados($pMB1, 'A', $hoje->modify('-500 days'), null, true, $empMB, $setorMultiFixture);
+
+    $painelMulti = $service->montarPainel(['codigo_setor' => $setorMultiFixture], $inicio, $fim);
+
+    $check(count($painelMulti['headcount_por_empresa']) === 2, '(21) Headcount por Empresa: 2 empresas encontradas (empMA + empMB), isoladas pelo filtro de Setor fixture');
+    $somaHeadcountPorEmpresa = array_sum(array_column($painelMulti['headcount_por_empresa'], 'quantidade'));
+    $check($somaHeadcountPorEmpresa === $painelMulti['headcount']['atual'], '(21) Headcount por Empresa: soma das barras é EXATAMENTE igual ao card Headcount Atual — mesma unidade (contrato) e mesma data de referência ($fim), nunca RhIndicadoresService::distribuicao() (que usaria sempre "hoje")');
+
+    $itemEmpMA = $painelMulti['headcount_por_empresa'][0] ?? null;
+    $itemEmpMB = $painelMulti['headcount_por_empresa'][1] ?? null;
+    $check($itemEmpMA !== null && $itemEmpMA['codigo'] === $empMA && $itemEmpMA['quantidade'] === 2, '(21) Headcount por Empresa: empMA tem 2 contratos ativos hoje (pMA1 + pMA1b; pMA2 já desligado) e vem primeiro (ordenado por quantidade desc)');
+    $check($itemEmpMA !== null && $itemEmpMA['label'] === 'Empresa Fixture ' . $suffix, '(21) Headcount por Empresa: rótulo de empMA vem da coluna `empresa` do METADADOS (nunca um nome inventado) — reaproveitado mesmo vindo de um contrato diferente do mesmo codigo_empresa');
+    $check($itemEmpMB !== null && $itemEmpMB['codigo'] === $empMB && $itemEmpMB['quantidade'] === 1, '(21) Headcount por Empresa: empMB tem 1 contrato ativo, vem depois de empMA');
+    $check($itemEmpMB !== null && $itemEmpMB['label'] === $empMB, '(21) Headcount por Empresa: empMB nunca teve nome de Empresa preenchido em nenhum contrato — rótulo cai no próprio código, nunca um nome inventado');
+
+    $headcountInicioEmpMA = RhIndicadoresService::headcountEm([
+        ['admissao' => $hoje->modify('-500 days')->format('Y-m-d'), 'demissao' => null],
+        ['admissao' => $hoje->modify('-450 days')->format('Y-m-d'), 'demissao' => null],
+        ['admissao' => $hoje->modify('-400 days')->format('Y-m-d'), 'demissao' => $hoje->modify('-10 days')->format('Y-m-d')],
+    ], $inicio->modify('-1 day'));
+    $esperadoTurnoverEmpMA = RhIndicadoresService::taxaTurnover(1, $headcountInicioEmpMA, 2);
+    $porEmpresaTurnover = [];
+    foreach ($painelMulti['turnover']['por_empresa'] as $linha) {
+        $porEmpresaTurnover[$linha['codigo']] = $linha;
+    }
+    $check(($porEmpresaTurnover[$empMA]['desligamentos'] ?? null) === 1, '(22) Desligamentos por Empresa: empMA tem 1 evento (pMA2) — mesma contagem de RhIndicadoresService::turnoverPorDimensao(), sem fórmula paralela');
+    $check(($porEmpresaTurnover[$empMB]['desligamentos'] ?? null) === 0, '(22) Desligamentos por Empresa: empMB tem 0 eventos no período');
+    $check(
+        isset($porEmpresaTurnover[$empMA]) && $porEmpresaTurnover[$empMA]['taxa'] === $esperadoTurnoverEmpMA,
+        '(23) Turnover por Empresa: empMA bate exatamente com RhIndicadoresService::taxaTurnover()/headcountEm() com âncora "início do período - 1 dia" — mesma fórmula do Turnover Geral, sem reimplementação'
+    );
+    $check(
+        array_keys($porEmpresaTurnover) === [$empMA, $empMB] || array_values(array_map(static fn(array $l) => $l['codigo'], $painelMulti['turnover']['por_empresa'])) === [$empMA, $empMB],
+        '(24) Turnover por Empresa segue a MESMA ordem de Headcount por Empresa (empMA antes de empMB) — permite comparar as duas barras lado a lado sem reordenar mentalmente'
+    );
+
+    $desligamentosPorEmpresaCodigos = array_map(static fn(array $l) => $l['codigo'], $painelMulti['desligamentos_por_empresa']);
+    $check($desligamentosPorEmpresaCodigos === [$empMA, $empMB], '(25) Desligamentos por Empresa: ranking próprio por número de eventos desc (empMA com 1 evento antes de empMB com 0)');
+
+    // Filtro de Empresa cascateando para o novo bloco (não só para o card Headcount Atual).
+    $painelSoEmpMA = $service->montarPainel(['codigo_empresa' => $empMA], $inicio, $fim);
+    $check(
+        count($painelSoEmpMA['headcount_por_empresa']) === 1 && $painelSoEmpMA['headcount_por_empresa'][0]['codigo'] === $empMA,
+        '(26) Filtro de Empresa isola Headcount por Empresa para só a Empresa selecionada — mesmo comportamento coerente já exigido para os demais indicadores'
+    );
+
     // ---- 8) Turnover por Faixa Etária: ignora sem nascimento; null quando nada é classificável --
     $faixaEmp = $painelEmp['turnover']['faixa_etaria'];
     $check($faixaEmp !== null && $faixaEmp['amostra'] === 2, '(H) Faixa etária: amostra = 2 (as 2 rescisões de P5, que tem nascimento) — P6 (sem nascimento) fica fora da classificação, mas não do total de desligamentos');
@@ -430,6 +508,9 @@ try {
     $check($painelEmpresaNaoCadastrada['vagas']['empresa_sem_correspondencia'] === true, '(9) Empresa selecionada sem correspondência local: sinalizada explicitamente (empresa_sem_correspondencia = true)');
     $check($painelEmpresaNaoCadastrada['vagas']['abertas'] === 0, '(9) Empresa sem correspondência: Vagas Abertas = 0 — NUNCA o total geral silenciosamente ampliado');
     $check($painelEmpresaNaoCadastrada['vagas']['fechadas_no_periodo'] === 0, '(9) Empresa sem correspondência: Vagas Fechadas = 0 — mesma regra');
+    $check($painelEmpresaNaoCadastrada['headcount_por_empresa'] === [], '(27) Empresa sem correspondência: Headcount por Empresa = [], nunca o total geral');
+    $check($painelEmpresaNaoCadastrada['turnover']['por_empresa'] === [], '(27) Empresa sem correspondência: Turnover por Empresa = [], nunca o total geral');
+    $check($painelEmpresaNaoCadastrada['desligamentos_por_empresa'] === [], '(27) Empresa sem correspondência: Desligamentos por Empresa = [], nunca o total geral');
     $check(
         $painelSemFiltroDeEmpresa['vagas']['abertas'] === 0 || $painelEmpresaNaoCadastrada['vagas']['abertas'] !== $painelSemFiltroDeEmpresa['vagas']['abertas'],
         '(9) Empresa sem correspondência não é numericamente igual ao total sem filtro (a menos que o total geral em DEV já seja 0) — prova de que não houve degradação para "sem filtro"'
@@ -489,6 +570,31 @@ try {
         $painelV['turnover']['geral_percentual'] !== round($painelV['turnover']['voluntario']['percentual'] + $painelV['turnover']['involuntario']['percentual'], 1),
         'Confirma explicitamente que Geral NÃO é a soma de Voluntário + Involuntário (existem desligamentos "outros" no meio)'
     );
+
+    // ---- 16b) Rosca Voluntário x Involuntário x Outros: participação é % do TOTAL DE
+    //           DESLIGAMENTOS do período (nunca da taxa de turnover) — as 3 fatias somam 100% dos
+    //           desligamentos reais, nunca força Voluntário+Involuntário=100% quando há Outros ---
+    $participacaoVolEsperada = round(2 / 9 * 100, 1);
+    $participacaoInvolEsperada = round(3 / 9 * 100, 1);
+    $participacaoOutrosEsperada = round(4 / 9 * 100, 1);
+    $check($painelV['turnover']['voluntario']['participacao_desligamentos'] === $participacaoVolEsperada, '(28) Rosca: participação de Voluntário = 2/9 dos desligamentos do período (22,2%), não da taxa de turnover');
+    $check($painelV['turnover']['involuntario']['participacao_desligamentos'] === $participacaoInvolEsperada, '(28) Rosca: participação de Involuntário = 3/9 dos desligamentos (33,3%)');
+    $check($painelV['turnover']['outros']['eventos'] === 4 && $painelV['turnover']['outros']['participacao_desligamentos'] === $participacaoOutrosEsperada, '(28) Rosca: "Outros" é representado como fatia própria (4/9 = 44,4%) — nunca omitido, nunca absorvido por Voluntário/Involuntário para forçar 100%');
+    $check(
+        round($painelV['turnover']['voluntario']['participacao_desligamentos'] + $painelV['turnover']['involuntario']['participacao_desligamentos'] + $painelV['turnover']['outros']['participacao_desligamentos'], 1) >= 99.9,
+        '(28) Rosca: as 3 fatias juntas cobrem a totalidade dos desligamentos do período (~100%, sujeito a arredondamento de 0,1 p.p.) — nunca uma composição matematicamente enganosa'
+    );
+    // Sem nenhum desligamento no período, participação é 0.0 (view decide omitir a rosca inteira,
+    // nunca desenhar 3 fatias falsas de 0%).
+    $check($painelVazio['turnover']['voluntario']['participacao_desligamentos'] === 0.0, '(28) Rosca: sem desligamentos no período, participação fica 0.0 — a view usa desligamentos.periodo === 0 para decidir omitir a rosca inteira, nunca 0% inventado como se fosse um dado real');
+
+    // ---- 16c) Guard de regressão: nenhuma métrica contratual volta a usar
+    //           COUNT(DISTINCT codigo_pessoa) (Headcount/Turnover/Desligamentos por Empresa
+    //           incluídos) — a unidade oficial continua sendo o CONTRATO -----------------------
+    $fonteRepository = strtoupper((string)file_get_contents(APP_PATH . '/repositories/PeopleAnalyticsRepository.php'));
+    $fonteService = strtoupper((string)file_get_contents(APP_PATH . '/services/PeopleAnalyticsService.php'));
+    $check(!str_contains($fonteRepository, 'COUNT(DISTINCT'), '(29) PeopleAnalyticsRepository nunca usa COUNT(DISTINCT ...) — unidade oficial é o contrato, nunca codigo_pessoa deduplicado');
+    $check(!str_contains($fonteService, 'COUNT(DISTINCT'), '(29) PeopleAnalyticsService nunca usa COUNT(DISTINCT ...) — mesma garantia no lado do Service (agrupamentos por Empresa incluídos)');
 
     // ---- 17) Sidebar: item Dashboard exige dashboard.visualizar (fonte, não só comportamento) ---
     $sidebarFonte = (string)file_get_contents(APP_PATH . '/views/layouts/sidebar.php');

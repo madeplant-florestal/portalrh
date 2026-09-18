@@ -4,13 +4,22 @@
  * People Analytics — Tela Inicial/Dashboard principal do Portal RH.
  *
  * Unidade oficial dos indicadores corporativos de Headcount/movimentação (Headcount Atual,
- * Admissões, Desligamentos, Turnover Geral/Voluntário/Involuntário, Colaboradores por Setor): o
- * CONTRATO do METADADOS — nunca pessoa distinta. Uma mesma pessoa pode ter múltiplos contratos
- * oficiais válidos simultaneamente; eles não são deduplicados por `codigo_pessoa`. Reaproveita
- * diretamente `RhIndicadoresService::headcountEm()`/`admissoesNoPeriodo()`/`taxaTurnover()` — a
- * mesma semântica já consolidada em Indicadores de RH, nunca uma interpretação paralela. Quando um
- * indicador futuro precisar ser baseado em PESSOA em vez de contrato, isso deve ser uma decisão
- * explícita do negócio, documentada aqui — nunca inferida.
+ * Admissões, Desligamentos, Turnover Geral/Voluntário/Involuntário, Colaboradores por Setor,
+ * Headcount/Turnover/Desligamentos por Empresa): o CONTRATO do METADADOS — nunca pessoa distinta.
+ * Uma mesma pessoa pode ter múltiplos contratos oficiais válidos simultaneamente; eles não são
+ * deduplicados por `codigo_pessoa`. Reaproveita diretamente `RhIndicadoresService::headcountEm()`/
+ * `admissoesNoPeriodo()`/`taxaTurnover()`/`turnoverPorDimensao()` — a mesma semântica já
+ * consolidada em Indicadores de RH, nunca uma interpretação paralela. Headcount por Empresa usa
+ * headcountEm() agrupado com a MESMA data de referência ($fim) do card Headcount Atual — nunca
+ * `RhIndicadoresService::distribuicao()`, que avalia sempre em "hoje" e divergiria do card sempre
+ * que o período selecionado não terminar hoje. Quando um indicador futuro precisar ser baseado em
+ * PESSOA em vez de contrato, isso deve ser uma decisão explícita do negócio, documentada aqui —
+ * nunca inferida.
+ *
+ * Nome de Empresa (Headcount/Turnover/Desligamentos por Empresa): resolvido a partir da própria
+ * coluna de texto `empresa` do METADADOS (mapeada por `codigo_empresa`), mesma fonte de
+ * `PeopleAnalyticsRepository::opcoesFiltro()` — nunca a tabela local `empresas` (catálogo do
+ * Recrutamento, id-based, não é garantidamente completo em relação ao universo do METADADOS).
  *
  * Convenção de indisponibilidade (mesma de outros dashboards desta geração): todo indicador que
  * não pode ser calculado com confiança chega aqui como `null` (nunca `0` falso) — a view decide a
@@ -83,6 +92,7 @@ class PeopleAnalyticsService
         $turnoverGeral = RhIndicadoresService::taxaTurnover(count($desligamentos), $headcountInicio, $headcountFim);
         $voluntarios = $this->contarPorCodigosMotivo($desligamentos, self::CODIGOS_VOLUNTARIO);
         $involuntarios = $this->contarPorCodigosMotivo($desligamentos, self::CODIGOS_INVOLUNTARIO);
+        $outros = count($desligamentos) - $voluntarios - $involuntarios;
         $turnoverVoluntario = RhIndicadoresService::taxaTurnover($voluntarios, $headcountInicio, $headcountFim);
         $turnoverInvoluntario = RhIndicadoresService::taxaTurnover($involuntarios, $headcountInicio, $headcountFim);
 
@@ -101,21 +111,46 @@ class PeopleAnalyticsService
         $notasNps = $this->repository->buscarNotasNpsIntegracao($inicio, $fim);
         $avaliacaoExperiencia = $this->repository->avaliacaoExperiencia($inicio, $fim, RhIndicadoresService::LIMITE_TURNOVER_PRECOCE_DIAS);
 
+        $nomesEmpresa = $this->mapaNomesEmpresa($contratos);
+        $headcountPorEmpresa = $this->montarHeadcountPorEmpresa($contratos, $fim, $nomesEmpresa);
+        [$turnoverPorEmpresa, $desligamentosPorEmpresa] = $this->montarTurnoverEDesligamentosPorEmpresa(
+            $contratos,
+            $inicio,
+            $fim,
+            $nomesEmpresa,
+            $headcountPorEmpresa
+        );
+
         return [
             'headcount' => [
                 'atual' => $headcountFim,
             ],
+            'headcount_por_empresa' => $headcountPorEmpresa,
             'vagas' => $vagas,
             'admissoes' => ['periodo' => count($admissoesContratos)],
             'desligamentos' => ['periodo' => count($desligamentos)],
+            'desligamentos_por_empresa' => $desligamentosPorEmpresa,
             'turnover' => [
                 'geral_percentual' => $turnoverGeral,
                 'headcount_inicio' => $headcountInicio,
                 'headcount_fim' => $headcountFim,
-                'voluntario' => ['percentual' => $turnoverVoluntario, 'eventos' => $voluntarios],
-                'involuntario' => ['percentual' => $turnoverInvoluntario, 'eventos' => $involuntarios],
+                'voluntario' => [
+                    'percentual' => $turnoverVoluntario,
+                    'eventos' => $voluntarios,
+                    'participacao_desligamentos' => $this->participacaoDesligamentos($voluntarios, count($desligamentos)),
+                ],
+                'involuntario' => [
+                    'percentual' => $turnoverInvoluntario,
+                    'eventos' => $involuntarios,
+                    'participacao_desligamentos' => $this->participacaoDesligamentos($involuntarios, count($desligamentos)),
+                ],
+                'outros' => [
+                    'eventos' => $outros,
+                    'participacao_desligamentos' => $this->participacaoDesligamentos($outros, count($desligamentos)),
+                ],
                 'genero' => ['disponivel' => false],
                 'faixa_etaria' => $this->faixaEtariaDesligamentos($desligamentos),
+                'por_empresa' => $turnoverPorEmpresa,
             ],
             'integracao' => [
                 'realizadas_periodo' => $integracoesRealizadas,
@@ -140,6 +175,127 @@ class PeopleAnalyticsService
             }
         }
         return $contagem;
+    }
+
+    /** Participação (%) de uma contagem sobre o total de desligamentos do período — só para a
+     *  composição visual da rosca Voluntário×Involuntário×Outros (nunca confundir com a taxa de
+     *  Turnover, que usa headcount como base). Sem desligamentos no período, 0.0 (a view decide
+     *  omitir a rosca inteira nesse caso, nunca mostrar fatias falsas). */
+    private function participacaoDesligamentos(int $eventos, int $totalDesligamentos): float
+    {
+        if ($totalDesligamentos <= 0) {
+            return 0.0;
+        }
+        return round(($eventos / $totalDesligamentos) * 100, 1);
+    }
+
+    /**
+     * codigo_empresa -> nome de exibição, a partir dos próprios contratos já carregados (mesma
+     * fonte/convenção de PeopleAnalyticsRepository::opcoesFiltro(): coluna de texto `empresa` do
+     * METADADOS — nunca a tabela local `empresas` do Recrutamento). Quando mais de um nome
+     * aparece para o mesmo código (razão social alterada ao longo do histórico), fica com o maior
+     * valor (string), mesmo critério de desempate do `MAX(empresa)` já usado em opcoesFiltro().
+     * Código sem nenhum nome associado fica de fora do mapa — quem consome cai no fallback para o
+     * próprio código, nunca um nome inventado.
+     */
+    private function mapaNomesEmpresa(array $contratos): array
+    {
+        $nomes = [];
+        foreach ($contratos as $contrato) {
+            $codigo = (string)($contrato['codigo_empresa'] ?? '');
+            $nome = trim((string)($contrato['empresa'] ?? ''));
+            if ($codigo === '' || $nome === '') {
+                continue;
+            }
+            if (!isset($nomes[$codigo]) || $nome > $nomes[$codigo]) {
+                $nomes[$codigo] = $nome;
+            }
+        }
+        return $nomes;
+    }
+
+    /**
+     * Headcount por Empresa: mesma unidade (CONTRATO) e MESMA data de referência ($fim, o fim do
+     * período selecionado) do card "Headcount Atual" — nunca `RhIndicadoresService::distribuicao()`
+     * aqui, porque ela avalia sempre em "hoje" (hardcoded), o que divergiria do card superior
+     * sempre que o período selecionado não terminar hoje (ex.: filtro "Ano anterior"). A soma das
+     * barras deste gráfico é sempre idêntica ao valor do card Headcount Atual.
+     *
+     * @return array Lista ordenada por quantidade desc: [['codigo' , 'label', 'quantidade'], ...]
+     */
+    private function montarHeadcountPorEmpresa(array $contratos, DateTimeImmutable $fim, array $nomesEmpresa): array
+    {
+        $porEmpresa = [];
+        foreach ($contratos as $contrato) {
+            $codigo = (string)($contrato['codigo_empresa'] ?? '');
+            $chave = $codigo !== '' ? $codigo : RhIndicadoresService::NAO_INFORMADO;
+            $porEmpresa[$chave][] = $contrato;
+        }
+
+        $resultado = [];
+        foreach ($porEmpresa as $codigo => $contratosDaEmpresa) {
+            $resultado[] = [
+                'codigo' => $codigo,
+                'label' => $nomesEmpresa[$codigo] ?? $codigo,
+                'quantidade' => RhIndicadoresService::headcountEm($contratosDaEmpresa, $fim),
+            ];
+        }
+
+        usort($resultado, static fn(array $a, array $b): int => $b['quantidade'] <=> $a['quantidade']);
+        return $resultado;
+    }
+
+    /**
+     * Turnover por Empresa e Desligamentos por Empresa a partir de UMA ÚNICA chamada a
+     * RhIndicadoresService::turnoverPorDimensao() (headcount início/fim/turnover já consolidados,
+     * mesma âncora "início do período - 1 dia" do Turnover Geral) — nenhuma fórmula reimplementada
+     * aqui. O código de Empresa (label bruto de turnoverPorDimensao) é traduzido para o nome de
+     * exibição pelo mesmo mapa usado em Headcount por Empresa.
+     *
+     * Ordem: Turnover por Empresa segue a MESMA ordem (por quantidade de Headcount, maior primeiro)
+     * do gráfico de Headcount por Empresa — permite comparar as duas barras lado a lado sem
+     * reordenar mentalmente. Desligamentos por Empresa tem ranking próprio, por número de eventos.
+     *
+     * @return array{0: array, 1: array} [turnoverPorEmpresa, desligamentosPorEmpresa]
+     */
+    private function montarTurnoverEDesligamentosPorEmpresa(
+        array $contratos,
+        DateTimeImmutable $inicio,
+        DateTimeImmutable $fim,
+        array $nomesEmpresa,
+        array $headcountPorEmpresa
+    ): array {
+        $porDimensao = RhIndicadoresService::turnoverPorDimensao($contratos, 'codigo_empresa', $inicio, $fim);
+
+        $porCodigo = [];
+        foreach ($porDimensao as $linha) {
+            $codigo = $linha['label'];
+            $porCodigo[$codigo] = [
+                'codigo' => $codigo,
+                'label' => $nomesEmpresa[$codigo] ?? $codigo,
+                'taxa' => $linha['taxa'],
+                'desligamentos' => $linha['desligamentos'],
+            ];
+        }
+
+        // Segue a ordem de Headcount por Empresa quando o código existe nos dois (caso normal);
+        // qualquer código que só aparece em turnoverPorDimensao (nunca deveria acontecer, mesma
+        // base de $contratos) entra no final, sem perder o dado.
+        $turnoverPorEmpresa = [];
+        foreach ($headcountPorEmpresa as $item) {
+            if (isset($porCodigo[$item['codigo']])) {
+                $turnoverPorEmpresa[] = $porCodigo[$item['codigo']];
+                unset($porCodigo[$item['codigo']]);
+            }
+        }
+        foreach ($porCodigo as $restante) {
+            $turnoverPorEmpresa[] = $restante;
+        }
+
+        $desligamentosPorEmpresa = $turnoverPorEmpresa;
+        usort($desligamentosPorEmpresa, static fn(array $a, array $b): int => $b['desligamentos'] <=> $a['desligamentos']);
+
+        return [$turnoverPorEmpresa, $desligamentosPorEmpresa];
     }
 
     /**

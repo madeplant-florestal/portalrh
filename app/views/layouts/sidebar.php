@@ -96,6 +96,12 @@ $sidebarLinkClass = static function (array $paths = [], string $extra = '') use 
         <span class="sidebar-link-label">Mensagens</span>
       </a>
       <?php endif; ?>
+      <?php if (Authorization::temPermissao('pesquisa_reacao_integracao.visualizar')): ?>
+      <a href="<?= $base ?>/admin/pesquisas-reacao-integracao" class="sidebar-primary-link <?= $sidebarLinkClass(['/admin/pesquisas-reacao-integracao']) ?>" data-admin-menu-close="1" title="Pesquisa de Reação — Integração" aria-label="Pesquisa de Reação — Integração">
+        <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        <span class="sidebar-link-label">Pesquisa de Reação — Integração</span>
+      </a>
+      <?php endif; ?>
       <?php
         // Cadastros é só um agrupador visual (§6 do ajuste) — não tem permissão própria. Aparece
         // se pelo menos UM filho for visível; cada filho usa a MESMA regra aditiva dos itens

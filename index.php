@@ -39,6 +39,12 @@ try {
     $router->get('/integracao/{token}', [PesquisaIntegracaoController::class, 'show']);
     $router->post('/integracao/{token}', [PesquisaIntegracaoController::class, 'store']);
 
+    // Pesquisa de Reação — Treinamento de Integração — página pública, sem login, acessada por
+    // token aleatório. Instrumento DIFERENTE de /integracao (não é a mesma pesquisa/tabela): 1
+    // Campanha -> N Respostas, participação anônima opcional. Ver PesquisaReacaoIntegracaoController.
+    $router->get('/pesquisa-reacao/{token}', [PesquisaReacaoIntegracaoController::class, 'show']);
+    $router->post('/pesquisa-reacao/{token}', [PesquisaReacaoIntegracaoController::class, 'store']);
+
     $router->post('/api/check-cpf', [ApiController::class, 'checkCpf']);
     $router->post('/api/pipeline/move', [AdminPipelineController::class, 'move']);
     $router->post('/api/solicitacoes-vaga/move', [AdminSolicitacoesVagaKanbanController::class, 'move']);
@@ -190,6 +196,11 @@ try {
     $router->post('/admin/mensagens/novo', [AdminMensagensController::class, 'store']);
     $router->get('/admin/mensagens/editar/{id}', [AdminMensagensController::class, 'edit']);
     $router->post('/admin/mensagens/editar/{id}', [AdminMensagensController::class, 'update']);
+
+    $router->get('/admin/pesquisas-reacao-integracao', [AdminPesquisaReacaoIntegracaoController::class, 'index']);
+    $router->post('/admin/pesquisas-reacao-integracao', [AdminPesquisaReacaoIntegracaoController::class, 'store']);
+    $router->post('/admin/pesquisas-reacao-integracao/{id}/desativar', [AdminPesquisaReacaoIntegracaoController::class, 'desativar']);
+    $router->get('/admin/pesquisas-reacao-integracao/{id}/resultados', [AdminPesquisaReacaoIntegracaoController::class, 'resultados']);
 
     $router->get('/admin/usuarios', [AdminUsuariosController::class, 'index']);
     $router->get('/admin/usuarios/novo', [AdminUsuariosController::class, 'create']);

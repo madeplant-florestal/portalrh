@@ -54,13 +54,23 @@ class PesquisaIntegracao
      * idempotência). O UNIQUE KEY em (colaborador_id, integracao_data_relacionada) fica como
      * defesa em profundidade contra corrida entre duas chamadas simultâneas.
      */
-    public static function create(int $colaboradorId, string $integracaoData, string $tokenHash): int
+    public static function create(int $colaboradorId, string $integracaoData, string $tokenHash, ?int $metadadosId = null): int
     {
         self::ensureSchema();
-        $stmt = Database::conn()->prepare(
-            'INSERT INTO pesquisas_integracao (colaborador_id, integracao_data_relacionada, token_hash) VALUES (?, ?, ?)'
-        );
-        $stmt->execute([$colaboradorId, $integracaoData, $tokenHash]);
+        // `metadados_id` (migration 2026-09-19-pesquisa-integracao-qr.sql) só é gravado quando o
+        // colaborador tem contrato oficial vinculado: o UNIQUE (metadados_id, data) passa a impedir,
+        // no banco, que o mesmo contrato+integração tenha uma pesquisa individual E uma via QR.
+        if ($metadadosId !== null) {
+            $stmt = Database::conn()->prepare(
+                'INSERT INTO pesquisas_integracao (colaborador_id, metadados_id, integracao_data_relacionada, token_hash) VALUES (?, ?, ?, ?)'
+            );
+            $stmt->execute([$colaboradorId, $metadadosId, $integracaoData, $tokenHash]);
+        } else {
+            $stmt = Database::conn()->prepare(
+                'INSERT INTO pesquisas_integracao (colaborador_id, integracao_data_relacionada, token_hash) VALUES (?, ?, ?)'
+            );
+            $stmt->execute([$colaboradorId, $integracaoData, $tokenHash]);
+        }
         return (int)Database::conn()->lastInsertId();
     }
 

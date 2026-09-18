@@ -39,14 +39,28 @@ class PesquisaIntegracaoService
             return ['ok' => true, 'ja_existia' => true, 'pesquisa' => $existente, 'token' => null];
         }
 
+        // Mesmo contrato oficial + mesma integração já cobertos pelo fluxo coletivo (QR): é o mesmo
+        // EVENTO — não gera uma segunda pesquisa (nunca por CPF; só pelo vínculo oficial).
+        $metadadosId = !empty($colaborador['metadados_id']) ? (int)$colaborador['metadados_id'] : null;
+        if ($metadadosId !== null) {
+            $doEvento = PesquisaIntegracaoQr::buscarPesquisaDoEvento($metadadosId, $integracaoData);
+            if ($doEvento !== null) {
+                return ['ok' => true, 'ja_existia' => true, 'pesquisa' => PesquisaIntegracao::find((int)$doEvento['id']), 'token' => null];
+            }
+        }
+
         $rawToken = bin2hex(random_bytes(32));
         try {
-            $id = PesquisaIntegracao::create($colaboradorId, $integracaoData, hash('sha256', $rawToken));
+            $id = PesquisaIntegracao::create($colaboradorId, $integracaoData, hash('sha256', $rawToken), $metadadosId);
         } catch (Throwable $e) {
             // Corrida: outra chamada criou a pesquisa entre o findByColaboradorEData() e o INSERT
             // acima (UNIQUE KEY barra o duplicado) — comportamento idempotente equivalente:
             // devolve a que já existe, sem duplicar nem propagar o erro.
             $existente = PesquisaIntegracao::findByColaboradorEData($colaboradorId, $integracaoData);
+            if ($existente === null && $metadadosId !== null) {
+                $doEvento = PesquisaIntegracaoQr::buscarPesquisaDoEvento($metadadosId, $integracaoData);
+                $existente = $doEvento !== null ? PesquisaIntegracao::find((int)$doEvento['id']) : null;
+            }
             if ($existente !== null) {
                 return ['ok' => true, 'ja_existia' => true, 'pesquisa' => $existente, 'token' => null];
             }

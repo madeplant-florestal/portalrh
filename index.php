@@ -39,6 +39,18 @@ try {
     $router->get('/integracao/{token}', [PesquisaIntegracaoController::class, 'show']);
     $router->post('/integracao/{token}', [PesquisaIntegracaoController::class, 'store']);
 
+    // Pesquisa de Integração — fluxo COLETIVO via QR Code único e reutilizável (CPF + data de
+    // nascimento -> contrato oficial -> pesquisa). Rotas estáticas: o Router as resolve ANTES de
+    // `/integracao/{token}`, que continua atendendo os links individuais já distribuídos.
+    // Ver PesquisaIntegracaoQrController.
+    $router->get('/integracao', [PesquisaIntegracaoQrController::class, 'inicio']);
+    $router->post('/integracao/identificar', [PesquisaIntegracaoQrController::class, 'identificar']);
+    $router->get('/integracao/confirmar', [PesquisaIntegracaoQrController::class, 'confirmar']);
+    $router->post('/integracao/confirmar', [PesquisaIntegracaoQrController::class, 'confirmarSelecao']);
+    $router->get('/integracao/responder', [PesquisaIntegracaoQrController::class, 'responder']);
+    $router->post('/integracao/responder', [PesquisaIntegracaoQrController::class, 'enviar']);
+    $router->get('/integracao/obrigado', [PesquisaIntegracaoQrController::class, 'obrigado']);
+
     // Pesquisa de Reação — Treinamento de Integração — página pública, sem login, acessada por
     // token aleatório. Instrumento DIFERENTE de /integracao (não é a mesma pesquisa/tabela): 1
     // Campanha -> N Respostas, participação anônima opcional. Ver PesquisaReacaoIntegracaoController.
@@ -201,6 +213,10 @@ try {
     $router->post('/admin/pesquisas-reacao-integracao', [AdminPesquisaReacaoIntegracaoController::class, 'store']);
     $router->post('/admin/pesquisas-reacao-integracao/{id}/desativar', [AdminPesquisaReacaoIntegracaoController::class, 'desativar']);
     $router->get('/admin/pesquisas-reacao-integracao/{id}/resultados', [AdminPesquisaReacaoIntegracaoController::class, 'resultados']);
+
+    $router->get('/admin/pesquisa-integracao-qr', [AdminPesquisaIntegracaoQrController::class, 'index']);
+    $router->post('/admin/pesquisa-integracao-qr/sessao', [AdminPesquisaIntegracaoQrController::class, 'abrir']);
+    $router->post('/admin/pesquisa-integracao-qr/sessao/{id}/encerrar', [AdminPesquisaIntegracaoQrController::class, 'encerrar']);
 
     $router->get('/admin/usuarios', [AdminUsuariosController::class, 'index']);
     $router->get('/admin/usuarios/novo', [AdminUsuariosController::class, 'create']);

@@ -253,4 +253,218 @@ if (!function_exists('dashboard_vertical_bars')) {
         return '<div class="flex items-end justify-center gap-3 overflow-x-auto pb-1">' . $bars . '</div>';
     }
 }
+
+if (!function_exists('dashboard_nice_max')) {
+    // Teto "redondo" (1/2/5 x 10^n) para o eixo Y de gráficos com valores >= 0.
+    function dashboard_nice_max(float $max): float
+    {
+        if ($max <= 0) {
+            return 1.0;
+        }
+        $base = 10 ** floor(log10($max));
+        $fracao = $max / $base;
+        $nice = $fracao <= 1 ? 1 : ($fracao <= 2 ? 2 : ($fracao <= 5 ? 5 : 10));
+        return $nice * $base;
+    }
+}
+
+if (!function_exists('dashboard_chart_legend')) {
+    // Legenda de séries. $items: ['label' => string, 'color' => '#hex', 'estilo' => 'solid'|'dashed'|'hollow'].
+    function dashboard_chart_legend(array $items): string
+    {
+        $html = '<ul class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-[#5B5F4E]">';
+        foreach ($items as $item) {
+            $cor = Security::e((string)$item['color']);
+            $estilo = $item['estilo'] ?? 'solid';
+            if ($estilo === 'dashed') {
+                $marca = 'border-2 border-dashed bg-white" style="border-color:' . $cor;
+            } elseif ($estilo === 'hollow') {
+                $marca = 'border-2 bg-white" style="border-color:' . $cor;
+            } else {
+                $marca = '" style="background:' . $cor;
+            }
+            $html .= '<li class="flex items-center gap-1.5"><span class="inline-block h-2.5 w-2.5 flex-shrink-0 rounded-full ' . $marca . '"></span>' . Security::e((string)$item['label']) . '</li>';
+        }
+        return $html . '</ul>';
+    }
+}
+
+if (!function_exists('dashboard_data_table')) {
+    // Os mesmos valores do gráfico em tabela acessível (não depende de hover nem só do SVG).
+    // $rows: lista de linhas, cada uma uma lista de strings já formatadas (a 1ª coluna é o cabeçalho da linha).
+    function dashboard_data_table(string $caption, array $headers, array $rows): string
+    {
+        $html = '<details class="mt-3"><summary class="cursor-pointer text-xs font-semibold text-[#3B4822]">Ver valores em tabela</summary>'
+            . '<div class="mt-2 overflow-x-auto"><table class="min-w-full text-xs"><caption class="sr-only">' . Security::e($caption) . '</caption><thead><tr class="border-b text-left text-[#5B5F4E]">';
+        foreach ($headers as $header) {
+            $html .= '<th scope="col" class="px-2 py-1.5 font-semibold">' . Security::e((string)$header) . '</th>';
+        }
+        $html .= '</tr></thead><tbody>';
+        foreach ($rows as $row) {
+            $html .= '<tr class="border-b">';
+            foreach (array_values($row) as $i => $celula) {
+                $html .= $i === 0
+                    ? '<th scope="row" class="px-2 py-1.5 text-left font-medium text-[#2B2E22]">' . Security::e((string)$celula) . '</th>'
+                    : '<td class="px-2 py-1.5 text-[#2B2E22]">' . Security::e((string)$celula) . '</td>';
+            }
+            $html .= '</tr>';
+        }
+        return $html . '</tbody></table></div></details>';
+    }
+}
+
+if (!function_exists('dashboard_multi_line_chart')) {
+    // Linhas com várias séries sobre as mesmas categorias (ex.: 12 meses). SVG puro, sem biblioteca.
+    // $series: [['label','color','values' => array<?float> (null = sem ponto, quebra a linha),
+    //            'partial' => array<bool> (ponto parcial: marcador vazado + trecho tracejado)]].
+    // Rótulo de valor em todo ponto (não depende de hover). Eixo Y sempre a partir de 0.
+    function dashboard_multi_line_chart(array $labels, array $series, string $suffix = '%', int $decimals = 1, string $ariaLabel = 'Gráfico de linhas'): string
+    {
+        $largura = 720.0;
+        $altura = 280.0;
+        $esq = 44.0;
+        $dir = 16.0;
+        $topo = 30.0;
+        $base = 34.0;
+        $n = max(1, count($labels));
+        $plotW = $largura - $esq - $dir;
+        $plotH = $altura - $topo - $base;
+
+        $maximo = 0.0;
+        foreach ($series as $s) {
+            foreach ($s['values'] as $v) {
+                if ($v !== null) {
+                    $maximo = max($maximo, (float)$v);
+                }
+            }
+        }
+        $teto = dashboard_nice_max($maximo);
+        $xDe = static fn(int $i): float => $esq + ($i + 0.5) * ($plotW / $n);
+        $yDe = static fn(float $v): float => $topo + $plotH - ($v / $teto) * $plotH;
+        $fmt = static fn(float $v): string => number_format($v, $decimals, ',', '.') . $suffix;
+
+        $svg = '<svg viewBox="0 0 ' . $largura . ' ' . $altura . '" class="h-auto w-full" role="img" aria-label="' . Security::e($ariaLabel) . '">';
+        for ($t = 0; $t <= 4; $t++) {
+            $valorTick = $teto / 4 * $t;
+            $y = $yDe($valorTick);
+            $svg .= '<line x1="' . $esq . '" y1="' . dashboard_fmt($y) . '" x2="' . ($largura - $dir) . '" y2="' . dashboard_fmt($y) . '" stroke="#E2DFD0" stroke-dasharray="3 5"></line>'
+                . '<text x="' . ($esq - 6) . '" y="' . dashboard_fmt($y + 3) . '" text-anchor="end" font-size="10" fill="#5B5F4E">' . Security::e(number_format($valorTick, $teto < 10 ? 1 : 0, ',', '.') . $suffix) . '</text>';
+        }
+        foreach ($labels as $i => $rotulo) {
+            $svg .= '<text x="' . dashboard_fmt($xDe((int)$i)) . '" y="' . ($altura - 12) . '" text-anchor="middle" font-size="11" fill="#5B5F4E">' . Security::e((string)$rotulo) . '</text>';
+        }
+
+        foreach ($series as $indiceSerie => $s) {
+            $cor = Security::e((string)$s['color']);
+            $parciais = $s['partial'] ?? [];
+            $segmentos = [];
+            $atual = [];
+            foreach ($labels as $i => $rotulo) {
+                $v = $s['values'][$i] ?? null;
+                if ($v === null) {
+                    if ($atual !== []) {
+                        $segmentos[] = $atual;
+                        $atual = [];
+                    }
+                    continue;
+                }
+                $atual[] = ['x' => $xDe((int)$i), 'y' => $yDe((float)$v), 'v' => (float)$v, 'i' => (int)$i, 'parcial' => !empty($parciais[$i]), 'rotulo' => (string)$rotulo];
+            }
+            if ($atual !== []) {
+                $segmentos[] = $atual;
+            }
+
+            foreach ($segmentos as $pontos) {
+                $solidos = $pontos;
+                $ultimo = end($pontos);
+                if (count($pontos) >= 2 && $ultimo['parcial']) {
+                    array_pop($solidos);
+                    $anterior = end($solidos);
+                    $svg .= '<line x1="' . dashboard_fmt($anterior['x']) . '" y1="' . dashboard_fmt($anterior['y']) . '" x2="' . dashboard_fmt($ultimo['x']) . '" y2="' . dashboard_fmt($ultimo['y']) . '" stroke="' . $cor . '" stroke-width="2.5" stroke-dasharray="4 4" stroke-linecap="round"></line>';
+                }
+                if (count($solidos) >= 2) {
+                    $svg .= '<path d="' . dashboard_smooth_line_path($solidos) . '" fill="none" stroke="' . $cor . '" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>';
+                }
+            }
+            foreach ($segmentos as $pontos) {
+                foreach ($pontos as $p) {
+                    // Duas séries: o maior valor do mês fica com o rótulo acima, o menor abaixo (sem sobrepor).
+                    $abaixo = false;
+                    if (count($series) === 2) {
+                        $outro = $series[1 - $indiceSerie]['values'][$p['i']] ?? null;
+                        if ($outro !== null) {
+                            $abaixo = $p['v'] < (float)$outro || ($p['v'] === (float)$outro && $indiceSerie === 1);
+                        }
+                    }
+                    $svg .= '<g><title>' . Security::e($s['label'] . ' — ' . $p['rotulo'] . ': ' . $fmt($p['v']) . ($p['parcial'] ? ' (parcial)' : '')) . '</title>'
+                        . '<circle cx="' . dashboard_fmt($p['x']) . '" cy="' . dashboard_fmt($p['y']) . '" r="3.5" fill="' . ($p['parcial'] ? '#ffffff' : $cor) . '" stroke="' . $cor . '" stroke-width="2"></circle>'
+                        . '<text x="' . dashboard_fmt($p['x']) . '" y="' . dashboard_fmt($p['y'] + ($abaixo ? 16 : -8)) . '" text-anchor="middle" font-size="10" font-weight="600" fill="#2B2E22">' . Security::e($fmt($p['v'])) . '</text></g>';
+                }
+            }
+        }
+        return '<div class="overflow-x-auto"><div class="min-w-[560px]">' . $svg . '</svg></div></div>';
+    }
+}
+
+if (!function_exists('dashboard_grouped_columns')) {
+    // Colunas agrupadas (uma coluna por série em cada categoria). $series: [['label','color',
+    // 'values' => array<?int> (null = sem coluna e sem rótulo), 'partial' => array<bool>]]. Coluna
+    // parcial: preenchimento translúcido + contorno tracejado. Rótulo de valor em toda coluna.
+    function dashboard_grouped_columns(array $labels, array $series, string $ariaLabel = 'Gráfico de colunas'): string
+    {
+        $largura = 720.0;
+        $altura = 280.0;
+        $esq = 40.0;
+        $dir = 12.0;
+        $topo = 26.0;
+        $base = 34.0;
+        $n = max(1, count($labels));
+        $k = max(1, count($series));
+        $plotW = $largura - $esq - $dir;
+        $plotH = $altura - $topo - $base;
+        $grupoW = $plotW / $n;
+        $barraW = min(18.0, $grupoW * 0.38);
+
+        $maximo = 0.0;
+        foreach ($series as $s) {
+            foreach ($s['values'] as $v) {
+                if ($v !== null) {
+                    $maximo = max($maximo, (float)$v);
+                }
+            }
+        }
+        $teto = max(1.0, dashboard_nice_max($maximo));
+
+        $svg = '<svg viewBox="0 0 ' . $largura . ' ' . $altura . '" class="h-auto w-full" role="img" aria-label="' . Security::e($ariaLabel) . '">';
+        for ($t = 0; $t <= 4; $t++) {
+            $valorTick = $teto / 4 * $t;
+            $y = $topo + $plotH - ($valorTick / $teto) * $plotH;
+            $svg .= '<line x1="' . $esq . '" y1="' . dashboard_fmt($y) . '" x2="' . ($largura - $dir) . '" y2="' . dashboard_fmt($y) . '" stroke="#E2DFD0" stroke-dasharray="3 5"></line>'
+                . '<text x="' . ($esq - 6) . '" y="' . dashboard_fmt($y + 3) . '" text-anchor="end" font-size="10" fill="#5B5F4E">' . Security::e(number_format($valorTick, $teto < 4 ? 1 : 0, ',', '.')) . '</text>';
+        }
+        foreach ($labels as $i => $rotulo) {
+            $centro = $esq + ($i + 0.5) * $grupoW;
+            $svg .= '<text x="' . dashboard_fmt($centro) . '" y="' . ($altura - 12) . '" text-anchor="middle" font-size="11" fill="#5B5F4E">' . Security::e((string)$rotulo) . '</text>';
+            foreach ($series as $indice => $s) {
+                $v = $s['values'][$i] ?? null;
+                if ($v === null) {
+                    continue;
+                }
+                $v = (float)$v;
+                $x = $centro + ($indice - ($k - 1) / 2) * ($barraW + 3) - $barraW / 2;
+                $h = ($v / $teto) * $plotH;
+                $y = $topo + $plotH - $h;
+                $parcial = !empty(($s['partial'] ?? [])[$i]);
+                $cor = Security::e((string)$s['color']);
+                $svg .= '<g><title>' . Security::e($s['label'] . ' — ' . $rotulo . ': ' . number_format($v, 0, ',', '.') . ($parcial ? ' (parcial)' : '')) . '</title>';
+                if ($h > 0) {
+                    $svg .= '<rect x="' . dashboard_fmt($x) . '" y="' . dashboard_fmt($y) . '" width="' . dashboard_fmt($barraW) . '" height="' . dashboard_fmt($h) . '" rx="2" fill="' . $cor . '"'
+                        . ($parcial ? ' fill-opacity="0.45" stroke="' . $cor . '" stroke-width="1.5" stroke-dasharray="3 2"' : '') . '></rect>';
+                }
+                $svg .= '<text x="' . dashboard_fmt($x + $barraW / 2) . '" y="' . dashboard_fmt($y - 4) . '" text-anchor="middle" font-size="9" font-weight="600" fill="#2B2E22">' . Security::e(number_format($v, 0, ',', '.')) . '</text></g>';
+            }
+        }
+        return '<div class="overflow-x-auto"><div class="min-w-[560px]">' . $svg . '</svg></div></div>';
+    }
+}
 }

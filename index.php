@@ -80,6 +80,9 @@ try {
     $router->get('/admin', [AdminController::class, 'index']);
     $router->get('/admin/indicadores-rh', [AdminRhIndicadoresController::class, 'index']);
     $router->get('/admin/dashboard-recrutamento', [AdminDashboardRecrutamentoController::class, 'index']);
+    // Dashboard de Turnover — seis análises sobre os contratos oficiais do METADADOS. Permissão
+    // individual dashboard_turnover.visualizar (ver AdminDashboardTurnoverController).
+    $router->get('/admin/dashboard-turnover', [AdminDashboardTurnoverController::class, 'index']);
     // Sincronização operacional do METADADOS sob demanda (Etapa 1). O Portal só aciona a camada
     // de orquestração interna e consulta o andamento — nunca acessa o SQL Server. Ver
     // AdminMetadadosSyncController e docs/claude/roadmap-tecnico.md.

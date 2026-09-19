@@ -74,6 +74,12 @@ $sidebarLinkClass = static function (array $paths = [], string $extra = '') use 
         <span class="sidebar-link-label">Recrutamento e Seleção</span>
       </a>
       <?php endif; ?>
+      <?php if (Authorization::temPermissao('dashboard_turnover.visualizar')): ?>
+      <a href="<?= $base ?>/admin/dashboard-turnover" class="sidebar-primary-link <?= $sidebarLinkClass(['/admin/dashboard-turnover']) ?>" data-admin-menu-close="1" title="Dashboard de Turnover" aria-label="Dashboard de Turnover">
+        <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg>
+        <span class="sidebar-link-label">Dashboard de Turnover</span>
+      </a>
+      <?php endif; ?>
       <a href="<?= $base ?>/admin/candidaturas" class="sidebar-primary-link <?= $sidebarLinkClass(['/admin/candidaturas']) ?>" data-admin-menu-close="1" title="Candidaturas" aria-label="Candidaturas">
         <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="8" cy="8" r="3"/><circle cx="16" cy="12" r="3"/></svg>
         <span class="sidebar-link-label">Candidaturas</span>

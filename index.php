@@ -57,6 +57,12 @@ try {
     $router->get('/pesquisa-reacao/{token}', [PesquisaReacaoIntegracaoController::class, 'show']);
     $router->post('/pesquisa-reacao/{token}', [PesquisaReacaoIntegracaoController::class, 'store']);
 
+    // Entrevista de Desligamento — página pública, sem login, acessada por token aleatório de 256 bits
+    // (só o hash é persistido). Domínio próprio: sem relação com /integracao nem /pesquisa-reacao.
+    // Layout sem recursos de terceiros, Referrer-Policy no-referrer e rate limit. Ver EntrevistaDesligamentoController.
+    $router->get('/entrevista-desligamento/{token}', [EntrevistaDesligamentoController::class, 'show']);
+    $router->post('/entrevista-desligamento/{token}', [EntrevistaDesligamentoController::class, 'store']);
+
     $router->post('/api/check-cpf', [ApiController::class, 'checkCpf']);
     $router->post('/api/pipeline/move', [AdminPipelineController::class, 'move']);
     $router->post('/api/solicitacoes-vaga/move', [AdminSolicitacoesVagaKanbanController::class, 'move']);
@@ -222,6 +228,12 @@ try {
     $router->get('/admin/pesquisa-integracao-qr', [AdminPesquisaIntegracaoQrController::class, 'index']);
     $router->post('/admin/pesquisa-integracao-qr/sessao', [AdminPesquisaIntegracaoQrController::class, 'abrir']);
     $router->post('/admin/pesquisa-integracao-qr/sessao/{id}/encerrar', [AdminPesquisaIntegracaoQrController::class, 'encerrar']);
+    // Entrevista de Desligamento (administração) — permissões individuais entrevista_desligamento.*.
+    $router->get('/admin/entrevistas-desligamento', [AdminEntrevistaDesligamentoController::class, 'index']);
+    $router->post('/admin/entrevistas-desligamento/gerar', [AdminEntrevistaDesligamentoController::class, 'gerar']);
+    $router->post('/admin/entrevistas-desligamento/{id}/regenerar', [AdminEntrevistaDesligamentoController::class, 'regenerar']);
+    $router->post('/admin/entrevistas-desligamento/{id}/cancelar', [AdminEntrevistaDesligamentoController::class, 'cancelar']);
+    $router->get('/admin/entrevistas-desligamento/{id}/resultado', [AdminEntrevistaDesligamentoController::class, 'resultado']);
 
     $router->get('/admin/usuarios', [AdminUsuariosController::class, 'index']);
     $router->get('/admin/usuarios/novo', [AdminUsuariosController::class, 'create']);

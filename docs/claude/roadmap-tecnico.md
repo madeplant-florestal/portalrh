@@ -560,3 +560,37 @@ colaboradores quebra por coluna ausente) → `2026-09-04-metadados-sync-execucoe
 não) o `--enviar` do sender para as novas dimensões; confirmar a semântica de `ATIVADESATIVADA`
 (Setores/Cargos); próxima fase: reconstrução de Centro de Custo, migração das telas de
 Empresas/Unidades/Setores/Cargos para consulta oficial, descontinuação do cadastro duplicado.
+
+## Entrevista de Desligamento (sprint 2026-09-21)
+
+Domínio próprio (não usa tabelas/controllers das Pesquisas de Integração/Reação). Uma entrevista
+**identificada** por **contrato** oficial: `entrevistas_desligamento.metadados_id` (`UNIQUE`, FK para
+`colaboradores_metadados.id`); `codigo_pessoa` nunca agrupa contratos (recontratação = outro contrato =
+outra entrevista). Camadas: `EntrevistaDesligamentoRepository` (SQL), `EntrevistaDesligamentoService`
+(regras), `AdminEntrevistaDesligamentoController` (`/admin/entrevistas-desligamento…`),
+`EntrevistaDesligamentoController` (público `/entrevista-desligamento/{token}`).
+
+- **Elegível (V1)**: `demissao IS NOT NULL AND demissao <= hoje` e motivo oficial ≠ `020` (Falecimento) —
+  regra em SQL (`listarElegiveis`) e em PHP (`elegibilidade`), ambas alimentadas por
+  `EntrevistaDesligamentoService::criteriosElegibilidade`. Sem outras exclusões.
+- **Sem Voluntário/Involuntário, sem Gestor Imediato, sem Área** na V1 (sem fonte/semântica aprovada);
+  não reutiliza os mapas de motivos do People Analytics nem do Dashboard de Turnover. Motivo oficial
+  (snapshot `snap_motivo_*`) e motivo declarado (`motivo_principal`) são independentes.
+- **Snapshot** (`snap_*`) na geração; o METADADOS pode mudar depois sem alterar o contexto histórico. A
+  divergência (demissão/motivo) é só sinalizada na administração (`divergencias()`); a entrevista nunca é
+  apagada. Regenerar mantém o snapshot original.
+- **Token**: `bin2hex(random_bytes(32))`, só o SHA-256 persistido, bruto exibido uma única vez (POST de
+  gerar/regenerar renderiza direto). Prazo 30 dias; situação **derivada** de timestamps (respondida >
+  cancelada > expirada > pendente). Regenerar troca o hash (invalida o anterior), renova o prazo e nunca
+  reabre respondida; cancelar só pendente. Resposta concluída por `UPDATE … WHERE respondida_em IS NULL`
+  (+ token/cancelada/expiração) com `rowCount()` em transação, junto com os fatores (tabela filha).
+- **Página pública sensível**: layout `publico-seguro` (sem recursos de terceiros, sem script),
+  `Referrer-Policy: no-referrer` (cabeçalho + `<meta>`), `Cache-Control: no-store`, noindex, CSRF, PRG e
+  rate limit de token inexistente (10 tentativas/10 min por IP → bloqueio de 15 min). Observação:
+  `Header always set` de `public/.htaccess` pode duplicar/sobrescrever Referrer-Policy/CSP — as defesas
+  efetivas são o `<meta>` e a ausência de requisições externas.
+- **Permissões** (seed sem concessão; 620/630/640): `entrevista_desligamento.visualizar` (situação
+  operacional, nunca respostas), `.gerenciar` (gerar/regenerar/cancelar), `.resultados` (resposta
+  individual e eNPS consolidado). Envio do link é manual (RH copia); WhatsApp/N8N ficam para depois.
+- **Migrations** (ordem): `2026-09-21-entrevista-desligamento.sql` (+ `-rollback`, destrutivo) e
+  `2026-09-21-entrevista-desligamento-permissoes-seed.sql`.

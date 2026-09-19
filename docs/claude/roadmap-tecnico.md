@@ -594,3 +594,27 @@ outra entrevista). Camadas: `EntrevistaDesligamentoRepository` (SQL), `Entrevist
   individual e eNPS consolidado). Envio do link é manual (RH copia); WhatsApp/N8N ficam para depois.
 - **Migrations** (ordem): `2026-09-21-entrevista-desligamento.sql` (+ `-rollback`, destrutivo) e
   `2026-09-21-entrevista-desligamento-permissoes-seed.sql`.
+
+## Dashboard da Entrevista de Desligamento (sprint 2026-09-22)
+
+Painel gerencial **agregado** em `/admin/dashboard-entrevista-desligamento` (permissão própria
+`dashboard_entrevista_desligamento.visualizar`, ordem 650, seed sem concessão; **não** reutiliza
+`entrevista_desligamento.resultados`). Camadas: `DashboardEntrevistaDesligamentoRepository` (8 agregações + opções de
+filtro, só leitura), `DashboardEntrevistaDesligamentoService` (composição pura e testável),
+`AdminDashboardEntrevistaDesligamentoController`, view `admin/dashboard-entrevista-desligamento.php`. Sem tabela nova.
+
+- **Duas populações, denominadores próprios**: (A) desligamentos oficiais = contratos de `colaboradores_metadados`
+  (competência `demissao`; total, cobertura e permanência); (B) entrevistas **respondidas** (competência
+  `snap_demissao` — nunca `respondida_em`; filtros pelos campos `snap_*`): motivos declarados, fatores, satisfação
+  (`experiencia_geral`, 0–10), eNPS, liderança, cultura, integração. Cada indicador mostra o nº de respostas.
+- **Filtros**: período (inclusivo; fim limitado a hoje; máx. 60 meses), Unidade (identidade **empresa + unidade** — o
+  código de unidade só é único dentro da empresa) e Cargo (`codigo_cargo`), validados no servidor contra as opções.
+- **"Sem base" = `null`** (taxa sem geradas, médias/eNPS sem respostas, permanência sem contratos válidos); zero real
+  continua 0. Meses sem dados: contagens 0, indicadores `null`.
+- **Permanência (meses)** = (Σ dias(demissão − admissão) ÷ contratos válidos) ÷ 30,4375; válido = admissão preenchida e
+  ≤ demissão (inválidos contados à parte). Taxa de resposta = respondidas ÷ geradas; cobertura = elegíveis (motivo ≠ 020)
+  com entrevista gerada ÷ elegíveis.
+- **Fora da V1** (sem fonte/semântica aprovada): Voluntário/Involuntário, Área, Gestor, motivos por Área/Gestor.
+- Helpers: `chart-helpers.php` ganhou parâmetro opcional `$opcoes` em `dashboard_multi_line_chart` (`min`/`max` fixos,
+  `valores`) e `dashboard_grouped_columns` (`valores`) — comportamento padrão inalterado.
+- **Migration**: só `2026-09-22-dashboard-entrevista-desligamento-permissao-seed.sql`.

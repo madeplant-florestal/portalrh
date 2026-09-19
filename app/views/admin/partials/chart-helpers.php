@@ -318,7 +318,7 @@ if (!function_exists('dashboard_multi_line_chart')) {
     // $series: [['label','color','values' => array<?float> (null = sem ponto, quebra a linha),
     //            'partial' => array<bool> (ponto parcial: marcador vazado + trecho tracejado)]].
     // Rótulo de valor em todo ponto (não depende de hover). Eixo Y sempre a partir de 0.
-    function dashboard_multi_line_chart(array $labels, array $series, string $suffix = '%', int $decimals = 1, string $ariaLabel = 'Gráfico de linhas'): string
+    function dashboard_multi_line_chart(array $labels, array $series, string $suffix = '%', int $decimals = 1, string $ariaLabel = 'Gráfico de linhas', array $opcoes = []): string
     {
         $largura = 720.0;
         $altura = 280.0;
@@ -338,17 +338,23 @@ if (!function_exists('dashboard_multi_line_chart')) {
                 }
             }
         }
-        $teto = dashboard_nice_max($maximo);
+        // Escala padrão: de 0 ao "teto bonito" dos dados. `$opcoes['min']`/`['max']` fixam a escala (ex.: eNPS de
+        // -100 a 100, nota de 1 a 5); sem opções o comportamento é o original.
+        $minimo = isset($opcoes['min']) ? (float)$opcoes['min'] : 0.0;
+        $teto = isset($opcoes['max']) ? (float)$opcoes['max'] : dashboard_nice_max($maximo);
+        $faixa = max(0.0001, $teto - $minimo);
+        $escalaFixa = isset($opcoes['min']) || isset($opcoes['max']);
+        $mostrarValores = ($opcoes['valores'] ?? true) !== false;
         $xDe = static fn(int $i): float => $esq + ($i + 0.5) * ($plotW / $n);
-        $yDe = static fn(float $v): float => $topo + $plotH - ($v / $teto) * $plotH;
+        $yDe = static fn(float $v): float => $topo + $plotH - (($v - $minimo) / $faixa) * $plotH;
         $fmt = static fn(float $v): string => number_format($v, $decimals, ',', '.') . $suffix;
 
         $svg = '<svg viewBox="0 0 ' . $largura . ' ' . $altura . '" class="h-auto w-full" role="img" aria-label="' . Security::e($ariaLabel) . '">';
         for ($t = 0; $t <= 4; $t++) {
-            $valorTick = $teto / 4 * $t;
+            $valorTick = $minimo + $faixa / 4 * $t;
             $y = $yDe($valorTick);
             $svg .= '<line x1="' . $esq . '" y1="' . dashboard_fmt($y) . '" x2="' . ($largura - $dir) . '" y2="' . dashboard_fmt($y) . '" stroke="#E2DFD0" stroke-dasharray="3 5"></line>'
-                . '<text x="' . ($esq - 6) . '" y="' . dashboard_fmt($y + 3) . '" text-anchor="end" font-size="10" fill="#5B5F4E">' . Security::e(number_format($valorTick, $teto < 10 ? 1 : 0, ',', '.') . $suffix) . '</text>';
+                . '<text x="' . ($esq - 6) . '" y="' . dashboard_fmt($y + 3) . '" text-anchor="end" font-size="10" fill="#5B5F4E">' . Security::e(number_format($valorTick, $escalaFixa ? (fmod($faixa / 4, 1.0) !== 0.0 ? 1 : 0) : ($teto < 10 ? 1 : 0), ',', '.') . $suffix) . '</text>';
         }
         foreach ($labels as $i => $rotulo) {
             $svg .= '<text x="' . dashboard_fmt($xDe((int)$i)) . '" y="' . ($altura - 12) . '" text-anchor="middle" font-size="11" fill="#5B5F4E">' . Security::e((string)$rotulo) . '</text>';
@@ -398,7 +404,7 @@ if (!function_exists('dashboard_multi_line_chart')) {
                     }
                     $svg .= '<g><title>' . Security::e($s['label'] . ' — ' . $p['rotulo'] . ': ' . $fmt($p['v']) . ($p['parcial'] ? ' (parcial)' : '')) . '</title>'
                         . '<circle cx="' . dashboard_fmt($p['x']) . '" cy="' . dashboard_fmt($p['y']) . '" r="3.5" fill="' . ($p['parcial'] ? '#ffffff' : $cor) . '" stroke="' . $cor . '" stroke-width="2"></circle>'
-                        . '<text x="' . dashboard_fmt($p['x']) . '" y="' . dashboard_fmt($p['y'] + ($abaixo ? 16 : -8)) . '" text-anchor="middle" font-size="10" font-weight="600" fill="#2B2E22">' . Security::e($fmt($p['v'])) . '</text></g>';
+                        . ($mostrarValores ? '<text x="' . dashboard_fmt($p['x']) . '" y="' . dashboard_fmt($p['y'] + ($abaixo ? 16 : -8)) . '" text-anchor="middle" font-size="10" font-weight="600" fill="#2B2E22">' . Security::e($fmt($p['v'])) . '</text>' : '') . '</g>';
                 }
             }
         }
@@ -410,8 +416,9 @@ if (!function_exists('dashboard_grouped_columns')) {
     // Colunas agrupadas (uma coluna por série em cada categoria). $series: [['label','color',
     // 'values' => array<?int> (null = sem coluna e sem rótulo), 'partial' => array<bool>]]. Coluna
     // parcial: preenchimento translúcido + contorno tracejado. Rótulo de valor em toda coluna.
-    function dashboard_grouped_columns(array $labels, array $series, string $ariaLabel = 'Gráfico de colunas'): string
+    function dashboard_grouped_columns(array $labels, array $series, string $ariaLabel = 'Gráfico de colunas', array $opcoes = []): string
     {
+        $mostrarValores = ($opcoes['valores'] ?? true) !== false;
         $largura = 720.0;
         $altura = 280.0;
         $esq = 40.0;
@@ -461,7 +468,10 @@ if (!function_exists('dashboard_grouped_columns')) {
                     $svg .= '<rect x="' . dashboard_fmt($x) . '" y="' . dashboard_fmt($y) . '" width="' . dashboard_fmt($barraW) . '" height="' . dashboard_fmt($h) . '" rx="2" fill="' . $cor . '"'
                         . ($parcial ? ' fill-opacity="0.45" stroke="' . $cor . '" stroke-width="1.5" stroke-dasharray="3 2"' : '') . '></rect>';
                 }
-                $svg .= '<text x="' . dashboard_fmt($x + $barraW / 2) . '" y="' . dashboard_fmt($y - 4) . '" text-anchor="middle" font-size="9" font-weight="600" fill="#2B2E22">' . Security::e(number_format($v, 0, ',', '.')) . '</text></g>';
+                if ($mostrarValores) {
+                    $svg .= '<text x="' . dashboard_fmt($x + $barraW / 2) . '" y="' . dashboard_fmt($y - 4) . '" text-anchor="middle" font-size="9" font-weight="600" fill="#2B2E22">' . Security::e(number_format($v, 0, ',', '.')) . '</text>';
+                }
+                $svg .= '</g>';
             }
         }
         return '<div class="overflow-x-auto"><div class="min-w-[560px]">' . $svg . '</svg></div></div>';

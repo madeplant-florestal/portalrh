@@ -234,6 +234,8 @@ try {
     $router->post('/admin/entrevistas-desligamento/{id}/regenerar', [AdminEntrevistaDesligamentoController::class, 'regenerar']);
     $router->post('/admin/entrevistas-desligamento/{id}/cancelar', [AdminEntrevistaDesligamentoController::class, 'cancelar']);
     $router->get('/admin/entrevistas-desligamento/{id}/resultado', [AdminEntrevistaDesligamentoController::class, 'resultado']);
+    // Dashboard da Entrevista de Desligamento (agregado) — permissão própria dashboard_entrevista_desligamento.visualizar.
+    $router->get('/admin/dashboard-entrevista-desligamento', [AdminDashboardEntrevistaDesligamentoController::class, 'index']);
 
     $router->get('/admin/usuarios', [AdminUsuariosController::class, 'index']);
     $router->get('/admin/usuarios/novo', [AdminUsuariosController::class, 'create']);

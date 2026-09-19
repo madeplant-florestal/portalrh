@@ -108,6 +108,12 @@ $sidebarLinkClass = static function (array $paths = [], string $extra = '') use 
         <span class="sidebar-link-label">Pesquisa de Reação — Integração</span>
       </a>
       <?php endif; ?>
+      <?php if (Authorization::temPermissao('dashboard_entrevista_desligamento.visualizar')): ?>
+      <a href="<?= $base ?>/admin/dashboard-entrevista-desligamento" class="sidebar-primary-link <?= $sidebarLinkClass(['/admin/dashboard-entrevista-desligamento']) ?>" data-admin-menu-close="1" title="Dashboard de Entrevista de Desligamento" aria-label="Dashboard de Entrevista de Desligamento">
+        <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg>
+        <span class="sidebar-link-label">Dashboard de Entrevista de Desligamento</span>
+      </a>
+      <?php endif; ?>
       <?php if (Authorization::temPermissao('entrevista_desligamento.visualizar')): ?>
       <a href="<?= $base ?>/admin/entrevistas-desligamento" class="sidebar-primary-link <?= $sidebarLinkClass(['/admin/entrevistas-desligamento']) ?>" data-admin-menu-close="1" title="Entrevistas de Desligamento" aria-label="Entrevistas de Desligamento">
         <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>

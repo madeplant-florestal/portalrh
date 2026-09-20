@@ -234,6 +234,25 @@ try {
     $router->post('/admin/entrevistas-desligamento/{id}/regenerar', [AdminEntrevistaDesligamentoController::class, 'regenerar']);
     $router->post('/admin/entrevistas-desligamento/{id}/cancelar', [AdminEntrevistaDesligamentoController::class, 'cancelar']);
     $router->get('/admin/entrevistas-desligamento/{id}/resultado', [AdminEntrevistaDesligamentoController::class, 'resultado']);
+    // PDI — Plano de Desenvolvimento Individual (V1 assistida por RH/Gestor; o colaborador NÃO tem rota/portal).
+    // Permissões pdi.visualizar/gerenciar/acompanhar + escopo por linha (gestor só vê os próprios). Rotas estáticas
+    // (/novo) antes de /{id}. Ver AdminPdisController.
+    $router->get('/admin/pdis', [AdminPdisController::class, 'index']);
+    $router->get('/admin/pdis/novo', [AdminPdisController::class, 'novo']);
+    $router->post('/admin/pdis', [AdminPdisController::class, 'store']);
+    $router->get('/admin/pdis/{id}', [AdminPdisController::class, 'show']);
+    $router->get('/admin/pdis/{id}/editar', [AdminPdisController::class, 'editar']);
+    $router->post('/admin/pdis/{id}/editar', [AdminPdisController::class, 'atualizar']);
+    $router->post('/admin/pdis/{id}/acompanhamentos', [AdminPdisController::class, 'acompanhar']);
+    $router->post('/admin/pdis/{id}/espaco-colaborador', [AdminPdisController::class, 'espacoColaborador']);
+    $router->post('/admin/pdis/{id}/evidencias', [AdminPdisController::class, 'evidencias']);
+    $router->post('/admin/pdis/{id}/acoes/{ordem}/status', [AdminPdisController::class, 'statusAcao']);
+    $router->post('/admin/pdis/{id}/liberar', [AdminPdisController::class, 'liberar']);
+    $router->post('/admin/pdis/{id}/iniciar', [AdminPdisController::class, 'iniciar']);
+    $router->post('/admin/pdis/{id}/concluir', [AdminPdisController::class, 'concluir']);
+    $router->post('/admin/pdis/{id}/reabrir', [AdminPdisController::class, 'reabrir']);
+    $router->post('/admin/pdis/{id}/cancelar', [AdminPdisController::class, 'cancelar']);
+    $router->post('/admin/pdis/{id}/manter-desligado', [AdminPdisController::class, 'manterDesligado']);
     // Dashboard da Entrevista de Desligamento (agregado) — permissão própria dashboard_entrevista_desligamento.visualizar.
     $router->get('/admin/dashboard-entrevista-desligamento', [AdminDashboardEntrevistaDesligamentoController::class, 'index']);
 

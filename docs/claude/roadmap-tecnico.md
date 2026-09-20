@@ -618,3 +618,30 @@ filtro, só leitura), `DashboardEntrevistaDesligamentoService` (composição pur
 - Helpers: `chart-helpers.php` ganhou parâmetro opcional `$opcoes` em `dashboard_multi_line_chart` (`min`/`max` fixos,
   `valores`) e `dashboard_grouped_columns` (`valores`) — comportamento padrão inalterado.
 - **Migration**: só `2026-09-22-dashboard-entrevista-desligamento-permissao-seed.sql`.
+
+## PDI — Plano de Desenvolvimento Individual (V1 assistida, sprint 2026-09-23)
+
+Processo persistente (não é pesquisa de resposta única) em `/admin/pdis`. **O colaborador NÃO tem login/portal**: o
+"espaço do colaborador" e os relatos em nome dele são registrados por RH/Gestor e marcados
+`registrado_em_nome_do_colaborador` (com quem registrou). Camadas: `PdiRepository`, `PdiService`,
+`AdminPdisController` (16 rotas, todas sob `/admin/pdis`), views `admin/pdis/*`. Migrations: `2026-09-23-pdi.sql`
+(+ `-rollback`, destrutivo) e `2026-09-23-pdi-permissoes-seed.sql` (660/670/680, sem concessão).
+
+- **Modelo**: `pdis` (vínculo por `metadados_id`, **sem** UNIQUE por contrato; SNAPSHOT na abertura; `gestor_usuario_id` +
+  nome, escolhido explicitamente — nunca inferido —; origem fechada + referência futura `origem_ref_*` sem FK),
+  `pdi_competencias` (texto; `competencia_id` nullable sem FK), `pdi_acoes` (máx. 3: `ordem` 1–3 + UNIQUE (pdi_id, ordem)
+  + regra no Service), `pdi_acompanhamentos` e `pdi_eventos` (**append-only**: o repository só tem INSERT).
+  CHECKs no banco: listas fechadas, prazo ≥ abertura e conclusão × avaliação final × data real.
+- **Status**: rascunho → não iniciado → em andamento → concluído (+ cancelado). Sair de rascunho NÃO exige textos nem
+  competência (opcionais até o RH decidir o contrário); a única exigência para iniciar é ≥1 ação; concluir exige avaliação
+  final e preenche a data real; concluído bloqueia a edição comum; só Admin/RH
+  reabrem (com motivo; avaliação/data real são limpas e ficam no histórico). Atraso é só sinalização derivada de datas.
+- **Autorização em duas camadas**: permissão individual (visualizar/gerenciar/acompanhar; Admin só pelo bypass) **e** escopo
+  por linha — só Admin (bypass central) e RH (com a permissão) veem todos; os demais só os PDIs em que são o gestor
+  responsável (fora do escopo responde "não encontrado"). A sinalização de **supervisor não dá escopo global** no PDI e o
+  controller não usa `Auth::requireRole` (que libera supervisor): só permissão individual + escopo por linha. Gestor sem escopo total cria PDI sempre vinculado a si próprio.
+- **Auditoria**: toda alteração relevante grava evento na MESMA transação (teste de atomicidade). Desligamento e mudança de
+  cargo/unidade no METADADOS **não** encerram nem alteram o PDI: só sinalizam; a decisão do RH (manter/concluir/cancelar) é
+  registrada.
+- **Fora da V1**: Área, portal do colaborador, anexos, assinatura/ciência, notificações, cifragem, dashboard. O risco
+  preexistente de exposição por role `viewer` em telas antigas (Candidaturas etc.) continua registrado e NÃO foi alterado.

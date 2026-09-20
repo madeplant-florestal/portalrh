@@ -108,6 +108,12 @@ $sidebarLinkClass = static function (array $paths = [], string $extra = '') use 
         <span class="sidebar-link-label">Pesquisa de Reação — Integração</span>
       </a>
       <?php endif; ?>
+      <?php if (Authorization::temPermissao('pdi.visualizar')): ?>
+      <a href="<?= $base ?>/admin/pdis" class="sidebar-primary-link <?= $sidebarLinkClass(['/admin/pdis']) ?>" data-admin-menu-close="1" title="PDI — Plano de Desenvolvimento Individual" aria-label="PDI — Plano de Desenvolvimento Individual">
+        <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 15l3-4 3 2 4-6"/></svg>
+        <span class="sidebar-link-label">PDI</span>
+      </a>
+      <?php endif; ?>
       <?php if (Authorization::temPermissao('dashboard_entrevista_desligamento.visualizar')): ?>
       <a href="<?= $base ?>/admin/dashboard-entrevista-desligamento" class="sidebar-primary-link <?= $sidebarLinkClass(['/admin/dashboard-entrevista-desligamento']) ?>" data-admin-menu-close="1" title="Dashboard de Entrevista de Desligamento" aria-label="Dashboard de Entrevista de Desligamento">
         <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg>

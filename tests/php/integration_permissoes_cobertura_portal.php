@@ -160,16 +160,43 @@ try {
     // sem remover nenhuma das 15+42 desta rodada — o teste continua provando "nada foi removido/duplicado".
     $check((int)$pdo->query('SELECT COUNT(*) FROM permissoes')->fetchColumn() >= $totalAntigo + 42, 'total de permissões >= 15 já existentes + 42 desta rodada, nenhuma removida/duplicada');
 
-    // ---- 15/16. Tela de Usuários / Contexto Organizacional / vínculo METADADOS: nenhum arquivo tocado
-    $arquivosNaoTocados = [
-        'app/controllers/AdminUsuariosController.php',
-        'app/services/UsuarioContextoOrganizacionalService.php',
+    // ---- 15/16. Tela de Usuários / Contexto Organizacional / vínculo METADADOS: comportamento de autorização preservado
+    // Esta rodada só cadastrou permissões e ajustou o menu. Em vez de exigir que os arquivos estejam fora do `git diff`
+    // (o que impede qualquer evolução legítima posterior), o guard verifica o CÓDIGO relevante: cada ação PRÉ-EXISTENTE de
+    // AdminUsuariosController mantém exatamente o portão de perfil de antes, o controller não passou a decidir acesso pelo
+    // catálogo de permissões novo, e o serviço de Contexto Organizacional continua sem regra de permissão/perfil.
+    // Ações adicionadas depois (ex.: updateGestor) têm o portão verificado no teste do próprio módulo.
+    $semComentarios = static function (string $codigo): string {
+        $out = '';
+        foreach (token_get_all($codigo) as $t) {
+            if (is_array($t) && in_array($t[0], [T_COMMENT, T_DOC_COMMENT], true)) {
+                continue;
+            }
+            $out .= is_array($t) ? $t[1] : $t;
+        }
+        return $out;
+    };
+    $corpoMetodo = static function (string $classe, string $metodo) use ($semComentarios): string {
+        $r = new ReflectionMethod($classe, $metodo);
+        $linhas = file($r->getFileName());
+        return $semComentarios("<?php\n" . implode('', array_slice($linhas, $r->getStartLine() - 1, $r->getEndLine() - $r->getStartLine() + 1)));
+    };
+    $portoesPreExistentes = [
+        'index' => "['admin']", 'create' => "['admin']", 'store' => "['admin']", 'updateRole' => "['admin']",
+        'delete' => "['admin']", 'updateVagaAcesso' => "['admin']", 'updatePermissoes' => "['admin']", 'updateStatus' => "['admin']",
+        'show' => "['admin', 'rh']", 'vincularMetadados' => "['admin', 'rh']", 'updateContextoOrganizacional' => "['admin', 'rh']",
+        'buscarMetadados' => "['admin', 'rh']",
     ];
-    $diffNomes = [];
-    exec('git -C ' . escapeshellarg(dirname(__DIR__, 2)) . ' diff --name-only', $diffNomes);
-    foreach ($arquivosNaoTocados as $arquivo) {
-        $check(!in_array($arquivo, $diffNomes, true), "'{$arquivo}' não foi alterado nesta rodada — Tela de Usuários/Contexto Organizacional/vínculo METADADOS seguem exatamente como estavam");
+    foreach ($portoesPreExistentes as $metodo => $perfis) {
+        $corpo = $corpoMetodo(AdminUsuariosController::class, $metodo);
+        $check(str_contains($corpo, "Auth::requireRole({$perfis})"), "AdminUsuariosController::{$metodo} mantém o portão de perfil {$perfis} (Tela de Usuários/Contexto Organizacional/vínculo METADADOS sem mudança de autorização)");
     }
+    $controllerFonte = $semComentarios((string)file_get_contents(__DIR__ . '/../../app/controllers/AdminUsuariosController.php'));
+    $check(!preg_match('/Authorization::(requirePermissao|usuarioTemPermissao|temPermissao)/', $controllerFonte), 'AdminUsuariosController não decide acesso pelo catálogo de permissões novo (a cobertura desta rodada é só catálogo + menu)');
+    $servicoContexto = $semComentarios((string)file_get_contents(__DIR__ . '/../../app/services/UsuarioContextoOrganizacionalService.php'));
+    $check(!preg_match('/Authorization::|Auth::requireRole|is_supervisor/', $servicoContexto), 'UsuarioContextoOrganizacionalService segue sem regra de permissão/perfil (nenhum bypass novo)');
+    $apiContexto = ['resolverContextoOficial', 'aplicarContextoDoVinculo', 'aoDesvincular', 'definirContextoManual', 'contextoDoUsuario', 'setoresDoUsuario'];
+    $check(array_reduce($apiContexto, static fn(bool $ok, string $m): bool => $ok && method_exists(UsuarioContextoOrganizacionalService::class, $m), true), 'UsuarioContextoOrganizacionalService mantém a API pública do Contexto Organizacional/vínculo METADADOS');
     // Confirma que o mecanismo de salvar permissões continua funcionando de ponta a ponta.
     $syncFinal = Authorization::sincronizar($gestorId, [$idColaboradores]);
     $check(($syncFinal['ok'] ?? false) === true && (int)($syncFinal['total'] ?? 0) === 1, 'Authorization::sincronizar() (usado por AdminUsuariosController::updatePermissoes) continua salvando corretamente');

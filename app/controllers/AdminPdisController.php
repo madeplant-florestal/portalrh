@@ -51,7 +51,12 @@ class AdminPdisController extends Controller
         if ($contratoId > 0) {
             $contrato = $service->contratoParaCriacao($contratoId, $ator, $hoje);
             if ($contrato !== null) {
-                $this->renderForm('criar', $contrato, null, $this->valoresPadrao($hoje, $ator), [], $ator);
+                $valores = $this->valoresPadrao($hoje, $ator);
+                $sugestao = $this->gestorSugerido($contrato, $ator);
+                if ($sugestao !== null) {
+                    $valores['gestor_usuario_id'] = (string)$sugestao['id']; // só pré-seleciona: nada é gravado até o envio do formulário
+                }
+                $this->renderForm('criar', $contrato, null, $valores, [], $ator, $sugestao);
                 return;
             }
         }
@@ -324,7 +329,30 @@ class AdminPdisController extends Controller
         ];
     }
 
-    private function renderForm(string $modo, ?array $contrato, ?array $detalhe, array $valores, array $erros, array $ator): void
+    /**
+     * Sugestão (opcional) de gestor ao criar PDI: Gestor Imediato do USUÁRIO do Portal ligado ao contrato
+     * (`usuarios.colaborador_metadados_id`) — só a relação nova, só para Admin/RH e só se o gestor estiver entre as opções.
+     * Não altera autorização nem persiste nada; RH/Admin pode trocar.
+     */
+    private function gestorSugerido(array $contrato, array $ator): ?array
+    {
+        $metadadosId = (int)($contrato['metadados_id'] ?? 0);
+        if (!PdiService::escopoTotal($ator) || $metadadosId <= 0) {
+            return null;
+        }
+        $sugestao = (new UsuarioGestorService())->gestorSugeridoParaContrato($metadadosId);
+        if ($sugestao === null) {
+            return null;
+        }
+        foreach ((new PdiService())->usuariosParaEscolha($ator) as $u) {
+            if ((int)$u['id'] === $sugestao['id']) {
+                return $sugestao;
+            }
+        }
+        return null;
+    }
+
+    private function renderForm(string $modo, ?array $contrato, ?array $detalhe, array $valores, array $erros, array $ator, ?array $gestorSugerido = null): void
     {
         $this->view->render('admin/pdis/form', [
             'modo' => $modo,
@@ -335,6 +363,7 @@ class AdminPdisController extends Controller
             'usuarios' => (new PdiService())->usuariosParaEscolha($ator),
             'escopoTotal' => PdiService::escopoTotal($ator),
             'ator' => $ator,
+            'gestorSugerido' => $gestorSugerido,
         ], 'layouts/admin');
     }
 }

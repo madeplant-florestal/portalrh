@@ -36,6 +36,16 @@ $base = Config::app()['base_url'] ?? '';
         <option value="admin">Admin</option>
       </select>
     </div>
+    <div>
+      <label for="gestor_usuario_id" class="block text-sm text-gray-700">Gestor imediato <span class="text-gray-400">(opcional)</span></label>
+      <select id="gestor_usuario_id" name="gestor_usuario_id" class="mt-1 w-full border rounded px-3 py-2">
+        <option value="">Sem gestor definido</option>
+        <?php foreach (($gestorOptions ?? []) as $opt): ?>
+          <option value="<?= (int)$opt['id'] ?>" <?= (int)($gestorSelecionado ?? 0) === (int)$opt['id'] ? 'selected' : '' ?>><?= Security::e(UsuarioGestorService::rotuloOpcao($opt)) ?></option>
+        <?php endforeach; ?>
+      </select>
+      <p class="mt-1 text-xs text-gray-500">Hierarquia própria do Portal (outro usuário ativo). Não é o aprovador de Solicitação de Vaga.</p>
+    </div>
     <p class="text-xs text-gray-500">
       Vínculo com o METADADOS e contexto organizacional (Cargo principal, Setores de atuação,
       aprovador) são definidos na tela de detalhe do usuário, após a criação.

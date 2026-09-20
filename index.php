@@ -265,6 +265,8 @@ try {
     $router->post('/admin/usuarios/{id}/role', [AdminUsuariosController::class, 'updateRole']);
     $router->post('/admin/usuarios/{id}/status', [AdminUsuariosController::class, 'updateStatus']);
     $router->post('/admin/usuarios/{id}/vaga-acesso', [AdminUsuariosController::class, 'updateVagaAcesso']);
+    // Gestor Imediato (usuarios.gestor_usuario_id) — hierarquia própria do Portal, independente do aprovador de vaga.
+    $router->post('/admin/usuarios/{id}/gestor', [AdminUsuariosController::class, 'updateGestor']);
     $router->post('/admin/usuarios/{id}/metadados-vinculo', [AdminUsuariosController::class, 'vincularMetadados']);
     $router->post('/admin/usuarios/{id}/contexto-organizacional', [AdminUsuariosController::class, 'updateContextoOrganizacional']);
     $router->post('/admin/usuarios/{id}/permissoes', [AdminUsuariosController::class, 'updatePermissoes']);

@@ -29,7 +29,22 @@ class AdminUsuariosController extends Controller
         $success = isset($_GET['supervisor']) && $_GET['supervisor'] === 'ok'
             ? 'Usuário Supervisor criado/atualizado e protegido com sucesso.'
             : null;
-        $this->view->render('admin/usuarios/create', ['csrf' => $csrf, 'success' => $success], 'layouts/admin');
+        $this->view->render('admin/usuarios/create', [
+            'csrf' => $csrf,
+            'success' => $success,
+            'gestorOptions' => (new UsuarioGestorService())->candidatos(null),
+        ], 'layouts/admin');
+    }
+
+    /** Re-renderiza o cadastro com erro (mantém a lista de Gestor Imediato e a seleção feita). */
+    private function renderCreateComErro(string $error, ?int $gestorSelecionado): void
+    {
+        $this->view->render('admin/usuarios/create', [
+            'error' => $error,
+            'csrf' => Security::csrfToken(),
+            'gestorOptions' => (new UsuarioGestorService())->candidatos(null),
+            'gestorSelecionado' => $gestorSelecionado,
+        ], 'layouts/admin');
     }
 
     public function store(): void
@@ -46,44 +61,43 @@ class AdminUsuariosController extends Controller
         $role = Security::sanitizeString($_POST['role'] ?? 'viewer');
         $supervisorEmail = Config::app()['security']['supervisor_email'] ?? '';
         if (!in_array($role, ['admin','rh','viewer'], true)) { $role = 'viewer'; }
+        // Gestor Imediato (opcional): validado no servidor ANTES de criar o usuário — nunca confia no <select>.
+        $gestorId = ctype_digit((string)($_POST['gestor_usuario_id'] ?? '')) ? (int)$_POST['gestor_usuario_id'] : null;
+        $gestorService = new UsuarioGestorService();
         if (!$nome || !$email || !$senha) {
-            $this->view->render('admin/usuarios/create', [
-                'error' => 'Preencha nome, e-mail e senha.',
-                'csrf' => Security::csrfToken()
-            ], 'layouts/admin');
+            $this->renderCreateComErro('Preencha nome, e-mail e senha.', $gestorId);
             return;
         }
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            $this->view->render('admin/usuarios/create', [
-                'error' => 'E-mail inválido.',
-                'csrf' => Security::csrfToken()
-            ], 'layouts/admin');
+            $this->renderCreateComErro('E-mail inválido.', $gestorId);
             return;
         }
         if ($supervisorEmail !== '' && strcasecmp($email, $supervisorEmail) === 0) {
-            $this->view->render('admin/usuarios/create', [
-                'error' => 'Este e-mail é reservado ao usuário Supervisor protegido.',
-                'csrf' => Security::csrfToken()
-            ], 'layouts/admin');
+            $this->renderCreateComErro('Este e-mail é reservado ao usuário Supervisor protegido.', $gestorId);
             return;
         }
         $policy = PasswordPolicy::validate($senha);
         if (!$policy['valid']) {
-            $this->view->render('admin/usuarios/create', [
-                'error' => implode(' ', $policy['errors']),
-                'csrf' => Security::csrfToken()
-            ], 'layouts/admin');
+            $this->renderCreateComErro(implode(' ', $policy['errors']), $gestorId);
+            return;
+        }
+        $erroGestor = $gestorService->validarGestorNovoUsuario($gestorId);
+        if ($erroGestor !== null) {
+            $this->renderCreateComErro($erroGestor, $gestorId);
             return;
         }
         $senhaHash = password_hash($senha, PASSWORD_BCRYPT);
         try {
-            User::create($nome, $email, $senhaHash, $role);
+            $novoId = User::create($nome, $email, $senhaHash, $role);
         } catch (\Throwable $e) {
-            $this->view->render('admin/usuarios/create', [
-                'error' => 'Falha ao criar usuário: ' . Security::e($e->getMessage()),
-                'csrf' => Security::csrfToken()
-            ], 'layouts/admin');
+            $this->renderCreateComErro('Falha ao criar usuário: ' . Security::e($e->getMessage()), $gestorId);
             return;
+        }
+        if ($gestorId !== null) {
+            $resultado = $gestorService->definirGestor($novoId, $gestorId, (int)($_SESSION['user_id'] ?? 0) ?: null, Security::clientIp());
+            if (!($resultado['ok'] ?? false)) {
+                redirect('/admin/usuarios/' . $novoId . '?erro=' . urlencode('Usuário criado, mas o gestor imediato não foi definido: ' . (string)($resultado['error'] ?? '')));
+            }
         }
         redirect('/admin/usuarios');
     }
@@ -154,10 +168,15 @@ class AdminUsuariosController extends Controller
         }
 
         $contextoService = new UsuarioContextoOrganizacionalService();
+        // Gestor Imediato (relação própria do Portal, independente do aprovador acima).
+        $gestorService = new UsuarioGestorService();
 
         $this->view->render('admin/usuarios/show', [
             'user' => $user,
             'csrf' => Security::csrfToken(),
+            'gestor' => $gestorService->gestorDoUsuario((int)$user->id),
+            'gestorOptions' => $gestorService->candidatos((int)$user->id),
+            'liderados' => $gestorService->quantidadeSubordinadosDiretos((int)$user->id),
             'aprovador' => $aprovador,
             'aprovadorOptions' => User::candidatosAprovador((int)$user->id),
             'vinculoMetadados' => $vinculoMetadados,
@@ -213,6 +232,41 @@ class AdminUsuariosController extends Controller
             redirect($back . '?erro=' . urlencode((string)($result['error'] ?? 'Falha ao salvar o acesso a Solicitação de Vagas.')));
         }
         redirect($back . '?ok=' . urlencode('Acesso a Solicitação de Vagas atualizado.'));
+    }
+
+    /**
+     * Define, troca ou remove o Gestor Imediato do usuário (`usuarios.gestor_usuario_id`). Mesma política da administração
+     * de usuários (Admin/supervisor, CSRF, canManageUser). Independente do aprovador de Solicitação de Vaga.
+     */
+    public function updateGestor(string $id): void
+    {
+        Auth::requireRole(['admin']);
+        if (!Security::csrfCheck($_POST['csrf'] ?? '')) {
+            http_response_code(400);
+            echo 'Falha na verificação de segurança (CSRF).';
+            return;
+        }
+        $target = User::findById((int)$id);
+        if (!$target) {
+            http_response_code(404);
+            echo 'Usuário não encontrado';
+            return;
+        }
+        $actor = User::findById((int)($_SESSION['user_id'] ?? 0));
+        if (!User::canManageUser($actor, $target)) {
+            http_response_code(403);
+            echo 'Operação não permitida.';
+            return;
+        }
+
+        $gestorId = ctype_digit((string)($_POST['gestor_usuario_id'] ?? '')) ? (int)$_POST['gestor_usuario_id'] : null;
+        $result = (new UsuarioGestorService())->definirGestor((int)$id, $gestorId, $actor?->id, Security::clientIp());
+
+        $back = '/admin/usuarios/' . (int)$id;
+        if (!($result['ok'] ?? false)) {
+            redirect($back . '?erro=' . urlencode((string)($result['error'] ?? 'Falha ao salvar o gestor imediato.')));
+        }
+        redirect($back . '?ok=' . urlencode(($result['alterado'] ?? false) ? 'Gestor imediato atualizado.' : 'Nenhuma alteração no gestor imediato.'));
     }
 
     /**

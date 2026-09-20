@@ -64,6 +64,58 @@ $isAdminAtor = !empty($isAdminAtor);
     </div>
   </div>
 
+  <?php
+    // Gestor Imediato (usuarios.gestor_usuario_id): hierarquia própria do Portal, independente do aprovador de vaga.
+    $gestor = $gestor ?? null;
+    $gestorOptions = $gestorOptions ?? [];
+    $gestorAtualId = $gestor !== null ? (int)$gestor['id'] : 0;
+    $gestorAtualNaLista = false;
+    foreach ($gestorOptions as $optGestor) {
+        if ((int)$optGestor['id'] === $gestorAtualId) { $gestorAtualNaLista = true; }
+    }
+  ?>
+  <section class="mt-8 rounded-xl border border-gray-200 bg-gray-50 p-5" id="gestor-imediato">
+    <h3 class="text-lg font-semibold text-ctpblue">Gestor imediato</h3>
+    <p class="mt-1 text-sm text-gray-500">
+      Relação de hierarquia do Portal (outro usuário). É independente do aprovador de Solicitação de Vagas e não usa o cadastro legado de líderes.
+    </p>
+    <p class="mt-3 text-sm text-gray-800">
+      <span class="text-gray-500">Gestor configurado:</span>
+      <?php if ($gestor === null): ?>
+        <span class="font-medium">Sem gestor definido</span>
+      <?php else: ?>
+        <span class="font-medium"><?= Security::e((string)$gestor['nome']) ?></span>
+        <span class="text-gray-500">— <?= Security::e((string)$gestor['email']) ?></span>
+        <?php if (empty($gestor['ativo'])): ?><span class="ct-badge ct-badge-inactive ml-1">Inativo</span><?php endif; ?>
+      <?php endif; ?>
+      <?php if (!empty($liderados)): ?><span class="ml-2 text-xs text-gray-500">· este usuário lidera <?= (int)$liderados ?> pessoa(s) diretamente</span><?php endif; ?>
+    </p>
+    <?php if ($gestor !== null && empty($gestor['ativo'])): ?>
+      <p class="mt-2 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">O gestor configurado está inativo. Ele foi mantido — substitua ou remova quando desejar.</p>
+    <?php endif; ?>
+    <?php if ($isAdminAtor): ?>
+    <form action="<?= $base ?>/admin/usuarios/<?= (int)$user->id ?>/gestor" method="post" class="mt-4 space-y-3">
+      <input type="hidden" name="csrf" value="<?= Security::e($csrf) ?>">
+      <div>
+        <label for="gestor_usuario_id" class="block text-sm font-medium text-gray-700">Alterar gestor imediato</label>
+        <select id="gestor_usuario_id" name="gestor_usuario_id" class="mt-1 w-full rounded border px-3 py-2 text-sm">
+          <option value="">— Sem gestor definido</option>
+          <?php if ($gestor !== null && !$gestorAtualNaLista): ?>
+            <option value="<?= $gestorAtualId ?>" selected><?= Security::e((string)$gestor['nome'] . ' — ' . (string)$gestor['email']) ?> (atual<?= empty($gestor['ativo']) ? ', inativo' : '' ?>)</option>
+          <?php endif; ?>
+          <?php foreach ($gestorOptions as $opt): ?>
+            <option value="<?= (int)$opt['id'] ?>" <?= $gestorAtualId === (int)$opt['id'] ? 'selected' : '' ?>><?= Security::e(UsuarioGestorService::rotuloOpcao($opt)) ?></option>
+          <?php endforeach; ?>
+        </select>
+        <p class="mt-1 text-xs text-gray-500">Só usuários ativos, nunca o próprio usuário nem quem já é liderado dele (evita ciclos).</p>
+      </div>
+      <button class="bg-ctgreen text-white px-4 py-2 rounded hover:bg-ctdark text-sm">Salvar gestor imediato</button>
+    </form>
+    <?php else: ?>
+    <p class="mt-3 text-sm text-gray-500">O gestor imediato é gerenciado por um administrador.</p>
+    <?php endif; ?>
+  </section>
+
   <section class="mt-8 rounded-xl border border-gray-200 bg-gray-50 p-5">
     <h3 class="text-lg font-semibold text-ctpblue">Solicitação de Vagas</h3>
     <p class="mt-1 text-sm text-gray-500">

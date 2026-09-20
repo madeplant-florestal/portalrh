@@ -628,7 +628,7 @@ Processo persistente (não é pesquisa de resposta única) em `/admin/pdis`. **O
 (+ `-rollback`, destrutivo) e `2026-09-23-pdi-permissoes-seed.sql` (660/670/680, sem concessão).
 
 - **Modelo**: `pdis` (vínculo por `metadados_id`, **sem** UNIQUE por contrato; SNAPSHOT na abertura; `gestor_usuario_id` +
-  nome, escolhido explicitamente — nunca inferido —; origem fechada + referência futura `origem_ref_*` sem FK),
+  nome, escolhido explicitamente (Admin/RH recebem só uma SUGESTÃO pré-selecionada — ver "Gestor Imediato" —); origem fechada + referência futura `origem_ref_*` sem FK),
   `pdi_competencias` (texto; `competencia_id` nullable sem FK), `pdi_acoes` (máx. 3: `ordem` 1–3 + UNIQUE (pdi_id, ordem)
   + regra no Service), `pdi_acompanhamentos` e `pdi_eventos` (**append-only**: o repository só tem INSERT).
   CHECKs no banco: listas fechadas, prazo ≥ abertura e conclusão × avaliação final × data real.
@@ -645,3 +645,34 @@ Processo persistente (não é pesquisa de resposta única) em `/admin/pdis`. **O
   registrada.
 - **Fora da V1**: Área, portal do colaborador, anexos, assinatura/ciência, notificações, cifragem, dashboard. O risco
   preexistente de exposição por role `viewer` em telas antigas (Candidaturas etc.) continua registrado e NÃO foi alterado.
+
+## Gestor Imediato no cadastro de usuários (sprint 2026-09-24)
+
+**Decisão arquitetural (permanente):** novos relacionamentos de gestão/hierarquia/aprovação NÃO apontam para o legado
+(`colaboradores`, `usuario_colaboradores`, `lider_colaborador_id`, `is_gestor` legado) e NÃO são sincronizados com ele.
+METADADOS é a fonte oficial de contratos; `usuarios` guarda a identidade e as relações operacionais do Portal.
+
+- **Modelo**: `usuarios.gestor_usuario_id INT NULL → usuarios.id` (índice `idx_usuarios_gestor`, FK `fk_usuarios_gestor`
+  `ON DELETE SET NULL`, sem cascade). Gestor Imediato é **sempre outro usuário do Portal**; não existe `gestor_metadados_id`.
+  Migration `2026-09-24-usuarios-gestor-imediato.sql` (idempotente, sem seed, sem migrar valores) e
+  `-rollback.sql` (destrutivo: descarta a hierarquia; não toca no aprovador).
+- **Independente do aprovador**: `usuarios.aprovador_usuario_id` (Solicitação de Vaga) segue como está; nada é copiado ou
+  sincronizado entre os dois, em nenhum sentido. Nenhum fluxo existente (Solicitação de Vaga, Movimentação, PDI
+  autorização, recrutamento) passa a depender do gestor imediato nesta etapa.
+- **Camadas**: `UsuarioGestorRepository` (SQL) + `UsuarioGestorService` (regras; consultas reutilizáveis: gestor do
+  usuário, subordinados diretos, quantidade, cadeia acima, candidatos). Sem organograma/árvore multinível ainda.
+- **Regras**: gestor existente e **ativo** (`email_verified_at IS NOT NULL`, a regra real do Portal); nunca o próprio
+  usuário; **sem ciclo** (A→B→A, A→B→C→A) validado no servidor sobre o mapa da hierarquia carregado em memória (1 consulta)
+  com teto de profundidade contra dados corrompidos; usuário sem gestor é permitido. Gestor que ficou inativo NÃO é removido
+  nem trocado sozinho: a edição exibe a situação, mantém o vínculo por padrão e permite substituir ou remover; trocar para
+  OUTRO gestor exige que ele seja ativo.
+- **Autorização**: mesma política da administração de usuários (`create/store/updateGestor` = admin + CSRF; RH só lê em
+  `show`). Nenhuma permissão nova.
+- **Auditoria**: `auditoria_usuarios`, ação `gestor_imediato_update`, `gestor_usuario_id_anterior=X
+  gestor_usuario_id_novo=Y` (ator, IP, data), na mesma transação da alteração; sem log quando nada muda.
+- **UI**: select normal "Gestor Imediato" (opção "Sem gestor definido"; rótulo "Nome — e-mail (Cargo)") no cadastro e no
+  detalhe do usuário; a listagem NÃO ganhou coluna (já tem 6). O visual definitivo virá com o novo Design System.
+- **PDI**: ao criar um PDI, Admin/RH recebem o gestor imediato do usuário do Portal associado ao contrato
+  (`usuarios.colaborador_metadados_id`) apenas como **sugestão pré-selecionada** (só gestor ativo, só a relação nova, nunca
+  o aprovador). Nada é persistido antes do envio, o campo segue obrigatório e editável, e `PdiService`/escopo não mudaram.
+- **Testes**: `unit_usuario_gestor_service.php` (regras puras) e `integration_usuario_gestor_imediato.php`.

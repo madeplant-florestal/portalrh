@@ -54,7 +54,10 @@ $admissao = $criar ? ($contrato['admissao'] ?? null) : ($pdi['snap_admissao'] ??
               <option value="">Selecione um usuário do Portal…</option>
               <?php foreach ($usuarios as $u): ?><option value="<?= (int)$u['id'] ?>" <?= $v('gestor_usuario_id') === (string)$u['id'] ? 'selected' : '' ?>><?= Security::e((string)$u['nome']) ?> (<?= Security::e((string)$u['role']) ?>)</option><?php endforeach; ?>
             </select>
-            <p class="mt-1 text-xs text-[#5B5F4E]">Escolha explícita — o sistema não infere o gestor. O gestor precisa da permissão pdi.visualizar para acompanhar.</p>
+            <?php if (!empty($gestorSugerido) && $v('gestor_usuario_id') === (string)$gestorSugerido['id']): ?>
+              <p class="mt-1 text-xs text-[#5B5F4E]">Sugestão: gestor imediato de <?= Security::e((string)$gestorSugerido['usuario_nome']) ?> no Portal (<?= Security::e((string)$gestorSugerido['nome']) ?>). Você pode escolher outro usuário.</p>
+            <?php endif; ?>
+            <p class="mt-1 text-xs text-[#5B5F4E]">A escolha é sua — o sistema só sugere. O gestor precisa da permissão pdi.visualizar para acompanhar.</p>
           <?php else: ?>
             <p class="mt-1 rounded-lg bg-[#F7F6F1] px-3 py-2.5 text-sm text-[#2B2E22]"><?= Security::e($criar ? 'Você (gestor responsável)' : (string)$pdi['gestor_nome_snapshot']) ?></p>
           <?php endif; ?>

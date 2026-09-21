@@ -10,6 +10,44 @@
     --ctlight: #3e5c76;
     --ctpblue: #0d1321;
   }
+  /* Design System Portal RH — Fase 1 (docs/claude/DESIGN-SYSTEM-PORTAL-RH.md §6). Variáveis derivadas de
+     tailwind.config.js via theme(): a configuração é a ÚNICA fonte dos valores. Apenas variáveis — nenhuma regra usa
+     estes valores ainda, então as telas atuais não mudam. Serão consumidas pelos componentes das próximas fases. */
+  :root {
+    --color-primary-50: theme('colors.primary.50');
+    --color-primary-100: theme('colors.primary.100');
+    --color-primary-300: theme('colors.primary.300');
+    --color-primary-400: theme('colors.primary.400');
+    --color-primary-600: theme('colors.primary.600');
+    --color-primary-700: theme('colors.primary.700');
+    --color-primary-800: theme('colors.primary.800');
+    --color-primary-900: theme('colors.primary.900');
+    --color-background: theme('colors.background');
+    --color-surface: theme('colors.surface');
+    --color-surface-secondary: theme('colors.surface-secondary');
+    --color-border: theme('colors.border');
+    --color-text-primary: theme('colors.text-primary');
+    --color-text-secondary: theme('colors.text-secondary');
+    --color-text-muted: theme('colors.text-muted');
+    --color-success: theme('colors.success');
+    --color-warning: theme('colors.warning');
+    --color-danger: theme('colors.danger');
+    --color-info: theme('colors.info');
+    --color-focus: theme('colors.focus');
+    --color-support-beige: theme('colors.support-beige');
+    --color-support-sage: theme('colors.support-sage');
+    --color-support-brown-dark: theme('colors.support-brown-dark');
+    --color-support-brown: theme('colors.support-brown');
+    --radius-sm: theme('borderRadius.ds-sm');
+    --radius-md: theme('borderRadius.ds-md');
+    --radius-lg: theme('borderRadius.ds-lg');
+    --shadow-resting: theme('boxShadow.resting');
+    --shadow-elevated: theme('boxShadow.elevated');
+    /* Gutter de página: 16px mobile · 24px tablet (≥768) · 40px desktop (≥1280). Uso: px-gutter. */
+    --gutter-page: 16px;
+  }
+  @media (min-width: 768px) { :root { --gutter-page: 24px; } }
+  @media (min-width: 1280px) { :root { --gutter-page: 40px; } }
   html { overflow-x: hidden; }
   body { font-family: 'Montserrat', system-ui, -apple-system, sans-serif; overflow-x: hidden; }
   img, svg, video, canvas { max-width: 100%; height: auto; }

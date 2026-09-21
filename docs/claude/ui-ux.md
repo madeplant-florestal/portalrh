@@ -41,3 +41,31 @@ os tokens legados (`ct*`, `Montserrat`, `rounded-*` nativos) continuam valendo p
 - O Tailwind só emite as classes efetivamente usadas nas views (`content: ./app/views/**/*.php`): um token novo só aparece
   no CSS compilado quando uma view passa a usá-lo. Rode `npm run build:css` (gera `assets/tailwind.css` e copia para
   `public/assets/tailwind.css`, ambos versionados).
+
+## Nova UI — Fase 2: AppShell V2 e navegação base (sprint 2026-09-26)
+
+**Princípio da migração visual: compatibilidade primeiro, migração visual depois.** O Design System é o alvo, mas a
+estrutura estável atual é preservada: nada de reescrita ampla, nenhuma classe global existente é redefinida, tokens/
+componentes antigos e novos convivem, a migração é tela a tela e nenhuma regra de negócio muda para caber no design.
+
+- **O AppShell V2 é OPT-IN.** `layouts/admin` (com a sidebar) segue como o shell de TODAS as telas atuais; a **sidebar não
+  foi removida nem alterada** e a **Central do Portal ainda não existe** (Fase 3). Nenhum controller/view/rota usa o shell
+  novo ainda (o teste `unit_ui_shell.php` garante). Uma página migrada escolhe o layout explicitamente:
+  `$this->view->render('...', $dados, 'layouts/app-shell')`. Não há feature flag global.
+- **Arquivos**: `app/views/layouts/app-shell.php` (Header V2 + `<main>` com `px-gutter`, sem largura máxima; carrega os
+  mesmos metas e `admin.js`/`phone-utils.js` do layout atual; aceita `tituloPagina`) e `app/views/partials/ui-shell.php`
+  (funções que retornam string, mesmo padrão de `admin/partials/chart-helpers.php`).
+- **Componentes** (chamados pela própria view, com dados explícitos; escapam tudo com `Security::e()`; `href` já vem
+  pronto com `$base`; não consultam permissão, sessão de perfil nem banco — quem decide o que existe é a view/controller):
+  - `ui_header_v2($hrefInicio, $hrefLogo, $hrefSair, $nome)`: 64px, logotipo existente (`logo-escura.png`) + "Portal RH" +
+    avatar de iniciais + nome (oculto no mobile) + "Sair" (`/admin/logout`). **Sem menu de módulos.**
+  - `ui_breadcrumb($itens)`: trilha explícita; o último item é a página atual (sem link, `aria-current="page"`).
+  - `ui_page_header($opcoes)`: `titulo`, `eyebrow`, `descricao`, `badge{texto,tom}`, `acao{label,href}`.
+  - `ui_module_tabs($abas, $rotulo)`: aba ativa `primary-700` + borda de 2,5px + `aria-current`; rolagem horizontal contida.
+- **Mensagens flash**: continuam sendo renderizadas pela própria view (não há partial global hoje); o shell só entrega
+  `$content`. O componente Alert V2 pertence à Fase 4 — os alerts antigos não foram tocados.
+- **Ainda não existem** (fases seguintes): Central/ModuleCard, MetricCard, FilterBar, Table V2, campos de formulário, Modal,
+  Kanban V2. Sem `@font-face` da NewBlack (Header usa o fallback de sistema).
+- **Conflito conhecido para a migração de telas**: o layout antigo tem `<style>` inline (`.form-choice-*`, `.form-inline-grid`)
+  que o shell V2 não carrega; uma view migrada que use essas classes precisa ganhá-las na fase de formulários.
+- Validação sem rota de preview: harness temporário fora do repositório (HTML estático + Playwright).

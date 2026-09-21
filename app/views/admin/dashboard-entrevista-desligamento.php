@@ -206,7 +206,18 @@ $queryFiltros = static fn(array $extra): string => http_build_query(array_filter
       </div>
       <div class="min-w-0 2xl:col-span-2">
         <h3 class="text-xs font-bold text-[#2B2E22]">Avaliação média da liderança (1 a 5)</h3>
-        <?= dashboard_multi_line_chart($rotulosMes, [['label' => 'Liderança', 'color' => '#3B4822', 'values' => $col('lideranca')]], '', 1, 'Avaliação média da liderança por mês', ['min' => 1, 'max' => 5] + $opcoesGrafico) ?>
+        <?php $semBaseLideranca = array_filter($col('lideranca'), static fn($v): bool => $v !== null) === []; // zero real (0.0) NÃO é ausência de base ?>
+        <?php if ($semBaseLideranca): ?>
+          <div class="mt-2 rounded-xl border border-dashed border-[#D8D5C4] bg-[#F7F6F1] px-4 py-6 text-center">
+            <p class="text-sm font-semibold text-[#2B2E22]">Sem base no período selecionado</p>
+            <p class="mt-1 text-xs text-[#5B5F4E]">Ainda não existem entrevistas respondidas suficientes para calcular a avaliação média da liderança.</p>
+          </div>
+        <?php else: ?>
+          <?php /* Altura compacta (~300px no desktop): o gráfico ocupa a largura toda do card, e o SVG (proporção 720×280) escalaria sem limite. */ ?>
+          <div class="mx-auto w-full max-w-[780px]">
+            <?= dashboard_multi_line_chart($rotulosMes, [['label' => 'Liderança', 'color' => '#3B4822', 'values' => $col('lideranca')]], '', 1, 'Avaliação média da liderança por mês', ['min' => 1, 'max' => 5] + $opcoesGrafico) ?>
+          </div>
+        <?php endif; ?>
       </div>
     </div>
     <?= dashboard_data_table('Evolução mensal', ['Mês', 'Desligamentos', 'Geradas', 'Respondidas', 'Taxa de resposta', 'Satisfação (0–10)', 'eNPS', 'Liderança (1–5)'],

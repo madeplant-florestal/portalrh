@@ -297,6 +297,13 @@ try {
     $check($externas === [] && !str_contains($html, '<script src="https://'), '(visual) Sem biblioteca externa de gráficos');
     $check(substr_count($html, 'Ver valores em tabela') >= 6 && str_contains($html, '<caption class="sr-only">'), '(acessibilidade) Valores também em tabelas acessíveis');
     $check(str_contains($html, '/admin/dashboard-entrevista-desligamento'), '(menu) Usuário COM a permissão vê o item no menu');
+    // Avaliação média da liderança: altura compacta com dados; estado compacto (sem plano cartesiano vazio) sem base.
+    $check(str_contains($html, 'max-w-[780px]') && !str_contains($html, 'Sem base no período selecionado'), '(liderança) Com dados no período: gráfico renderizado em contêiner compacto (~300px no desktop), sem o estado vazio');
+    $_GET = ['inicio' => '2099-01-01', 'fim' => '2099-12-31', 'unidade' => $chaveU1E1];
+    $htmlVazio = $renderizar(static fn() => (new AdminDashboardEntrevistaDesligamentoController())->index());
+    $check(!preg_match('/Warning:|Notice:|Deprecated:|Fatal error/i', $htmlVazio) && str_contains($htmlVazio, 'Sem base no período selecionado') && str_contains($htmlVazio, 'entrevistas respondidas suficientes para calcular a avaliação média da liderança'), '(liderança) Sem base em todos os meses: estado compacto "Sem base no período selecionado" com texto auxiliar');
+    $check(substr_count($htmlVazio, '<svg viewBox="0 0 720 280"') === 4 && str_contains($htmlVazio, 'Avaliação média da liderança (1 a 5)') && str_contains($htmlVazio, 'Liderança (1–5)'), '(liderança) Sem base: não renderiza o gráfico vazio, mantém o título e a tabela acessível "Ver valores em tabela"');
+    $_GET = ['inicio' => '2025-01-01', 'fim' => '2025-06-30', 'unidade' => $chaveU1E1];
     $comoUsuario($soResultadosId, 'viewer');
     $htmlSem = $renderizar(static function () use ($service) {
         // Sem a permissão do dashboard o menu não mostra o item (o backend responde 403 antes de renderizar).

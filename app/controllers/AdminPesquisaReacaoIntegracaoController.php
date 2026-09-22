@@ -32,7 +32,7 @@ class AdminPesquisaReacaoIntegracaoController extends Controller
             'flashSuccess' => Security::sanitizeString($_GET['ok'] ?? ''),
             'formError' => '',
             'formValues' => [],
-        ], 'layouts/admin');
+        ], 'layouts/app-shell');
     }
 
     public function store(): void
@@ -65,7 +65,7 @@ class AdminPesquisaReacaoIntegracaoController extends Controller
 
         if (!($resultado['ok'] ?? false)) {
             $dadosView['formError'] = (string)($resultado['error'] ?? 'Não foi possível gerar a campanha.');
-            $this->view->render('admin/pesquisa_reacao_integracao/index', $dadosView, 'layouts/admin');
+            $this->view->render('admin/pesquisa_reacao_integracao/index', $dadosView, 'layouts/app-shell');
             return;
         }
 
@@ -74,7 +74,7 @@ class AdminPesquisaReacaoIntegracaoController extends Controller
         $baseUrl = rtrim((string)(Config::app()['base_url'] ?? ''), '/');
         $dadosView['linkGerado'] = $baseUrl . '/pesquisa-reacao/' . $resultado['token'];
         $dadosView['formValues'] = [];
-        $this->view->render('admin/pesquisa_reacao_integracao/index', $dadosView, 'layouts/admin');
+        $this->view->render('admin/pesquisa_reacao_integracao/index', $dadosView, 'layouts/app-shell');
     }
 
     public function desativar(string $id): void
@@ -111,6 +111,6 @@ class AdminPesquisaReacaoIntegracaoController extends Controller
         $this->view->render('admin/pesquisa_reacao_integracao/resultados', [
             'campanha' => $campanha,
             'resultados' => PesquisaReacaoIntegracaoService::calcularResultados((int)$id),
-        ], 'layouts/admin');
+        ], 'layouts/app-shell');
     }
 }

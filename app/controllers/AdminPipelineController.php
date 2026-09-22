@@ -3,7 +3,8 @@ class AdminPipelineController extends Controller
 {
     public function index(): void
     {
-        Auth::requireRole(['admin', 'rh']);
+        // Entrada da tela: role admin/rh (como sempre) OU a permissão individual pipeline.visualizar. Mover cards (move()) segue admin/rh.
+        Authorization::requireRoleOuPermissao(['admin', 'rh'], 'pipeline.visualizar');
 
         $vagaId = isset($_GET['vaga_id']) ? (int)$_GET['vaga_id'] : null;
 
@@ -41,7 +42,9 @@ class AdminPipelineController extends Controller
             'selectedVaga' => $vagaId,
             'csrf' => Security::csrfToken(),
             'stageCount' => count($stages),
-        ], 'layouts/admin');
+            // Só exibição: mover cards segue exigindo admin/rh (move()); quem entrou pela permissão pipeline.visualizar vê o quadro sem arrastar.
+            'podeMovimentar' => !empty($_SESSION['user_is_supervisor']) || in_array(Auth::role(), ['admin', 'rh'], true),
+        ], 'layouts/app-shell');
     }
 
     public function move(): void

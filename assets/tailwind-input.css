@@ -69,194 +69,9 @@
 }
 
 @layer components {
-  .app-shell {
-    --sidebar-width-expanded: 16rem;
-    --sidebar-width-collapsed: 5.5rem;
-    --sidebar-current-width: var(--sidebar-width-expanded);
-    --app-header-height: 4rem;
-    min-height: 100vh;
-    overflow-x: clip;
-    background: #f9fafb;
-  }
-  .app-shell.app-sidebar-collapsed {
-    --sidebar-current-width: var(--sidebar-width-collapsed);
-  }
-  .app { min-height: 100vh; align-items: stretch; }
-  .sidebar {
-    position: fixed;
-    inset: 0 auto 0 0;
-    z-index: 70;
-    width: var(--sidebar-current-width);
-    max-width: var(--sidebar-current-width);
-    min-width: 0;
-    overflow: visible;
-    background: #0d1321;
-    color: #ffffff;
-    border-right: 1px solid rgba(148, 163, 184, 0.18);
-    transition: width .24s ease, max-width .24s ease, transform .28s ease;
-  }
-  .sidebar-inner { display: flex; min-height: 100vh; flex-direction: column; }
-  .sidebar-brand-row { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; min-height: 5rem; }
-  .sidebar-brand { display: flex; min-width: 0; align-items: center; justify-content: flex-start; flex: 1 1 auto; }
-  .sidebar-brand-mark { flex: 0 0 auto; }
-  .sidebar-actions { display: flex; align-items: center; gap: 0.5rem; }
-  .sidebar-collapse-toggle { display: inline-flex; }
-  .sidebar-nav {
-    display: flex;
-    min-height: 0;
-    flex: 1 1 auto;
-    flex-direction: column;
-    gap: 0.375rem;
-    overflow-x: visible;
-    overflow-y: auto;
-    padding: 1rem 0.75rem;
-  }
-  .sidebar-link {
-    display: flex;
-    min-height: 2.875rem;
-    align-items: center;
-    gap: 0.75rem;
-    border-radius: 0.875rem;
-    padding: 0.75rem 0.875rem;
-    color: #e5e7eb;
-    transition: background-color .2s ease, color .2s ease, transform .2s ease, padding .2s ease, gap .2s ease;
-  }
-  .sidebar-link:hover,
-  .sidebar-link:focus-visible { background: rgba(62, 92, 118, 0.55); color: #ffffff; }
-  .sidebar-link-danger { color: #fca5a5; }
-  .sidebar-link-danger:hover,
-  .sidebar-link-danger:focus-visible { background: rgba(220, 38, 38, 0.18); color: #fecaca; }
-  .sidebar-link svg,
-  .sidebar-group-summary svg,
-  .sidebar-actions svg {
-    color: #4d3726;
-  }
-  .sidebar-link:hover svg,
-  .sidebar-link:focus-visible svg,
-  .sidebar-link.bg-white\/10 svg,
-  .sidebar-group-summary:hover svg,
-  .sidebar-group-summary:focus-visible svg,
-  .sidebar-group[open] > .sidebar-group-summary svg,
-  .sidebar-actions button:hover svg,
-  .sidebar-actions button:focus-visible svg {
-    color: #4d3726;
-  }
-  .sidebar-link-label { min-width: 0; overflow-wrap: anywhere; line-height: 1.35; }
-  .sidebar-primary-link { position: relative; }
-  .sidebar-group { position: relative; overflow: visible; }
-  .sidebar-group-summary { justify-content: space-between; }
-  .sidebar-group-summary::-webkit-details-marker { display: none; }
-  .sidebar-group-chevron { transition: transform .2s ease; }
-  .sidebar-group[open] > .sidebar-group-summary .sidebar-group-chevron { transform: rotate(180deg); }
-  .sidebar-group-panel { position: relative; }
-  .sidebar-footer {
-    border-top: 1px solid rgba(148, 163, 184, 0.18);
-    padding: 1rem;
-    text-align: center;
-    font-size: 0.75rem;
-    color: #9ca3af;
-    transition: opacity .2s ease;
-  }
-  .content {
-    min-width: 0;
-    width: auto;
-    max-width: 100%;
-    margin-left: var(--sidebar-current-width);
-    padding: clamp(1rem, 2vw, 1.5rem);
-    transition: margin-left .24s ease, padding .24s ease;
-  }
-  .content > * { max-width: 100%; }
-  .app-header {
-    display: none;
-    position: sticky;
-    top: 0;
-    z-index: 60;
-    min-height: var(--app-header-height);
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    padding: 0.875rem 1rem;
-    background: #0d1321;
-    color: #ffffff;
-    border-bottom: 1px solid rgba(148, 163, 184, 0.15);
-  }
-  .app-header-brand { display: flex; min-width: 0; align-items: center; gap: 0.75rem; }
-  .app-header-brand-label { min-width: 0; line-height: 1.2; }
+  /* Navegação pública (layouts/main — vitrine de vagas): NÃO é a sidebar administrativa removida. */
   .app-nav-toggle { @apply inline-flex items-center justify-center w-11 h-11 rounded-md focus:outline-none focus:ring-2 focus:ring-white; }
-  .sidebar-close { display: none; }
   .touch-target { @apply min-h-[44px] min-w-[44px]; }
-  .app-overlay { position: fixed; inset: 0; z-index: 55; background: rgba(15, 23, 42, 0.56); opacity: 0; visibility: hidden; pointer-events: none; transition: opacity .25s ease, visibility .25s ease; }
-  .app-overlay.open { opacity: 1; visibility: visible; pointer-events: auto; }
-  .app-sidebar-open { overflow: hidden; }
-  .app-footer {
-    margin-left: var(--sidebar-current-width);
-    transition: margin-left .24s ease;
-  }
-  .app-shell.app-sidebar-collapsed .sidebar-brand-row { justify-content: center; }
-  .app-shell.app-sidebar-collapsed .sidebar-brand { justify-content: center; }
-  .app-shell.app-sidebar-collapsed .sidebar-primary-link {
-    justify-content: center;
-    gap: 0;
-    padding-inline: 0.75rem;
-  }
-  .app-shell.app-sidebar-collapsed .sidebar-primary-link .sidebar-link-label {
-    width: 0;
-    max-width: 0;
-    opacity: 0;
-    overflow: hidden;
-    pointer-events: none;
-    white-space: nowrap;
-  }
-  .app-shell.app-sidebar-collapsed .sidebar-group-summary {
-    justify-content: center;
-  }
-  .app-shell.app-sidebar-collapsed .sidebar-group-summary > span {
-    display: flex;
-    justify-content: center;
-  }
-  .app-shell.app-sidebar-collapsed .sidebar-group-chevron,
-  .app-shell.app-sidebar-collapsed .sidebar-footer {
-    opacity: 0;
-    pointer-events: none;
-  }
-  .app-shell.app-sidebar-collapsed .sidebar-group-panel {
-    position: absolute;
-    top: 0;
-    left: calc(100% + 0.75rem);
-    z-index: 90;
-    width: min(16rem, calc(100vw - 7rem));
-    border: 1px solid rgba(148, 163, 184, 0.2);
-    border-radius: 1rem;
-    background: #0d1321;
-    box-shadow: 0 18px 48px rgba(15, 23, 42, 0.28);
-    padding: 0.5rem;
-    opacity: 0;
-    visibility: hidden;
-    pointer-events: none;
-    transform: translateX(-0.35rem);
-    transition: opacity .2s ease, transform .2s ease, visibility .2s ease;
-  }
-  .app-shell.app-sidebar-collapsed .sidebar-group[open] > .sidebar-group-panel,
-  .app-shell.app-sidebar-collapsed .sidebar-group:focus-within > .sidebar-group-panel,
-  .app-shell.app-sidebar-collapsed .sidebar-group:hover > .sidebar-group-panel {
-    opacity: 1;
-    visibility: visible;
-    pointer-events: auto;
-    transform: translateX(0);
-  }
-  .app-shell.app-sidebar-collapsed .sidebar-sub-link {
-    justify-content: flex-start;
-    gap: 0.5rem;
-    padding-inline: 0.875rem;
-  }
-  .app-shell.app-sidebar-collapsed .sidebar-sub-link .sidebar-link-label {
-    width: auto;
-    max-width: none;
-    opacity: 1;
-    overflow: visible;
-    pointer-events: auto;
-    white-space: normal;
-  }
   .responsive-panel { width: 100%; max-width: 100%; border-radius: 1rem; background: #ffffff; padding: clamp(1rem, 2vw, 1.5rem); box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08); }
   .responsive-header { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 1rem; }
   .responsive-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; }
@@ -284,69 +99,7 @@
   .sv-kanban-column-shell { min-width: 0; width: 100%; max-width: 100%; }
   .text-fluid-title { font-size: clamp(1.75rem, 4vw, 2.5rem); line-height: 1.1; }
   .text-fluid-subtitle { font-size: clamp(1rem, 2vw, 1.125rem); line-height: 1.5; }
-  .content input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
-  .content select,
-  .content textarea,
-  .content button,
-  .content a.inline-flex,
-  .content a.ct-btn {
-    max-width: 100%;
-  }
-  .content input:not([type="checkbox"]):not([type="radio"]),
-  .content select,
-  .content textarea,
-  .content button {
-    min-height: 2.75rem;
-  }
   @media (max-width: 768px) {
-    .app { min-height: calc(100vh - var(--app-header-height)); }
-    .app-shell,
-    .app-shell.app-sidebar-collapsed {
-      --sidebar-current-width: min(18.5rem, calc(100vw - 2.5rem));
-    }
-    .sidebar {
-      position: fixed;
-      inset: 0 auto 0 0;
-      z-index: 70;
-      width: min(18.5rem, calc(100vw - 2.5rem));
-      max-width: calc(100vw - 2.5rem);
-      transform: translateX(-100%);
-      transition: transform .28s ease;
-      box-shadow: 0 18px 48px rgba(15, 23, 42, 0.28);
-    }
-    .sidebar.active { transform: translateX(0); }
-    .app-header { display: flex; }
-    .sidebar-collapse-toggle { display: none; }
-    .sidebar-close { display: inline-flex; }
-    .sidebar-footer,
-    .sidebar-primary-link .sidebar-link-label,
-    .sidebar-group-chevron {
-      opacity: 1 !important;
-      max-width: none !important;
-      width: auto !important;
-      overflow: visible !important;
-      pointer-events: auto !important;
-      transform: none !important;
-    }
-    .sidebar-primary-link { justify-content: flex-start !important; gap: 0.75rem !important; padding-inline: 0.875rem !important; }
-    .sidebar-group-panel {
-      position: relative !important;
-      top: auto !important;
-      left: auto !important;
-      width: auto !important;
-      border: 0 !important;
-      box-shadow: none !important;
-      padding: 0 0 0.5rem !important;
-      opacity: 1 !important;
-      visibility: visible !important;
-      pointer-events: auto !important;
-      transform: none !important;
-    }
-    .content,
-    .app-footer {
-      margin-left: 0;
-    }
-    .content { padding: 1rem; }
     .responsive-form-grid-4,
     .responsive-form-grid-6 { grid-template-columns: minmax(0, 1fr); }
     .responsive-card-list { display: grid; gap: 0.75rem; }
@@ -354,12 +107,6 @@
     .responsive-pagination > * { width: 100%; }
     .kanban-board { grid-auto-columns: minmax(16rem, calc(100vw - 2rem)); }
     .sv-kanban-board { grid-auto-columns: minmax(16rem, calc(100vw - 2rem)); }
-  }
-  @media (min-width: 769px) {
-    .app-header { display: none !important; }
-    .sidebar-close { display: none !important; }
-    .mobile-table-desktop { display: table !important; }
-    .mobile-block-desktop { display: block !important; }
   }
   .snap-x { scroll-snap-type: x mandatory; }
   .snap-start { scroll-snap-align: start; }
@@ -466,4 +213,99 @@
       border-color: #1d2d44;
     }
   }
+}
+
+/* ==========================================================================================================================
+   Nova UI (Design System Portal RH) — compatibilidade da MARCAÇÃO LEGADA dentro do AppShell V2.
+   Tudo sob `:where([data-app-shell-v2])` (especificidade zero do escopo): só vale nas páginas migradas para `layouts/app-shell`
+   e nunca afeta as telas antigas; utilitários por elemento continuam podendo sobrescrever. Substitui, para as telas migradas,
+   o `<style>` inline e as regras `.content ...` do layout antigo (que o AppShell V2 não carrega).
+   ========================================================================================================================== */
+@layer components {
+  /* Painéis/cartões legados (`responsive-panel`, `responsive-card`) com a anatomia de Card do Design System */
+  :where([data-app-shell-v2]) .responsive-panel {
+    border: 1px solid theme('colors.border');
+    border-radius: theme('borderRadius.ds-lg');
+    background: theme('colors.surface');
+    box-shadow: theme('boxShadow.resting');
+    padding: clamp(1rem, 2vw, 1.25rem);
+  }
+  :where([data-app-shell-v2]) .responsive-card {
+    border: 1px solid theme('colors.border');
+    border-radius: theme('borderRadius.ds-md');
+    background: theme('colors.surface');
+  }
+
+  /* Campos (§7): 40px, borda `border`, radius md, foco em `focus` com anel */
+  :where([data-app-shell-v2]) input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]):not([type="range"]):not([type="submit"]):not([type="button"]),
+  :where([data-app-shell-v2]) select,
+  :where([data-app-shell-v2]) textarea {
+    min-height: 40px;
+    border: 1px solid theme('colors.border');
+    border-radius: theme('borderRadius.ds-md');
+    background-color: theme('colors.surface');
+    padding: 0.5rem 0.75rem;
+    font-size: 14px;
+    line-height: 1.4;
+    color: theme('colors.text-primary');
+  }
+  :where([data-app-shell-v2]) textarea { min-height: 88px; }
+  :where([data-app-shell-v2]) input::placeholder,
+  :where([data-app-shell-v2]) textarea::placeholder { color: theme('colors.text-muted'); }
+  :where([data-app-shell-v2]) input:not([type="checkbox"]):not([type="radio"]):focus,
+  :where([data-app-shell-v2]) select:focus,
+  :where([data-app-shell-v2]) textarea:focus {
+    outline: none;
+    border-color: theme('colors.focus');
+    box-shadow: 0 0 0 2px theme('colors.primary.100');
+  }
+  :where([data-app-shell-v2]) input[readonly],
+  :where([data-app-shell-v2]) textarea[readonly],
+  :where([data-app-shell-v2]) input:disabled,
+  :where([data-app-shell-v2]) select:disabled,
+  :where([data-app-shell-v2]) textarea:disabled {
+    background-color: theme('colors.surface-secondary');
+    cursor: not-allowed;
+  }
+  :where([data-app-shell-v2]) input[type="checkbox"],
+  :where([data-app-shell-v2]) input[type="radio"] { accent-color: theme('colors.primary.700'); }
+  :where([data-app-shell-v2]) input[type="file"] { font-size: 13px; color: theme('colors.text-secondary'); }
+  :where([data-app-shell-v2]) :focus-visible { outline: 2px solid theme('colors.focus'); outline-offset: 2px; }
+
+  /* Botões/links-botão legados: alvo de toque mínimo e foco visível (as cores vêm das classes de cada view) */
+  :where([data-app-shell-v2]) button,
+  :where([data-app-shell-v2]) a.inline-flex { min-height: 40px; }
+  :where([data-app-shell-v2]) button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* Opções em cartão (`form-choice-*`) e grade em linha (`form-inline-grid`) — reproduz o comportamento do layout antigo
+     com os tokens novos, só o que as telas migradas usam */
+  :where([data-app-shell-v2]) .form-choice-group { display: flex; flex-direction: column; gap: 0.75rem; }
+  :where([data-app-shell-v2]) .form-choice-card {
+    display: flex; min-height: 3rem; align-items: center; gap: 0.75rem; cursor: pointer;
+    border: 1px solid theme('colors.border'); border-radius: theme('borderRadius.ds-md');
+    background: theme('colors.surface'); padding: 0.75rem 1rem; line-height: 1.35;
+    transition: border-color .15s ease, background-color .15s ease, box-shadow .15s ease;
+  }
+  :where([data-app-shell-v2]) .form-choice-card:hover { border-color: theme('colors.primary.300'); background: theme('colors.primary.50'); }
+  :where([data-app-shell-v2]) .form-choice-card:focus-within { border-color: theme('colors.focus'); box-shadow: 0 0 0 2px theme('colors.primary.100'); }
+  :where([data-app-shell-v2]) .form-choice-card input { margin: 0; flex: 0 0 auto; }
+  :where([data-app-shell-v2]) .form-choice-card span { min-width: 0; overflow-wrap: anywhere; }
+  :where([data-app-shell-v2]) .form-choice-card.is-disabled { opacity: 0.6; cursor: not-allowed; }
+  :where([data-app-shell-v2]) .form-inline-grid { display: grid; gap: 1rem; }
+  @media (min-width: 769px) {
+    :where([data-app-shell-v2]) .form-choice-group.is-inline { flex-direction: row; flex-wrap: wrap; }
+    :where([data-app-shell-v2]) .form-choice-group.is-inline .form-choice-card { flex: 1 1 11rem; }
+    :where([data-app-shell-v2]) .form-choice-group.is-inline.is-compact .form-choice-card { flex: 1 1 0; min-width: 0; }
+    :where([data-app-shell-v2]) .form-inline-grid.form-inline-grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  }
+}
+
+@layer components {
+  /* Bordas padrão e tabelas legadas dentro do AppShell V2 (§7 Tabelas): cabeçalho em surface-secondary, 12px/700 */
+  :where([data-app-shell-v2]) *,
+  :where([data-app-shell-v2]) *::before,
+  :where([data-app-shell-v2]) *::after { border-color: theme('colors.border'); }
+  :where([data-app-shell-v2]) table thead { background-color: theme('colors.surface-secondary'); }
+  :where([data-app-shell-v2]) table thead th { font-size: 12px; font-weight: 700; color: theme('colors.text-secondary'); white-space: nowrap; }
+  :where([data-app-shell-v2]) table tbody tr:hover { background-color: theme('colors.surface-secondary'); }
 }

@@ -83,7 +83,12 @@ try {
     $router->post('/admin/forgot-password', [PasswordRecoveryController::class, 'sendToken']);
     $router->get('/admin/reset-password/{token}', [PasswordRecoveryController::class, 'resetForm']);
     $router->post('/admin/reset-password/{token}', [PasswordRecoveryController::class, 'performReset']);
-    $router->get('/admin', [AdminController::class, 'index']);
+    // Nova UI: /admin é a CENTRAL DO PORTAL RH (AppShell V2; sem permissão própria — só navega). O dashboard que ocupava /admin
+    // (People Analytics, gate dashboard.visualizar) passou a ser uma funcionalidade própria em /admin/dashboard.
+    $router->get('/admin', [AdminCentralController::class, 'index']);
+    $router->get('/admin/dashboard', [AdminController::class, 'index']);
+    // Rota de desenvolvimento da Central (nunca publicada): mantida só como redirecionamento para a URL canônica.
+    $router->get('/admin/central', static fn() => redirect('/admin'));
     $router->get('/admin/indicadores-rh', [AdminRhIndicadoresController::class, 'index']);
     $router->get('/admin/dashboard-recrutamento', [AdminDashboardRecrutamentoController::class, 'index']);
     // Dashboard de Turnover — seis análises sobre os contratos oficiais do METADADOS. Permissão

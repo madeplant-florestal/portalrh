@@ -19,7 +19,7 @@ class AdminCandidaturasController extends Controller
             'stages' => $stages,
             'filters' => $filters,
             'csrf' => Security::csrfToken(),
-        ], 'layouts/admin');
+        ], 'layouts/app-shell');
     }
 
     public function show(string $id): void
@@ -49,7 +49,7 @@ class AdminCandidaturasController extends Controller
             'comunicacoes' => $comunicacoes,
             'podeVerPesquisa' => $podeVerPesquisa,
             'pesquisa' => $pesquisa,
-        ], 'layouts/admin');
+        ], 'layouts/app-shell');
     }
     
     public function download(string $id): void

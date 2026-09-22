@@ -103,7 +103,13 @@ try {
     $check(str_contains($corpoIndex, "Auth::requireRole(['admin', 'rh', 'viewer'])") && str_contains($corpoIndex, "Authorization::requirePermissao('dashboard_turnover.visualizar')"), '(permissão) index() exige sessão + dashboard_turnover.visualizar no backend (403 real, não só ocultação de menu)');
     $fonteIndexPhp = (string)file_get_contents(BASE_PATH . '/index.php');
     $check(str_contains($fonteIndexPhp, "\$router->get('/admin/dashboard-turnover', [AdminDashboardTurnoverController::class, 'index'])"), '(rota) /admin/dashboard-turnover registrada sob /admin (autenticação global do index.php)');
-    $check((bool)preg_match('/temPermissao\(\'dashboard_turnover\.visualizar\'\)\s*\)\s*:\s*\?>\s*<a href="<\?= \$base \?>\/admin\/dashboard-turnover"/s', (string)file_get_contents(APP_PATH . '/views/layouts/sidebar.php')), '(menu) O link só é renderizado dentro de um if Authorization::temPermissao(\'dashboard_turnover.visualizar\')');
+    $regraNavDashboardTurnover = null;
+    foreach (PortalNavegacaoService::definicao() as $m) {
+        foreach ($m['itens'] as $it) {
+            if ($it['href'] === '/admin/dashboard-turnover') { $regraNavDashboardTurnover = $it['regra']; }
+        }
+    }
+    $check($regraNavDashboardTurnover === 'perm:dashboard_turnover.visualizar', '(menu) A Central só oferece o Dashboard de Turnover sob a regra perm:dashboard_turnover.visualizar (PortalNavegacaoService::definicao() — sidebar removida, fonte da verdade agora é o serviço de navegação)');
 
     // ---- fixtures de contratos -----------------------------------------------------------------------------
     $mk($empA, $nomeEmpA, $cargoA, 'ZZTD Cargo A', '2000-01-01', null, null);          // A1 ativo

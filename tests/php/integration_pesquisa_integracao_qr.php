@@ -159,7 +159,13 @@ try {
     $check(str_contains($fonteIndex, "\$router->get('/integracao', [PesquisaIntegracaoQrController::class, 'inicio'])"), '(1) GET /integracao (URL do QR) está registrada');
     $check(str_contains($fonteIndex, "\$router->get('/integracao/{token}', [PesquisaIntegracaoController::class, 'show'])") && str_contains($fonteIndex, "\$router->post('/integracao/{token}', [PesquisaIntegracaoController::class, 'store'])"), '(1) Rotas do fluxo individual /integracao/{token} continuam registradas');
     $check(str_contains($fonteIndex, "\$router->get('/admin/pesquisa-integracao-qr'"), '(1) Rota administrativa registrada sob /admin (autenticação global do index.php)');
-    $check(str_contains((string)file_get_contents(APP_PATH . '/views/layouts/sidebar.php'), "temPermissao('integracao_colaborador.visualizar')"), '(admin) Item do menu condicionado à permissão individual');
+    $regraNavQr = null;
+    foreach (PortalNavegacaoService::definicao() as $m) {
+        foreach ($m['itens'] as $it) {
+            if ($it['href'] === '/admin/pesquisa-integracao-qr') { $regraNavQr = $it['regra']; }
+        }
+    }
+    $check($regraNavQr === 'perm:integracao_colaborador.visualizar', '(admin) A Central só oferece o QR da Integração sob a regra perm:integracao_colaborador.visualizar (PortalNavegacaoService::definicao() — sidebar removida, fonte da verdade agora é o serviço de navegação)');
 
     // ---- 2) Sem sessão aberta -----------------------------------------------------------------------
     $_SESSION = [];

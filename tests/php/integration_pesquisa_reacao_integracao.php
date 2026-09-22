@@ -126,11 +126,16 @@ try {
     $check(!str_contains($fonteControllerPublico, 'Auth::requireRole'), '(21) PesquisaReacaoIntegracaoController (público) NUNCA exige Auth::requireRole() — é a única parte pública do módulo');
     $check(str_contains($fonteControllerPublico, 'Security::csrfCheck'), 'PesquisaReacaoIntegracaoController::store() valida CSRF mesmo sendo público');
 
-    // ---- Sidebar: item só aparece com a permissão individual --------------------------------------
-    $sidebarFonte = (string)file_get_contents(APP_PATH . '/views/layouts/sidebar.php');
+    // ---- Central: item só aparece com a permissão individual (sidebar removida) --------------------
+    $regraNavPesquisaReacao = null;
+    foreach (PortalNavegacaoService::definicao() as $m) {
+        foreach ($m['itens'] as $it) {
+            if ($it['href'] === '/admin/pesquisas-reacao-integracao') { $regraNavPesquisaReacao = $it['regra']; }
+        }
+    }
     $check(
-        (bool)preg_match('/temPermissao\(\'pesquisa_reacao_integracao\.visualizar\'\)\s*\)\s*:\s*\?>\s*<a href="<\?= \$base \?>\/admin\/pesquisas-reacao-integracao"/s', $sidebarFonte),
-        '(12) Sidebar só renderiza o link da Pesquisa de Reação dentro de um if Authorization::temPermissao(\'pesquisa_reacao_integracao.visualizar\')'
+        $regraNavPesquisaReacao === 'perm:pesquisa_reacao_integracao.visualizar',
+        '(12) A Central só oferece a Pesquisa de Reação sob a regra perm:pesquisa_reacao_integracao.visualizar (PortalNavegacaoService::definicao() — fonte da verdade agora é o serviço de navegação)'
     );
 
     // ---- Nenhuma DDL em runtime: migration é a única fonte da estrutura --------------------------

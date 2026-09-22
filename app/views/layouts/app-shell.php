@@ -1,12 +1,12 @@
 <?php
 
 /**
- * AppShell V2 (Design System Portal RH, Fase 2) — layout OPT-IN.
- *
- * Coexiste com `layouts/admin` (sidebar), que continua sendo o shell de todas as telas atuais. Uma página migrada escolhe
- * este layout explicitamente: `$this->view->render('...', $dados, 'layouts/app-shell')`. Estrutura: Header V2 (identidade +
- * usuário; sem menu de módulos) → conteúdo com os gutters responsivos da Fase 1 (`px-gutter`), sem largura máxima.
- * Breadcrumb / PageHeader / ModuleTabs são chamados pela própria view (helpers em `partials/ui-shell.php`).
+ * AppShell V2 (Design System Portal RH, Fase 2) — ÚNICO shell administrativo (publicação consolidada da Nova UI; o antigo
+ * `layouts/admin`, com sidebar, foi removido). Toda página administrativa escolhe este layout explicitamente:
+ * `$this->view->render('...', $dados, 'layouts/app-shell')`. Estrutura: Header V2 (identidade + usuário; sem menu de
+ * módulos — a navegação é a Central + abas de módulo, ver `PortalNavegacaoService`) → conteúdo com os gutters responsivos da
+ * Fase 1 (`px-gutter`), sem largura máxima. Breadcrumb / PageHeader / ModuleTabs são chamados pela própria view (helpers em
+ * `partials/ui-shell.php`).
  *
  * Variáveis opcionais do `$params`: `tituloPagina` (string, <title>). Não decide autorização: quem chega aqui já passou
  * pelos gates do controller. Mensagens de sucesso/erro continuam sendo renderizadas pela própria view, como hoje.
@@ -16,7 +16,7 @@
 require_once APP_PATH . '/views/partials/ui-shell.php';
 
 $base = $base ?? (Config::app()['base_url'] ?? '');
-$tituloPagina = trim((string)($tituloPagina ?? ''));
+$tituloPagina = trim((string)($tituloPagina ?? '')) ?: ui_titulo_pagina();
 ?><!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -28,6 +28,9 @@ $tituloPagina = trim((string)($tituloPagina ?? ''));
   <link rel="stylesheet" href="<?= $base ?>/assets/tailwind.css?v=<?= urlencode(Config::assetVersion('assets/tailwind.css')) ?>">
   <script src="<?= $base ?>/assets/phone-utils.js?v=<?= urlencode(Config::assetVersion('assets/phone-utils.js')) ?>" defer></script>
   <script src="<?= $base ?>/assets/admin.js?v=<?= urlencode(Config::assetVersion('assets/admin.js')) ?>" defer></script>
+<?php foreach (ui_script_pagina() as $scriptPagina): ?>
+  <script src="<?= $base ?>/assets/<?= Security::e($scriptPagina) ?>?v=<?= urlencode(Config::assetVersion('assets/' . $scriptPagina)) ?>" defer></script>
+<?php endforeach; ?>
 </head>
 <body class="min-h-screen bg-background font-ds text-ds-body text-text-primary" data-app-shell-v2="1">
   <a href="#conteudo" class="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-2 focus:z-50 focus:rounded-ds-md focus:bg-surface focus:px-3 focus:py-2 focus:text-primary-700 focus:shadow-elevated">Ir para o conteúdo</a>

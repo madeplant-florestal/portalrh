@@ -130,7 +130,13 @@ try {
     $check(str_contains($corpoIndex, "Auth::requireRole(['admin', 'rh', 'viewer'])") && str_contains($corpoIndex, "Authorization::requirePermissao('dashboard_entrevista_desligamento.visualizar')"), '(backend) index() exige sessão + a permissão (403 real, não só ocultação de menu)');
     $fonteIndexPhp = (string)file_get_contents(BASE_PATH . '/index.php');
     $check(str_contains($fonteIndexPhp, "\$router->get('/admin/dashboard-entrevista-desligamento', [AdminDashboardEntrevistaDesligamentoController::class, 'index'])"), '(rota) /admin/dashboard-entrevista-desligamento registrada sob /admin (login global do index.php)');
-    $check((bool)preg_match('/temPermissao\(\'dashboard_entrevista_desligamento\.visualizar\'\)\s*\)\s*:\s*\?>\s*<a href="<\?= \$base \?>\/admin\/dashboard-entrevista-desligamento"/s', (string)file_get_contents(APP_PATH . '/views/layouts/sidebar.php')), '(menu) O link só é renderizado dentro de um if Authorization::temPermissao(\'dashboard_entrevista_desligamento.visualizar\')');
+    $regraNavDashboardEntrevista = null;
+    foreach (PortalNavegacaoService::definicao() as $m) {
+        foreach ($m['itens'] as $it) {
+            if ($it['href'] === '/admin/dashboard-entrevista-desligamento') { $regraNavDashboardEntrevista = $it['regra']; }
+        }
+    }
+    $check($regraNavDashboardEntrevista === 'perm:dashboard_entrevista_desligamento.visualizar', '(menu) A Central só oferece o Dashboard da Entrevista sob a regra perm:dashboard_entrevista_desligamento.visualizar (PortalNavegacaoService::definicao() — sidebar removida, fonte da verdade agora é o serviço de navegação)');
 
     // ---- fixtures ------------------------------------------------------------------------------------------------------------
     $c1 = $mk($E1, $U1, $CG1, '2024-01-10', '2025-01-10', '003');  // Jan | respondida em MARÇO | enps 10

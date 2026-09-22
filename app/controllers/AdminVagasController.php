@@ -18,14 +18,14 @@ class AdminVagasController extends Controller
             'vagas' => $vagas,
             'flashSuccess' => Security::sanitizeString($_GET['ok'] ?? ''),
             'flashError' => Security::sanitizeString($_GET['erro'] ?? ''),
-        ], 'layouts/admin');
+        ], 'layouts/app-shell');
     }
 
     public function create(): void
     {
         Auth::requireRole(['admin', 'rh']);
         $csrf = Security::csrfToken();
-        $this->view->render('admin/vagas/form', ['csrf' => $csrf, 'vaga' => null, 'empresas' => $this->empresaRepository->allOptions()], 'layouts/admin');
+        $this->view->render('admin/vagas/form', ['csrf' => $csrf, 'vaga' => null, 'empresas' => $this->empresaRepository->allOptions()], 'layouts/app-shell');
     }
 
     public function store(): void
@@ -50,7 +50,7 @@ class AdminVagasController extends Controller
             Vaga::create($data);
             redirect('/admin/vagas');
         } catch (Throwable $e) {
-            $this->view->render('admin/vagas/form', ['csrf' => Security::csrfToken(), 'vaga' => $data, 'error' => $e->getMessage(), 'empresas' => $this->empresaRepository->allOptions()], 'layouts/admin');
+            $this->view->render('admin/vagas/form', ['csrf' => Security::csrfToken(), 'vaga' => $data, 'error' => $e->getMessage(), 'empresas' => $this->empresaRepository->allOptions()], 'layouts/app-shell');
         }
     }
 
@@ -60,7 +60,7 @@ class AdminVagasController extends Controller
         $vaga = Vaga::find((int)$id);
         if (!$vaga) { http_response_code(404); echo 'Vaga não encontrada'; return; }
         $csrf = Security::csrfToken();
-        $this->view->render('admin/vagas/form', ['csrf' => $csrf, 'vaga' => $vaga, 'empresas' => $this->empresaRepository->allOptions()], 'layouts/admin');
+        $this->view->render('admin/vagas/form', ['csrf' => $csrf, 'vaga' => $vaga, 'empresas' => $this->empresaRepository->allOptions()], 'layouts/app-shell');
     }
 
     public function update(string $id): void
@@ -82,7 +82,7 @@ class AdminVagasController extends Controller
             redirect('/admin/vagas');
         } catch (Throwable $e) {
             $data['id'] = (int)$id;
-            $this->view->render('admin/vagas/form', ['csrf' => Security::csrfToken(), 'vaga' => $data, 'error' => $e->getMessage(), 'empresas' => $this->empresaRepository->allOptions()], 'layouts/admin');
+            $this->view->render('admin/vagas/form', ['csrf' => Security::csrfToken(), 'vaga' => $data, 'error' => $e->getMessage(), 'empresas' => $this->empresaRepository->allOptions()], 'layouts/app-shell');
         }
     }
 

@@ -18,7 +18,7 @@ class AdminMensagensController extends Controller
             'podeEditar' => Authorization::temPermissao('mensagens.editar'),
             'flashError' => Security::sanitizeString($_GET['erro'] ?? ''),
             'flashSuccess' => Security::sanitizeString($_GET['ok'] ?? ''),
-        ], 'layouts/admin');
+        ], 'layouts/app-shell');
     }
 
     public function create(): void
@@ -26,7 +26,7 @@ class AdminMensagensController extends Controller
         Auth::requireRole(['admin', 'rh', 'viewer']);
         Authorization::requirePermissao('mensagens.criar');
 
-        $this->view->render('admin/mensagens/form', $this->dadosDoFormulario('create', null, ''), 'layouts/admin');
+        $this->view->render('admin/mensagens/form', $this->dadosDoFormulario('create', null, ''), 'layouts/app-shell');
     }
 
     public function store(): void
@@ -47,7 +47,7 @@ class AdminMensagensController extends Controller
             $this->view->render(
                 'admin/mensagens/form',
                 $this->dadosDoFormulario('create', $data, (string)($result['error'] ?? 'Falha ao cadastrar a mensagem.')),
-                'layouts/admin'
+                'layouts/app-shell'
             );
             return;
         }
@@ -67,7 +67,7 @@ class AdminMensagensController extends Controller
             return;
         }
 
-        $this->view->render('admin/mensagens/form', $this->dadosDoFormulario('edit', $mensagem, ''), 'layouts/admin');
+        $this->view->render('admin/mensagens/form', $this->dadosDoFormulario('edit', $mensagem, ''), 'layouts/app-shell');
     }
 
     public function update(string $id): void
@@ -98,7 +98,7 @@ class AdminMensagensController extends Controller
             $this->view->render(
                 'admin/mensagens/form',
                 $this->dadosDoFormulario('edit', $data, (string)($result['error'] ?? 'Falha ao atualizar a mensagem.')),
-                'layouts/admin'
+                'layouts/app-shell'
             );
             return;
         }

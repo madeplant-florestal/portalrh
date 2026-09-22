@@ -19,7 +19,7 @@ abstract class AdminCatalogosController extends Controller
             'filters' => $filters,
             'flashError' => Security::sanitizeString($_GET['erro'] ?? ''),
             'flashSuccess' => Security::sanitizeString($_GET['ok'] ?? ''),
-        ], 'layouts/admin');
+        ], 'layouts/app-shell');
     }
 
     protected function renderCreate(string $table, ?array $item = null, string $error = ''): void
@@ -35,7 +35,7 @@ abstract class AdminCatalogosController extends Controller
             'item' => $item,
             'error' => $error,
             'csrf' => Security::csrfToken(),
-        ], 'layouts/admin');
+        ], 'layouts/app-shell');
     }
 
     protected function handleStore(string $table): void
@@ -81,7 +81,7 @@ abstract class AdminCatalogosController extends Controller
             'item' => $item,
             'error' => $error,
             'csrf' => Security::csrfToken(),
-        ], 'layouts/admin');
+        ], 'layouts/app-shell');
     }
 
     protected function handleUpdate(string $table, int $id): void

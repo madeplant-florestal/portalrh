@@ -35,7 +35,7 @@ class AdminPdisController extends Controller
             'escopoTotal' => PdiService::escopoTotal($ator),
             'flashOk' => Security::sanitizeString($_GET['ok'] ?? ''),
             'flashErro' => Security::sanitizeString($_GET['erro'] ?? ''),
-        ], 'layouts/admin');
+        ], 'layouts/app-shell');
     }
 
     /** Passo 1: buscar o colaborador (contrato oficial). Passo 2 (`?contrato=`): formulário do PDI. */
@@ -65,7 +65,7 @@ class AdminPdisController extends Controller
             'busca' => $busca,
             'contratos' => $service->buscarContratos($busca, $ator, $hoje),
             'flashErro' => $contratoId > 0 ? 'Contrato não encontrado.' : Security::sanitizeString($_GET['erro'] ?? ''),
-        ], 'layouts/admin');
+        ], 'layouts/app-shell');
     }
 
     public function store(): void
@@ -110,7 +110,7 @@ class AdminPdisController extends Controller
             'hoje' => new DateTimeImmutable('today'),
             'flashOk' => Security::sanitizeString($_GET['ok'] ?? ''),
             'flashErro' => Security::sanitizeString($_GET['erro'] ?? ''),
-        ], 'layouts/admin');
+        ], 'layouts/app-shell');
     }
 
     public function editar(string $id): void
@@ -364,6 +364,6 @@ class AdminPdisController extends Controller
             'escopoTotal' => PdiService::escopoTotal($ator),
             'ator' => $ator,
             'gestorSugerido' => $gestorSugerido,
-        ], 'layouts/admin');
+        ], 'layouts/app-shell');
     }
 }

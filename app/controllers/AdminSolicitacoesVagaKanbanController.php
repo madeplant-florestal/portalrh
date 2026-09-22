@@ -61,7 +61,7 @@ class AdminSolicitacoesVagaKanbanController extends Controller
             'csrf' => Security::csrfToken(),
             'podeMovimentar' => $podeMovimentar,
             'podeAbrirDetalhes' => $podeAbrirDetalhes,
-        ], 'layouts/admin');
+        ], 'layouts/app-shell');
     }
 
     public function move(): void

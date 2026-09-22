@@ -258,6 +258,57 @@ try {
         throw new RuntimeException('O campo tempo_fechamento_dias não foi calculado.');
     }
 
+    // Ajuste pontual — Tipo de vaga/Tipo de contratação: "Nova posição" e "Terceiro" saem de circulação para NOVAS
+    // solicitações (só na view; sem migration, sem alterar ENUM/service/model). $createdId acima foi criado com
+    // tipo_vaga=nova_posicao (fixture já existente deste teste) — serve de registro HISTÓRICO real para a verificação.
+    require_once APP_PATH . '/views/partials/ui-shell.php';
+    $_SESSION['user'] = true;
+    $_SESSION['user_id'] = (int)$adminUser['id'];
+    $_SESSION['user_role'] = (string)$adminUser['role'];
+    $_SESSION['user_is_supervisor'] = (int)$adminUser['is_supervisor'];
+    $_GET = [];
+    $renderizar = static function (callable $acao): string {
+        ob_start();
+        try {
+            $acao();
+        } finally {
+            $html = ob_get_clean();
+        }
+        return $html;
+    };
+    $htmlNova = $renderizar(static fn() => (new AdminSolicitacoesVagaController())->create());
+    $radiosTipoVaga = [];
+    preg_match_all('/<input type="radio" name="tipo_vaga" value="([a-z_]+)"/', $htmlNova, $mv);
+    $radiosTipoVaga = $mv[1];
+    $radiosTipoContratacao = [];
+    preg_match_all('/<input type="radio" name="tipo_contratacao" value="([a-z_]+)"/', $htmlNova, $mc);
+    $radiosTipoContratacao = $mc[1];
+    if (in_array('nova_posicao', $radiosTipoVaga, true)) {
+        throw new RuntimeException('(UI) "Nova posição" ainda aparece como opção selecionável em Nova Solicitação de Vaga.');
+    }
+    if (in_array('terceiro', $radiosTipoContratacao, true)) {
+        throw new RuntimeException('(UI) "Terceiro" ainda aparece como opção selecionável em Nova Solicitação de Vaga.');
+    }
+    if ($radiosTipoVaga !== ['substituicao', 'aumento_quadro', 'projeto_temporario']) {
+        throw new RuntimeException('(UI) Opções de Tipo de vaga na criação divergem do esperado: ' . implode(',', $radiosTipoVaga));
+    }
+    if ($radiosTipoContratacao !== ['clt', 'temporario', 'pj']) {
+        throw new RuntimeException('(UI) Opções de Tipo de contratação na criação divergem do esperado: ' . implode(',', $radiosTipoContratacao));
+    }
+    if (!str_contains($htmlNova, 'name="csrf"')) {
+        throw new RuntimeException('(UI) CSRF ausente no formulário de Nova Solicitação de Vaga.');
+    }
+    $ancienHtml = $renderizar(static fn() => (new AdminSolicitacoesVagaController())->show((string)$createdId));
+    if (preg_match('/Warning:|Notice:|Fatal error/i', $ancienHtml)) {
+        throw new RuntimeException('(UI) O detalhe de uma solicitação histórica com tipo_vaga=nova_posicao gerou Warning/Notice/Fatal.');
+    }
+    if (!str_contains($ancienHtml, '<dt class="font-semibold text-text-primary">Tipo de vaga</dt><dd class="text-text-secondary">Nova posição</dd>')) {
+        throw new RuntimeException('(UI) O detalhe de uma solicitação histórica com "Nova posição" não preservou o rótulo correto (regressão de contexto histórico).');
+    }
+    echo "  [ok] (UI) Nova Solicitação de Vaga: Tipo de vaga = substituicao,aumento_quadro,projeto_temporario (sem nova_posicao)\n";
+    echo "  [ok] (UI) Nova Solicitação de Vaga: Tipo de contratação = clt,temporario,pj (sem terceiro)\n";
+    echo "  [ok] (UI) Solicitação histórica #{$createdId} (tipo_vaga=nova_posicao) continua exibindo \"Nova posição\" corretamente\n";
+
     echo "SOLICITACAO_FLOW_OK\n";
 } finally {
     foreach ($cleanup['vagas'] as $vagaId) {

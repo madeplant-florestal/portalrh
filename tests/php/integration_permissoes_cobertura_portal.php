@@ -49,9 +49,11 @@ $mkUser = static function (string $sufixo, string $role) use ($emailMk, $senha, 
     return $id;
 };
 
-/** Renderiza o sidebar como se `$usuarioId` estivesse logado (mesmo padrão de manipulação direta
- *  de $_SESSION já usado em integration_auth_supervisor_session.php). */
-$renderizarSidebar = static function (int $usuarioId, string $role, bool $isSupervisor): string {
+/** Autentica como `$usuarioId` estivesse logado (mesmo padrão de manipulação direta de $_SESSION já
+ *  usado em integration_auth_supervisor_session.php). A navegação real passou da sidebar para
+ *  `PortalNavegacaoService` (Central + abas de módulo no AppShell V2) — os testes abaixo leem
+ *  `modulos()`/`abas()` desse serviço em vez de renderizar HTML de sidebar. */
+$comoUsuario = static function (int $usuarioId, string $role, bool $isSupervisor): void {
     $_SESSION = [
         'user' => true,
         'user_id' => $usuarioId,
@@ -59,7 +61,6 @@ $renderizarSidebar = static function (int $usuarioId, string $role, bool $isSupe
         'user_name' => 'Teste',
         'user_is_supervisor' => $isSupervisor,
     ];
-    return (new View())->renderPartial('layouts/sidebar', ['base' => '']);
 };
 
 try {
@@ -115,37 +116,57 @@ try {
     $check(($syncGestor['ok'] ?? false) === true, 'sincronizar() concede colaboradores.visualizar ao Gestor');
     $check(Authorization::usuarioTemPermissao($gestorId, 'colaboradores.visualizar') === true, '(6) usuário COM a permissão passa a "ver" a capacidade (Authorization concede)');
 
-    // ---- 9/10/11/12. Menu: Cadastros aparece com >=1 filho; filhos individuais respeitam a regra
-    $htmlGestorComPermissao = $renderizarSidebar($gestorId, 'viewer', false);
-    $check(str_contains($htmlGestorComPermissao, 'Cadastros'), '(9) agrupador Cadastros aparece (Empresas/Setores/Cargos/Benefícios/Avaliações já são liberados por role a qualquer autenticado)');
-    $check(str_contains($htmlGestorComPermissao, '>Colaboradores<'), '(6) Gestor COM colaboradores.visualizar vê o filho Colaboradores dentro de Cadastros');
-    $check(str_contains($htmlGestorComPermissao, 'Empresas'), 'filho Empresas continua visível (acesso por role já existente, aditivo preservado)');
+    // ---- 9/10/11/12. Central/abas de módulo: Cadastros aparece com >=1 destino; permissão individual libera ADITIVAMENTE
+    //      um destino de "recrutamento" para quem não tem a role, sem nunca remover o que a role já dava (sidebar removida:
+    //      a superfície de navegação real agora é PortalNavegacaoService, consumida pela Central e pelas abas de módulo).
+    $comoUsuario($gestorId, 'viewer', false);
+    $modulosGestorComPermissao = array_column((new PortalNavegacaoService())->modulos(), 'chave');
+    $hrefPorModuloGestorComPermissao = array_column((new PortalNavegacaoService())->modulos(), 'href', 'chave');
+    $check(in_array('cadastros', $modulosGestorComPermissao, true), '(9) módulo Cadastros aparece (Empresas/Setores/Cargos/Benefícios/Avaliações já são liberados por role a qualquer autenticado)');
+    // O módulo "Colaboradores" sempre aparece (o 2º destino, Movimentações, é `aberto`), mas o Gestor COM colaboradores.visualizar
+    // ainda cai em Movimentações, nunca em /admin/colaboradores: o backend daquela listagem é admin/rh só (expõe salário
+    // individual) — mesma exceção provada em integration_portal_central.php. A permissão em si continua concedida
+    // (Authorization::usuarioTemPermissao, itens 6/7 acima), só não abre um destino que o backend bloquearia (403).
+    $check(($hrefPorModuloGestorComPermissao['colaboradores'] ?? null) === '/admin/movimentacoes-pessoal' && !(new PortalNavegacaoService())->visivel('staff'), '(6, exceção documentada) Gestor COM colaboradores.visualizar não abre /admin/colaboradores pela Central (cai em Movimentações)');
+    $check(in_array('empresas', array_column((new PortalNavegacaoService())->abas('cadastros'), 'chave'), true), 'aba Empresas continua visível dentro de Cadastros (acesso por role já existente, aditivo preservado)');
 
     $syncGestorRemove = Authorization::sincronizar($gestorId, []);
     $check(($syncGestorRemove['ok'] ?? false) === true, 'remove a permissão do Gestor para testar o cenário oposto');
-    $htmlGestorSemPermissao = $renderizarSidebar($gestorId, 'viewer', false);
-    $check(!str_contains($htmlGestorSemPermissao, '>Colaboradores<'), '(12) Gestor SEM colaboradores.visualizar não vê o filho Colaboradores (permanece oculto)');
-    $check(str_contains($htmlGestorSemPermissao, 'Empresas'), 'mas continua vendo Empresas (acesso por role, aditivo — nada foi removido)');
-    $check(!str_contains($htmlGestorSemPermissao, 'Pipeline Kanban'), 'Gestor sem pipeline.visualizar não vê "Pipeline Kanban" (backend hoje é admin/rh só — link não ficaria morto)');
-    $check(!str_contains($htmlGestorSemPermissao, 'Webhooks do recrutamento'), 'Gestor sem recruitment_webhooks.visualizar não vê "Webhooks do recrutamento"');
-    $check(!str_contains($htmlGestorSemPermissao, 'Programa de Indicações'), 'Gestor sem indicacoes.visualizar não vê "Programa de Indicações"');
-    $check(!str_contains($htmlGestorSemPermissao, '>Usuários<'), 'Gestor (não admin/supervisor) continua sem ver "Usuários" — regra antiga preservada');
+    $comoUsuario($gestorId, 'viewer', false);
+    $modulosGestorSemPermissao = array_column((new PortalNavegacaoService())->modulos(), 'chave');
+    $check(in_array('empresas', array_column((new PortalNavegacaoService())->abas('cadastros'), 'chave'), true), 'mesmo sem a permissão, continua vendo a aba Empresas (acesso por role, aditivo — nada foi removido)');
+    $abasRecrutamentoSemPermissao = array_column((new PortalNavegacaoService())->abas('recrutamento'), 'chave');
+    $check(!in_array('pipeline', $abasRecrutamentoSemPermissao, true), '(12) Gestor sem pipeline.visualizar não vê a aba "Pipeline Kanban" (backend hoje é admin/rh só — aba não ficaria morta)');
+    $check(!in_array('webhooks', $abasRecrutamentoSemPermissao, true), 'Gestor sem recruitment_webhooks.visualizar não vê a aba "Webhooks"');
+    $check(!in_array('indicacoes', $abasRecrutamentoSemPermissao, true), 'Gestor sem indicacoes.visualizar não vê a aba "Indicações"');
+    $check(!in_array('usuarios', $modulosGestorSemPermissao, true), 'Gestor (não admin/supervisor) continua sem ver o módulo "Usuários" — regra antiga preservada');
 
-    $htmlAdmin = $renderizarSidebar($adminId, 'admin', false);
-    $check(str_contains($htmlAdmin, 'Pipeline Kanban') && str_contains($htmlAdmin, 'Webhooks do recrutamento') && str_contains($htmlAdmin, 'Programa de Indicações') && str_contains($htmlAdmin, '>Colaboradores<') && str_contains($htmlAdmin, '>Usuários<'), 'Admin continua vendo TODOS os itens pelo bypass central — nenhuma regressão');
+    // ---- variante aditiva real (item 6 provado de ponta a ponta): pipeline.visualizar NÃO é role admin/rh, então concedê-la
+    //      ao Gestor precisa liberar a aba sem que ele tenha ganhado a role nem is_supervisor.
+    $idsPermissao2 = $pdo->query('SELECT id, codigo FROM permissoes')->fetchAll(PDO::FETCH_KEY_PAIR);
+    $idPipeline = (int)array_search('pipeline.visualizar', $idsPermissao2, true);
+    Authorization::sincronizar($gestorId, [$idPipeline]);
+    $comoUsuario($gestorId, 'viewer', false);
+    $check(in_array('pipeline', array_column((new PortalNavegacaoService())->abas('recrutamento'), 'chave'), true), '(6) Gestor COM pipeline.visualizar passa a ver a aba "Pipeline Kanban" mesmo sem role admin/rh nem is_supervisor');
+    Authorization::sincronizar($gestorId, []); // devolve o Gestor ao estado sem permissões extras
 
-    $htmlRh = $renderizarSidebar($rhId, 'rh', false);
-    $check(str_contains($htmlRh, 'Pipeline Kanban') && str_contains($htmlRh, '>Colaboradores<'), 'RH continua vendo os itens que já via pela role (admin/rh) — acesso aditivo preservado, nada removido');
-    $check(!str_contains($htmlRh, '>Usuários<'), 'RH sem a permissão especial nem is_supervisor continua sem ver "Usuários" (regra antiga preservada)');
+    $comoUsuario($adminId, 'admin', false);
+    $abasRecrutamentoAdmin = array_column((new PortalNavegacaoService())->abas('recrutamento'), 'chave');
+    $modulosAdmin = array_column((new PortalNavegacaoService())->modulos(), 'chave');
+    $check(in_array('pipeline', $abasRecrutamentoAdmin, true) && in_array('webhooks', $abasRecrutamentoAdmin, true) && in_array('indicacoes', $abasRecrutamentoAdmin, true) && in_array('colaboradores', $modulosAdmin, true) && in_array('usuarios', $modulosAdmin, true), 'Admin continua vendo TODOS os módulos/abas pelo bypass central — nenhuma regressão');
 
-    // Não é possível reproduzir hoje "Cadastros oculto" (item 10) de ponta a ponta: Empresas,
-    // Setores, Cargos, Benefícios e Avaliações são liberados por role a QUALQUER usuário
-    // autenticado (decisão aditiva confirmada — não removemos esse acesso). A lógica em si
-    // (`in_array(true, $cadastrosFilhosVisiveis, true)`) está implementada e correta — confirmado
-    // por inspeção de código-fonte abaixo — mas o cenário "0 filhos visíveis" só existiria se um
-    // desses 5 catálogos também ganhasse gate próprio no futuro.
-    $sidebarFonte = (string)file_get_contents(__DIR__ . '/../../app/views/layouts/sidebar.php');
-    $check(str_contains($sidebarFonte, 'in_array(true, $cadastrosFilhosVisiveis, true)'), "código-fonte do sidebar implementa 'mostra se >=1 filho visível' (base para o item 10, não reproduzível ponta-a-ponta hoje pelo motivo acima)");
+    $comoUsuario($rhId, 'rh', false);
+    $abasRecrutamentoRh = array_column((new PortalNavegacaoService())->abas('recrutamento'), 'chave');
+    $modulosRh = array_column((new PortalNavegacaoService())->modulos(), 'chave');
+    $check(in_array('pipeline', $abasRecrutamentoRh, true) && in_array('colaboradores', $modulosRh, true), 'RH continua vendo os destinos que já via pela role (admin/rh) — acesso aditivo preservado, nada removido');
+    $check(!in_array('usuarios', $modulosRh, true), 'RH sem a permissão especial nem is_supervisor continua sem ver o módulo "Usuários" (regra antiga preservada)');
+
+    // Item 10 ("Cadastros oculto") permanece não reproduzível ponta a ponta hoje, pelo mesmo motivo já documentado na época
+    // da sidebar: Empresas, Setores, Cargos, Benefícios e Avaliações são liberados por role a QUALQUER usuário autenticado
+    // (decisão aditiva confirmada — não removemos esse acesso). A lógica "aparece se >=1 destino visível" está implementada
+    // em PortalNavegacaoService::modulos() (`break` ao achar o primeiro item visível) e é exercitada pelos módulos acima e
+    // por integration_portal_central.php; o cenário "0 destinos visíveis" só existiria se um desses 5 catálogos ganhasse
+    // gate próprio no futuro.
 
     // ---- 13. regras contextuais legítimas continuam funcionando (nenhum controller tocado) -----
     $solicitacaoVagaFonte = (string)file_get_contents(__DIR__ . '/../../app/models/SolicitacaoVaga.php');
@@ -223,7 +244,8 @@ try {
     $check($tocouMetadados === false, 'nenhum arquivo de integração com METADADOS foi alterado nesta rodada');
 
     // ---- 20. nenhum módulo recebeu bypass novo por role=rh/is_supervisor -------------------------
-    $check(str_contains($sidebarFonte, "\$isStaff || Authorization::temPermissao"), 'condição aditiva do menu usa Authorization::temPermissao() como fonte da permissão nova, nunca um novo `if role===rh` isolado');
+    $fonteNavegacao = (string)file_get_contents(__DIR__ . '/../../app/services/PortalNavegacaoService.php');
+    $check(str_contains($fonteNavegacao, 'Authorization::temPermissao($codigo)') && substr_count($fonteNavegacao, "'rh'") === 1, 'condição aditiva da navegação (PortalNavegacaoService) usa Authorization::temPermissao() como fonte da permissão nova; a única comparação de role==="rh" continua sendo a definição canônica de $staff, sem nenhum bypass novo isolado');
     $check(Authorization::usuarioTemPermissao($rhId, 'vagas.excluir') === false, 'confirmação direta: RH continua sem a permissão nova vagas.excluir automaticamente');
     $check(Authorization::usuarioTemPermissao($supervisorId, 'vagas.excluir') === false, 'confirmação direta: Supervisor continua sem a permissão nova vagas.excluir automaticamente');
 

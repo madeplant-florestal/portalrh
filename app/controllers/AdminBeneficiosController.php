@@ -5,14 +5,14 @@ class AdminBeneficiosController extends Controller
     {
         Auth::requireRole(['admin', 'rh', 'viewer']);
         $beneficios = Beneficio::all();
-        $this->view->render('admin/beneficios/index', ['beneficios' => $beneficios], 'layouts/admin');
+        $this->view->render('admin/beneficios/index', ['beneficios' => $beneficios], 'layouts/app-shell');
     }
 
     public function create(): void
     {
         Auth::requireRole(['admin', 'rh']);
         $csrf = Security::csrfToken();
-        $this->view->render('admin/beneficios/form', ['csrf' => $csrf, 'beneficio' => null], 'layouts/admin');
+        $this->view->render('admin/beneficios/form', ['csrf' => $csrf, 'beneficio' => null], 'layouts/app-shell');
     }
 
     public function store(): void
@@ -36,7 +36,7 @@ class AdminBeneficiosController extends Controller
                 $filename = Upload::saveImage($_FILES['logo'], 'logos');
                 $data['logo_path'] = $filename;
             } catch (\Throwable $e) {
-                $this->view->render('admin/beneficios/form', ['csrf' => Security::csrfToken(), 'beneficio' => $data, 'error' => $e->getMessage()], 'layouts/admin');
+                $this->view->render('admin/beneficios/form', ['csrf' => Security::csrfToken(), 'beneficio' => $data, 'error' => $e->getMessage()], 'layouts/app-shell');
                 return;
             }
         }
@@ -51,7 +51,7 @@ class AdminBeneficiosController extends Controller
         $beneficio = Beneficio::find((int)$id);
         if (!$beneficio) { http_response_code(404); echo 'Benefício não encontrado'; return; }
         $csrf = Security::csrfToken();
-        $this->view->render('admin/beneficios/form', ['csrf' => $csrf, 'beneficio' => $beneficio], 'layouts/admin');
+        $this->view->render('admin/beneficios/form', ['csrf' => $csrf, 'beneficio' => $beneficio], 'layouts/app-shell');
     }
 
     public function update(string $id): void
@@ -75,7 +75,7 @@ class AdminBeneficiosController extends Controller
                 $filename = Upload::saveImage($_FILES['logo'], 'logos');
                 $data['logo_path'] = $filename;
             } catch (\Throwable $e) {
-                $this->view->render('admin/beneficios/form', ['csrf' => Security::csrfToken(), 'beneficio' => $data, 'error' => $e->getMessage()], 'layouts/admin');
+                $this->view->render('admin/beneficios/form', ['csrf' => Security::csrfToken(), 'beneficio' => $data, 'error' => $e->getMessage()], 'layouts/app-shell');
                 return;
             }
         }

@@ -1,4 +1,5 @@
 <?php
+require_once APP_PATH . '/views/partials/modulo-topo.php';
 $statusLabels = [
     'pendente_lider' => 'Pendente líder',
     'pendente_rh' => 'Pendente RH',
@@ -9,38 +10,32 @@ $statusLabels = [
 ];
 $statusClass = static function (string $status): string {
     return match ($status) {
-        'pendente_lider', 'pendente_rh' => 'bg-amber-100 text-amber-800',
-        'aprovada', 'concluida' => 'bg-green-100 text-green-800',
-        default => 'bg-red-100 text-red-800',
+        'pendente_lider', 'pendente_rh' => 'bg-warning/10 text-warning',
+        'aprovada', 'concluida' => 'bg-success/10 text-success',
+        default => 'bg-danger/10 text-danger',
     };
 };
 ?>
-<div class="responsive-panel">
-  <div class="responsive-header">
-    <div>
-      <h2 class="text-xl font-semibold text-ctpblue">Solicitações de vaga</h2>
-      <p class="mt-1 text-sm text-gray-500">Fluxo integrado com cargos, setores, centros de custo, gestores e controle interno do RH.</p>
-    </div>
-    <div class="flex flex-wrap gap-2">
-      <a href="<?= $base ?>/admin/vagas" class="inline-flex items-center justify-center rounded-lg border border-gray-300 px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50">Voltar para vagas</a>
-      <?php if (!empty($vePodeKanban)): ?>
-      <a href="<?= $base ?>/admin/solicitacoes-vaga/kanban" class="inline-flex items-center justify-center rounded-lg border border-ctgreen px-4 py-3 text-sm font-medium text-ctgreen hover:bg-ctgreen hover:text-white">Kanban de solicitações</a>
-      <?php endif; ?>
-      <?php if (!empty($podeCriarSolicitacao)): ?>
-      <a href="<?= $base ?>/admin/solicitacoes-vaga/nova" class="inline-flex items-center justify-center rounded-lg bg-ctgreen px-4 py-3 text-sm font-medium text-white hover:bg-ctdark">Nova solicitação</a>
-      <?php endif; ?>
-    </div>
+<div class="space-y-4">
+  <?= ui_modulo_topo($base, 'recrutamento', 'solicitacoes', [
+      'titulo' => 'Solicitações de vaga',
+      'descricao' => 'Fluxo integrado com cargos, setores, centros de custo, gestores e controle interno do RH.',
+      'acao' => !empty($podeCriarSolicitacao) ? ['label' => 'Nova solicitação', 'href' => $base . '/admin/solicitacoes-vaga/nova'] : null,
+  ]) ?>
+  <?php if (!empty($vePodeKanban)): ?>
+  <div class="flex flex-wrap gap-2">
+    <a href="<?= $base ?>/admin/solicitacoes-vaga/kanban" class="<?= ui_btn('secundario') ?>">Kanban de solicitações</a>
   </div>
-
+  <?php endif; ?>
   <?php if (!empty($flashError)): ?>
-    <div class="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"><?= Security::e($flashError) ?></div>
+    <div class="mt-4 rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger"><?= Security::e($flashError) ?></div>
   <?php endif; ?>
   <?php if (!empty($flashSuccess)): ?>
-    <div class="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700"><?= Security::e($flashSuccess) ?></div>
+    <div class="mt-4 rounded-lg border border-success/30 bg-success/10 px-4 py-3 text-sm text-success"><?= Security::e($flashSuccess) ?></div>
   <?php endif; ?>
 
   <div class="responsive-table-wrap mt-4">
-    <table class="mobile-table-desktop min-w-full text-sm">
+    <table class="hidden min-w-full text-sm md:table">
       <thead>
         <tr class="border-b">
           <th class="p-3 text-left">Área</th>
@@ -56,12 +51,12 @@ $statusClass = static function (string $status): string {
       <tbody>
         <?php if (empty($items)): ?>
           <tr>
-            <td colspan="8" class="p-6 text-center text-sm text-gray-500">Nenhuma solicitação de vaga cadastrada até o momento.</td>
+            <td colspan="8" class="p-6 text-center text-sm text-text-secondary">Nenhuma solicitação de vaga cadastrada até o momento.</td>
           </tr>
         <?php else: ?>
           <?php foreach ($items as $item): ?>
-            <tr class="border-b hover:bg-gray-50">
-              <td class="p-3 font-medium text-ctpblue"><?= Security::e($item['setor_nome']) ?></td>
+            <tr class="border-b hover:bg-surface-secondary">
+              <td class="p-3 font-medium text-text-primary"><?= Security::e($item['setor_nome']) ?></td>
               <td class="p-3"><?= Security::e($item['cargo_nome']) ?></td>
               <td class="p-3"><?= Security::e($item['gestor_nome']) ?></td>
               <td class="p-3"><?= (int)$item['quantidade_vagas'] ?></td>
@@ -73,7 +68,7 @@ $statusClass = static function (string $status): string {
                 </span>
               </td>
               <td class="p-3">
-                <a href="<?= $base ?>/admin/solicitacoes-vaga/<?= (int)$item['id'] ?>" class="text-ctpblue hover:text-ctgreen">Abrir</a>
+                <a href="<?= $base ?>/admin/solicitacoes-vaga/<?= (int)$item['id'] ?>" class="text-text-primary hover:text-primary-700">Abrir</a>
               </td>
             </tr>
           <?php endforeach; ?>
@@ -85,17 +80,17 @@ $statusClass = static function (string $status): string {
   <div class="responsive-card-list mt-4 md:hidden">
     <?php foreach ($items as $item): ?>
       <div class="responsive-card">
-        <div class="text-base font-semibold text-ctpblue"><?= Security::e($item['cargo_nome']) ?></div>
-        <div class="mt-2 text-sm text-gray-600">Área: <?= Security::e($item['setor_nome']) ?></div>
-        <div class="mt-1 text-sm text-gray-600">Gestor: <?= Security::e($item['gestor_nome']) ?></div>
-        <div class="mt-1 text-sm text-gray-600">Qtd.: <?= (int)$item['quantidade_vagas'] ?></div>
+        <div class="text-base font-semibold text-text-primary"><?= Security::e($item['cargo_nome']) ?></div>
+        <div class="mt-2 text-sm text-text-secondary">Área: <?= Security::e($item['setor_nome']) ?></div>
+        <div class="mt-1 text-sm text-text-secondary">Gestor: <?= Security::e($item['gestor_nome']) ?></div>
+        <div class="mt-1 text-sm text-text-secondary">Qtd.: <?= (int)$item['quantidade_vagas'] ?></div>
         <div class="mt-3">
           <span class="inline-flex rounded-full px-3 py-1 text-xs font-semibold <?= $statusClass((string)$item['status_fluxo']) ?>">
             <?= Security::e($statusLabels[$item['status_fluxo']] ?? $item['status_fluxo']) ?>
           </span>
         </div>
         <div class="responsive-card-actions mt-4">
-          <a href="<?= $base ?>/admin/solicitacoes-vaga/<?= (int)$item['id'] ?>" class="text-ctpblue hover:text-ctgreen">Abrir</a>
+          <a href="<?= $base ?>/admin/solicitacoes-vaga/<?= (int)$item['id'] ?>" class="text-text-primary hover:text-primary-700">Abrir</a>
         </div>
       </div>
     <?php endforeach; ?>

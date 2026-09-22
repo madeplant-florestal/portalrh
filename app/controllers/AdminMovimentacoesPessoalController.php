@@ -12,7 +12,7 @@ class AdminMovimentacoesPessoalController extends Controller
             ),
             'flashError' => Security::sanitizeString($_GET['erro'] ?? ''),
             'flashSuccess' => Security::sanitizeString($_GET['ok'] ?? ''),
-        ], 'layouts/admin');
+        ], 'layouts/app-shell');
     }
 
     public function create(): void
@@ -39,7 +39,7 @@ class AdminMovimentacoesPessoalController extends Controller
             'currentRole' => $role,
             'currentUserId' => $userId,
             'isSupervisor' => $isSupervisor,
-        ], 'layouts/admin');
+        ], 'layouts/app-shell');
     }
 
     public function store(): void
@@ -103,7 +103,7 @@ class AdminMovimentacoesPessoalController extends Controller
             'currentRole' => $role,
             'currentUserId' => $userId,
             'isSupervisor' => $isSupervisor,
-        ], 'layouts/admin');
+        ], 'layouts/app-shell');
     }
 
     public function update(string $id): void
@@ -169,7 +169,7 @@ class AdminMovimentacoesPessoalController extends Controller
             'currentRole' => $role,
             'currentUserId' => $userId,
             'isSupervisor' => $isSupervisor,
-        ], 'layouts/admin');
+        ], 'layouts/app-shell');
     }
 
     private function canCreate(int $userId, ?string $role, bool $isSupervisor): bool

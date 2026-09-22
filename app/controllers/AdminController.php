@@ -66,7 +66,7 @@ class AdminController extends Controller
             'periodoInicio' => $inicio,
             'periodoFim' => $fim,
             'ultimaSincronizacao' => $ultimaSincronizacao,
-        ], 'layouts/admin');
+        ], 'layouts/app-shell');
     }
 
     /** @return array{0:DateTimeImmutable,1:DateTimeImmutable} */

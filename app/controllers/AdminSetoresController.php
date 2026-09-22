@@ -33,7 +33,7 @@ class AdminSetoresController extends AdminCatalogosController
             'pages' => $result['pages'],
             'perPage' => $result['per_page'],
             'total' => $result['total'],
-        ], 'layouts/admin');
+        ], 'layouts/app-shell');
     }
 
     public function create(): void
@@ -203,7 +203,7 @@ class AdminSetoresController extends AdminCatalogosController
             'linkedCargos' => $data['linkedCargos'] ?? [],
             'availableCargos' => $data['availableCargos'] ?? [],
             'companies' => $data['companies'] ?? [],
-        ], 'layouts/admin');
+        ], 'layouts/app-shell');
     }
 
     private function captureFormData(): array

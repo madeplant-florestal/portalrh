@@ -51,7 +51,7 @@ class AdminColaboradoresController extends Controller
             'erro' => $erro,
             'flashError' => Security::sanitizeString($_GET['erro'] ?? ''),
             'flashSuccess' => Security::sanitizeString($_GET['ok'] ?? ''),
-        ], 'layouts/admin');
+        ], 'layouts/app-shell');
     }
 
 
@@ -101,7 +101,7 @@ class AdminColaboradoresController extends Controller
             return;
         }
 
-        $this->view->render('admin/colaboradores/rh-form', $dados, 'layouts/admin');
+        $this->view->render('admin/colaboradores/rh-form', $dados, 'layouts/app-shell');
     }
 
     /**
@@ -172,7 +172,7 @@ class AdminColaboradoresController extends Controller
             $dados['linkPesquisaIntegracaoGerado'] = $baseUrl . '/integracao/' . $resultado['token'];
         }
 
-        $this->view->render('admin/colaboradores/rh-form', $dados, 'layouts/admin');
+        $this->view->render('admin/colaboradores/rh-form', $dados, 'layouts/app-shell');
     }
 
     /**
@@ -255,7 +255,7 @@ class AdminColaboradoresController extends Controller
             } else {
                 $dados['colaborador'] = array_merge($dados['colaborador'], $payload);
             }
-            $this->view->render('admin/colaboradores/rh-form', $dados, 'layouts/admin');
+            $this->view->render('admin/colaboradores/rh-form', $dados, 'layouts/app-shell');
             return;
         }
 
@@ -294,7 +294,7 @@ class AdminColaboradoresController extends Controller
             'senhaTemp' => is_string($senhaTemp) ? $senhaTemp : null,
             'flashError' => Security::sanitizeString($_GET['erro'] ?? ''),
             'flashSuccess' => Security::sanitizeString($_GET['ok'] ?? ''),
-        ], 'layouts/admin');
+        ], 'layouts/app-shell');
     }
 
     public function updateAcesso(string $id): void

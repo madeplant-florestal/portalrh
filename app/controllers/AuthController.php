@@ -7,8 +7,7 @@ class AuthController extends Controller
 
     /**
      * Destino inicial resolvido de forma centralizada em Authorization::primeiraRotaAcessivel() —
-     * nunca assume que /admin (People Analytics) está disponível para todo usuário autenticado
-     * (exige dashboard.visualizar desde a correção deste problema).
+     * hoje a Central do Portal (`/admin`), aberta a qualquer sessão autenticada.
      */
     private function postLoginPath(): string
     {

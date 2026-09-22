@@ -40,10 +40,9 @@
  *   - usuário sem dashboard.visualizar não vê o item Dashboard na sidebar (fonte, não só 403);
  *   - Supervisor sem a permissão individual não recebe acesso simplesmente por ser Supervisor
  *     (mesma disciplina de "role/flag sozinha não basta" já provada para RH);
- *   - Authorization::primeiraRotaAcessivel() nunca manda quem tem dashboard.visualizar para outro
- *     lugar, manda quem só tem permissão funcional (ex.: Solicitação de Vaga) para essa área real
- *     (nunca para /admin, nunca 403), e tem uma rota de segurança final para quem não tem nenhuma
- *     permissão — sem loop de redirect;
+ *   - Authorization::primeiraRotaAcessivel() manda TODO usuário autenticado para a Central do Portal (/admin, aberta a
+ *     qualquer sessão; o Dashboard People Analytics é /admin/dashboard e mantém o gate dashboard.visualizar), nunca para uma
+ *     rota que devolva 403 e sem loop de redirect;
  *   - Empresa selecionada e RESOLVIDA no catálogo local filtra Vagas normalmente; Empresa
  *     selecionada e SEM correspondência local nunca degrada silenciosamente para o total geral.
  */
@@ -596,11 +595,16 @@ try {
     $check(!str_contains($fonteRepository, 'COUNT(DISTINCT'), '(29) PeopleAnalyticsRepository nunca usa COUNT(DISTINCT ...) — unidade oficial é o contrato, nunca codigo_pessoa deduplicado');
     $check(!str_contains($fonteService, 'COUNT(DISTINCT'), '(29) PeopleAnalyticsService nunca usa COUNT(DISTINCT ...) — mesma garantia no lado do Service (agrupamentos por Empresa incluídos)');
 
-    // ---- 17) Sidebar: item Dashboard exige dashboard.visualizar (fonte, não só comportamento) ---
-    $sidebarFonte = (string)file_get_contents(APP_PATH . '/views/layouts/sidebar.php');
+    // ---- 17) Central: item Dashboard exige dashboard.visualizar (fonte, não só comportamento; sidebar removida) ---
+    $regraNavDashboard = null;
+    foreach (PortalNavegacaoService::definicao() as $m) {
+        foreach ($m['itens'] as $it) {
+            if ($it['href'] === '/admin/dashboard') { $regraNavDashboard = $it['regra']; }
+        }
+    }
     $check(
-        (bool)preg_match('/temPermissao\(\'dashboard\.visualizar\'\)\s*\)\s*:\s*\?>\s*<a href="<\?= \$base \?>\/admin"/s', $sidebarFonte),
-        '(20) Sidebar só renderiza o link "Dashboard" dentro de um if Authorization::temPermissao(\'dashboard.visualizar\') — Admin continua vendo por bypass central, ninguém mais vê automaticamente por role'
+        $regraNavDashboard === 'perm:dashboard.visualizar',
+        '(20) A Central só oferece o Dashboard (People Analytics, /admin/dashboard) sob a regra perm:dashboard.visualizar (PortalNavegacaoService::definicao()) — Admin continua vendo por bypass central, ninguém mais vê automaticamente por role'
     );
 
     // ---- 18) Supervisor sem a permissão individual NÃO recebe acesso só por ser Supervisor ------
@@ -648,20 +652,20 @@ try {
     };
 
     $sessaoOriginal = $comoUsuario($adminId, 'admin');
-    $check(Authorization::primeiraRotaAcessivel() === '/admin', '(6-a) Admin (bypass) continua indo para /admin');
+    $check(Authorization::primeiraRotaAcessivel() === '/admin', '(6-a) Admin entra pela Central (/admin) após o login');
 
     $comoUsuario($viewerComId, 'viewer');
-    $check(Authorization::primeiraRotaAcessivel() === '/admin', '(6-b) Usuário com dashboard.visualizar continua indo para /admin');
+    $check(Authorization::primeiraRotaAcessivel() === '/admin', '(6-b) Usuário com dashboard.visualizar também entra pela Central (/admin); o Dashboard virou /admin/dashboard');
 
     $comoUsuario($gestorId, 'viewer');
     $rotaGestor = Authorization::primeiraRotaAcessivel();
-    $check($rotaGestor === '/admin/solicitacoes-vaga', '(7) "Gestor restrito" (só solicitacao_vaga.visualizar, sem dashboard.visualizar) é direcionado para /admin/solicitacoes-vaga — nunca /admin, nunca 403');
-    $check($rotaGestor !== '/admin', '(7-correlato) Confirma explicitamente que o Gestor restrito não cai em /admin (onde receberia 403)');
+    $check($rotaGestor === '/admin', '(7) "Gestor restrito" (só solicitacao_vaga.visualizar, sem dashboard.visualizar) entra pela Central (/admin), aberta a qualquer autenticado — nunca 403; o card de Solicitações o leva ao módulo');
+    $check($rotaGestor !== '/admin/dashboard', '(7-correlato) Confirma explicitamente que o Gestor restrito não é enviado ao Dashboard (/admin/dashboard, onde receberia 403)');
 
     $comoUsuario($ninguemId, 'viewer');
     $rotaSemPermissaoAlguma = Authorization::primeiraRotaAcessivel();
-    $check($rotaSemPermissaoAlguma !== '/admin', '(6-c) Usuário sem NENHUMA permissão individual não é enviado para /admin');
-    $check(in_array($rotaSemPermissaoAlguma, ['/admin/candidaturas', '/admin/manual'], true), '(6-c) Usuário sem nenhuma permissão é tratado de forma explícita e segura — recebe uma rota real aberta por role, sem loop de redirect');
+    $check($rotaSemPermissaoAlguma !== '/admin/dashboard', '(6-c) Usuário sem NENHUMA permissão individual não é enviado ao Dashboard (/admin/dashboard)');
+    $check($rotaSemPermissaoAlguma === '/admin', '(6-c) Usuário sem nenhuma permissão entra pela Central (aberta por role, sem loop de redirect — /admin não redireciona)');
 
     $restaurarSessao($sessaoOriginal);
 

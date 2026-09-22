@@ -3,7 +3,9 @@ class AdminIndicacoesController extends Controller
 {
     public function index(): void
     {
-        Auth::requireRole(['admin', 'rh']);
+        // Entrada da tela: role admin/rh (como sempre) OU a permissão individual indicacoes.visualizar. Exportar e registrar/editar
+        // pagamento seguem admin/rh (regras próprias, inalteradas).
+        Authorization::requireRoleOuPermissao(['admin', 'rh'], 'indicacoes.visualizar');
         $filters = [
             'q' => Security::sanitizeString($_GET['q'] ?? ''),
             'pagamento' => Security::sanitizeString($_GET['pagamento'] ?? ''),
@@ -28,8 +30,10 @@ class AdminIndicacoesController extends Controller
             'filters' => $filters,
             'csrf' => Security::csrfToken(),
             'flashError' => Security::sanitizeString($_GET['erro'] ?? ''),
-            'flashSuccess' => Security::sanitizeString($_GET['ok'] ?? '')
-        ], 'layouts/admin');
+            'flashSuccess' => Security::sanitizeString($_GET['ok'] ?? ''),
+            // Só exibição: exportar e registrar/editar pagamento seguem admin/rh (gates próprios); quem entrou só pela permissão vê a listagem.
+            'podeOperar' => !empty($_SESSION['user_is_supervisor']) || in_array(Auth::role(), ['admin', 'rh'], true),
+        ], 'layouts/app-shell');
     }
 
     public function markPago(string $id): void

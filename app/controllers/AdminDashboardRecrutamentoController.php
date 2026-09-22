@@ -60,7 +60,8 @@ class AdminDashboardRecrutamentoController extends Controller
             ],
             'periodoInicio' => $inicio,
             'periodoFim' => $fim,
-        ], 'layouts/admin');
+            'tituloPagina' => 'Dashboard de Recrutamento e Seleção',
+        ], 'layouts/app-shell');
     }
 
     /** @return array{0:DateTimeImmutable,1:DateTimeImmutable} */

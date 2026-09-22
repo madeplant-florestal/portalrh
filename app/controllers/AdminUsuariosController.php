@@ -19,7 +19,7 @@ class AdminUsuariosController extends Controller
             'perPage' => $result['per_page'],
             'filters' => $filters,
             'csrf' => Security::csrfToken()
-        ], 'layouts/admin');
+        ], 'layouts/app-shell');
     }
 
     public function create(): void
@@ -33,7 +33,7 @@ class AdminUsuariosController extends Controller
             'csrf' => $csrf,
             'success' => $success,
             'gestorOptions' => (new UsuarioGestorService())->candidatos(null),
-        ], 'layouts/admin');
+        ], 'layouts/app-shell');
     }
 
     /** Re-renderiza o cadastro com erro (mantém a lista de Gestor Imediato e a seleção feita). */
@@ -44,7 +44,7 @@ class AdminUsuariosController extends Controller
             'csrf' => Security::csrfToken(),
             'gestorOptions' => (new UsuarioGestorService())->candidatos(null),
             'gestorSelecionado' => $gestorSelecionado,
-        ], 'layouts/admin');
+        ], 'layouts/app-shell');
     }
 
     public function store(): void
@@ -188,7 +188,7 @@ class AdminUsuariosController extends Controller
             'permissoesAtribuidas' => Authorization::idsAtribuidos((int)$user->id),
             'flashError' => Security::sanitizeString($_GET['erro'] ?? ''),
             'flashSuccess' => Security::sanitizeString($_GET['ok'] ?? ''),
-        ], 'layouts/admin');
+        ], 'layouts/app-shell');
     }
 
     /** Admin (ou supervisor protegido) — distingue de RH, que só administra Contexto Organizacional. */

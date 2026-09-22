@@ -1,4 +1,5 @@
 <?php
+require_once APP_PATH . '/views/partials/modulo-topo.php';
 $dataAdmissao = '';
 if (!empty($colaborador['data_admissao'])) {
     $dataAdmissao = DateHelper::formatBrazilianDate((string)$colaborador['data_admissao']);
@@ -34,30 +35,27 @@ if (!empty($colaborador['data_demissao']) && preg_match('/^\d{2}\/\d{2}\/\d{4}$/
 // "Código" (sem equivalente no METADADOS) continua editável. Sem contrato oficial, o formulário
 // completo continua exatamente como antes (colaborador 100% local/manual, ex.: PJ/terceiro).
 $temExtensaoOficial = !empty($colaborador['tem_extensao_oficial']);
-$readonlyClass = 'mt-1 w-full rounded border bg-gray-50 px-3 py-2 text-gray-700';
+$readonlyClass = 'mt-1 w-full rounded border bg-surface-secondary px-3 py-2 text-text-primary';
 ?>
-<div class="responsive-panel max-w-3xl">
-  <div class="responsive-header">
-    <div>
-      <h2 class="text-xl font-semibold text-ctpblue">Dados RH do colaborador</h2>
-      <p class="mt-1 text-sm text-gray-500">Atualize matrícula, salário e datas de referência usadas nos formulários internos de RH.</p>
-    </div>
-    <a href="<?= $base ?>/admin/colaboradores" class="inline-flex items-center justify-center rounded-lg border border-gray-300 px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50">Voltar</a>
-  </div>
-
+<div class="space-y-4">
+  <?= ui_modulo_topo($base, 'pessoas', 'colaboradores', [
+      'titulo' => 'Dados RH do colaborador',
+      'descricao' => 'Atualize matrícula, salário e datas de referência usadas nos formulários internos de RH.',
+  ], [['label' => (string)($colaborador['nome'] ?? 'Colaborador'), 'href' => null], ['label' => 'Dados RH', 'href' => null]]) ?>
+  <div class="responsive-panel max-w-4xl">
   <?php if (!empty($error)): ?>
-    <div class="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"><?= Security::e($error) ?></div>
+    <div class="mt-4 rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger"><?= Security::e($error) ?></div>
   <?php endif; ?>
   <?php if (!empty($flashError)): ?>
-    <div class="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"><?= Security::e($flashError) ?></div>
+    <div class="mt-4 rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger"><?= Security::e($flashError) ?></div>
   <?php endif; ?>
   <?php if (!empty($flashSuccess)): ?>
-    <div class="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700"><?= Security::e($flashSuccess) ?></div>
+    <div class="mt-4 rounded-lg border border-success/30 bg-success/10 px-4 py-3 text-sm text-success"><?= Security::e($flashSuccess) ?></div>
   <?php endif; ?>
 
-  <div class="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
-    <div class="text-lg font-semibold text-slate-900"><?= Security::e($colaborador['nome']) ?></div>
-    <div class="mt-1 text-sm text-slate-600"><?= Security::e($colaborador['cargo_nome'] ?? '') ?><?= !empty($colaborador['setor_nome']) ? ' - ' . Security::e($colaborador['setor_nome']) : '' ?></div>
+  <div class="mt-6 rounded-ds-md border border-border bg-surface-secondary p-4">
+    <div class="text-lg font-semibold text-text-primary"><?= Security::e($colaborador['nome']) ?></div>
+    <div class="mt-1 text-sm text-text-secondary"><?= Security::e($colaborador['cargo_nome'] ?? '') ?><?= !empty($colaborador['setor_nome']) ? ' - ' . Security::e($colaborador['setor_nome']) : '' ?></div>
   </div>
 
   <form action="<?= $base ?>/admin/colaboradores/rh/editar/<?= (int)$colaborador['id'] ?>" method="post" class="mt-6 space-y-4">
@@ -65,11 +63,11 @@ $readonlyClass = 'mt-1 w-full rounded border bg-gray-50 px-3 py-2 text-gray-700'
 
     <div class="grid gap-4 md:grid-cols-2">
       <div>
-        <label class="block text-sm font-medium text-gray-700">Código *</label>
+        <label class="block text-sm font-medium text-text-primary">Código *</label>
         <input type="text" name="codigo" value="<?= Security::e((string)($colaborador['codigo'] ?? '')) ?>" class="mt-1 w-full rounded border px-3 py-2" required>
       </div>
       <div>
-        <label class="block text-sm font-medium text-gray-700">Matrícula<?= $temExtensaoOficial ? ' (contrato oficial)' : ' *' ?></label>
+        <label class="block text-sm font-medium text-text-primary">Matrícula<?= $temExtensaoOficial ? ' (contrato oficial)' : ' *' ?></label>
         <?php if ($temExtensaoOficial): ?>
           <input type="text" value="<?= Security::e((string)($colaborador['matricula'] ?? '')) ?>" class="<?= $readonlyClass ?>" readonly>
         <?php else: ?>
@@ -77,7 +75,7 @@ $readonlyClass = 'mt-1 w-full rounded border bg-gray-50 px-3 py-2 text-gray-700'
         <?php endif; ?>
       </div>
       <div>
-        <label class="block text-sm font-medium text-gray-700">CPF<?= $temExtensaoOficial ? ' (oficial)' : '' ?></label>
+        <label class="block text-sm font-medium text-text-primary">CPF<?= $temExtensaoOficial ? ' (oficial)' : '' ?></label>
         <?php if ($temExtensaoOficial): ?>
           <input type="text" value="<?= Security::e((string)($colaborador['cpf'] ?? '')) ?>" class="<?= $readonlyClass ?>" readonly>
         <?php else: ?>
@@ -85,7 +83,7 @@ $readonlyClass = 'mt-1 w-full rounded border bg-gray-50 px-3 py-2 text-gray-700'
         <?php endif; ?>
       </div>
       <div>
-        <label class="block text-sm font-medium text-gray-700">Salário atual<?= $temExtensaoOficial ? ' (oficial)' : ' *' ?></label>
+        <label class="block text-sm font-medium text-text-primary">Salário atual<?= $temExtensaoOficial ? ' (oficial)' : ' *' ?></label>
         <?php if ($temExtensaoOficial): ?>
           <input type="text" value="<?= !empty($colaborador['salario_atual']) ? 'R$ ' . number_format((float)$colaborador['salario_atual'], 2, ',', '.') : '' ?>" class="<?= $readonlyClass ?>" readonly>
         <?php else: ?>
@@ -93,7 +91,7 @@ $readonlyClass = 'mt-1 w-full rounded border bg-gray-50 px-3 py-2 text-gray-700'
         <?php endif; ?>
       </div>
       <div>
-        <label class="block text-sm font-medium text-gray-700">Data de admissão<?= $temExtensaoOficial ? ' (oficial)' : ' *' ?></label>
+        <label class="block text-sm font-medium text-text-primary">Data de admissão<?= $temExtensaoOficial ? ' (oficial)' : ' *' ?></label>
         <?php if ($temExtensaoOficial): ?>
           <input type="text" value="<?= Security::e($dataAdmissao) ?>" class="<?= $readonlyClass ?>" readonly>
         <?php else: ?>
@@ -101,7 +99,7 @@ $readonlyClass = 'mt-1 w-full rounded border bg-gray-50 px-3 py-2 text-gray-700'
         <?php endif; ?>
       </div>
       <div>
-        <label class="block text-sm font-medium text-gray-700">Data de início no cargo<?= $temExtensaoOficial ? ' (oficial)' : ' *' ?></label>
+        <label class="block text-sm font-medium text-text-primary">Data de início no cargo<?= $temExtensaoOficial ? ' (oficial)' : ' *' ?></label>
         <?php if ($temExtensaoOficial): ?>
           <input type="text" value="<?= Security::e($dataInicioCargo) ?>" class="<?= $readonlyClass ?>" readonly>
         <?php else: ?>
@@ -109,7 +107,7 @@ $readonlyClass = 'mt-1 w-full rounded border bg-gray-50 px-3 py-2 text-gray-700'
         <?php endif; ?>
       </div>
       <div>
-        <label class="block text-sm font-medium text-gray-700">Data de nascimento<?= $temExtensaoOficial ? ' (oficial)' : '' ?></label>
+        <label class="block text-sm font-medium text-text-primary">Data de nascimento<?= $temExtensaoOficial ? ' (oficial)' : '' ?></label>
         <?php if ($temExtensaoOficial): ?>
           <input type="text" value="<?= Security::e($dataNascimento) ?>" class="<?= $readonlyClass ?>" readonly>
         <?php else: ?>
@@ -117,7 +115,7 @@ $readonlyClass = 'mt-1 w-full rounded border bg-gray-50 px-3 py-2 text-gray-700'
         <?php endif; ?>
       </div>
       <div>
-        <label class="block text-sm font-medium text-gray-700">Data de demissão<?= $temExtensaoOficial ? ' (oficial)' : '' ?></label>
+        <label class="block text-sm font-medium text-text-primary">Data de demissão<?= $temExtensaoOficial ? ' (oficial)' : '' ?></label>
         <?php if ($temExtensaoOficial): ?>
           <input type="text" value="<?= Security::e($dataDemissao) ?>" class="<?= $readonlyClass ?>" readonly>
         <?php else: ?>
@@ -125,7 +123,7 @@ $readonlyClass = 'mt-1 w-full rounded border bg-gray-50 px-3 py-2 text-gray-700'
         <?php endif; ?>
       </div>
       <div class="md:col-span-2">
-        <label class="block text-sm font-medium text-gray-700">Motivo da rescisão<?= $temExtensaoOficial ? ' (oficial)' : '' ?></label>
+        <label class="block text-sm font-medium text-text-primary">Motivo da rescisão<?= $temExtensaoOficial ? ' (oficial)' : '' ?></label>
         <?php if ($temExtensaoOficial): ?>
           <textarea class="<?= $readonlyClass ?>" rows="3" readonly><?= Security::e((string)($colaborador['motivo_rescisao'] ?? '')) ?></textarea>
         <?php else: ?>
@@ -134,23 +132,23 @@ $readonlyClass = 'mt-1 w-full rounded border bg-gray-50 px-3 py-2 text-gray-700'
       </div>
     </div>
     <?php if ($temExtensaoOficial): ?>
-      <p class="text-xs text-gray-500">Matrícula, CPF, salário, datas e motivo da rescisão vêm do contrato oficial sincronizado do METADADOS e não podem ser alterados aqui. Só "Código" é uma informação exclusiva do Portal.</p>
+      <p class="text-xs text-text-secondary">Matrícula, CPF, salário, datas e motivo da rescisão vêm do contrato oficial sincronizado do METADADOS e não podem ser alterados aqui. Só "Código" é uma informação exclusiva do Portal.</p>
     <?php endif; ?>
 
     <div class="grid gap-4 md:grid-cols-2">
       <div>
-        <label class="block text-sm font-medium text-gray-700">Tempo de empresa</label>
-        <input type="text" value="<?= Security::e((string)($colaborador['tempo_empresa_label'] ?? '')) ?>" class="mt-1 w-full rounded border bg-gray-50 px-3 py-2" readonly>
+        <label class="block text-sm font-medium text-text-primary">Tempo de empresa</label>
+        <input type="text" value="<?= Security::e((string)($colaborador['tempo_empresa_label'] ?? '')) ?>" class="mt-1 w-full rounded border bg-surface-secondary px-3 py-2" readonly>
       </div>
       <div>
-        <label class="block text-sm font-medium text-gray-700">Tempo no cargo</label>
-        <input type="text" value="<?= Security::e((string)($colaborador['tempo_cargo_label'] ?? '')) ?>" class="mt-1 w-full rounded border bg-gray-50 px-3 py-2" readonly>
+        <label class="block text-sm font-medium text-text-primary">Tempo no cargo</label>
+        <input type="text" value="<?= Security::e((string)($colaborador['tempo_cargo_label'] ?? '')) ?>" class="mt-1 w-full rounded border bg-surface-secondary px-3 py-2" readonly>
       </div>
     </div>
 
     <div class="responsive-form-actions pt-2">
-      <button type="submit" class="rounded-lg bg-ctgreen px-4 py-3 text-sm font-medium text-white hover:bg-ctdark">Salvar dados RH</button>
-      <a href="<?= $base ?>/admin/colaboradores" class="text-sm font-medium text-ctpblue hover:text-ctgreen">Cancelar</a>
+      <button type="submit" class="rounded-lg bg-primary-700 px-4 py-3 text-sm font-medium text-white hover:bg-primary-800">Salvar dados RH</button>
+      <a href="<?= $base ?>/admin/colaboradores" class="text-sm font-medium text-text-primary hover:text-primary-700">Cancelar</a>
     </div>
   </form>
 
@@ -162,15 +160,15 @@ $readonlyClass = 'mt-1 w-full rounded border bg-gray-50 px-3 py-2 text-gray-700'
         $integracaoData = DateHelper::formatBrazilianDate((string)$colaborador['integracao_data']);
     }
   ?>
-  <div class="mt-8 rounded-xl border border-gray-200 bg-gray-50 p-5">
-    <h3 class="text-lg font-semibold text-ctpblue">Integração</h3>
-    <p class="mt-1 text-sm text-gray-500">Controle operacional do onboarding — informação do Portal, não faz parte do METADADOS.</p>
+  <div class="mt-8 rounded-ds-md border border-border bg-surface-secondary p-5">
+    <h3 class="text-lg font-semibold text-text-primary">Integração</h3>
+    <p class="mt-1 text-sm text-text-secondary">Controle operacional do onboarding — informação do Portal, não faz parte do METADADOS.</p>
 
     <?php if (!empty($podeEditarIntegracao)): ?>
     <form action="<?= $base ?>/admin/colaboradores/<?= (int)$colaborador['id'] ?>/integracao" method="post" class="mt-4 space-y-4" data-integracao-form="1">
       <input type="hidden" name="csrf" value="<?= Security::e($csrf) ?>">
       <div>
-        <label class="block text-sm font-medium text-gray-700">Status</label>
+        <label class="block text-sm font-medium text-text-primary">Status</label>
         <select name="integracao_status" class="mt-1 w-full rounded border px-3 py-2 text-sm" data-integracao-status="1">
           <option value="pendente" <?= $integracaoStatus === 'pendente' ? 'selected' : '' ?>>Pendente</option>
           <option value="realizada" <?= $integracaoStatus === 'realizada' ? 'selected' : '' ?>>Realizada</option>
@@ -178,11 +176,11 @@ $readonlyClass = 'mt-1 w-full rounded border bg-gray-50 px-3 py-2 text-gray-700'
       </div>
       <div data-integracao-campos="1" class="grid gap-4 md:grid-cols-2">
         <div>
-          <label class="block text-sm font-medium text-gray-700">Data da integração</label>
+          <label class="block text-sm font-medium text-text-primary">Data da integração</label>
           <input type="text" name="integracao_data" value="<?= Security::e($integracaoData) ?>" class="mt-1 w-full rounded border px-3 py-2 text-sm" placeholder="DD/MM/AAAA" data-mask-date="1">
         </div>
         <div>
-          <label class="block text-sm font-medium text-gray-700">Responsável</label>
+          <label class="block text-sm font-medium text-text-primary">Responsável</label>
           <select name="integracao_responsavel_usuario_id" class="mt-1 w-full rounded border px-3 py-2 text-sm">
             <option value="">— Selecione —</option>
             <?php foreach (($usuariosOptions ?? []) as $u): ?>
@@ -191,48 +189,39 @@ $readonlyClass = 'mt-1 w-full rounded border bg-gray-50 px-3 py-2 text-gray-700'
           </select>
         </div>
       </div>
-      <p class="text-xs text-gray-500">Ao marcar "Realizada", data e responsável são obrigatórios. A data não precisa ser a de hoje — registre a data em que a integração realmente ocorreu.</p>
-      <button type="submit" class="rounded-lg bg-ctgreen px-4 py-3 text-sm font-medium text-white hover:bg-ctdark">Salvar integração</button>
+      <p class="text-xs text-text-secondary">Ao marcar "Realizada", data e responsável são obrigatórios. A data não precisa ser a de hoje — registre a data em que a integração realmente ocorreu.</p>
+      <button type="submit" class="<?= ui_btn('primario') ?>">Salvar integração</button>
     </form>
-    <script>
-      (() => {
-        const select = document.querySelector('[data-integracao-status="1"]');
-        const campos = document.querySelector('[data-integracao-campos="1"]');
-        if (!select || !campos) return;
-        const sync = () => { campos.classList.toggle('hidden', select.value !== 'realizada'); };
-        select.addEventListener('change', sync);
-        sync();
-      })();
-    </script>
+    <?php ui_script_pagina('colaboradores.js'); // JS movido para assets/colaboradores.js (CSP: sem <script> inline) ?>
     <?php else: ?>
       <div class="mt-4 grid gap-3 sm:grid-cols-3 text-sm">
-        <div><span class="text-gray-500">Status:</span> <span class="font-medium text-gray-900"><?= $integracaoStatus === 'realizada' ? 'Realizada' : 'Pendente' ?></span></div>
-        <div><span class="text-gray-500">Data:</span> <span class="font-medium text-gray-900"><?= Security::e($integracaoData ?: '-') ?></span></div>
-        <div><span class="text-gray-500">Responsável:</span> <span class="font-medium text-gray-900"><?= Security::e((string)($colaborador['integracao_responsavel_nome'] ?? '-')) ?></span></div>
+        <div><span class="text-text-secondary">Status:</span> <span class="font-medium text-text-primary"><?= $integracaoStatus === 'realizada' ? 'Realizada' : 'Pendente' ?></span></div>
+        <div><span class="text-text-secondary">Data:</span> <span class="font-medium text-text-primary"><?= Security::e($integracaoData ?: '-') ?></span></div>
+        <div><span class="text-text-secondary">Responsável:</span> <span class="font-medium text-text-primary"><?= Security::e((string)($colaborador['integracao_responsavel_nome'] ?? '-')) ?></span></div>
       </div>
     <?php endif; ?>
 
     <?php if ($integracaoStatus === 'realizada'): ?>
-      <div class="mt-6 border-t border-gray-200 pt-5">
-        <h4 class="text-sm font-semibold text-ctpblue">Pesquisa de Integração</h4>
-        <p class="mt-1 text-xs text-gray-500">Pesquisa de onboarding respondida pelo colaborador — fonte futura do NPS/Satisfação da Integração. Independente da Pesquisa de Experiência do processo seletivo.</p>
+      <div class="mt-6 border-t border-border pt-5">
+        <h4 class="text-sm font-semibold text-text-primary">Pesquisa de Integração</h4>
+        <p class="mt-1 text-xs text-text-secondary">Pesquisa de onboarding respondida pelo colaborador — fonte futura do NPS/Satisfação da Integração. Independente da Pesquisa de Experiência do processo seletivo.</p>
 
         <?php if (empty($pesquisaIntegracao)): ?>
-          <p class="mt-2 text-sm text-gray-500">Nenhuma pesquisa gerada ainda para esta integração.</p>
+          <p class="mt-2 text-sm text-text-secondary">Nenhuma pesquisa gerada ainda para esta integração.</p>
           <?php if (!empty($podeEditarIntegracao)): ?>
             <form action="<?= $base ?>/admin/colaboradores/<?= (int)$colaborador['id'] ?>/pesquisa-integracao/gerar" method="post" class="mt-3">
               <input type="hidden" name="csrf" value="<?= Security::e($csrf) ?>">
-              <button type="submit" class="rounded-lg bg-ctgreen px-4 py-2 text-sm font-medium text-white hover:bg-ctdark">Gerar pesquisa de integração</button>
+              <button type="submit" class="rounded-lg bg-primary-700 px-4 py-2 text-sm font-medium text-white hover:bg-primary-800">Gerar pesquisa de integração</button>
             </form>
           <?php endif; ?>
         <?php else: ?>
           <?php if (!empty($linkPesquisaIntegracaoGerado)): ?>
-            <div class="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+            <div class="mt-3 rounded-lg border border-success/30 bg-success/10 p-3 text-sm text-success">
               <p class="font-medium">Pesquisa gerada. Copie o link agora — por segurança, ele não pode ser recuperado depois desta tela:</p>
-              <input type="text" readonly value="<?= Security::e($linkPesquisaIntegracaoGerado) ?>" class="mt-2 w-full rounded border border-emerald-300 bg-white px-3 py-2 text-xs" onclick="this.select()">
+              <input type="text" readonly value="<?= Security::e($linkPesquisaIntegracaoGerado) ?>" class="mt-2 w-full rounded border border-success/30 bg-white px-3 py-2 text-xs" data-select-on-click="1">
             </div>
           <?php endif; ?>
-          <p class="mt-3 text-sm text-gray-700">
+          <p class="mt-3 text-sm text-text-primary">
             Status:
             <span class="font-medium">
               <?= !empty($pesquisaIntegracao['respondida_em'])
@@ -245,4 +234,5 @@ $readonlyClass = 'mt-1 w-full rounded border bg-gray-50 px-3 py-2 text-gray-700'
     <?php endif; ?>
   </div>
   <?php endif; ?>
+  </div>
 </div>

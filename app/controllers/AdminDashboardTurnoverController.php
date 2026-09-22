@@ -69,6 +69,6 @@ class AdminDashboardTurnoverController extends Controller
             ],
             'hoje' => $hoje,
             'ultimaSincronizacao' => $ultimaSincronizacao,
-        ], 'layouts/admin');
+        ], 'layouts/app-shell');
     }
 }

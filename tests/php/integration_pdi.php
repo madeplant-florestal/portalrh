@@ -515,7 +515,13 @@ try {
     $publicos = array_map(static fn(ReflectionMethod $m): string => $m->getName(), array_filter((new ReflectionClass(AdminPdisController::class))->getMethods(ReflectionMethod::IS_PUBLIC), static fn(ReflectionMethod $m): bool => $m->class === AdminPdisController::class));
     $check(!preg_grep('/meu|colaborador(?!.*espaco)|portal|autoatend/i', array_diff($publicos, ['espacoColaborador'])) && !preg_grep('/colaborador/i', array_map(static fn(string $r): string => $r, array_filter(file(BASE_PATH . '/index.php'), static fn(string $l): bool => str_contains($l, '/pdi') && !str_contains($l, '/admin/pdis')))), '(colaborador) Não existe rota, método ou portal do colaborador — o espaço dele é registrado por RH/Gestor');
     $fonteIndex = (string)file_get_contents(BASE_PATH . '/index.php');
-    $check((bool)preg_match('/temPermissao\(\'pdi\.visualizar\'\)\s*\)\s*:\s*\?>\s*<a href="<\?= \$base \?>\/admin\/pdis"/s', (string)file_get_contents(APP_PATH . '/views/layouts/sidebar.php')) && str_contains($fonteIndex, "\$router->get('/admin/pdis/novo', [AdminPdisController::class, 'novo'])") && strpos($fonteIndex, "'/admin/pdis/novo'") < strpos($fonteIndex, "'/admin/pdis/{id}'"), '(rota/menu) Menu só com pdi.visualizar; /novo registrada antes de /{id}');
+    $regraNavPdi = null;
+    foreach (PortalNavegacaoService::definicao() as $m) {
+        foreach ($m['itens'] as $it) {
+            if ($it['href'] === '/admin/pdis') { $regraNavPdi = $it['regra']; }
+        }
+    }
+    $check($regraNavPdi === 'perm:pdi.visualizar' && str_contains($fonteIndex, "\$router->get('/admin/pdis/novo', [AdminPdisController::class, 'novo'])") && strpos($fonteIndex, "'/admin/pdis/novo'") < strpos($fonteIndex, "'/admin/pdis/{id}'"), '(rota/menu) A Central só oferece PDI sob a regra perm:pdi.visualizar (sidebar removida); /novo registrada antes de /{id}');
 
     $comoUsuario($gestorAId, 'viewer');
     $_GET = [];

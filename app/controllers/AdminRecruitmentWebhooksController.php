@@ -11,7 +11,9 @@ class AdminRecruitmentWebhooksController extends Controller
 
     public function index(): void
     {
-        Auth::requireRole(['admin', 'rh']);
+        // Entrada (somente leitura): role admin/rh (como sempre) OU a permissão individual recruitment_webhooks.visualizar. Salvar,
+        // regenerar segredo, testar, reprocessar e reenviar seguem com seus gates próprios, inalterados.
+        Authorization::requireRoleOuPermissao(['admin', 'rh'], 'recruitment_webhooks.visualizar');
         $page = max(1, (int)($_GET['page'] ?? 1));
         $data = $this->service->dashboardData($page);
 
@@ -37,7 +39,10 @@ class AdminRecruitmentWebhooksController extends Controller
             'flashSuccess' => Security::sanitizeString($_GET['ok'] ?? ''),
             'revealSecret' => $revealSecret,
             'testResult' => $testResult,
-        ], 'layouts/admin');
+            // Só exibição: testar/reprocessar/reenviar = admin/rh; salvar configuração e regenerar segredo = admin. Quem entrou só pela
+            // permissão recruitment_webhooks.visualizar vê a tela em modo leitura (sem formulários de ação).
+            'podeOperar' => !empty($_SESSION['user_is_supervisor']) || in_array(Auth::role(), ['admin', 'rh'], true),
+        ], 'layouts/app-shell');
     }
 
     public function saveSetting(): void

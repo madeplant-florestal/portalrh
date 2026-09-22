@@ -143,6 +143,6 @@ class AdminCargosController extends AdminCatalogosController
             'csrf' => Security::csrfToken(),
             'linkedSetores' => $data['linkedSetores'] ?? [],
             'availableSetores' => $data['availableSetores'] ?? [],
-        ], 'layouts/admin');
+        ], 'layouts/app-shell');
     }
 }

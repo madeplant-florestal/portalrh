@@ -1,16 +1,36 @@
 <?php
+/**
+ * Tela de login — ajuste puramente visual (não migrada para o AppShell V2; login/recuperação seguem em `layouts/main`
+ * por decisão da revisão global). Nenhum campo, name, action, method ou CSRF foi tocado — só apresentação.
+ *
+ * Imagem de fundo do painel esquerdo: `assets/imgfundo.HEIC` (fornecido) não é utilizável diretamente — HEIC não tem
+ * suporte confiável nos navegadores-alvo (Chrome/Firefox/Edge no Windows, a base real de usuários do Portal). Sem
+ * Imagick/GD com HEIF disponíveis no ambiente PHP (não instalados; não é o caso de adicionar extensão nova por causa
+ * desta tela), a conversão foi feita localmente, uma única vez, com o FFmpeg já presente na máquina de desenvolvimento
+ * (ferramenta do sistema operacional, não uma dependência nova do projeto/build) — gerando `imgfundo-login.webp`
+ * (formato preferencial, leitura universal nos navegadores-alvo) com `imgfundo-login.jpg` como fallback via <picture>
+ * para qualquer navegador sem suporte a WebP. O .HEIC original permanece em assets/, intocado.
+ */
 ?>
 <div class="min-h-screen flex">
   <!-- Left Container - Branding Area -->
-  <div class="hidden lg:flex lg:w-1/2 xl:w-2/3 relative" style="background-color: #1d2d44;">
+  <div class="hidden lg:flex lg:w-1/2 xl:w-2/3 relative overflow-hidden isolate">
+    <!-- Imagem de fundo: cover, sem distorção -->
+    <picture class="absolute inset-0 -z-10">
+      <source srcset="<?= $base ?>/assets/imgfundo-login.webp" type="image/webp">
+      <img src="<?= $base ?>/assets/imgfundo-login.jpg" alt="" class="h-full w-full object-cover object-center">
+    </picture>
+    <!-- Overlay azul institucional (identidade + legibilidade, sem apagar a fotografia) -->
+    <div class="absolute inset-0 -z-10" style="background: linear-gradient(160deg, rgba(13,19,33,.88) 0%, rgba(29,45,68,.74) 55%, rgba(13,19,33,.86) 100%);"></div>
+
     <!-- Main Logo - Centered -->
-    <div class="flex items-center justify-center w-full">
-      <img src="<?= $base ?>/assets/logo.png" alt="MADEPLANT - Recrutamento e Seleção" class="w-128 h-auto">
+    <div class="flex items-center justify-center w-full p-12">
+      <img src="<?= $base ?>/assets/logooficial.png" alt="Madeplant Florestal" class="w-full max-w-lg h-auto" style="filter: drop-shadow(0 6px 18px rgba(0,0,0,.35));">
     </div>
-    
-    <!-- Isotipo - Bottom Left -->
+
+    <!-- Isotipo - Bottom Left (marca d'água) -->
     <div class="absolute bottom-0 left-0">
-      <img src="<?= $base ?>/assets/Isotipolinear.png" alt="MADEPLANT - Recrutamento e Seleção" class="w-60 h-auto opacity-50">
+      <img src="<?= $base ?>/assets/Isotipolinear.png" alt="" aria-hidden="true" class="w-60 h-auto" style="opacity: .2;">
     </div>
   </div>
 
@@ -19,11 +39,8 @@
     <div class="w-full max-w-md">
       <div class="bg-white shadow-lg rounded-lg p-8">
         <div class="text-center mb-8">
-          <!-- Mobile Logo -->
-          <div class="lg:hidden mb-6">
-            <img src="<?= $base ?>/assets/logo.png" alt="MADEPLANT - Recrutamento e Seleção" class="w-60 h-auto mx-auto">
-          </div>
-          <h2 class="text-2xl font-semibold text-ctpblue">RECRUTAMENTO E SELEÇÃO</h2>
+          <img src="<?= $base ?>/assets/logooficial.png" alt="Madeplant Florestal" class="h-10 w-auto mx-auto mb-5">
+          <h2 class="text-2xl font-semibold text-ctpblue">PORTAL RH</h2>
           <span class="text-sm text-gray-500">Acesso ao Painel</span>
         </div>
         

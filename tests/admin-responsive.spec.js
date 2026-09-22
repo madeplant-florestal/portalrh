@@ -1,5 +1,10 @@
 const { test, expect } = require('@playwright/test');
 
+// Nova UI (AppShell V2): reescrito na publicação consolidada. A tela pós-login em /admin passou a ser a Central do
+// Portal RH (cards, sem sidebar/menu de módulos); o antigo Dashboard colapsável virou /admin/dashboard (People
+// Analytics). Este spec prova responsividade e ausência de sidebar/menu antigos; a navegação real (Central → módulo)
+// é testada em admin-sidebar-collapse.spec.js's lugar, que foi removido por testar só a sidebar (funcionalidade que não
+// existe mais).
 const entryPath = process.env.ENTRY_PATH || '/';
 
 const viewports = [
@@ -28,46 +33,36 @@ async function hasPageOverflow(page) {
   return page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
 }
 
-test.describe('admin responsivo', () => {
+test.describe('admin responsivo (AppShell V2)', () => {
   for (const viewport of viewports) {
-    test(`menu e layout em ${viewport.label}px`, async ({ page }) => {
+    test(`Central e navegação em ${viewport.label}px`, async ({ page }) => {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
       const appBase = await getAppBase(page);
 
       await login(page, appBase);
       await page.goto(`${appBase}/admin`, { waitUntil: 'domcontentloaded' });
       await expect(page).toHaveURL(new RegExp(`${appBase}/admin$`));
-      await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Central do Portal RH' })).toBeVisible();
 
-      if (viewport.width <= 768) {
-        const toggle = page.locator('[data-admin-menu-toggle="1"]');
-        const sidebar = page.locator('[data-admin-sidebar="1"]');
-        const overlay = page.locator('[data-admin-overlay="1"]');
-
-        await expect(toggle).toBeVisible();
-        await toggle.click();
-        await expect(sidebar).toHaveClass(/active/);
-        await expect(overlay).toHaveClass(/open/);
-
-        await page.getByRole('link', { name: 'Vagas', exact: true }).first().click();
-        await expect(page).toHaveURL(new RegExp(`${appBase}/admin/vagas$`));
-        await expect(sidebar).not.toHaveClass(/active/);
-
-        await toggle.click();
-        await expect(sidebar).toHaveClass(/active/);
-        await page.evaluate(() => {
-          const overlayElement = document.querySelector('[data-admin-overlay="1"]');
-          overlayElement?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-        });
-        await expect(sidebar).not.toHaveClass(/active/);
-        await expect(page.locator('table')).toBeHidden();
-        await expect(page.getByText('Nova vaga')).toBeVisible();
-      } else {
-        await expect(page.locator('[data-admin-sidebar="1"]')).toBeVisible();
-      }
-
+      // Sem sidebar/menu antigos em nenhum viewport: a Central nunca teve esses elementos.
+      await expect(page.locator('[data-admin-sidebar="1"]')).toHaveCount(0);
+      await expect(page.locator('[data-admin-menu-toggle="1"]')).toHaveCount(0);
+      await expect(page.locator('[data-admin-overlay="1"]')).toHaveCount(0);
       await expect(await hasPageOverflow(page)).toBeFalsy();
 
+      // Navegação real pela Central: o card "Recrutamento e Seleção" leva a um destino de verdade.
+      const cardRecrutamento = page.getByRole('link', { name: /Recrutamento e Seleção/ });
+      await expect(cardRecrutamento).toBeVisible();
+      await cardRecrutamento.click();
+      await page.waitForLoadState('domcontentloaded');
+      await expect(await hasPageOverflow(page)).toBeFalsy();
+
+      // People Analytics (antigo Dashboard, agora /admin/dashboard): mesma prova de responsividade.
+      await page.goto(`${appBase}/admin/dashboard`, { waitUntil: 'domcontentloaded' });
+      await expect(page.getByRole('heading', { name: 'People Analytics' })).toBeVisible();
+      await expect(await hasPageOverflow(page)).toBeFalsy();
+
+      // Pipeline Kanban: colunas visíveis e sem overflow do documento em qualquer largura.
       await page.goto(`${appBase}/admin/pipeline`, { waitUntil: 'domcontentloaded' });
       await expect(page.getByRole('heading', { name: 'Kanban de Recrutamento e Seleção' })).toBeVisible();
       await expect(page.locator('[data-kanban-board-column="1"]').first()).toBeVisible();

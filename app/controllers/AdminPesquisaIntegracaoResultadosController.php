@@ -22,6 +22,6 @@ class AdminPesquisaIntegracaoResultadosController extends Controller
 
         $this->view->render('admin/pesquisa_integracao_qr/resultados', [
             'resultados' => PesquisaIntegracaoResultadosService::resultadosDaIntegracao($dataYmd),
-        ], 'layouts/admin');
+        ], 'layouts/app-shell');
     }
 }

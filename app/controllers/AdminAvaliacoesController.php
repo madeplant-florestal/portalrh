@@ -15,7 +15,7 @@ class AdminAvaliacoesController extends Controller
             'colaboradorOptions' => AvaliacaoDesempenho::colaboradorOptions(),
             'flashError' => Security::sanitizeString($_GET['erro'] ?? ''),
             'flashSuccess' => Security::sanitizeString($_GET['ok'] ?? ''),
-        ], 'layouts/admin');
+        ], 'layouts/app-shell');
     }
 
     public function create(): void
@@ -26,7 +26,7 @@ class AdminAvaliacoesController extends Controller
             'avaliacao' => null,
             'colaboradorOptions' => AvaliacaoDesempenho::colaboradorOptions(),
             'error' => '',
-        ], 'layouts/admin');
+        ], 'layouts/app-shell');
     }
 
     public function store(): void
@@ -52,7 +52,7 @@ class AdminAvaliacoesController extends Controller
                 'avaliacao' => $payload,
                 'colaboradorOptions' => AvaliacaoDesempenho::colaboradorOptions(),
                 'error' => $result['error'] ?? 'Falha ao cadastrar avaliação.',
-            ], 'layouts/admin');
+            ], 'layouts/app-shell');
             return;
         }
 
@@ -74,7 +74,7 @@ class AdminAvaliacoesController extends Controller
             'avaliacao' => $avaliacao,
             'colaboradorOptions' => AvaliacaoDesempenho::colaboradorOptions(),
             'error' => '',
-        ], 'layouts/admin');
+        ], 'layouts/app-shell');
     }
 
     public function update(string $id): void
@@ -101,7 +101,7 @@ class AdminAvaliacoesController extends Controller
                 'avaliacao' => $payload,
                 'colaboradorOptions' => AvaliacaoDesempenho::colaboradorOptions(),
                 'error' => $result['error'] ?? 'Falha ao atualizar avaliação.',
-            ], 'layouts/admin');
+            ], 'layouts/app-shell');
             return;
         }
 

@@ -6,26 +6,22 @@
 require_once __DIR__ . '/_helpers.php';
 $f = $lista['filtros'] ?? [];
 $op = $lista['opcoes'] ?? ['empresas' => [], 'unidades' => [], 'cargos' => [], 'gestores' => []];
-$campo = 'mt-1 w-full rounded-lg border border-[#E2DFD0] bg-white px-3 py-2 text-sm text-[#2B2E22]';
-$rotulo = 'block text-xs font-semibold uppercase tracking-wide text-[#5B5F4E]';
+$campo = 'mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-text-primary';
+$rotulo = 'block text-xs font-semibold uppercase tracking-wide text-text-secondary';
 $unidadeSelecionada = !empty($f['unidade']) ? $f['unidade']['codigo_empresa'] . '|' . $f['unidade']['codigo_unidade'] : '';
 ?>
-<div class="responsive-panel space-y-5">
-  <div class="responsive-header">
-    <div>
-      <h2 class="text-xl font-semibold text-[#2B2E22]">PDI — Plano de Desenvolvimento Individual</h2>
-      <p class="mt-1 text-sm text-[#5B5F4E]">Processo de desenvolvimento acompanhado por RH e gestor. <?= $escopoTotal ? 'Você vê todos os PDIs.' : 'Você vê os PDIs em que é o gestor responsável.' ?></p>
-    </div>
-    <?php if (!empty($podeCriar)): ?>
-      <a href="<?= $base ?>/admin/pdis/novo" class="rounded-lg bg-[#3B4822] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#2E3919]">Novo PDI</a>
-    <?php endif; ?>
-  </div>
+<div class="space-y-5">
+  <?= ui_breadcrumb([['label' => 'Portal RH', 'href' => $base . '/admin'], ['label' => 'PDI']]) ?>
+  <?= ui_page_header([
+      'titulo' => 'PDI — Plano de Desenvolvimento Individual',
+      'descricao' => 'Processo de desenvolvimento acompanhado por RH e gestor. ' . ($escopoTotal ? 'Você vê todos os PDIs.' : 'Você vê os PDIs em que é o gestor responsável.'),
+      'acao' => !empty($podeCriar) ? ['label' => 'Novo PDI', 'href' => $base . '/admin/pdis/novo'] : null,
+  ]) ?>
+  <?php if (!empty($erro)): ?><div class="rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger"><?= Security::e($erro) ?></div><?php endif; ?>
+  <?php if (!empty($flashErro)): ?><div class="rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger"><?= Security::e($flashErro) ?></div><?php endif; ?>
+  <?php if (!empty($flashOk)): ?><div class="rounded-lg border border-success/30 bg-success/10 px-4 py-3 text-sm text-success"><?= Security::e($flashOk) ?></div><?php endif; ?>
 
-  <?php if (!empty($erro)): ?><div class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"><?= Security::e($erro) ?></div><?php endif; ?>
-  <?php if (!empty($flashErro)): ?><div class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"><?= Security::e($flashErro) ?></div><?php endif; ?>
-  <?php if (!empty($flashOk)): ?><div class="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700"><?= Security::e($flashOk) ?></div><?php endif; ?>
-
-  <form method="get" action="<?= $base ?>/admin/pdis" class="grid grid-cols-1 gap-3 rounded-2xl border border-[#E2DFD0] bg-white p-4 sm:grid-cols-2 lg:grid-cols-4">
+  <form method="get" action="<?= $base ?>/admin/pdis" class="grid grid-cols-1 gap-3 rounded-ds-lg border border-border bg-white p-4 sm:grid-cols-2 lg:grid-cols-4">
     <div>
       <label for="f-status" class="<?= $rotulo ?>">Status</label>
       <select id="f-status" name="status" class="<?= $campo ?>">
@@ -82,15 +78,15 @@ $unidadeSelecionada = !empty($f['unidade']) ? $f['unidade']['codigo_empresa'] . 
       </select>
     </div>
     <div class="flex items-end gap-2 sm:col-span-2 lg:col-span-4">
-      <button type="submit" class="rounded-lg bg-[#3B4822] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#2E3919]">Filtrar</button>
-      <a href="<?= $base ?>/admin/pdis" class="px-2 py-2 text-sm text-[#3B4822] hover:underline">Limpar</a>
+      <button type="submit" class="<?= ui_btn('primario') ?>">Filtrar</button>
+      <a href="<?= $base ?>/admin/pdis" class="<?= ui_btn('ghost') ?>">Limpar</a>
     </div>
   </form>
 
-  <div class="responsive-table-wrap">
-    <table class="mobile-table-desktop min-w-full text-sm">
+  <div class="responsive-table-wrap rounded-ds-lg border border-border bg-surface shadow-resting">
+    <table class="min-w-full text-sm">
       <thead>
-        <tr class="border-b text-left text-[#5B5F4E]">
+        <tr class="border-b text-left text-text-secondary">
           <th class="p-3">Colaborador</th>
           <th class="p-3">Gestor</th>
           <th class="p-3">Origem</th>
@@ -104,27 +100,27 @@ $unidadeSelecionada = !empty($f['unidade']) ? $f['unidade']['codigo_empresa'] . 
       <tbody>
         <?php foreach ($lista['itens'] as $p): ?>
           <tr class="border-b align-top">
-            <td class="p-3 font-medium text-[#2B2E22]"><?= Security::e((string)$p['snap_nome']) ?>
-              <span class="block text-xs font-normal text-[#5B5F4E]"><?= Security::e((string)($p['snap_cargo'] ?? '—')) ?> · <?= Security::e((string)($p['snap_unidade'] ?? $p['snap_empresa'] ?? '')) ?></span></td>
-            <td class="p-3 text-[#5B5F4E]"><?= Security::e((string)$p['gestor_nome_snapshot']) ?></td>
-            <td class="p-3 text-[#5B5F4E]"><?= Security::e(PdiService::ORIGENS[$p['origem_tipo']] ?? (string)$p['origem_tipo']) ?></td>
+            <td class="p-3 font-medium text-text-primary"><?= Security::e((string)$p['snap_nome']) ?>
+              <span class="block text-xs font-normal text-text-secondary"><?= Security::e((string)($p['snap_cargo'] ?? '—')) ?> · <?= Security::e((string)($p['snap_unidade'] ?? $p['snap_empresa'] ?? '')) ?></span></td>
+            <td class="p-3 text-text-secondary"><?= Security::e((string)$p['gestor_nome_snapshot']) ?></td>
+            <td class="p-3 text-text-secondary"><?= Security::e(PdiService::ORIGENS[$p['origem_tipo']] ?? (string)$p['origem_tipo']) ?></td>
             <td class="p-3"><?= pdi_status_badge((string)$p['status']) ?>
               <?php if (!empty($p['prazo']['atrasado'])): ?><span class="mt-1 block"><?= pdi_atraso_badge($p['prazo']) ?></span><?php endif; ?>
-              <?php if ((string)$p['status'] === 'concluido'): ?><span class="mt-1 block text-xs text-[#5B5F4E]"><?= Security::e(PdiService::AVALIACOES_FINAIS[$p['avaliacao_final']] ?? '') ?></span><?php endif; ?></td>
-            <td class="p-3 text-[#5B5F4E]"><?= Security::e(pdi_data_br($p['data_abertura'])) ?></td>
-            <td class="p-3 text-[#5B5F4E]"><?= Security::e(pdi_data_br($p['data_prevista_conclusao'])) ?></td>
+              <?php if ((string)$p['status'] === 'concluido'): ?><span class="mt-1 block text-xs text-text-secondary"><?= Security::e(PdiService::AVALIACOES_FINAIS[$p['avaliacao_final']] ?? '') ?></span><?php endif; ?></td>
+            <td class="p-3 text-text-secondary"><?= Security::e(pdi_data_br($p['data_abertura'])) ?></td>
+            <td class="p-3 text-text-secondary"><?= Security::e(pdi_data_br($p['data_prevista_conclusao'])) ?></td>
             <td class="p-3"><?= pdi_barra_progresso($p['progresso']) ?>
-              <?php if ($p['acoes_atrasadas'] > 0): ?><span class="mt-1 block text-[11px] font-semibold text-amber-800"><?= (int)$p['acoes_atrasadas'] ?> ação(ões) atrasada(s)</span><?php endif; ?></td>
-            <td class="p-3"><a href="<?= $base ?>/admin/pdis/<?= (int)$p['id'] ?>" class="text-[#3B4822] hover:underline">Abrir</a></td>
+              <?php if ($p['acoes_atrasadas'] > 0): ?><span class="mt-1 block text-[11px] font-semibold text-warning"><?= (int)$p['acoes_atrasadas'] ?> ação(ões) atrasada(s)</span><?php endif; ?></td>
+            <td class="p-3"><a href="<?= $base ?>/admin/pdis/<?= (int)$p['id'] ?>" class="text-primary-700 hover:underline">Abrir</a></td>
           </tr>
         <?php endforeach; ?>
         <?php if (empty($lista['itens'])): ?>
-          <tr><td colspan="8" class="p-4 text-center text-[#5B5F4E]">Nenhum PDI encontrado para os filtros informados.</td></tr>
+          <tr><td colspan="8" class="p-4 text-center text-text-secondary">Nenhum PDI encontrado para os filtros informados.</td></tr>
         <?php endif; ?>
       </tbody>
     </table>
   </div>
   <?php if (count($lista['itens']) >= PdiService::LIMITE_LISTAGEM): ?>
-    <p class="text-xs text-[#5B5F4E]">Mostrando os primeiros <?= PdiService::LIMITE_LISTAGEM ?> PDIs. Refine os filtros para localizar os demais.</p>
+    <p class="text-xs text-text-secondary">Mostrando os primeiros <?= PdiService::LIMITE_LISTAGEM ?> PDIs. Refine os filtros para localizar os demais.</p>
   <?php endif; ?>
 </div>

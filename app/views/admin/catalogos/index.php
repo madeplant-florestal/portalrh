@@ -1,119 +1,114 @@
 <?php
+require_once APP_PATH . '/views/partials/modulo-topo.php';
 $queryBase = $base . $routeBase;
 $q = (string)($filters['q'] ?? '');
 $status = (string)($filters['status'] ?? '');
 $canManage = in_array((string)Auth::role(), ['admin', 'rh'], true) || !empty($_SESSION['user_is_supervisor']);
 $canDelete = (string)Auth::role() === 'admin' || !empty($_SESSION['user_is_supervisor']);
 
-$actionButtonClass = 'inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700';
-$dangerButtonClass = 'inline-flex h-9 w-9 items-center justify-center rounded-lg border border-rose-200 bg-white text-rose-600 shadow-sm transition hover:bg-rose-50 hover:text-rose-700';
+$actionButtonClass = 'inline-flex h-9 w-9 items-center justify-center rounded-ds-md border border-border bg-surface text-text-secondary shadow-sm transition hover:border-primary-300 hover:bg-primary-50 hover:text-primary-700';
+$dangerButtonClass = 'inline-flex h-9 w-9 items-center justify-center rounded-ds-md border border-danger/30 bg-surface text-danger shadow-sm transition hover:bg-danger/10 hover:text-danger';
 ?>
 <div class="space-y-6">
-  <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-    <div>
-      <h1 class="text-fluid-title font-bold text-gray-800"><?= Security::e($meta['plural']) ?></h1>
-      <p class="text-fluid-subtitle text-gray-600">Gestão de <?= strtolower(Security::e($meta['plural'])) ?> com navegação e ações minimalistas.</p>
-    </div>
-    <div class="flex flex-wrap gap-3">
-      <a href="<?= $base ?>/admin/colaboradores" class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
-        Colaboradores
-      </a>
-      <?php if ($canManage): ?>
-        <a href="<?= $queryBase ?>/novo" class="inline-flex items-center justify-center rounded-xl bg-blue-900 px-4 py-3 text-sm font-semibold text-white shadow-sm hover:bg-blue-950">
-          Novo <?= strtolower(Security::e($meta['singular'])) ?>
-        </a>
-      <?php endif; ?>
-    </div>
+  <?= ui_modulo_topo($base, 'cadastros', basename((string)$routeBase), [
+      'titulo' => $meta['plural'],
+      'descricao' => 'Gestão de ' . strtolower($meta['plural']) . ' com navegação e ações minimalistas.',
+  ]) ?>
+  <div class="flex flex-wrap items-center gap-2">
+    <a href="<?= $base ?>/admin/colaboradores" class="<?= ui_btn('secundario') ?>">Colaboradores</a>
+    <?php if ($canManage): ?>
+      <a href="<?= $queryBase ?>/novo" class="<?= ui_btn('primario') ?>">Novo <?= strtolower(Security::e($meta['singular'])) ?></a>
+    <?php endif; ?>
   </div>
 
   <?php if (!empty($flashError)): ?>
-    <div class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700"><?= Security::e($flashError) ?></div>
+    <div class="rounded-ds-md border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger"><?= Security::e($flashError) ?></div>
   <?php endif; ?>
   <?php if (!empty($flashSuccess)): ?>
-    <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700"><?= Security::e($flashSuccess) ?></div>
+    <div class="rounded-ds-md border border-success/30 bg-success/10 px-4 py-3 text-sm text-success"><?= Security::e($flashSuccess) ?></div>
   <?php endif; ?>
 
   <div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-    <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-      <p class="text-sm font-medium text-slate-500">Total de registros</p>
-      <p class="mt-2 text-3xl font-bold text-slate-900"><?= (int)($summary['total'] ?? 0) ?></p>
+    <div class="rounded-ds-lg bg-surface p-5 shadow-sm ring-1 ring-border">
+      <p class="text-sm font-medium text-text-secondary">Total de registros</p>
+      <p class="mt-2 text-3xl font-bold text-text-primary"><?= (int)($summary['total'] ?? 0) ?></p>
     </div>
-    <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-      <p class="text-sm font-medium text-slate-500">Ativos</p>
-      <p class="mt-2 text-3xl font-bold text-emerald-600"><?= (int)($summary['ativos'] ?? 0) ?></p>
+    <div class="rounded-ds-lg bg-surface p-5 shadow-sm ring-1 ring-border">
+      <p class="text-sm font-medium text-text-secondary">Ativos</p>
+      <p class="mt-2 text-3xl font-bold text-success"><?= (int)($summary['ativos'] ?? 0) ?></p>
     </div>
-    <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-      <p class="text-sm font-medium text-slate-500">Inativos</p>
-      <p class="mt-2 text-3xl font-bold text-slate-500"><?= (int)($summary['inativos'] ?? 0) ?></p>
+    <div class="rounded-ds-lg bg-surface p-5 shadow-sm ring-1 ring-border">
+      <p class="text-sm font-medium text-text-secondary">Inativos</p>
+      <p class="mt-2 text-3xl font-bold text-text-secondary"><?= (int)($summary['inativos'] ?? 0) ?></p>
     </div>
-    <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-      <p class="text-sm font-medium text-slate-500">Vinculados a colaboradores</p>
-      <p class="mt-2 text-3xl font-bold text-violet-600"><?= (int)($summary['vinculados'] ?? 0) ?></p>
+    <div class="rounded-ds-lg bg-surface p-5 shadow-sm ring-1 ring-border">
+      <p class="text-sm font-medium text-text-secondary">Vinculados a colaboradores</p>
+      <p class="mt-2 text-3xl font-bold text-info"><?= (int)($summary['vinculados'] ?? 0) ?></p>
     </div>
   </div>
 
-  <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+  <div class="rounded-ds-lg bg-surface p-5 shadow-sm ring-1 ring-border">
     <form class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4" method="get" action="<?= $queryBase ?>">
       <div class="xl:col-span-2">
-        <label class="mb-2 block text-sm font-medium text-slate-700">Busca</label>
-        <input type="text" name="q" value="<?= Security::e($q) ?>" placeholder="Nome ou slug" class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100">
+        <label class="mb-2 block text-sm font-medium text-text-primary">Busca</label>
+        <input type="text" name="q" value="<?= Security::e($q) ?>" placeholder="Nome ou slug" class="w-full rounded-ds-md border border-border px-4 py-3 text-sm outline-none transition focus:border-focus focus:ring-2 focus:ring-primary-100">
       </div>
       <div>
-        <label class="mb-2 block text-sm font-medium text-slate-700">Status</label>
-        <select name="status" class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100">
+        <label class="mb-2 block text-sm font-medium text-text-primary">Status</label>
+        <select name="status" class="w-full rounded-ds-md border border-border px-4 py-3 text-sm outline-none transition focus:border-focus focus:ring-2 focus:ring-primary-100">
           <option value="">Todos</option>
           <option value="active" <?= $status === 'active' ? 'selected' : '' ?>>Ativos</option>
           <option value="inactive" <?= $status === 'inactive' ? 'selected' : '' ?>>Inativos</option>
         </select>
       </div>
       <div class="flex flex-wrap items-end gap-3">
-        <button class="inline-flex items-center justify-center rounded-xl bg-blue-900 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-950">Filtrar</button>
-        <a href="<?= $queryBase ?>" class="inline-flex items-center justify-center rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-600 hover:bg-slate-50">Limpar</a>
+        <button class="<?= ui_btn('primario') ?>">Filtrar</button>
+        <a href="<?= $queryBase ?>" class="<?= ui_btn('secundario') ?>">Limpar</a>
       </div>
     </form>
   </div>
 
-  <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+  <div class="rounded-ds-lg bg-surface p-5 shadow-sm ring-1 ring-border">
     <div class="mb-4 flex items-center justify-between">
       <div>
-        <h2 class="text-lg font-semibold text-slate-900">Lista de <?= Security::e($meta['plural']) ?></h2>
-        <p class="text-sm text-slate-500">Gerencie os registros do módulo sem alterar o fluxo atual do painel.</p>
+        <h2 class="text-lg font-semibold text-text-primary">Lista de <?= Security::e($meta['plural']) ?></h2>
+        <p class="text-sm text-text-secondary">Gerencie os registros do módulo sem alterar o fluxo atual do painel.</p>
       </div>
-      <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600"><?= count($items) ?> registro(s)</span>
+      <span class="rounded-full bg-surface-secondary px-3 py-1 text-xs font-semibold text-text-secondary"><?= count($items) ?> registro(s)</span>
     </div>
 
     <div class="responsive-table-wrap">
-      <table class="mobile-table-desktop min-w-full text-sm">
-        <thead class="bg-slate-50">
-          <tr class="border-b border-slate-200">
-            <th class="p-3 text-left font-medium text-slate-500">Nome</th>
-            <th class="p-3 text-left font-medium text-slate-500">Slug</th>
-            <th class="p-3 text-left font-medium text-slate-500">Status</th>
+      <table class="hidden min-w-full text-sm md:table">
+        <thead class="bg-background">
+          <tr class="border-b border-border">
+            <th class="p-3 text-left font-medium text-text-secondary">Nome</th>
+            <th class="p-3 text-left font-medium text-text-secondary">Slug</th>
+            <th class="p-3 text-left font-medium text-text-secondary">Status</th>
             <?php if ($table === 'empresas'): ?>
-              <th class="p-3 text-left font-medium text-slate-500">Setores</th>
-              <th class="p-3 text-left font-medium text-slate-500">Colaboradores ativos</th>
+              <th class="p-3 text-left font-medium text-text-secondary">Setores</th>
+              <th class="p-3 text-left font-medium text-text-secondary">Colaboradores ativos</th>
             <?php else: ?>
-              <th class="p-3 text-left font-medium text-slate-500">Uso em colaboradores</th>
+              <th class="p-3 text-left font-medium text-text-secondary">Uso em colaboradores</th>
             <?php endif; ?>
-            <th class="p-3 text-right font-medium text-slate-500">Ações</th>
+            <th class="p-3 text-right font-medium text-text-secondary">Ações</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-slate-200">
+        <tbody class="divide-y divide-border">
           <?php foreach ($items as $item): ?>
             <?php $isActive = (int)($item['ativo'] ?? 0) === 1; ?>
-            <tr class="hover:bg-slate-50">
-              <td class="p-3 font-medium text-slate-900"><?= Security::e($item['nome']) ?></td>
-              <td class="p-3 text-slate-600"><?= Security::e($item['slug']) ?></td>
+            <tr class="hover:bg-surface-secondary">
+              <td class="p-3 font-medium text-text-primary"><?= Security::e($item['nome']) ?></td>
+              <td class="p-3 text-text-secondary"><?= Security::e($item['slug']) ?></td>
               <td class="p-3">
-                <span class="inline-flex rounded-full px-3 py-1 text-xs font-semibold <?= $isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600' ?>">
+                <span class="inline-flex rounded-full px-3 py-1 text-xs font-semibold <?= $isActive ? 'bg-success/10 text-success' : 'bg-border text-text-secondary' ?>">
                   <?= $isActive ? 'Ativo' : 'Inativo' ?>
                 </span>
               </td>
               <?php if ($table === 'empresas'): ?>
-                <td class="p-3 text-slate-600"><?= (int)($item['setores_count'] ?? 0) ?></td>
-                <td class="p-3 text-slate-600"><?= (int)($item['usage_count'] ?? 0) ?></td>
+                <td class="p-3 text-text-secondary"><?= (int)($item['setores_count'] ?? 0) ?></td>
+                <td class="p-3 text-text-secondary"><?= (int)($item['usage_count'] ?? 0) ?></td>
               <?php else: ?>
-                <td class="p-3 text-slate-600"><?= (int)($item['usage_count'] ?? 0) ?></td>
+                <td class="p-3 text-text-secondary"><?= (int)($item['usage_count'] ?? 0) ?></td>
               <?php endif; ?>
               <td class="p-3">
                 <div class="flex justify-end gap-2">
@@ -136,7 +131,7 @@ $dangerButtonClass = 'inline-flex h-9 w-9 items-center justify-center rounded-lg
           <?php endforeach; ?>
           <?php if (empty($items)): ?>
             <tr>
-              <td colspan="<?= $table === 'empresas' ? 6 : 5 ?>" class="p-6 text-center text-slate-500">Nenhum registro encontrado para os filtros informados.</td>
+              <td colspan="<?= $table === 'empresas' ? 6 : 5 ?>" class="p-6 text-center text-text-secondary">Nenhum registro encontrado para os filtros informados.</td>
             </tr>
           <?php endif; ?>
         </tbody>
@@ -147,16 +142,16 @@ $dangerButtonClass = 'inline-flex h-9 w-9 items-center justify-center rounded-lg
       <?php foreach ($items as $item): ?>
         <?php $isActive = (int)($item['ativo'] ?? 0) === 1; ?>
         <div class="responsive-card">
-          <div class="text-base font-semibold text-slate-900"><?= Security::e($item['nome']) ?></div>
-          <div class="mt-1 text-sm text-slate-600">Slug: <?= Security::e($item['slug']) ?></div>
+          <div class="text-base font-semibold text-text-primary"><?= Security::e($item['nome']) ?></div>
+          <div class="mt-1 text-sm text-text-secondary">Slug: <?= Security::e($item['slug']) ?></div>
           <?php if ($table === 'empresas'): ?>
-            <div class="mt-1 text-sm text-slate-600">Setores: <?= (int)($item['setores_count'] ?? 0) ?></div>
-            <div class="mt-1 text-sm text-slate-600">Colaboradores ativos: <?= (int)($item['usage_count'] ?? 0) ?></div>
+            <div class="mt-1 text-sm text-text-secondary">Setores: <?= (int)($item['setores_count'] ?? 0) ?></div>
+            <div class="mt-1 text-sm text-text-secondary">Colaboradores ativos: <?= (int)($item['usage_count'] ?? 0) ?></div>
           <?php else: ?>
-            <div class="mt-1 text-sm text-slate-600">Vinculados: <?= (int)($item['usage_count'] ?? 0) ?></div>
+            <div class="mt-1 text-sm text-text-secondary">Vinculados: <?= (int)($item['usage_count'] ?? 0) ?></div>
           <?php endif; ?>
           <div class="mt-3">
-            <span class="inline-flex rounded-full px-3 py-1 text-xs font-semibold <?= $isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600' ?>">
+            <span class="inline-flex rounded-full px-3 py-1 text-xs font-semibold <?= $isActive ? 'bg-success/10 text-success' : 'bg-border text-text-secondary' ?>">
               <?= $isActive ? 'Ativo' : 'Inativo' ?>
             </span>
           </div>

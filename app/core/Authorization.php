@@ -36,6 +36,50 @@ class Authorization
         }
     }
 
+    /**
+     * O usuário da SESSÃO tem acesso pela ROLE informada (ou é supervisor, como em `Auth::requireRole`) OU pela permissão
+     * individual? Lógica pura, sem efeito colateral — usada por `requireRoleOuPermissao()` e por testes.
+     *
+     * Modelo ADITIVO deliberado (ver a seed 2026-09-16-permissoes-cobertura-portal): a permissão individual passa a liberar o
+     * acesso de quem NÃO tem a role, sem retirar o de quem já entrava pela role. Admin entra pelo bypass central de
+     * `temPermissao` (e também está na lista de roles).
+     *
+     * @param string[] $roles
+     */
+    public static function temAcessoPorRoleOuPermissao(array $roles, string $codigo): bool
+    {
+        if (!empty($_SESSION['user_is_supervisor'])) {
+            return true;
+        }
+        if (!Auth::check()) {
+            return false;
+        }
+        $role = strtolower(trim((string)(Auth::role() ?? '')));
+        if (in_array($role, array_map(static fn($r) => strtolower(trim((string)$r)), $roles), true)) {
+            return true;
+        }
+        return self::temPermissao($codigo);
+    }
+
+    /**
+     * Gate de ENTRADA de tela: libera quem tem a role OU a permissão individual `$codigo` (ex.: `pipeline.visualizar`). Sem
+     * sessão → /login; sem acesso → 403 (mesma convenção de `Auth::requireRole`). Use SÓ na leitura/entrada da funcionalidade;
+     * ações sensíveis (escrita, pagamento, configuração, reenvio) mantêm o próprio `Auth::requireRole`.
+     *
+     * @param string[] $roles
+     */
+    public static function requireRoleOuPermissao(array $roles, string $codigo): void
+    {
+        if (empty($_SESSION['user_is_supervisor']) && !Auth::check()) {
+            redirect('/login');
+        }
+        if (!self::temAcessoPorRoleOuPermissao($roles, $codigo)) {
+            http_response_code(403);
+            echo 'Acesso negado';
+            exit;
+        }
+    }
+
     /** Permissão do usuário da SESSÃO atual. */
     public static function temPermissao(string $codigo): bool
     {
@@ -159,47 +203,24 @@ class Authorization
 
     /**
      * Resolução centralizada do destino inicial após login — usa a SESSÃO já estabelecida por
-     * `Auth::establishSession()`. `/admin` (People Analytics) exige `dashboard.visualizar` desde
-     * a correção deste problema: um usuário autenticado sem essa permissão não pode mais cair
-     * direto num 403 só por ter feito login. Nunca inventa permissão nova para isto — cada
-     * candidato abaixo usa exatamente a mesma condição de acesso já aplicada no controller/sidebar
-     * da rota correspondente, em ordem de especificidade (mais funcional primeiro), terminando
-     * numa rota aberta por role a admin/rh/viewer (garantida hoje, nunca gera loop de redirect).
+     * `Auth::establishSession()`. Histórico: `/admin` era o dashboard People Analytics (exige `dashboard.visualizar`), então
+     * este método escolhia um destino acessível por permissão para ninguém cair num 403 logo após o login. Com a Nova UI,
+     * `/admin` é a Central do Portal (aberta a qualquer sessão autenticada; os cards já respeitam as permissões) e o
+     * dashboard foi para `/admin/dashboard` — o destino passou a ser sempre a Central, sem loop de redirect.
      */
     public static function primeiraRotaAcessivel(): string
     {
-        if (self::temPermissao('dashboard.visualizar')) {
+        // Nova UI: a entrada do Portal é a CENTRAL (`/admin`, AdminCentralController) — não tem permissão própria, é aberta a
+        // qualquer sessão autenticada com role admin/rh/viewer (ou supervisor, que passa por Auth::requireRole) e mostra só
+        // os módulos que o usuário pode acessar. Por isso o destino deixou de depender de permissão individual: o que antes
+        // exigia escolher entre dashboard.visualizar, dashboard_recrutamento, solicitações ou candidaturas agora é decidido
+        // pelos cards (PortalNavegacaoService). O Dashboard (People Analytics) mudou para `/admin/dashboard` e mantém o gate.
+        if (!empty($_SESSION['user_is_supervisor']) || in_array(Auth::role(), ['admin', 'rh', 'viewer'], true)) {
             return '/admin';
         }
-        if (self::temPermissao('dashboard_recrutamento.visualizar')) {
-            return '/admin/dashboard-recrutamento';
-        }
 
-        $isAdminOuSupervisor = Auth::role() === 'admin' || !empty($_SESSION['user_is_supervisor']);
-        $isStaff = $isAdminOuSupervisor || Auth::role() === 'rh';
-
-        // Mesma condição de "Solicitações de vaga" já usada na sidebar ($vePedidosDeVaga) — é o
-        // destino funcionalmente mais relevante para um usuário (ex.: gestor) cujas únicas
-        // permissões são de Solicitação de Vaga/Kanban.
-        if (
-            $isStaff
-            || self::temPermissao('solicitacao_vaga.visualizar')
-            || self::temPermissao('solicitacao_vaga.criar')
-            || self::temPermissao('kanban_vagas.visualizar')
-        ) {
-            return '/admin/solicitacoes-vaga';
-        }
-
-        // Candidaturas (AdminCandidaturasController::index) é aberta por role a admin/rh/viewer
-        // sem nenhum gate de permissão individual hoje — cobre qualquer sessão autenticada válida
-        // (o papel é sempre um destes três, ver Auth::establishSession()).
-        if (in_array(Auth::role(), ['admin', 'rh', 'viewer'], true)) {
-            return '/admin/candidaturas';
-        }
-
-        // Rede de segurança final: Manual de Uso é aberto por role a qualquer sessão autenticada
-        // e nunca deveria ser necessário chegar aqui — evita loop de redirect caso surja um papel
-        // fora de admin/rh/viewer no futuro.
+        // Rede de segurança final (papel fora de admin/rh/viewer, que não deveria existir — ver Auth::establishSession()):
+        // o Manual de Uso é aberto por role e nunca redireciona, então não há loop.
         return '/admin/manual';
     }
 }

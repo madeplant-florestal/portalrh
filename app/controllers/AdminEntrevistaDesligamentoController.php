@@ -93,7 +93,7 @@ class AdminEntrevistaDesligamentoController extends Controller
         if (!headers_sent()) {
             header('Cache-Control: no-store');
         }
-        $this->view->render('admin/entrevista_desligamento/resultado', ['entrevista' => $entrevista], 'layouts/admin');
+        $this->view->render('admin/entrevista_desligamento/resultado', ['entrevista' => $entrevista], 'layouts/app-shell');
     }
 
     /** Falha → volta à lista com a mensagem; sucesso → renderiza a lista de pendentes com o link (única exibição). */
@@ -139,6 +139,6 @@ class AdminEntrevistaDesligamentoController extends Controller
             'linkGerado' => null,
             'flashSuccess' => '',
             'flashError' => '',
-        ], 'layouts/admin');
+        ], 'layouts/app-shell');
     }
 }

@@ -163,7 +163,13 @@ try {
         $check(str_contains($fonteIndex, $rota), '(rota) ' . substr($rota, 9, 70));
     }
     $check(!str_contains(substr($fonteIndex, 0, (int)strpos($fonteIndex, "'/admin/entrevistas-desligamento'")), "'/entrevista-desligamento/{token}', [Admin"), '(rota) A rota pública não é administrativa (não passa pelo bloqueio /admin) e as administrativas ficam sob /admin (login global)');
-    $check((bool)preg_match('/temPermissao\(\'entrevista_desligamento\.visualizar\'\)\s*\)\s*:\s*\?>\s*<a href="<\?= \$base \?>\/admin\/entrevistas-desligamento"/s', (string)file_get_contents(APP_PATH . '/views/layouts/sidebar.php')), '(menu) O link só é renderizado com entrevista_desligamento.visualizar');
+    $regraNavEntrevistas = null;
+    foreach (PortalNavegacaoService::definicao() as $m) {
+        foreach ($m['itens'] as $it) {
+            if ($it['href'] === '/admin/entrevistas-desligamento') { $regraNavEntrevistas = $it['regra']; }
+        }
+    }
+    $check($regraNavEntrevistas === 'perm:entrevista_desligamento.visualizar', '(menu) A Central só oferece Entrevistas de Desligamento sob a regra perm:entrevista_desligamento.visualizar (PortalNavegacaoService::definicao() — sidebar removida, fonte da verdade agora é o serviço de navegação)');
 
     // ---- fixtures ---------------------------------------------------------------------------------------------------------
     $adm1 = $D(1000);

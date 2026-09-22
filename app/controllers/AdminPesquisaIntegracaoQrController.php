@@ -66,6 +66,6 @@ class AdminPesquisaIntegracaoQrController extends Controller
             'podeGerenciar' => Authorization::temPermissao('integracao_colaborador.editar'),
             'flashError' => $flashError,
             'flashSuccess' => $flashSuccess,
-        ], 'layouts/admin');
+        ], 'layouts/app-shell');
     }
 }

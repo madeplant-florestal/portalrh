@@ -257,169 +257,6 @@ if (typeof module !== 'undefined' && module.exports) {
     });
   };
 
-  const initAdminSidebar = () => {
-    const shell = document.querySelector('[data-admin-shell="1"]') || document.body;
-    const btn = document.querySelector('.menu-toggle') || document.querySelector('[data-admin-menu-toggle="1"]');
-    const collapseBtn = document.querySelector('[data-admin-sidebar-collapse-toggle="1"]');
-    const sidebar = document.querySelector('[data-admin-sidebar="1"]') || document.querySelector('aside');
-    const overlay = document.querySelector('[data-admin-overlay="1"]');
-    const closeTriggers = Array.from(document.querySelectorAll('[data-admin-menu-close="1"]'));
-    const groups = Array.from(document.querySelectorAll('[data-sidebar-group="1"]'));
-    if (!btn || !sidebar || !overlay) return;
-
-    const MOBILE_BREAKPOINT = 768;
-    const AUTO_COLLAPSE_BREAKPOINT = 1200;
-    const STORAGE_KEY = 'rhmadeplant.admin.sidebar.collapsed';
-
-    const isMobileViewport = () => window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`).matches;
-    const shouldAutoCollapse = () => window.innerWidth < AUTO_COLLAPSE_BREAKPOINT;
-    const readStoredCollapsed = () => {
-      try {
-        const value = window.localStorage.getItem(STORAGE_KEY);
-        if (value === '1') return true;
-        if (value === '0') return false;
-      } catch {
-        return null;
-      }
-      return null;
-    };
-    const persistCollapsed = (collapsed) => {
-      try {
-        window.localStorage.setItem(STORAGE_KEY, collapsed ? '1' : '0');
-      } catch {
-        // Ignora falha de storage sem afetar a navegacao.
-      }
-    };
-
-    const setCollapseButtonState = (collapsed) => {
-      if (!collapseBtn) return;
-      collapseBtn.setAttribute('aria-pressed', collapsed ? 'true' : 'false');
-      collapseBtn.setAttribute('aria-label', collapsed ? 'Expandir menu' : 'Recolher menu');
-      collapseBtn.setAttribute('title', collapsed ? 'Expandir menu' : 'Recolher menu');
-      collapseBtn.classList.toggle('is-collapsed', collapsed);
-    };
-
-    const closeDesktopGroups = () => {
-      if (isMobileViewport()) return;
-      groups.forEach((group) => {
-        if (!group.matches(':focus-within')) {
-          group.removeAttribute('open');
-        }
-      });
-    };
-
-    const syncMobileState = (isOpen) => {
-      sidebar.classList.toggle('active', isOpen);
-      overlay.classList.toggle('open', isOpen);
-      document.body.classList.toggle('app-sidebar-open', isOpen);
-      btn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-      sidebar.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
-      shell.classList.add('app-sidebar-mobile');
-      shell.classList.remove('app-sidebar-desktop');
-    };
-
-    const syncDesktopState = (collapsed, { persist = false } = {}) => {
-      shell.classList.add('app-sidebar-desktop');
-      shell.classList.remove('app-sidebar-mobile');
-      shell.classList.toggle('app-sidebar-collapsed', collapsed);
-      sidebar.classList.remove('active');
-      overlay.classList.remove('open');
-      document.body.classList.remove('app-sidebar-open');
-      sidebar.setAttribute('aria-hidden', 'false');
-      btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
-      sidebar.setAttribute('data-collapsed', collapsed ? '1' : '0');
-      setCollapseButtonState(collapsed);
-      if (collapsed) {
-        closeDesktopGroups();
-      }
-      if (persist) {
-        persistCollapsed(collapsed);
-      }
-    };
-
-    const syncResponsiveState = ({ persist = false } = {}) => {
-      if (isMobileViewport()) {
-        syncMobileState(false);
-        return;
-      }
-
-      const stored = readStoredCollapsed();
-      const collapsed = shouldAutoCollapse() ? true : (stored === null ? false : stored);
-      syncDesktopState(collapsed, { persist });
-    };
-
-    btn.addEventListener('click', () => {
-      if (isMobileViewport()) {
-        const isOpen = btn.getAttribute('aria-expanded') === 'true';
-        syncMobileState(!isOpen);
-        return;
-      }
-
-      const nextCollapsed = !shell.classList.contains('app-sidebar-collapsed');
-      syncDesktopState(nextCollapsed, { persist: true });
-    });
-
-    collapseBtn?.addEventListener('click', () => {
-      if (isMobileViewport()) {
-        return;
-      }
-      const nextCollapsed = !shell.classList.contains('app-sidebar-collapsed');
-      syncDesktopState(nextCollapsed, { persist: true });
-    });
-
-    overlay.addEventListener('click', () => syncMobileState(false));
-    closeTriggers.forEach((trigger) => {
-      trigger.addEventListener('click', () => {
-        if (isMobileViewport()) {
-          syncMobileState(false);
-        }
-      });
-    });
-
-    groups.forEach((group) => {
-      const summary = group.querySelector('summary');
-      if (!summary) return;
-
-      summary.addEventListener('click', () => {
-        if (isMobileViewport()) {
-          return;
-        }
-        window.requestAnimationFrame(() => {
-          groups.forEach((item) => {
-            if (item !== group) {
-              item.removeAttribute('open');
-            }
-          });
-        });
-      });
-    });
-
-    document.addEventListener('click', (event) => {
-      if (isMobileViewport()) {
-        return;
-      }
-      if (!sidebar.contains(event.target)) {
-        closeDesktopGroups();
-      }
-    });
-
-    document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape') {
-        if (isMobileViewport()) {
-          syncMobileState(false);
-        } else {
-          closeDesktopGroups();
-        }
-      }
-    });
-
-    window.addEventListener('resize', () => {
-      syncResponsiveState();
-    });
-
-    syncResponsiveState();
-  };
-
   const initAiAnalyze = () => {
     const btn = document.querySelector('[data-ai-analyze="1"]');
     if (!btn) return;
@@ -432,6 +269,8 @@ if (typeof module !== 'undefined' && module.exports) {
   const initKanban = () => {
     const columns = Array.from(document.querySelectorAll('[data-kanban-column="1"]'));
     if (columns.length === 0) return;
+    // Somente visualização (permissão pipeline.visualizar sem admin/rh): não habilita arrastar; o backend já negaria o move.
+    if (document.querySelector('[data-kanban-readonly="1"]')) return;
 
     const cards = Array.from(document.querySelectorAll('[data-kanban-card="1"]'));
 
@@ -1701,7 +1540,6 @@ if (typeof module !== 'undefined' && module.exports) {
   document.addEventListener('DOMContentLoaded', () => {
     initAutoSubmit();
     initConfirmations();
-    initAdminSidebar();
     initInputMasks();
     initCollaboratorImport();
     initSolicitacaoVagaForm();

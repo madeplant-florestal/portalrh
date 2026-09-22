@@ -85,7 +85,7 @@ class AdminRhIndicadoresController extends Controller
             'ultimaSincronizacao' => $ultimaSincronizacao,
             'podeSincronizar' => $podeSincronizar,
             'orquestradorConfigurado' => $orquestradorConfigurado,
-        ], 'layouts/admin');
+        ], 'layouts/app-shell');
     }
 
     /** @return array{0:DateTimeImmutable,1:DateTimeImmutable} */

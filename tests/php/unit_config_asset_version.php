@@ -43,8 +43,10 @@ try {
     $v3 = Config::assetVersion($caminhoRelativo);
     $assert($v3 !== $v1, 'ALTERAR o arquivo físico muda a versão — é isso que invalida o cache do navegador a cada deploy real');
 
-    // ---- Os 6 pontos de uso nas views usam Config::assetVersion(), não mais o stamp fixo -------
-    foreach (['app/views/layouts/admin.php', 'app/views/layouts/main.php'] as $view) {
+    // ---- Os pontos de uso nas views usam Config::assetVersion(), não mais o stamp fixo ---------
+    // layouts/admin.php (sidebar) foi removido na publicação consolidada da Nova UI — o shell administrativo
+    // agora é layouts/app-shell.php; layouts/main.php continua servindo as páginas públicas/login.
+    foreach (['app/views/layouts/app-shell.php', 'app/views/layouts/main.php'] as $view) {
         $conteudo = (string)file_get_contents(BASE_PATH . '/' . $view);
         $assert(
             substr_count($conteudo, "Config::assetVersion(") >= 2,

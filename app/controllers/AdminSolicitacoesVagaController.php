@@ -18,7 +18,7 @@ class AdminSolicitacoesVagaController extends Controller
             // verdade (Admin já entra pelo bypass central de Authorization) — o botão não pode
             // aparecer para quem o backend vai rejeitar em seguida.
             'vePodeKanban' => Authorization::temPermissao('kanban_vagas.visualizar'),
-        ], 'layouts/admin');
+        ], 'layouts/app-shell');
     }
 
     public function create(): void
@@ -54,7 +54,7 @@ class AdminSolicitacoesVagaController extends Controller
             'canEditRh' => SolicitacaoVaga::userCanEditRh($role, $isSupervisor),
             'currentRole' => $role,
             'currentUserId' => $userId,
-        ], 'layouts/admin');
+        ], 'layouts/app-shell');
     }
 
     public function store(): void
@@ -90,7 +90,7 @@ class AdminSolicitacoesVagaController extends Controller
                 'canEditRh' => SolicitacaoVaga::userCanEditRh($role, $isSupervisor),
                 'currentRole' => $role,
                 'currentUserId' => $userId,
-            ], 'layouts/admin');
+            ], 'layouts/app-shell');
         }
     }
 
@@ -146,7 +146,7 @@ class AdminSolicitacoesVagaController extends Controller
             'currentRole' => $role,
             'currentUserId' => $userId,
             'vagaVinculada' => $vagaVinculada,
-        ], 'layouts/admin');
+        ], 'layouts/app-shell');
     }
 
     public function approveLeader(string $id): void

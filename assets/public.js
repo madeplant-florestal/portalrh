@@ -50,7 +50,9 @@
     const copyBtn = panel.querySelector('[data-share-copy="1"]');
     const nativeBtn = panel.querySelector('[data-share-native="1"]');
     const links = panel.querySelectorAll('[data-share-link]');
-    const titleEl = document.querySelector('h2');
+    // `data-page-title` é o título real da página (Vagas Disponíveis / título da vaga) — mais preciso que "o
+    // primeiro h2 da página", que era frágil (a Nova UI da vitrine pública passou a usar h1 para o título).
+    const titleEl = document.querySelector('[data-page-title="1"]') || document.querySelector('h1') || document.querySelector('h2');
     const pageTitle = titleEl ? titleEl.textContent || document.title : document.title;
 
     const shareUtils = window.ShareUtils || {
@@ -352,10 +354,20 @@
     sync();
   };
 
+  // Esconde graciosamente uma imagem que falhou ao carregar (ex.: logo de benefício sem arquivo no
+  // ambiente) em vez de deixar o ícone de imagem quebrada do navegador — puramente cosmético, nunca
+  // impede o restante do bloco (nome/descrição do benefício) de aparecer.
+  const initImgFallback = () => {
+    document.querySelectorAll('[data-img-fallback-hide="1"]').forEach((img) => {
+      img.addEventListener('error', () => { img.style.display = 'none'; }, { once: true });
+    });
+  };
+
   document.addEventListener('DOMContentLoaded', () => {
     initShareMenu();
     initPublicMenu();
     initCpfValidation();
     initPhoneMask();
+    initImgFallback();
   });
 })();

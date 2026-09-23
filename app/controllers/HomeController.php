@@ -9,7 +9,7 @@ class HomeController extends Controller
             $vagas = [];
             $erro = 'Falha ao consultar vagas: ' . $e->getMessage();
         }
-        $this->view->render('home/index', ['vagas' => $vagas, 'erro' => $erro ?? null]);
+        $this->view->render('home/index', ['vagas' => $vagas, 'erro' => $erro ?? null, 'isFullBleed' => true]);
     }
 
     public function vaga(string $id): void
@@ -27,7 +27,7 @@ class HomeController extends Controller
         } catch (\Throwable $e) {
             $beneficios = [];
         }
-        $this->view->render('home/vaga', ['vaga' => $vaga, 'csrf' => $csrf, 'beneficios' => $beneficios]);
+        $this->view->render('home/vaga', ['vaga' => $vaga, 'csrf' => $csrf, 'beneficios' => $beneficios, 'isFullBleed' => true]);
     }
 
     public function candidatar(string $id): void

@@ -17,15 +17,18 @@ async function loginAdmin(page, appBase) {
   await expect(page).toHaveURL(new RegExp(`${appBase}/admin$`));
 }
 
-test('admin em vagas públicas permanece no fluxo público ao clicar em Vagas', async ({ page }) => {
+test('admin em vagas públicas permanece no fluxo público ao clicar em Trabalhe Conosco', async ({ page }) => {
   const appBase = await getAppBase(page);
   await loginAdmin(page, appBase);
 
   await page.goto(`${appBase}/vagas`, { waitUntil: 'domcontentloaded' });
-  await page.getByRole('link', { name: 'Vagas', exact: true }).click();
+  // Nova UI/UX da vitrine pública (Trabalhe Conosco): o link do cabeçalho passou de "Vagas" para
+  // "Trabalhe Conosco" e o título da página passou a ser o H1 do hero — a intenção do teste
+  // (navegação pública permanece pública) continua a mesma.
+  await page.getByRole('link', { name: 'Trabalhe Conosco', exact: true }).click();
 
   await expect(page).toHaveURL(new RegExp(`${appBase}/vagas$`));
-  await expect(page.getByRole('heading', { name: 'Vagas Disponíveis' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Construa sua carreira na Madeplant' })).toBeVisible();
 });
 
 test('acesso à raiz redireciona para /login', async ({ page }) => {
@@ -52,5 +55,5 @@ test('rotas públicas de vagas permanecem acessíveis sem autenticação', async
 
   await page.goto(`${appBase}/vagas`, { waitUntil: 'domcontentloaded' });
   await expect(page).toHaveURL(new RegExp(`${appBase}/vagas$`));
-  await expect(page.getByRole('heading', { name: 'Vagas Disponíveis' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Construa sua carreira na Madeplant' })).toBeVisible();
 });

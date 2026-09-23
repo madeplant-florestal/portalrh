@@ -50,7 +50,9 @@
     const copyBtn = panel.querySelector('[data-share-copy="1"]');
     const nativeBtn = panel.querySelector('[data-share-native="1"]');
     const links = panel.querySelectorAll('[data-share-link]');
-    const titleEl = document.querySelector('h2');
+    // `data-page-title` é o título real da página (Vagas Disponíveis / título da vaga) — mais preciso que "o
+    // primeiro h2 da página", que era frágil (a Nova UI da vitrine pública passou a usar h1 para o título).
+    const titleEl = document.querySelector('[data-page-title="1"]') || document.querySelector('h1') || document.querySelector('h2');
     const pageTitle = titleEl ? titleEl.textContent || document.title : document.title;
 
     const shareUtils = window.ShareUtils || {
@@ -180,6 +182,30 @@
     }
   };
 
+  const initPublicMenu = () => {
+    const btn = document.querySelector('[data-public-menu-toggle="1"]');
+    const menu = document.getElementById('public-menu');
+    if (!btn || !menu) return;
+    const open = () => {
+      menu.classList.remove('hidden');
+      btn.setAttribute('aria-expanded', 'true');
+    };
+    const close = () => {
+      menu.classList.add('hidden');
+      btn.setAttribute('aria-expanded', 'false');
+    };
+    btn.addEventListener('click', () => {
+      const expanded = btn.getAttribute('aria-expanded') === 'true';
+      if (expanded) close(); else open();
+    });
+    window.addEventListener('resize', () => {
+      if (window.innerWidth >= 640) {
+        menu.classList.add('hidden');
+        btn.setAttribute('aria-expanded', 'false');
+      }
+    });
+  };
+
   const initCpfValidation = () => {
     const cpfInput = document.querySelector('[data-cpf-input="1"]');
     if (!cpfInput) return;
@@ -288,9 +314,60 @@
     });
   };
 
+  const initPhoneMask = () => {
+    const phoneInput = document.querySelector('[data-phone-input="1"]');
+    if (!phoneInput || !window.PhoneUtils) return;
+
+    const phoneInvalid = document.querySelector('[data-phone-error="invalid"]');
+
+    const setHidden = (el, hidden) => {
+      if (!el) return;
+      if (hidden) {
+        el.classList.add('hidden');
+      } else {
+        el.classList.remove('hidden');
+      }
+    };
+
+    const sync = () => {
+      const d = window.PhoneUtils.digits(phoneInput.value || '').slice(0, 11);
+      phoneInput.value = window.PhoneUtils.format(d);
+
+      if (d.length === 0) {
+        setHidden(phoneInvalid, true);
+        phoneInput.setCustomValidity('');
+        return;
+      }
+
+      if (d.length !== 11) {
+        setHidden(phoneInvalid, false);
+        phoneInput.setCustomValidity('Telefone inválido. Informe 11 dígitos (DDD + número).');
+        return;
+      }
+
+      setHidden(phoneInvalid, true);
+      phoneInput.setCustomValidity('');
+    };
+
+    phoneInput.addEventListener('input', sync);
+    phoneInput.addEventListener('blur', sync);
+    sync();
+  };
+
+  // Esconde graciosamente uma imagem que falhou ao carregar (ex.: logo de benefício sem arquivo no
+  // ambiente) em vez de deixar o ícone de imagem quebrada do navegador — puramente cosmético, nunca
+  // impede o restante do bloco (nome/descrição do benefício) de aparecer.
+  const initImgFallback = () => {
+    document.querySelectorAll('[data-img-fallback-hide="1"]').forEach((img) => {
+      img.addEventListener('error', () => { img.style.display = 'none'; }, { once: true });
+    });
+  };
+
   document.addEventListener('DOMContentLoaded', () => {
     initShareMenu();
+    initPublicMenu();
     initCpfValidation();
+    initPhoneMask();
+    initImgFallback();
   });
 })();
-

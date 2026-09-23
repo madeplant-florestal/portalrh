@@ -7,6 +7,11 @@ require_once APP_PATH . '/views/partials/modulo-topo.php';
       'descricao' => 'Vagas do site de recrutamento e rascunhos gerados a partir das solicitações aprovadas.',
       'acao' => ['label' => 'Nova vaga (exceção)', 'href' => $base . '/admin/vagas/novo'],
   ]) ?>
+  <a href="<?= $base ?>/vagas" target="_blank" rel="noopener"
+     class="inline-flex items-center gap-1.5 text-ds-label font-semibold text-primary-700 hover:text-primary-800">
+    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M14 5h5v5m0-5L10 14M9 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-3"/></svg>
+    Ver página pública de vagas
+  </a>
   <div class="responsive-panel">
   <?php if (!empty($flashSuccess)): ?>
     <div class="mt-3 rounded border border-success/30 bg-success/10 px-3 py-2 text-sm text-success"><?= Security::e($flashSuccess) ?></div>

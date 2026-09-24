@@ -203,6 +203,42 @@ try {
     $assert($porLabelSexo['F']['desligamentos'] === 1, 'Caso 11: Feminino deveria ter 1 desligamento no período (headcount início=5, fim=5).');
     $assert(abs($porLabelSexo['F']['taxa'] - 20.0) < 0.05, 'Caso 11: turnover Feminino deveria ser 1/média(5,5)*100 = 20,0%, pela mesma fórmula oficial.');
 
+    // ---- Casos 12-14 (vigente × histórico — reconciliação de ausência) --------------------
+    // Ver migration 2026-09-24-colaboradores-metadados-reconciliacao-ausencia.sql: um contrato
+    // com ausente_na_origem=1 nunca pode contar como população VIGENTE agora, mas precisa
+    // continuar contando normalmente em qualquer cálculo histórico de uma data passada — a
+    // ausência foi detectada HOJE, não reescreve o passado.
+    $hoje = new DateTimeImmutable('today');
+
+    // Caso 12 — ausente, sem demissão (o padrão real dos "66 stale" do diagnóstico).
+    $contratoAusenteAtivo = contrato(['admissao' => '2025-01-01', 'demissao' => null, 'ausente_na_origem' => 1]);
+    $painelAtual12 = $S::montarPainelComContratos([$contratoAusenteAtivo], $hoje, $hoje);
+    $assert($painelAtual12['headcount_atual'] === 0, 'Caso 12: registro ausente_na_origem=1 nunca conta no headcount ATUAL (fim=hoje).');
+    $painelHistorico12 = $S::montarPainelComContratos([$contratoAusenteAtivo], new DateTimeImmutable('2025-05-01'), new DateTimeImmutable('2025-06-01'));
+    $assert($painelHistorico12['headcount_atual'] === 1, 'Caso 12: o MESMO registro ausente continua contando no headcount de uma data histórica (2025-06-01), onde estava genuinamente vigente — ausência detectada hoje não reescreve o passado.');
+
+    // Caso 13 — ausente, com demissão histórica (contrato já encerrado no passado).
+    $contratoAusenteDesligado = contrato(['admissao' => '2025-01-01', 'demissao' => '2025-12-31', 'ausente_na_origem' => 1]);
+    $painelAtual13 = $S::montarPainelComContratos([$contratoAusenteDesligado], $hoje, $hoje);
+    $assert($painelAtual13['headcount_atual'] === 0, 'Caso 13: registro ausente e já desligado nunca conta no headcount ATUAL.');
+    $painelHistorico13 = $S::montarPainelComContratos([$contratoAusenteDesligado], new DateTimeImmutable('2025-05-01'), new DateTimeImmutable('2025-06-01'));
+    $assert($painelHistorico13['headcount_atual'] === 1, 'Caso 13: o mesmo registro continua contando no headcount de 2025-06-01 (dentro da janela em que esteve genuinamente ativo) — histórico preservado mesmo estando ausente hoje.');
+    $admissoesHistoricas13 = $S::admissoesNoPeriodo([$contratoAusenteDesligado], new DateTimeImmutable('2024-12-01'), new DateTimeImmutable('2025-01-31'));
+    $assert(count($admissoesHistoricas13) === 1, 'Caso 13: admissoesNoPeriodo() continua contando o registro ausente normalmente — reconciliação não muda admissões.');
+    $desligamentosHistoricos13 = $S::desligamentosNoPeriodo([$contratoAusenteDesligado], new DateTimeImmutable('2025-12-01'), new DateTimeImmutable('2025-12-31'));
+    $assert(count($desligamentosHistoricos13) === 1, 'Caso 13: desligamentosNoPeriodo() continua contando o registro ausente normalmente — reconciliação não muda desligamentos.');
+
+    // Caso 14 — registro normal (sem a chave ausente_na_origem, equivalente a 0): nada muda.
+    $contratoNormal = contrato(['admissao' => '2025-01-01', 'demissao' => null]);
+    $painelNormalAtual = $S::montarPainelComContratos([$contratoNormal], $hoje, $hoje);
+    $assert($painelNormalAtual['headcount_atual'] === 1, 'Caso 14: registro sem ausente_na_origem (default 0) continua contando normalmente no headcount atual.');
+
+    // distribuicao_* é sempre uma fotografia de "agora" (já era, antes desta mudança) — por isso
+    // exclui o ausente mesmo quando o painel foi pedido para uma data histórica ($fim=2025-06-01).
+    $painelDist = $S::montarPainelComContratos([$contratoAusenteAtivo, $contratoNormal], new DateTimeImmutable('2025-05-01'), new DateTimeImmutable('2025-06-01'));
+    $totalDistribuicaoEmpresa = array_sum(array_column($painelDist['distribuicao_empresa'], 'quantidade'));
+    $assert($totalDistribuicaoEmpresa === 1, 'Caso 12b: distribuicao_empresa exclui o registro ausente mesmo com $fim histórico, porque distribuicao() é sempre uma fotografia de agora — só o contrato normal entra.');
+
     echo "OK unit_rh_indicadores_service\n";
 } catch (Throwable $e) {
     fwrite(STDERR, $e->getMessage() . PHP_EOL);

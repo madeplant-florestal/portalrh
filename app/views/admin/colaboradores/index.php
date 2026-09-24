@@ -6,6 +6,8 @@ $empresaSel = (string)($filters['empresa'] ?? '');
 $setorSel = (string)($filters['setor'] ?? '');
 $cargoSel = (string)($filters['cargo'] ?? '');
 $situacao = (string)($filters['situacao'] ?? '');
+$sexoSel = (string)($filters['sexo'] ?? '');
+$situacaoMetadadosSel = (string)($filters['situacao_metadados'] ?? '');
 $page = max(1, (int)($page ?? 1));
 $pages = max(1, (int)($pages ?? 1));
 $perPage = in_array((int)($perPage ?? 20), [20, 50, 100], true) ? (int)$perPage : 20;
@@ -19,8 +21,19 @@ $filterParams = [
   'setor' => $setorSel,
   'cargo' => $cargoSel,
   'situacao' => $situacao,
+  'sexo' => $sexoSel,
+  'situacao_metadados' => $situacaoMetadadosSel,
   'per_page' => $perPage,
 ];
+$rotuloSexo = static function (?string $sexo): string {
+  if ($sexo === 'M') {
+    return 'Masculino';
+  }
+  if ($sexo === 'F') {
+    return 'Feminino';
+  }
+  return 'Não informado';
+};
 $actionButtonClass = 'inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-white text-text-secondary shadow-sm transition hover:border-primary-300 hover:bg-primary-50 hover:text-primary-700';
 $toolbarIconButtonClass = 'group relative inline-flex h-11 w-11 items-center justify-center rounded-ds-lg border border-border bg-white text-text-secondary shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-border hover:bg-surface-secondary hover:text-text-primary focus:outline-none focus:ring-2 focus:ring-primary-100 focus:ring-offset-2';
 $toolbarMenuLinkClass = 'flex items-center gap-3 rounded-ds-md px-3 py-2 text-sm font-medium text-text-secondary transition hover:bg-surface-secondary hover:text-text-primary';
@@ -136,6 +149,23 @@ $formatarSalario = static function ($valor): string {
         </select>
       </div>
       <div>
+        <label class="mb-2 block text-sm font-medium text-text-primary">Sexo</label>
+        <select name="sexo" class="w-full rounded-ds-md border border-border px-4 py-3 text-sm outline-none transition focus:border-focus focus:ring-2 focus:ring-primary-100">
+          <option value="">Todos</option>
+          <option value="M" <?= $sexoSel === 'M' ? 'selected' : '' ?>>Masculino</option>
+          <option value="F" <?= $sexoSel === 'F' ? 'selected' : '' ?>>Feminino</option>
+          <option value="nao_informado" <?= $sexoSel === 'nao_informado' ? 'selected' : '' ?>>Não informado</option>
+        </select>
+      </div>
+      <div>
+        <label class="mb-2 block text-sm font-medium text-text-primary">Situação METADADOS</label>
+        <select name="situacao_metadados" class="w-full rounded-ds-md border border-border px-4 py-3 text-sm outline-none transition focus:border-focus focus:ring-2 focus:ring-primary-100">
+          <option value="">Todos</option>
+          <option value="sincronizado" <?= $situacaoMetadadosSel === 'sincronizado' ? 'selected' : '' ?>>Sincronizado</option>
+          <option value="ausente" <?= $situacaoMetadadosSel === 'ausente' ? 'selected' : '' ?>>Ausente na origem</option>
+        </select>
+      </div>
+      <div>
         <label class="mb-2 block text-sm font-medium text-text-primary">Registros por página</label>
         <select name="per_page" class="w-full rounded-ds-md border border-border px-4 py-3 text-sm outline-none transition focus:border-focus focus:ring-2 focus:ring-primary-100" data-colaboradores-per-page="1" data-autosubmit="1">
           <?php foreach ([20, 50, 100] as $perPageOption): ?>
@@ -220,7 +250,9 @@ $formatarSalario = static function ($valor): string {
             <th class="p-3 text-left font-medium text-text-secondary">Motivo rescisão</th>
             <th class="p-3 text-left font-medium text-text-secondary">CPF</th>
             <th class="p-3 text-left font-medium text-text-secondary">Salário</th>
+            <th class="p-3 text-left font-medium text-text-secondary">Sexo</th>
             <th class="p-3 text-left font-medium text-text-secondary">Situação</th>
+            <th class="p-3 text-left font-medium text-text-secondary">Situação METADADOS</th>
             <th class="p-3 text-right font-medium text-text-secondary">Ações</th>
           </tr>
         </thead>
@@ -228,6 +260,7 @@ $formatarSalario = static function ($valor): string {
           <?php foreach ($colaboradores as $colaborador): ?>
             <?php
               $isActive = (int)($colaborador['ativo'] ?? 0) === 1;
+              $isAusente = (int)($colaborador['ausente_na_origem'] ?? 0) === 1;
               $localId = ctype_digit((string)($colaborador['local_id'] ?? '')) ? (int)$colaborador['local_id'] : null;
             ?>
             <tr class="hover:bg-surface-secondary">
@@ -242,9 +275,15 @@ $formatarSalario = static function ($valor): string {
               <td class="p-3 text-text-primary"><?= Security::e($colaborador['motivo_rescisao_descricao'] ?: 'Não informado') ?></td>
               <td class="p-3 text-text-primary"><?= Security::e($mascararCpf($colaborador['cpf'] ?? null)) ?></td>
               <td class="p-3 text-text-primary"><?= Security::e($formatarSalario($colaborador['salario_atual'] ?? null)) ?></td>
+              <td class="p-3 text-text-primary"><?= Security::e($rotuloSexo($colaborador['sexo'] ?? null)) ?></td>
               <td class="p-3">
                 <span class="inline-flex rounded-full px-3 py-1 text-xs font-semibold <?= $isActive ? 'bg-success/10 text-success' : 'bg-surface-secondary text-text-secondary' ?>">
                   <?= $isActive ? 'Ativo' : 'Desligado' ?>
+                </span>
+              </td>
+              <td class="p-3">
+                <span class="inline-flex rounded-full px-3 py-1 text-xs font-semibold <?= $isAusente ? 'bg-warning/10 text-warning' : 'bg-surface-secondary text-text-secondary' ?>" <?= $isAusente ? 'title="Registro não encontrado no último sync completo da origem."' : '' ?>>
+                  <?= $isAusente ? 'Ausente na origem' : 'Sincronizado' ?>
                 </span>
               </td>
               <td class="p-3">
@@ -282,7 +321,7 @@ $formatarSalario = static function ($valor): string {
           <?php endforeach; ?>
           <?php if (empty($colaboradores)): ?>
             <tr>
-              <td colspan="13" class="p-6 text-center text-text-secondary">Nenhum colaborador encontrado para os filtros informados.</td>
+              <td colspan="15" class="p-6 text-center text-text-secondary">Nenhum colaborador encontrado para os filtros informados.</td>
             </tr>
           <?php endif; ?>
         </tbody>
@@ -293,6 +332,7 @@ $formatarSalario = static function ($valor): string {
       <?php foreach ($colaboradores as $colaborador): ?>
         <?php
           $isActive = (int)($colaborador['ativo'] ?? 0) === 1;
+          $isAusente = (int)($colaborador['ausente_na_origem'] ?? 0) === 1;
           $localId = ctype_digit((string)($colaborador['local_id'] ?? '')) ? (int)$colaborador['local_id'] : null;
         ?>
         <div class="responsive-card">
@@ -307,9 +347,13 @@ $formatarSalario = static function ($valor): string {
           <div class="mt-1 text-sm text-text-secondary">Motivo rescisão: <?= Security::e($colaborador['motivo_rescisao_descricao'] ?: 'Não informado') ?></div>
           <div class="mt-1 text-sm text-text-secondary">CPF: <?= Security::e($mascararCpf($colaborador['cpf'] ?? null)) ?></div>
           <div class="mt-1 text-sm text-text-secondary">Salário: <?= Security::e($formatarSalario($colaborador['salario_atual'] ?? null)) ?></div>
-          <div class="mt-3">
+          <div class="mt-1 text-sm text-text-secondary">Sexo: <?= Security::e($rotuloSexo($colaborador['sexo'] ?? null)) ?></div>
+          <div class="mt-3 flex flex-wrap gap-2">
             <span class="inline-flex rounded-full px-3 py-1 text-xs font-semibold <?= $isActive ? 'bg-success/10 text-success' : 'bg-surface-secondary text-text-secondary' ?>">
               <?= $isActive ? 'Ativo' : 'Desligado' ?>
+            </span>
+            <span class="inline-flex rounded-full px-3 py-1 text-xs font-semibold <?= $isAusente ? 'bg-warning/10 text-warning' : 'bg-surface-secondary text-text-secondary' ?>">
+              <?= $isAusente ? 'Ausente na origem' : 'Sincronizado' ?>
             </span>
           </div>
           <div class="mt-4 flex gap-2">

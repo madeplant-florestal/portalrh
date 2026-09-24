@@ -57,7 +57,10 @@ class MetadadosSyncIngestService
         $hashLote = hash('sha256', $corpoBruto);
 
         try {
-            $resumo = $this->syncService->applyRows($validacao['registros'], $validacao['origem'], false);
+            // $validacao['registros'] é sempre a dimensão colaboradores INTEIRA (o sender nunca
+            // pagina — ver scripts/sync_metadados_producao.php), então este lote, se chegou até
+            // aqui com a assinatura/estrutura validadas, é um sync completo: reconcilia ausências.
+            $resumo = $this->syncService->applyRows($validacao['registros'], $validacao['origem'], false, true);
         } catch (Throwable $e) {
             Logger::exception($e, 'ERROR', ['endpoint' => 'internal/metadados/colaboradores/sync']);
             $this->registrarHistorico($correlacaoId, MetadadosSyncExecucaoRepository::STATUS_FALHA, [

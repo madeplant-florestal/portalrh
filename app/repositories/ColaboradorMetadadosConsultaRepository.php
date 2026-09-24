@@ -36,21 +36,16 @@ class ColaboradorMetadadosConsultaRepository
         return $this->pdo;
     }
 
-    /**
-     * Os 6 indicadores da tela, todos derivados exclusivamente do espelho oficial.
-     *
-     * `desligados` = tudo que não está explicitamente ativo (`ativo = 0` OU `ativo IS NULL`),
-     * espelhando a mesma semântica da coluna usada em toda a integração.
-     *
-     * `cargos_distintos`: o código oficial `codigo_cargo` (Fase 5.1A) ainda pode estar NULL em
-     * boa parte do espelho enquanto a sincronização de códigos não roda em todos os ambientes;
-     * o COALESCE com o texto `cargo` evita que a contagem colapse para zero nesse cenário.
-     */
     public function summary(): array
     {
+        // `ativos` representa a população vigente AGORA: um contrato marcado `ausente_na_origem
+        // = 1` (chave que sumiu de um sync completo — ver migration de reconciliação) nunca deve
+        // contar aqui, mesmo que `ativo` continue 1 (esse campo não muda de sentido — ver
+        // docstring da migration). `desligados`/`contratos` continuam somando tudo: são
+        // contagens históricas, não population vigente, e a ausência não apaga histórico.
         $sql = 'SELECT
                     COUNT(*) AS contratos,
-                    SUM(CASE WHEN ativo = 1 THEN 1 ELSE 0 END) AS ativos,
+                    SUM(CASE WHEN ativo = 1 AND ausente_na_origem = 0 THEN 1 ELSE 0 END) AS ativos,
                     SUM(CASE WHEN ativo IS NULL OR ativo = 0 THEN 1 ELSE 0 END) AS desligados,
                     COUNT(DISTINCT codigo_empresa) AS empresas,
                     COUNT(DISTINCT COALESCE(NULLIF(codigo_cargo, \'\'), cargo)) AS cargos_distintos,
@@ -72,7 +67,8 @@ class ColaboradorMetadadosConsultaRepository
      * Página da listagem oficial. Uma linha do resultado = um contrato de `colaboradores_metadados`.
      *
      * @param array $filtros Chaves: q, empresa (codigo_empresa), setor (texto), cargo (texto),
-     *                       situacao ('ativos'|'desligados'|''). Ausente/vazio = sem filtro.
+     *                       situacao ('ativos'|'desligados'|''), sexo ('M'|'F'|'nao_informado'|''),
+     *                       situacao_metadados ('sincronizado'|'ausente'|''). Ausente/vazio = sem filtro.
      * @return array{items:array,total:int,page:int,per_page:int,pages:int}
      */
     public function paginate(array $filtros, int $page, int $perPage): array
@@ -99,7 +95,7 @@ class ColaboradorMetadadosConsultaRepository
         $sql = 'SELECT
                     m.id, m.nome, m.cargo, m.empresa, m.setor, m.unidade,
                     m.numero_contrato, m.codigo_empresa, m.codigo_pessoa,
-                    m.cpf, m.salario_atual,
+                    m.cpf, m.salario_atual, m.sexo, m.ausente_na_origem,
                     m.admissao, m.nascimento, m.demissao, m.motivo_rescisao_descricao,
                     m.ativo,
                     c.id AS local_id
@@ -207,9 +203,27 @@ class ColaboradorMetadadosConsultaRepository
 
         $situacao = (string)($filtros['situacao'] ?? '');
         if ($situacao === 'ativos') {
-            $where[] = 'm.ativo = 1';
+            // Coerente com summary(): população vigente exclui quem sumiu de um sync completo.
+            $where[] = 'm.ativo = 1 AND m.ausente_na_origem = 0';
         } elseif ($situacao === 'desligados') {
             $where[] = '(m.ativo IS NULL OR m.ativo = 0)';
+        }
+
+        $sexo = (string)($filtros['sexo'] ?? '');
+        if ($sexo === 'M' || $sexo === 'F') {
+            $where[] = 'm.sexo = ?';
+            $params[] = $sexo;
+        } elseif ($sexo === 'nao_informado') {
+            $where[] = "(m.sexo IS NULL OR TRIM(m.sexo) = '')";
+        }
+
+        // Situação METADADOS: dimensão independente de `situacao` (ativo/desligado) — um
+        // contrato pode estar desligado e nunca ter ficado ausente, ou vice-versa.
+        $situacaoMetadados = (string)($filtros['situacao_metadados'] ?? '');
+        if ($situacaoMetadados === 'sincronizado') {
+            $where[] = 'm.ausente_na_origem = 0';
+        } elseif ($situacaoMetadados === 'ausente') {
+            $where[] = 'm.ausente_na_origem = 1';
         }
 
         return [$where, $params];

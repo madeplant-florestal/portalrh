@@ -102,13 +102,12 @@ class MetadadosSyncService
         $this->repository = $repository ?? new ColaboradorMetadadosRepository();
     }
 
-    /**
-     * @param bool $permitirOrigemMista Ver applyRows() — só passe true sabendo exatamente por quê.
-     */
     public function run(bool $permitirOrigemMista = false): array
     {
         $rows = $this->fetchSourceRows();
-        return $this->applyRows($rows, null, $permitirOrigemMista);
+        // fetchSourceRows() sempre traz a dimensão inteira (sem paginação) — este é, por
+        // construção, um sync completo: reconcilia ausências (ver applyRows()).
+        return $this->applyRows($rows, null, $permitirOrigemMista, true);
     }
 
     /**
@@ -166,13 +165,25 @@ class MetadadosSyncService
      * que `$permitirOrigemMista` seja explicitamente true. Isso é o que teria impedido os 6
      * contratos de RHTESTE de ficarem misturados aos 727 de RHMADEPLANT sem que ninguém soubesse.
      *
+     * Reconciliação de ausência (ver migration 2026-09-24-colaboradores-metadados-reconciliacao-
+     * ausencia.sql / ColaboradorMetadadosRepository::reconciliarAusentes()): quando
+     * `$reconciliarAusentes` é true, ao final do lote — só se `errors === 0` — toda chave hoje
+     * vigente que não veio em `$rows` é marcada `ausente_na_origem = 1`. `$reconciliarAusentes`
+     * é opt-in e default false de propósito: `$rows` pode ser uma amostra pequena (testes,
+     * chamadas manuais) e reconciliar contra uma amostra marcaria como ausente qualquer coisa
+     * fora dela — um falso positivo em massa. Só passe true quando `$rows` for, com certeza, a
+     * dimensão INTEIRA lida da origem agora mesmo (é o que run() e
+     * MetadadosSyncIngestService::receberLote() fazem — nenhum outro chamador deve passar true).
+     * Se houver qualquer erro no lote, a reconciliação é pulada inteira (não sabemos se as linhas
+     * com erro representam ausência real ou só uma falha de escrita local).
+     *
      * @param string|null $origem Rótulo da origem desta sincronização. Nulo = resolve
      *                            automaticamente via MetadadosDatabase::sourceLabel() (o
      *                            `Database=` do DSN ativo). Testes injetam um valor explícito
      *                            para não depender do local.php do ambiente.
-     * @return array{inserted:int, updated:int, unchanged:int, errors:int, error_details:array, origem:string}
+     * @return array{inserted:int, updated:int, unchanged:int, errors:int, error_details:array, origem:string, ausentes_marcados:int}
      */
-    public function applyRows(array $rows, ?string $origem = null, bool $permitirOrigemMista = false): array
+    public function applyRows(array $rows, ?string $origem = null, bool $permitirOrigemMista = false, bool $reconciliarAusentes = false): array
     {
         $origem = $origem ?? MetadadosDatabase::sourceLabel();
         $pdo = $this->repository->connection();
@@ -193,7 +204,7 @@ class MetadadosSyncService
             }
         }
 
-        $summary = ['inserted' => 0, 'updated' => 0, 'unchanged' => 0, 'errors' => 0, 'error_details' => [], 'origem' => $origem];
+        $summary = ['inserted' => 0, 'updated' => 0, 'unchanged' => 0, 'errors' => 0, 'error_details' => [], 'origem' => $origem, 'ausentes_marcados' => 0];
 
         $pdo->beginTransaction();
         try {
@@ -212,6 +223,13 @@ class MetadadosSyncService
                     ]);
                 }
             }
+
+            if ($reconciliarAusentes && $summary['errors'] === 0) {
+                $identificadores = array_map(static fn(array $row): string => (string)($row['identificador'] ?? ''), $rows);
+                $resultadoReconciliacao = $this->repository->reconciliarAusentes($identificadores);
+                $summary['ausentes_marcados'] = $resultadoReconciliacao['marcados_ausentes'];
+            }
+
             $pdo->commit();
         } catch (\Throwable $e) {
             if ($pdo->inTransaction()) {

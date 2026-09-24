@@ -41,7 +41,13 @@ class RhIndicadoresRepository
      *                       centro_custo. Ausente/vazio = sem filtro naquela dimensão.
      * @return array Cada item: id, codigo_empresa, empresa, codigo_unidade, unidade, cargo,
      *               setor, centro_custo, admissao, demissao, motivo_rescisao_descricao, ativo,
-     *               sexo.
+     *               sexo, ausente_na_origem. `ausente_na_origem` (ver migration 2026-09-24-
+     *               colaboradores-metadados-reconciliacao-ausencia.sql): sinaliza que a chave
+     *               sumiu de um sync completo mais recente — usado só para excluir o registro da
+     *               população VIGENTE agora (headcount atual/distribuições atuais em
+     *               RhIndicadoresService::montarPainelComContratos()), nunca para filtrar
+     *               cálculos históricos por data passada (admissões/desligamentos/turnover por
+     *               período continuam usando o histórico completo, sem este filtro).
      */
     public function buscarContratos(array $filtros = []): array
     {
@@ -63,7 +69,8 @@ class RhIndicadoresRepository
         }
 
         $sql = 'SELECT id, codigo_empresa, empresa, codigo_unidade, unidade, cargo, setor,
-                       centro_custo, admissao, demissao, motivo_rescisao_descricao, ativo, sexo
+                       centro_custo, admissao, demissao, motivo_rescisao_descricao, ativo, sexo,
+                       ausente_na_origem
                 FROM colaboradores_metadados';
         if ($where !== []) {
             $sql .= ' WHERE ' . implode(' AND ', $where);

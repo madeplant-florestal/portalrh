@@ -170,6 +170,54 @@ try {
     $check($repo->paginate(['setor' => $setorNome], 1, 100)['total'] === 5, 'filtro setor (texto) retorna os 5 contratos');
     $check($repo->paginate(['cargo' => $cargoB], 1, 100)['total'] === 2, 'filtro cargo (texto) retorna os 2 contratos do cargo B');
 
+    // ---- filtro de sexo + situação METADADOS (dimensões independentes) -
+    $antesSX = $repo->summary();
+    $tokSX = 'ZZSX' . substr(md5(uniqid('', true)), 0, 8);
+    $codEmpresaSX = 'E' . substr($tokSX, 0, 12);
+    $insertSX = $pdo->prepare(
+        'INSERT INTO colaboradores_metadados
+            (identificador, codigo_empresa, codigo_unidade, numero_contrato, codigo_pessoa,
+             cpf, nome, empresa, admissao, cargo, unidade, setor, ativo, origem_metadados,
+             sexo, ausente_na_origem, ausente_desde)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,1,?,?,?,?)'
+    );
+    // [nome, sexo, ausente_na_origem, ausente_desde]
+    $linhasSX = [
+        ['MASC ' . $tokSX, 'M', 0, null],
+        ['FEM ' . $tokSX, 'F', 0, null],
+        ['SEMSEXO ' . $tokSX, null, 0, null],
+        ['AUSENTE ' . $tokSX, 'M', 1, '2026-09-08 20:43:34'],
+    ];
+    foreach ($linhasSX as $i => $l) {
+        $insertSX->execute([
+            'IDSX' . $tokSX . $i, $codEmpresaSX, 'U1', 'CSX' . substr($tokSX, 0, 8) . $i, $tokSX . 'P' . $i,
+            '9876543210' . $i, $l[0], 'EMP ' . $tokSX, '2020-01-0' . ($i + 1), 'CARGO ' . $tokSX,
+            'UNIDADE ' . $tokSX, 'SET ' . $tokSX, 'RHMADEPLANT', $l[1], $l[2], $l[3],
+        ]);
+    }
+
+    $check($repo->paginate(['q' => $tokSX, 'sexo' => 'M'], 1, 100)['total'] === 2, 'filtro sexo=M retorna os 2 contratos masculinos (inclui o ausente)');
+    $check($repo->paginate(['q' => $tokSX, 'sexo' => 'F'], 1, 100)['total'] === 1, 'filtro sexo=F retorna o contrato feminino');
+    $check($repo->paginate(['q' => $tokSX, 'sexo' => 'nao_informado'], 1, 100)['total'] === 1, 'filtro sexo=nao_informado retorna o contrato sem sexo');
+    $check($repo->paginate(['q' => $tokSX, 'situacao_metadados' => 'ausente'], 1, 100)['total'] === 1, 'filtro situacao_metadados=ausente retorna só o registro ausente');
+    $check($repo->paginate(['q' => $tokSX, 'situacao_metadados' => 'sincronizado'], 1, 100)['total'] === 3, 'filtro situacao_metadados=sincronizado retorna os 3 demais');
+    $check($repo->paginate(['q' => $tokSX, 'sexo' => 'M', 'situacao_metadados' => 'sincronizado'], 1, 100)['total'] === 1, 'filtros combinados sexo=M + situacao_metadados=sincronizado excluem o ausente');
+
+    $itensSX = $repo->paginate(['q' => $tokSX], 1, 100)['items'];
+    $porNomeSX = [];
+    foreach ($itensSX as $it) {
+        $porNomeSX[$it['nome']] = $it;
+    }
+    $check(($porNomeSX['AUSENTE ' . $tokSX]['ausente_na_origem'] ?? null) == 1, 'paginate() expõe ausente_na_origem para a view');
+    $check(($porNomeSX['MASC ' . $tokSX]['sexo'] ?? null) === 'M', 'paginate() expõe sexo para a view');
+
+    // ---- summary(): ativos exclui ausente_na_origem = 1 (headcount vigente) -----------
+    // As 4 linhas SX têm ativo=1; só 3 estão sincronizadas. O delta deve ser exatamente +3,
+    // nunca +4 — a linha ausente nunca deve contar como população vigente, mesmo com ativo=1.
+    $depoisSX = $repo->summary();
+    $check($depoisSX['ativos'] - $antesSX['ativos'] === 3, 'summary(): ativos soma exatamente as 3 linhas sincronizadas do cenário SX, nunca a 4ª (ausente_na_origem=1)');
+    $check($depoisSX['contratos'] - $antesSX['contratos'] === 4, 'summary(): contratos (histórico) continua somando as 4 linhas SX, inclusive a ausente');
+
     // ---- opções de filtro ---------------------------------------------
     $opcoes = $repo->opcoesFiltro();
     $codigosEmpresa = array_map(static fn($e) => (string)$e['codigo_empresa'], $opcoes['empresas']);

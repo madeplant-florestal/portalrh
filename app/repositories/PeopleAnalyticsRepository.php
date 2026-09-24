@@ -44,9 +44,13 @@ class PeopleAnalyticsRepository
      * @param array $filtros Chaves aceitas: codigo_empresa, codigo_setor. Ausente/vazio = sem filtro.
      * @return array Cada item: codigo_pessoa, admissao, demissao, motivo_rescisao_codigo,
      *               motivo_rescisao_descricao, nascimento, sexo, codigo_setor, ativo,
-     *               codigo_empresa, empresa. `sexo` (RHPESSOAS.SEXO): dimensão demográfica
-     *               agregável, trazida para o diagnóstico "Transferências + Turnover por
-     *               Sexo/Gênero" — nunca renomeada para `genero` nesta camada.
+     *               codigo_empresa, empresa, ausente_na_origem. `sexo` (RHPESSOAS.SEXO): dimensão
+     *               demográfica agregável, trazida para o diagnóstico "Transferências + Turnover
+     *               por Sexo/Gênero" — nunca renomeada para `genero` nesta camada.
+     *               `ausente_na_origem` (ver migration 2026-09-24-colaboradores-metadados-
+     *               reconciliacao-ausencia.sql): só serve para excluir da população VIGENTE agora
+     *               (card Headcount Atual/Headcount por Empresa) — nunca aplicado a Turnover,
+     *               Admissões ou Desligamentos, que continuam olhando o histórico completo.
      */
     public function buscarContratos(array $filtros = []): array
     {
@@ -64,7 +68,7 @@ class PeopleAnalyticsRepository
 
         $sql = 'SELECT codigo_pessoa, admissao, demissao, motivo_rescisao_codigo,
                        motivo_rescisao_descricao, nascimento, sexo, codigo_setor, ativo,
-                       codigo_empresa, empresa
+                       codigo_empresa, empresa, ausente_na_origem
                 FROM colaboradores_metadados';
         if ($where !== []) {
             $sql .= ' WHERE ' . implode(' AND ', $where);
@@ -115,10 +119,14 @@ class PeopleAnalyticsRepository
      * CONTRATO (mesma convenção de Headcount/Admissões/Desligamentos desta tela), nunca pessoa
      * distinta. Quem não tem `codigo_setor` no espelho entra em "Setor não informado" — nunca
      * redistribuído, nunca inferido por cargo/centro de custo/cadastro legado.
+     *
+     * Sem parâmetro de data (é sempre "agora") — por isso exclui `ausente_na_origem = 1`
+     * incondicionalmente, ao contrário dos cálculos de headcount/turnover por período em
+     * buscarContratos(), que preservam o histórico completo.
      */
     public function distribuicaoAtivosPorSetor(array $filtros = []): array
     {
-        $where = ["cm.ativo = 1"];
+        $where = ["cm.ativo = 1", "cm.ausente_na_origem = 0"];
         $params = [];
         if (!empty($filtros['codigo_empresa'])) {
             $where[] = 'cm.codigo_empresa = ?';

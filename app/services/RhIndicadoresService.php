@@ -87,8 +87,28 @@ class RhIndicadoresService
         $turnoverMensal = self::turnoverMensal($contratos, $inicio, $fim);
         $turnoverPrecoce = self::turnoverPrecoce($desligamentos);
 
+        // População VIGENTE (exclui `ausente_na_origem = 1` — ver migration 2026-09-24-
+        // colaboradores-metadados-reconciliacao-ausencia.sql) nunca substitui $contratos nos
+        // cálculos acima: Turnover Geral/admissões/desligamentos/turnover mensal continuam
+        // olhando o histórico completo, propositalmente, porque dependem de datas passadas
+        // (inclusive $inicioAnterior, sempre histórico) onde um registro hoje "ausente" pode ter
+        // sido perfeitamente válido. $contratosVigentesAgora serve só para o que é,
+        // deliberadamente, sempre uma fotografia de "agora":
+        //   - distribuicao() já é hoje-ancorada internamente (sempre foi, mesmo antes desta
+        //     mudança) — filtrar sua entrada é sempre seguro, qualquer que seja $fim;
+        //   - 'headcount_atual' só recebe o filtro quando $fim É hoje de fato (ex.: período "Ano
+        //     anterior" usa $fim = 31/12 do ano passado — headcount_atual ali é uma fotografia
+        //     histórica, não "agora", e nunca deve levar em conta ausência detectada hoje).
+        $contratosSemAusentes = array_values(array_filter(
+            $contratos,
+            static fn(array $c): bool => (int)($c['ausente_na_origem'] ?? 0) === 0
+        ));
+        $hoje = new DateTimeImmutable('today');
+        $fimEhHoje = $fim->format('Y-m-d') === $hoje->format('Y-m-d');
+        $headcountAtualVigente = $fimEhHoje ? self::headcountEm($contratosSemAusentes, $fim) : $headcountFim;
+
         return [
-            'headcount_atual' => $headcountFim,
+            'headcount_atual' => $headcountAtualVigente,
             'headcount_inicio_periodo' => $headcountInicio,
             'admissoes_periodo' => count($admissoes),
             'desligamentos_periodo' => count($desligamentos),
@@ -96,11 +116,11 @@ class RhIndicadoresService
             'turnover_mensal' => $turnoverMensal,
             'turnover_precoce' => $turnoverPrecoce,
             'motivos_rescisao' => self::motivosRescisao($desligamentos),
-            'distribuicao_empresa' => self::distribuicao($contratos, 'empresa'),
-            'distribuicao_unidade' => self::distribuicao($contratos, 'unidade'),
-            'distribuicao_cargo' => self::distribuicao($contratos, 'cargo'),
-            'distribuicao_setor' => self::distribuicao($contratos, 'setor'),
-            'distribuicao_centro_custo' => self::distribuicao($contratos, 'centro_custo'),
+            'distribuicao_empresa' => self::distribuicao($contratosSemAusentes, 'empresa'),
+            'distribuicao_unidade' => self::distribuicao($contratosSemAusentes, 'unidade'),
+            'distribuicao_cargo' => self::distribuicao($contratosSemAusentes, 'cargo'),
+            'distribuicao_setor' => self::distribuicao($contratosSemAusentes, 'setor'),
+            'distribuicao_centro_custo' => self::distribuicao($contratosSemAusentes, 'centro_custo'),
             'turnover_por_empresa' => self::turnoverPorDimensao($contratos, 'empresa', $inicio, $fim),
             'turnover_por_unidade' => self::turnoverPorDimensao($contratos, 'unidade', $inicio, $fim),
             'turnover_por_cargo' => self::turnoverPorDimensao($contratos, 'cargo', $inicio, $fim),

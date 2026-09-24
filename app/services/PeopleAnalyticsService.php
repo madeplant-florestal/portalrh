@@ -96,6 +96,25 @@ class PeopleAnalyticsService
         $turnoverVoluntario = RhIndicadoresService::taxaTurnover($voluntarios, $headcountInicio, $headcountFim);
         $turnoverInvoluntario = RhIndicadoresService::taxaTurnover($involuntarios, $headcountInicio, $headcountFim);
 
+        // Card "Headcount Atual" (fotografia de AGORA, distinta do $headcountFim usado acima como
+        // base do Turnover — ver migration 2026-09-24-colaboradores-metadados-reconciliacao-
+        // ausencia.sql): exclui `ausente_na_origem = 1` só quando $fim é realmente hoje (período
+        // "Ano anterior", por exemplo, usa $fim = 31/12 do ano passado — nesse caso o card
+        // representa uma fotografia histórica, e ausência detectada HOJE não pode reescrever o
+        // passado). Turnover Geral/Voluntário/Involuntário acima continuam intocados, sempre
+        // sobre $headcountFim/$contratos completos — nenhuma fórmula de Turnover muda aqui.
+        $hoje = new DateTimeImmutable('today');
+        $fimEhHoje = $fim->format('Y-m-d') === $hoje->format('Y-m-d');
+        $contratosParaHeadcountAtual = $contratos;
+        $headcountAtualVigente = $headcountFim;
+        if ($fimEhHoje) {
+            $contratosParaHeadcountAtual = array_values(array_filter(
+                $contratos,
+                static fn(array $c): bool => (int)($c['ausente_na_origem'] ?? 0) === 0
+            ));
+            $headcountAtualVigente = RhIndicadoresService::headcountEm($contratosParaHeadcountAtual, $fim);
+        }
+
         // Vagas: filtro de Empresa traduzido de codigo_empresa (METADADOS) para o id local da
         // Empresa (dimensão do recrutamento) — reaproveita EmpresaMetadadosRepository, já oficial.
         // Setor não é suportado pelo módulo de Recrutamento hoje (vagas/solicitações não têm essa
@@ -112,7 +131,9 @@ class PeopleAnalyticsService
         $avaliacaoExperiencia = $this->repository->avaliacaoExperiencia($inicio, $fim, RhIndicadoresService::LIMITE_TURNOVER_PRECOCE_DIAS);
 
         $nomesEmpresa = $this->mapaNomesEmpresa($contratos);
-        $headcountPorEmpresa = $this->montarHeadcountPorEmpresa($contratos, $fim, $nomesEmpresa);
+        // Mesma base de contratos do card Headcount Atual (vigente quando $fim é hoje) — garante
+        // que a soma das barras deste gráfico continue exatamente igual ao card acima.
+        $headcountPorEmpresa = $this->montarHeadcountPorEmpresa($contratosParaHeadcountAtual, $fim, $nomesEmpresa);
         [$turnoverPorEmpresa, $desligamentosPorEmpresa] = $this->montarTurnoverEDesligamentosPorEmpresa(
             $contratos,
             $inicio,
@@ -123,7 +144,7 @@ class PeopleAnalyticsService
 
         return [
             'headcount' => [
-                'atual' => $headcountFim,
+                'atual' => $headcountAtualVigente,
             ],
             'headcount_por_empresa' => $headcountPorEmpresa,
             'vagas' => $vagas,

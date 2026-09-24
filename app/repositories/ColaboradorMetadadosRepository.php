@@ -37,12 +37,6 @@ class ColaboradorMetadadosRepository
         return $row ?: null;
     }
 
-    /**
-     * @param string $origem Rótulo da origem desta sincronização (ex.: "RHMADEPLANT", "RHTESTE"),
-     *                       gravado em `origem_metadados` em todo insert/update — nunca deixado
-     *                       vazio numa escrita nova. Ver MetadadosSyncService::originConflict().
-     * @return string 'inserted'|'updated'|'unchanged'
-     */
     public function upsert(array $row, string $origem): string
     {
         $codigoEmpresa = (string)$row['codigo_empresa'];
@@ -56,7 +50,11 @@ class ColaboradorMetadadosRepository
             return 'inserted';
         }
 
-        if (!$this->rowsDiffer($existing, $row)) {
+        // Uma chave que reaparece precisa sempre limpar a sinalização de ausência (ver
+        // reconciliarAusentes()), mesmo que nenhum campo comparável tenha mudado — por isso o
+        // caminho "unchanged" só é tomado se o registro já não estiver marcado como ausente.
+        $estavaAusente = (int)($existing['ausente_na_origem'] ?? 0) === 1;
+        if (!$this->rowsDiffer($existing, $row) && !$estavaAusente) {
             return 'unchanged';
         }
 
@@ -72,8 +70,9 @@ class ColaboradorMetadadosRepository
                 cpf, nome, empresa, nascimento, sexo, admissao, cargo, demissao,
                 motivo_rescisao_codigo, motivo_rescisao_descricao, unidade, setor, centro_custo,
                 codigo_setor, codigo_cargo, codigo_centro_custo,
-                ativo, origem_metadados, salario_atual, data_inicio_cargo, atualizado_em_origem
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
+                ativo, origem_metadados, salario_atual, data_inicio_cargo, atualizado_em_origem,
+                ausente_na_origem, ausente_desde
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,NULL)'
         );
         $stmt->execute([
             (string)$row['identificador'],
@@ -107,6 +106,9 @@ class ColaboradorMetadadosRepository
 
     private function update(int $id, array $row, string $origem): void
     {
+        // ausente_na_origem/ausente_desde sempre voltam a 0/NULL aqui: update() só é chamado para
+        // uma chave que VEIO no lote atual (ver upsert()) — reaparecer sempre limpa a sinalização
+        // de ausência, sem exigir nenhuma ação manual (ver reconciliarAusentes()).
         $stmt = $this->pdo->prepare(
             'UPDATE colaboradores_metadados SET
                 identificador = ?, codigo_pessoa = ?, cpf = ?, nome = ?, empresa = ?,
@@ -115,7 +117,8 @@ class ColaboradorMetadadosRepository
                 unidade = ?, setor = ?, centro_custo = ?,
                 codigo_setor = ?, codigo_cargo = ?, codigo_centro_custo = ?,
                 ativo = ?, origem_metadados = ?,
-                salario_atual = ?, data_inicio_cargo = ?, atualizado_em_origem = ?
+                salario_atual = ?, data_inicio_cargo = ?, atualizado_em_origem = ?,
+                ausente_na_origem = 0, ausente_desde = NULL
              WHERE id = ?'
         );
         $stmt->execute([
@@ -144,6 +147,45 @@ class ColaboradorMetadadosRepository
             self::nullableString($row['atualizado_em_origem'] ?? null),
             $id,
         ]);
+    }
+
+    /**
+     * Reconciliação de ausência (ver migration 2026-09-24-colaboradores-metadados-reconciliacao-
+     * ausencia.sql): marca como `ausente_na_origem = 1` toda chave hoje vigente
+     * (`ausente_na_origem = 0`) que NÃO está no conjunto de `identificador` recebido no lote
+     * atual. Nunca faz DELETE, nunca mexe em `ativo`/`demissao`/qualquer outro campo — só
+     * sinaliza. Uma chave já marcada como ausente nunca tem `ausente_desde` sobrescrito aqui
+     * (a condição `ausente_na_origem = 0` já a exclui do UPDATE).
+     *
+     * Só deve ser chamada por MetadadosSyncService::applyRows() quando o próprio chamador
+     * confirma que o lote é um sync completo e bem-sucedido (ver docstring de applyRows()) —
+     * nunca em teste isolado, dry-run ou lote parcial.
+     *
+     * Proteção mínima contra acidente de origem: um lote vazio nunca reconcilia — é o único
+     * sinal inequívoco de que a leitura da origem falhou ou voltou vazia. Qualquer outro
+     * tamanho é aceito: a verdade é o CONJUNTO de chaves recebidas, nunca uma contagem fixa
+     * esperada (o lote de hoje pode legitimamente ter menos ou mais registros que o anterior).
+     *
+     * @param string[] $identificadoresRecebidos Todo `identificador` do lote atual (a dimensão
+     *                                            inteira, nunca uma amostra).
+     * @return array{marcados_ausentes:int, ignorado_lote_vazio:bool}
+     */
+    public function reconciliarAusentes(array $identificadoresRecebidos): array
+    {
+        $identificadoresRecebidos = array_values(array_unique(array_map('strval', $identificadoresRecebidos)));
+        if ($identificadoresRecebidos === []) {
+            return ['marcados_ausentes' => 0, 'ignorado_lote_vazio' => true];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($identificadoresRecebidos), '?'));
+        $stmt = $this->pdo->prepare(
+            "UPDATE colaboradores_metadados
+             SET ausente_na_origem = 1, ausente_desde = NOW()
+             WHERE ausente_na_origem = 0 AND identificador NOT IN ($placeholders)"
+        );
+        $stmt->execute($identificadoresRecebidos);
+
+        return ['marcados_ausentes' => $stmt->rowCount(), 'ignorado_lote_vazio' => false];
     }
 
     /**

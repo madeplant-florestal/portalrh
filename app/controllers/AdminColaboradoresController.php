@@ -19,6 +19,8 @@ class AdminColaboradoresController extends Controller
             'setor' => Security::sanitizeString($_GET['setor'] ?? ''),
             'cargo' => Security::sanitizeString($_GET['cargo'] ?? ''),
             'situacao' => Security::sanitizeString($_GET['situacao'] ?? ''),
+            'sexo' => Security::sanitizeString($_GET['sexo'] ?? ''),
+            'situacao_metadados' => Security::sanitizeString($_GET['situacao_metadados'] ?? ''),
         ];
 
         $repo = new ColaboradorMetadadosConsultaRepository();

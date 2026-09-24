@@ -20,6 +20,9 @@ if ($tableExists === 0) {
     echo "SKIP integration_metadados_sync_ingest (migration colaboradores-metadados.sql nao aplicada)\n";
     exit(0);
 }
+$hasReconciliacao = (int)$pdo->query(
+    "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'colaboradores_metadados' AND COLUMN_NAME = 'ausente_na_origem'"
+)->fetchColumn() > 0;
 
 // O receiver agora registra cada sincronização válida em metadados_sync_execucoes (observabilidade).
 // Marca o ponto de partida para limpar só as linhas criadas por este teste no finally.
@@ -214,6 +217,39 @@ try {
     $assert($linha666['cargo'] === "Analista'; DROP TABLE colaboradores_metadados; --", 'Caso 12: o texto deveria ter sido persistido literalmente, sem execução.');
     $totalAindaExiste = (int)$pdo->query("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'colaboradores_metadados'")->fetchColumn();
     $assert($totalAindaExiste === 1, 'Caso 12: a tabela colaboradores_metadados ainda deveria existir (nenhum SQL foi executado).');
+
+    // 13) Reconciliação de ausência de ponta a ponta via receberLote() (migration 2026-09-24-
+    //     colaboradores-metadados-reconciliacao-ausencia.sql): o mesmo lote que upserta também
+    //     reconcilia quem sumiu, porque este endpoint sempre recebe a dimensão colaboradores
+    //     INTEIRA de uma vez (ver MetadadosSyncIngestService::receberLote()).
+    if ($hasReconciliacao) {
+        $registro901 = registroIngest($empresa, $unidade, $sufixo, [
+            'identificador' => "$empresa-$unidade-901", 'numero_contrato' => '901', 'codigo_pessoa' => 'PES' . $sufixo . '9',
+        ]);
+        $payload13a = [
+            'versao' => '1', 'origem_metadados' => 'RHMADEPLANT',
+            'gerado_em' => (new DateTimeImmutable())->format(DateTimeInterface::ATOM),
+            'total' => 2, 'registros' => [$registro1, $registro901],
+        ];
+        $assinado13a = assinarLote($payload13a, $segredo);
+        $r13a = $service->receberLote($assinado13a['corpo'], $assinado13a['headers'], $config);
+        $assert($r13a['http_status'] === 200 && $r13a['body']['ok'] === true, 'Caso 13a: lote completo sem o registro 002 é aceito normalmente.');
+        $linha002 = $repo->findByVinculo($empresa, $unidade, '002');
+        $assert((int)$linha002['ausente_na_origem'] === 1, 'Caso 13a: receberLote() reconcilia de ponta a ponta — 002 sumiu do lote e é marcado ausente.');
+        $assert($linha002['ausente_desde'] !== null, 'Caso 13a: ausente_desde preenchido pela reconciliação disparada via ingest.');
+
+        // 13b) 002 volta no próximo lote completo -> reconciliação limpa a sinalização sozinha.
+        $payload13b = [
+            'versao' => '1', 'origem_metadados' => 'RHMADEPLANT',
+            'gerado_em' => (new DateTimeImmutable())->format(DateTimeInterface::ATOM),
+            'total' => 3, 'registros' => [$registro1, $registro2, $registro901],
+        ];
+        $assinado13b = assinarLote($payload13b, $segredo);
+        $r13b = $service->receberLote($assinado13b['corpo'], $assinado13b['headers'], $config);
+        $assert($r13b['http_status'] === 200 && $r13b['body']['ok'] === true, 'Caso 13b: lote completo com 002 de volta é aceito normalmente.');
+        $linha002 = $repo->findByVinculo($empresa, $unidade, '002');
+        $assert((int)$linha002['ausente_na_origem'] === 0 && $linha002['ausente_desde'] === null, 'Caso 13b: 002 reaparece no lote -> ausente_na_origem volta a 0 e ausente_desde é limpo, via receberLote().');
+    }
 
     echo "OK integration_metadados_sync_ingest\n";
 } catch (Throwable $e) {

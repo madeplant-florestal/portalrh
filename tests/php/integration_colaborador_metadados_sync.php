@@ -250,4 +250,87 @@ try {
         ->execute([$empresaOrigem, $unidadeOrigem]);
 }
 
+// ===== Diagnóstico "Transferências + Turnover por Sexo/Gênero" — campo `sexo` (RHPESSOAS.SEXO,
+// migration 2026-09-24-colaboradores-metadados-sexo.sql). Valor bruto, sem normalização; payload
+// antigo (sem a chave 'sexo') não pode quebrar o upsert — MetadadosSyncService::normalizeSourceRow()
+// já cobre isso com `$row['sexo'] ?? null`. =====
+$sufixoSexo = (string)time() . (string)random_int(100, 999);
+$empresaSexo = 'EMPSX' . $sufixoSexo;
+$unidadeSexo = 'UNISX' . $sufixoSexo;
+$baseSexo = [
+    'identificador' => "$empresaSexo-$unidadeSexo-001",
+    'codigo_empresa' => $empresaSexo,
+    'codigo_unidade' => $unidadeSexo,
+    'numero_contrato' => '001',
+    'codigo_pessoa' => 'PESSX' . $sufixoSexo,
+    'cpf' => '33344455566',
+    'nome' => 'Colaborador Teste Sexo',
+    'empresa' => 'Empresa Teste Sexo',
+    'nascimento' => '1992-03-20',
+    'admissao' => '2023-01-01',
+    'cargo' => 'Analista',
+    'demissao' => null,
+    'motivo_rescisao_codigo' => null,
+    'motivo_rescisao_descricao' => null,
+    'unidade' => 'Unidade Teste Sexo',
+    'setor' => 'Setor Teste',
+    'centro_custo' => 'CC-SX',
+    'ativo' => 1,
+    'salario_atual' => '3000.00',
+    'data_inicio_cargo' => '2023-01-01',
+    'atualizado_em_origem' => null,
+];
+
+try {
+    $repoSexo = new ColaboradorMetadadosRepository($pdo);
+
+    // 14) sexo='M' persistido normalmente na inserção.
+    $contratoM = $baseSexo;
+    $contratoM['sexo'] = 'M';
+    $summarySexoM = $service->applyRows([$contratoM], 'RHMADEPLANT');
+    $assert($summarySexoM['inserted'] === 1, 'Falha: contrato com sexo=M deveria ser inserido.');
+    $rowSexoM = $repoSexo->findByVinculo($empresaSexo, $unidadeSexo, '001');
+    $assert($rowSexoM['sexo'] === 'M', 'Falha: sexo=M deveria ter sido persistido tal como recebido.');
+
+    // 15) Atualização via upsert: M -> F gera update e persiste o novo valor.
+    $contratoF = $contratoM;
+    $contratoF['sexo'] = 'F';
+    $summarySexoF = $service->applyRows([$contratoF], 'RHMADEPLANT');
+    $assert($summarySexoF['updated'] === 1, 'Falha: mudança de sexo=M para F deveria gerar update.');
+    $rowSexoF = $repoSexo->findByVinculo($empresaSexo, $unidadeSexo, '001');
+    $assert($rowSexoF['sexo'] === 'F', 'Falha: sexo=F deveria ter sido persistido após o update.');
+
+    // 16) Idempotência: reaplicar o mesmo sexo não gera update espúrio.
+    $summarySexoIdempotente = $service->applyRows([$contratoF], 'RHMADEPLANT');
+    $assert($summarySexoIdempotente['unchanged'] === 1, 'Falha: repetir o mesmo sexo não deveria gerar update.');
+
+    // 17) Transição de valor preenchido para NULL é detectada como mudança (mesmo padrão já usado
+    // para salario_atual) — cobre o cenário defensivo de um registro vindo sem o campo.
+    $contratoSexoNulo = $contratoF;
+    $contratoSexoNulo['sexo'] = null;
+    $summarySexoNulo = $service->applyRows([$contratoSexoNulo], 'RHMADEPLANT');
+    $assert($summarySexoNulo['updated'] === 1, 'Falha: sexo passando de preenchido para null deveria gerar update.');
+    $rowSexoNulo = $repoSexo->findByVinculo($empresaSexo, $unidadeSexo, '001');
+    $assert($rowSexoNulo['sexo'] === null, 'Falha: sexo deveria ter sido persistido como null.');
+
+    // 18) Compatibilidade retroativa: um "payload antigo" sem a CHAVE 'sexo' (não só null — a
+    // chave inteira ausente, simulando um sender anterior a esta mudança) não quebra o upsert nem
+    // apaga um sexo já persistido por engano — o valor recebido é null (ausência), então o
+    // resultado esperado é idêntico ao cenário 17 (já null): não deve gerar update nem erro.
+    $contratoSemChaveSexo = $contratoSexoNulo;
+    unset($contratoSemChaveSexo['sexo']);
+    $summarySemChave = $service->applyRows([$contratoSemChaveSexo], 'RHMADEPLANT');
+    $assert($summarySemChave['errors'] === 0, 'Falha: payload sem a chave sexo não deveria gerar erro.');
+    $assert($summarySemChave['unchanged'] === 1, 'Falha: ausência da chave sexo (equivalente a null) não deveria gerar update, já estava null.');
+    $rowSemChave = $repoSexo->findByVinculo($empresaSexo, $unidadeSexo, '001');
+    $assert($rowSemChave['sexo'] === null, 'Falha: sexo deveria continuar null quando o payload não traz a chave.');
+
+    // 19) Nenhuma regressão nos demais campos por causa da coluna nova.
+    $assert($rowSemChave['nome'] === 'Colaborador Teste Sexo', 'Falha (sanity): nome não deveria ter sido afetado pelas mudanças de sexo.');
+    $assert((float)$rowSemChave['salario_atual'] === 3000.00, 'Falha (sanity): salario_atual não deveria ter sido afetado pelas mudanças de sexo.');
+} finally {
+    $pdo->prepare('DELETE FROM colaboradores_metadados WHERE codigo_empresa = ? AND codigo_unidade = ?')
+        ->execute([$empresaSexo, $unidadeSexo]);
+}
+
 echo "OK integration_colaborador_metadados_sync\n";

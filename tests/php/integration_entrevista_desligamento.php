@@ -97,6 +97,12 @@ $postValido = static function (array $extra = []): array {
     return $extra + $post;
 };
 
+// Todo o corpo do teste roda dentro de um único ob_start(): os `echo` de $check() e afins ficam
+// retidos no buffer (nunca chegam de fato ao SAPI), então headers_sent() permanece false durante
+// toda a execução — inclusive quando o controller chama http_response_code() por dentro do
+// $renderizar() aninhado. Sem isso, o primeiro echo do harness já "envia" saída e qualquer
+// http_response_code() chamado depois emite Warning (headers already sent), mesmo em CLI.
+ob_start();
 try {
     // ---- permissões / usuários --------------------------------------------------------------------------------------
     $ids = [];
@@ -498,6 +504,10 @@ try {
         $pdo->exec("DELETE FROM usuarios WHERE id IN ($lista)");
     }
 }
+
+// Só agora o buffer é liberado de fato para o stdout real — preserva as mensagens [ok] na ordem
+// original, sem nenhuma delas ter "tocado" o SAPI antes (ver ob_start() no início do try).
+echo ob_get_clean();
 
 if ($falhas !== []) {
     fwrite(STDERR, "\n" . count($falhas) . " verificação(ões) falharam.\n");

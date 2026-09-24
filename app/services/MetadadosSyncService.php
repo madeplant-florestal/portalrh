@@ -47,6 +47,14 @@ class MetadadosSyncService
      * dos 725 contratos preenchidos em RHMADEPLANT, mas SALARIOCONTRATUAL foi escolhido por
      * representar semanticamente o salário-base contratual, nunca total recebido no mês.
      * DATAULTALTCARGO nunca cai em fallback para admissao — são conceitos diferentes.
+     *
+     * sexo (diagnóstico "Transferências + Turnover por Sexo/Gênero") vem de RHPESSOAS.SEXO — sem
+     * JOIN novo, RHPESSOAS já é consultada para cpf/nome/nascimento. Confirmado CHAR(1) NOT NULL
+     * na origem, só M/F, cobertura 100% nos 731 contratos testados — mesmo assim o espelho grava
+     * a coluna como NULLable e o valor bruto sem normalização (ver migration
+     * 2026-09-24-colaboradores-metadados-sexo.sql). Nome deliberadamente `sexo`, não `genero`: é
+     * a fonte técnica oficial: o rótulo de apresentação ("Turnover por Sexo" vs. "por Gênero")
+     * ainda depende de decisão do RH.
      */
     private const QUERY = "
         SELECT
@@ -59,6 +67,7 @@ class MetadadosSyncService
             pes.NOME                                       AS nome,
             emp.RAZAOSOCIAL                                AS empresa,
             CONVERT(char(10), pes.NASCIMENTO, 23)          AS nascimento,
+            pes.SEXO                                       AS sexo,
             CONVERT(char(10), ctr.DATAADMISSAO, 23)        AS admissao,
             cargo.DESCRICAO40                              AS cargo,
             CONVERT(char(10), ctr.DATARESCISAO, 23)        AS demissao,
@@ -126,6 +135,7 @@ class MetadadosSyncService
             'nome' => (string)($row['nome'] ?? ''),
             'empresa' => $row['empresa'] ?? null,
             'nascimento' => $row['nascimento'] ?? null,
+            'sexo' => $row['sexo'] ?? null,
             'admissao' => $row['admissao'] ?? null,
             'cargo' => $row['cargo'] ?? null,
             'demissao' => $row['demissao'] ?? null,

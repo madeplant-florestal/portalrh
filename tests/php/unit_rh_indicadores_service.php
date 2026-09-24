@@ -152,6 +152,57 @@ try {
     $assert($porLabel['B']['desligamentos'] === 1, 'Extra: setor B deveria ter 1 desligamento no período.');
     $assert($porLabel['A']['taxa'] > $porLabel['B']['taxa'], 'Extra: setor A (1 desligamento em headcount menor) deveria ter taxa maior que setor B (1 desligamento em headcount maior) mesmo com volume absoluto igual — é exatamente o que a taxa deveria capturar.');
 
+    // Caso 11 — diagnóstico "Transferências + Turnover por Sexo/Gênero": `distribuicao()` e
+    // `turnoverPorDimensao()` já são genéricos por nome de campo — nenhuma mudança de código foi
+    // necessária nelas, só confirmar que 'sexo' funciona como qualquer outra dimensão (empresa,
+    // unidade, cargo, setor, centro_custo). Chave interna continua `sexo`, nunca `genero`.
+    $contratosSexo = [
+        contrato(['sexo' => 'M']),
+        contrato(['sexo' => 'M']),
+        contrato(['sexo' => 'M']),
+        contrato(['sexo' => 'F']),
+        contrato(['sexo' => 'F']),
+        contrato(['sexo' => null]),
+    ];
+    $distSexo = $S::distribuicao($contratosSexo, 'sexo');
+    $porSexo = array_column($distSexo, 'quantidade', 'label');
+    $assert(($porSexo['M'] ?? null) === 3, 'Caso 11: distribuicao(sexo) deveria contar 3 registros M.');
+    $assert(($porSexo['F'] ?? null) === 2, 'Caso 11: distribuicao(sexo) deveria contar 2 registros F.');
+    $assert(($porSexo[RhIndicadoresService::NAO_INFORMADO] ?? null) === 1, 'Caso 11: sexo nulo deveria virar "Não informado", nunca ser descartado (mesmo comportamento de qualquer outra dimensão).');
+    $assert(array_sum($porSexo) === 6, 'Caso 11: nenhum registro deveria ser perdido na distribuição por sexo.');
+
+    // turnoverPorDimensao('sexo', ...) — mesma fórmula oficial (desligamentos / média(headcount
+    // início, fim) × 100), cada sexo com sua própria população, sem denominador geral vazando
+    // para o numerador segmentado. Cenário do diagnóstico: Masculino 10→8 com 2 desligamentos
+    // (22,2%), Feminino 5→5 com 1 desligamento (20,0%).
+    $contratosTurnoverSexo = [];
+    // 8 homens permanecem ativos o mês inteiro (compõem o headcount de início E de fim).
+    for ($i = 0; $i < 8; $i++) {
+        $contratosTurnoverSexo[] = contrato(['sexo' => 'M', 'admissao' => '2023-01-01', 'demissao' => null]);
+    }
+    // 2 homens são desligados dentro do período (contam no headcount de início, não no de fim).
+    $contratosTurnoverSexo[] = contrato(['sexo' => 'M', 'admissao' => '2023-01-01', 'demissao' => '2024-01-10']);
+    $contratosTurnoverSexo[] = contrato(['sexo' => 'M', 'admissao' => '2023-01-01', 'demissao' => '2024-01-20']);
+    // 4 mulheres permanecem ativas o mês inteiro.
+    for ($i = 0; $i < 4; $i++) {
+        $contratosTurnoverSexo[] = contrato(['sexo' => 'F', 'admissao' => '2023-01-01', 'demissao' => null]);
+    }
+    // 1 mulher é desligada dentro do período e 1 é admitida dentro do período (repõe a vaga) —
+    // é assim que o headcount final permanece 5 mesmo com 1 desligamento, exatamente como no
+    // cenário do diagnóstico (início=5, fim=5, desligamentos=1).
+    $contratosTurnoverSexo[] = contrato(['sexo' => 'F', 'admissao' => '2023-01-01', 'demissao' => '2024-01-15']);
+    $contratosTurnoverSexo[] = contrato(['sexo' => 'F', 'admissao' => '2024-01-05', 'demissao' => null]);
+
+    $turnoverSexo = $S::turnoverPorDimensao($contratosTurnoverSexo, 'sexo', new DateTimeImmutable('2024-01-01'), new DateTimeImmutable('2024-01-31'));
+    $porLabelSexo = [];
+    foreach ($turnoverSexo as $item) {
+        $porLabelSexo[$item['label']] = $item;
+    }
+    $assert($porLabelSexo['M']['desligamentos'] === 2, 'Caso 11: Masculino deveria ter 2 desligamentos no período (headcount início=10, fim=8).');
+    $assert(abs($porLabelSexo['M']['taxa'] - 22.2) < 0.05, 'Caso 11: turnover Masculino deveria ser 2/média(10,8)*100 = 22,2%, pela mesma fórmula oficial.');
+    $assert($porLabelSexo['F']['desligamentos'] === 1, 'Caso 11: Feminino deveria ter 1 desligamento no período (headcount início=5, fim=5).');
+    $assert(abs($porLabelSexo['F']['taxa'] - 20.0) < 0.05, 'Caso 11: turnover Feminino deveria ser 1/média(5,5)*100 = 20,0%, pela mesma fórmula oficial.');
+
     echo "OK unit_rh_indicadores_service\n";
 } catch (Throwable $e) {
     fwrite(STDERR, $e->getMessage() . PHP_EOL);

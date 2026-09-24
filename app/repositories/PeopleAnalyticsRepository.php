@@ -43,7 +43,10 @@ class PeopleAnalyticsRepository
      *
      * @param array $filtros Chaves aceitas: codigo_empresa, codigo_setor. Ausente/vazio = sem filtro.
      * @return array Cada item: codigo_pessoa, admissao, demissao, motivo_rescisao_codigo,
-     *               motivo_rescisao_descricao, nascimento, codigo_setor, ativo, codigo_empresa, empresa.
+     *               motivo_rescisao_descricao, nascimento, sexo, codigo_setor, ativo,
+     *               codigo_empresa, empresa. `sexo` (RHPESSOAS.SEXO): dimensão demográfica
+     *               agregável, trazida para o diagnóstico "Transferências + Turnover por
+     *               Sexo/Gênero" — nunca renomeada para `genero` nesta camada.
      */
     public function buscarContratos(array $filtros = []): array
     {
@@ -60,7 +63,7 @@ class PeopleAnalyticsRepository
         }
 
         $sql = 'SELECT codigo_pessoa, admissao, demissao, motivo_rescisao_codigo,
-                       motivo_rescisao_descricao, nascimento, codigo_setor, ativo,
+                       motivo_rescisao_descricao, nascimento, sexo, codigo_setor, ativo,
                        codigo_empresa, empresa
                 FROM colaboradores_metadados';
         if ($where !== []) {

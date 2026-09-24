@@ -10,7 +10,10 @@
  *
  * Nunca seleciona CPF, nome, data de nascimento ou salário: a camada analítica trabalha
  * exclusivamente com dimensões organizacionais e datas de vínculo, nunca com dados pessoais ou
- * remuneração individual (ver docs/claude/indicadores-rh.md §"Privacidade").
+ * remuneração individual (ver docs/claude/indicadores-rh.md §"Privacidade"). `sexo` é uma exceção
+ * deliberada a essa lista: é uma dimensão demográfica agregável (como cargo/setor), não um dado
+ * que identifica o indivíduo isoladamente — trazida para permitir Turnover/distribuição por sexo
+ * (diagnóstico "Transferências + Turnover por Sexo/Gênero"), nunca renomeada para `genero` aqui.
  */
 class RhIndicadoresRepository
 {
@@ -37,7 +40,8 @@ class RhIndicadoresRepository
      * @param array $filtros Chaves aceitas: codigo_empresa, codigo_unidade, cargo, setor,
      *                       centro_custo. Ausente/vazio = sem filtro naquela dimensão.
      * @return array Cada item: id, codigo_empresa, empresa, codigo_unidade, unidade, cargo,
-     *               setor, centro_custo, admissao, demissao, motivo_rescisao_descricao, ativo.
+     *               setor, centro_custo, admissao, demissao, motivo_rescisao_descricao, ativo,
+     *               sexo.
      */
     public function buscarContratos(array $filtros = []): array
     {
@@ -59,7 +63,7 @@ class RhIndicadoresRepository
         }
 
         $sql = 'SELECT id, codigo_empresa, empresa, codigo_unidade, unidade, cargo, setor,
-                       centro_custo, admissao, demissao, motivo_rescisao_descricao, ativo
+                       centro_custo, admissao, demissao, motivo_rescisao_descricao, ativo, sexo
                 FROM colaboradores_metadados';
         if ($where !== []) {
             $sql .= ' WHERE ' . implode(' AND ', $where);

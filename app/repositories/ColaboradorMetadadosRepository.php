@@ -7,7 +7,7 @@
 class ColaboradorMetadadosRepository
 {
     private const COMPARABLE_FIELDS = [
-        'identificador', 'cpf', 'nome', 'empresa', 'nascimento', 'admissao', 'cargo',
+        'identificador', 'cpf', 'nome', 'empresa', 'nascimento', 'sexo', 'admissao', 'cargo',
         'demissao', 'motivo_rescisao_codigo', 'motivo_rescisao_descricao', 'unidade',
         'setor', 'centro_custo', 'codigo_setor', 'codigo_cargo', 'codigo_centro_custo',
         'ativo', 'salario_atual', 'data_inicio_cargo', 'atualizado_em_origem',
@@ -69,11 +69,11 @@ class ColaboradorMetadadosRepository
         $stmt = $this->pdo->prepare(
             'INSERT INTO colaboradores_metadados (
                 identificador, codigo_empresa, codigo_unidade, numero_contrato, codigo_pessoa,
-                cpf, nome, empresa, nascimento, admissao, cargo, demissao,
+                cpf, nome, empresa, nascimento, sexo, admissao, cargo, demissao,
                 motivo_rescisao_codigo, motivo_rescisao_descricao, unidade, setor, centro_custo,
                 codigo_setor, codigo_cargo, codigo_centro_custo,
                 ativo, origem_metadados, salario_atual, data_inicio_cargo, atualizado_em_origem
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
         );
         $stmt->execute([
             (string)$row['identificador'],
@@ -85,6 +85,7 @@ class ColaboradorMetadadosRepository
             (string)$row['nome'],
             self::nullableString($row['empresa'] ?? null),
             self::nullableString($row['nascimento'] ?? null),
+            self::nullableString($row['sexo'] ?? null),
             self::nullableString($row['admissao'] ?? null),
             self::nullableString($row['cargo'] ?? null),
             self::nullableString($row['demissao'] ?? null),
@@ -109,7 +110,7 @@ class ColaboradorMetadadosRepository
         $stmt = $this->pdo->prepare(
             'UPDATE colaboradores_metadados SET
                 identificador = ?, codigo_pessoa = ?, cpf = ?, nome = ?, empresa = ?,
-                nascimento = ?, admissao = ?, cargo = ?, demissao = ?,
+                nascimento = ?, sexo = ?, admissao = ?, cargo = ?, demissao = ?,
                 motivo_rescisao_codigo = ?, motivo_rescisao_descricao = ?,
                 unidade = ?, setor = ?, centro_custo = ?,
                 codigo_setor = ?, codigo_cargo = ?, codigo_centro_custo = ?,
@@ -124,6 +125,7 @@ class ColaboradorMetadadosRepository
             (string)$row['nome'],
             self::nullableString($row['empresa'] ?? null),
             self::nullableString($row['nascimento'] ?? null),
+            self::nullableString($row['sexo'] ?? null),
             self::nullableString($row['admissao'] ?? null),
             self::nullableString($row['cargo'] ?? null),
             self::nullableString($row['demissao'] ?? null),

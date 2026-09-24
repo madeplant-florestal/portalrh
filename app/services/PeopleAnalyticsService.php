@@ -169,7 +169,7 @@ class PeopleAnalyticsService
                     'eventos' => $outros,
                     'participacao_desligamentos' => $this->participacaoDesligamentos($outros, count($desligamentos)),
                 ],
-                'genero' => ['disponivel' => false],
+                'genero' => $this->montarTurnoverPorSexo($contratos, $inicio, $fim),
                 'faixa_etaria' => $this->faixaEtariaDesligamentos($desligamentos),
                 'por_empresa' => $turnoverPorEmpresa,
             ],
@@ -264,6 +264,39 @@ class PeopleAnalyticsService
 
         usort($resultado, static fn(array $a, array $b): int => $b['quantidade'] <=> $a['quantidade']);
         return $resultado;
+    }
+
+    /**
+     * Turnover por Sexo: mesma metodologia do Turnover Geral (desligamentos / média(headcount
+     * início, headcount fim) × 100), segmentada por `colaboradores_metadados.sexo` — reaproveita
+     * `RhIndicadoresService::turnoverPorDimensao()` sem nenhuma fórmula paralela. Recebe
+     * $contratos completo (nunca a população vigente sem ausentes usada no card Headcount Atual):
+     * é um cálculo de PERÍODO, como Turnover por Empresa/Faixa Etária — a exclusão de
+     * `ausente_na_origem = 1` só se aplica à fotografia de "agora", nunca a cálculos históricos
+     * por período (ver migration 2026-09-24-colaboradores-metadados-reconciliacao-ausencia.sql).
+     *
+     * `sexo` (não `genero`) continua o nome técnico interno — a fonte oficial (RHPESSOAS.SEXO) só
+     * tem M/F; "Não informado" nunca é descartado, aparece como grupo próprio quando existe.
+     *
+     * @return array{disponivel:bool, masculino:array, feminino:array, nao_informado:?array}
+     */
+    private function montarTurnoverPorSexo(array $contratos, DateTimeImmutable $inicio, DateTimeImmutable $fim): array
+    {
+        $porSexo = RhIndicadoresService::turnoverPorDimensao($contratos, 'sexo', $inicio, $fim);
+        $porLabel = [];
+        foreach ($porSexo as $grupo) {
+            $porLabel[$grupo['label']] = $grupo;
+        }
+        $grupoVazio = static fn(string $label): array => [
+            'label' => $label, 'desligamentos' => 0, 'headcount_medio' => 0.0, 'taxa' => 0.0,
+        ];
+
+        return [
+            'disponivel' => true,
+            'masculino' => $porLabel['M'] ?? $grupoVazio('M'),
+            'feminino' => $porLabel['F'] ?? $grupoVazio('F'),
+            'nao_informado' => $porLabel[RhIndicadoresService::NAO_INFORMADO] ?? null,
+        ];
     }
 
     /**

@@ -235,6 +235,29 @@ $pa = [
     </article>
   </section>
 
+  <!-- Turnover por Sexo — mesma metodologia do Turnover Geral, segmentada por RHPESSOAS.SEXO -->
+  <section class="rounded-ds-lg border border-border bg-surface p-3 shadow-resting">
+    <h2 class="text-sm font-bold text-text-primary">Turnover por Sexo</h2>
+    <p class="text-[11px] text-text-secondary">Mesma metodologia do Turnover Geral (desligamentos ÷ headcount médio do período), segmentada pelo sexo oficial do METADADOS</p>
+    <div class="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2<?= $painel['turnover']['genero']['nao_informado'] !== null ? ' lg:grid-cols-3' : '' ?>">
+      <?php foreach ([['label' => 'Masculino', 'dado' => $painel['turnover']['genero']['masculino']], ['label' => 'Feminino', 'dado' => $painel['turnover']['genero']['feminino']]] as $bloco): ?>
+        <div class="rounded-ds-md bg-background p-2 text-center">
+          <p class="text-[11px] font-semibold text-text-secondary"><?= Security::e($bloco['label']) ?></p>
+          <p class="mt-1 text-xl font-bold text-text-primary"><?= number_format($bloco['dado']['taxa'], 1, ',', '.') ?>%</p>
+          <p class="text-[11px] text-text-secondary">Headcount médio: <?= number_format($bloco['dado']['headcount_medio'], 1, ',', '.') ?> · <?= (int)$bloco['dado']['desligamentos'] ?> desligamento(s)</p>
+        </div>
+      <?php endforeach; ?>
+      <?php if ($painel['turnover']['genero']['nao_informado'] !== null): ?>
+        <?php $naoInformado = $painel['turnover']['genero']['nao_informado']; ?>
+        <div class="rounded-ds-md bg-background p-2 text-center">
+          <p class="text-[11px] font-semibold text-text-secondary">Não informado</p>
+          <p class="mt-1 text-xl font-bold text-text-primary"><?= number_format($naoInformado['taxa'], 1, ',', '.') ?>%</p>
+          <p class="text-[11px] text-text-secondary">Headcount médio: <?= number_format($naoInformado['headcount_medio'], 1, ',', '.') ?> · <?= (int)$naoInformado['desligamentos'] ?> desligamento(s)</p>
+        </div>
+      <?php endif; ?>
+    </div>
+  </section>
+
   <!-- Colaboradores por Setor, Integrações, NPS, Avaliação de Experiência -->
   <section class="grid grid-cols-1 gap-4 xl:grid-cols-2">
     <article class="rounded-ds-lg border border-border bg-surface p-3 shadow-resting">
@@ -291,14 +314,13 @@ $pa = [
   <!-- Dados ainda não integrados -->
   <section class="rounded-ds-lg border border-border bg-surface p-3 shadow-resting">
     <h2 class="text-xs font-bold uppercase tracking-wide text-text-secondary">Dados ainda não integrados</h2>
-    <div class="mt-2 grid grid-cols-2 gap-2 text-sm sm:grid-cols-5">
-      <div class="rounded-ds-md bg-background p-2 text-center text-text-secondary">Turnover por Gênero<br><span class="text-[11px]">Dado ainda não integrado</span></div>
+    <div class="mt-2 grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
       <div class="rounded-ds-md bg-background p-2 text-center text-text-secondary">Banco de Horas<br><span class="text-[11px]">Dado ainda não integrado</span></div>
       <div class="rounded-ds-md bg-background p-2 text-center text-text-secondary">Horas Extras<br><span class="text-[11px]">Dado ainda não integrado</span></div>
       <div class="rounded-ds-md bg-background p-2 text-center text-text-secondary">Férias Programadas<br><span class="text-[11px]">Dado ainda não integrado</span></div>
       <div class="rounded-ds-md bg-background p-2 text-center text-text-secondary">Férias a Vencer<br><span class="text-[11px]">Dado ainda não integrado</span></div>
     </div>
-    <p class="mt-1.5 text-[11px] text-text-secondary">O espelho sincronizado do METADADOS (colaboradores_metadados) não possui campo de gênero/sexo hoje; os demais dependem de fontes ainda não integradas ao Portal.</p>
+    <p class="mt-1.5 text-[11px] text-text-secondary">Dependem de fontes ainda não integradas ao Portal.</p>
   </section>
 
   <?php endif; ?>

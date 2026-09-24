@@ -669,6 +669,53 @@ try {
 
     $restaurarSessao($sessaoOriginal);
 
+    // ---- (30) Turnover por Sexo: PeopleAnalyticsService::montarPainel()['turnover']['genero'] --
+    // Mesmo cenário já validado na fórmula pura (unit_rh_indicadores_service.php Caso 11):
+    // Masculino 10 -> 8 (2 desligamentos) = 22,2%; Feminino 5 -> 5 (1 desligamento, 1 readmissão
+    // no período) = 20,0%. Aqui provamos que PeopleAnalyticsService::montarPainel() realmente
+    // expõe esses números via turnoverPorDimensao('sexo', ...), não só a fórmula isolada.
+    $empSexoFixture = 'ZZH' . $suffix;
+    $inicioSexo = new DateTimeImmutable('2024-01-01');
+    $fimSexo = new DateTimeImmutable('2024-01-31');
+    $insertSexo = $pdo->prepare(
+        'INSERT INTO colaboradores_metadados
+            (identificador, codigo_empresa, codigo_unidade, numero_contrato, codigo_pessoa,
+             nome, sexo, admissao, demissao, ativo, origem_metadados)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    );
+    $mkSexo = function (string $sexo, string $admissao, ?string $demissao, string $seq) use ($pdo, $insertSexo, &$criados, $suffix, $empSexoFixture): void {
+        $identificador = 'ZZPASX_' . $suffix . '_' . $seq;
+        $insertSexo->execute([
+            $identificador, $empSexoFixture, 'ZZUSX' . $suffix, 'ZZCSX' . $suffix . $seq,
+            'ZZPSX' . $suffix . $seq, 'ZZPA Sexo Fixture ' . $seq, $sexo, $admissao, $demissao,
+            $demissao === null ? 1 : 0, 'zzpa-sexo-teste',
+        ]);
+        $criados['metadados_identificadores'][] = $identificador;
+    };
+    // 10 homens: 8 seguem ativos, 2 são desligados dentro do período (headcount início=10, fim=8).
+    for ($i = 0; $i < 8; $i++) {
+        $mkSexo('M', '2023-01-01', null, 'M' . $i);
+    }
+    $mkSexo('M', '2023-01-01', '2024-01-10', 'MD1');
+    $mkSexo('M', '2023-01-01', '2024-01-20', 'MD2');
+    // 5 mulheres: 4 seguem ativas, 1 é desligada e 1 é admitida dentro do período (repõe a vaga) —
+    // headcount início=5, fim=5, com 1 desligamento.
+    for ($i = 0; $i < 4; $i++) {
+        $mkSexo('F', '2023-01-01', null, 'F' . $i);
+    }
+    $mkSexo('F', '2023-01-01', '2024-01-15', 'FD1');
+    $mkSexo('F', '2024-01-05', null, 'FN1');
+
+    $painelSexo = $service->montarPainel(['codigo_empresa' => $empSexoFixture], $inicioSexo, $fimSexo);
+    $check($painelSexo['turnover']['genero']['disponivel'] === true, '(30) Turnover por Sexo: genero.disponivel = true (deixou de ser "Dado ainda não integrado").');
+    $check(abs($painelSexo['turnover']['genero']['masculino']['taxa'] - 22.2) < 0.05, '(30) Turnover por Sexo: Masculino = 2 desligamentos / média(10,8) × 100 = 22,2%, via montarPainel() real.');
+    $check((int)$painelSexo['turnover']['genero']['masculino']['desligamentos'] === 2, '(30) Turnover por Sexo: Masculino registra 2 desligamentos no período.');
+    $check(abs($painelSexo['turnover']['genero']['feminino']['taxa'] - 20.0) < 0.05, '(30) Turnover por Sexo: Feminino = 1 desligamento / média(5,5) × 100 = 20,0%, via montarPainel() real.');
+    $check((int)$painelSexo['turnover']['genero']['feminino']['desligamentos'] === 1, '(30) Turnover por Sexo: Feminino registra 1 desligamento no período.');
+    $check($painelSexo['turnover']['genero']['nao_informado'] === null, '(30) Turnover por Sexo: sem registro sem sexo neste cenário, "não_informado" fica null (nunca inventado).');
+    // Turnover Geral do mesmo painel não pode ter sido afetado pela segmentação por sexo.
+    $check($painelSexo['headcount']['atual'] === 13, '(30) Turnover por Sexo: Headcount Atual do painel (13 = 8M + 5F) não muda pela adição da segmentação por sexo.');
+
     echo "\nPEOPLE_ANALYTICS_OK\n";
 } finally {
     // ---- limpeza (ordem respeita as FKs: filhos antes dos pais) --------------------------------

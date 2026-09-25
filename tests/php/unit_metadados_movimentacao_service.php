@@ -3,11 +3,15 @@ declare(strict_types=1);
 require_once __DIR__ . '/../../app/core/bootstrap.php';
 
 /**
- * Cobre MetadadosMovimentacaoService::classificarTransferencia()/identificarTransferencias() —
- * regra fechada no diagnóstico "Transferências + Turnover por Sexo/Gênero". Todos os dados são
- * fictícios (CPFs de teste, nunca reais). Esta suíte NÃO valida nenhuma mudança de comportamento
- * em RhIndicadoresService/PeopleAnalyticsService — a classe testada aqui ainda não é usada por
- * nenhum dos dois (ver doc da classe).
+ * Cobre MetadadosMovimentacaoService — classificação pura, sem banco:
+ *   - classificarTransferencia()/identificarTransferencias(): Cenário B (rescisão real + novo
+ *     contrato), regra fechada no diagnóstico "Transferências + Turnover por Sexo/Gênero";
+ *   - classificarTransferenciaContinua()/identificarTransferenciasContinuas(): Cenário A
+ *     (transferência contínua, sem rescisão real), correção de 2026-09;
+ *   - classificarMovimentacoes(): ponto único que combina as duas classes.
+ * Todos os dados são fictícios (CPFs de teste, nunca reais). A validação end-to-end via
+ * PeopleAnalyticsService::montarPainel() (exclusão real de população/Admissões/Desligamentos/
+ * Turnover) está em integration_people_analytics_transferencias.php.
  */
 $assert = static function (bool $condition, string $message): void {
     if (!$condition) {
@@ -26,6 +30,7 @@ function contratoMov(array $overrides = []): array
         'admissao' => '2023-01-01',
         'demissao' => null,
         'motivo_rescisao_codigo' => null,
+        'ausente_na_origem' => 0,
     ], $overrides);
 }
 
@@ -156,6 +161,95 @@ try {
     $assert(!in_array('P3-A->P3-C', $pares, true), 'identificarTransferencias: nunca deveria comparar A diretamente com C, pulando o contrato do meio.');
     $assert(!in_array('P3-A->P3-B', $pares, true), 'identificarTransferencias: A->B da Pessoa 3 tem gap de mais de 2 anos, não deveria ser transferência.');
     $assert(count($transferencias) === 2, 'identificarTransferencias: total esperado de 2 transferências reais nesta fixture (Pessoa 1 e o par B->C da Pessoa 3).');
+
+    // ---- Cenário A: classificarTransferenciaContinua() — transferência contínua, sem rescisão --
+    // Caso 11 — origem órfã (ausente + sem demissão) + destino vigente em outra empresa -> contínua.
+    $origem11 = contratoMov(['identificador' => 'A11', 'codigo_empresa' => '0001', 'demissao' => null, 'ausente_na_origem' => 1]);
+    $destino11 = contratoMov(['identificador' => 'B11', 'codigo_empresa' => '0002', 'admissao' => '2024-01-01', 'ausente_na_origem' => 0]);
+    $ca11 = $M::classificarTransferenciaContinua($origem11, $destino11);
+    $assert($ca11['eh_transferencia_continua'] === true, 'Caso 11: origem órfã sem demissão + destino vigente em outra empresa deveria ser transferência contínua.');
+    $assert($ca11['contrato_origem'] === 'A11' && $ca11['contrato_destino'] === 'B11', 'Caso 11: identificadores de origem/destino deveriam vir no retorno.');
+
+    // Caso 12 — origem TEM demissão preenchida (rescisão real represada) -> NÃO é Cenário A (é o B).
+    $ca12 = $M::classificarTransferenciaContinua(
+        contratoMov(['codigo_empresa' => '0001', 'demissao' => '2024-01-10', 'ausente_na_origem' => 1]),
+        contratoMov(['codigo_empresa' => '0002', 'admissao' => '2024-01-11', 'ausente_na_origem' => 0])
+    );
+    $assert($ca12['eh_transferencia_continua'] === false, 'Caso 12: origem com demissão preenchida nunca é Cenário A (mesmo estando ausente_na_origem=1) — é rescisão real, cenário do classificarTransferencia().');
+
+    // Caso 13 — origem NÃO está ausente_na_origem -> não é Cenário A (nunca sumiu da fonte).
+    $ca13 = $M::classificarTransferenciaContinua(
+        contratoMov(['codigo_empresa' => '0001', 'demissao' => null, 'ausente_na_origem' => 0]),
+        contratoMov(['codigo_empresa' => '0002', 'admissao' => '2024-01-01', 'ausente_na_origem' => 0])
+    );
+    $assert($ca13['eh_transferencia_continua'] === false, 'Caso 13: origem que não está ausente_na_origem nunca é Cenário A.');
+
+    // Caso 14 — destino TAMBÉM ausente_na_origem -> nunca vira "sucessor", classificação recusada.
+    $ca14 = $M::classificarTransferenciaContinua(
+        contratoMov(['codigo_empresa' => '0001', 'demissao' => null, 'ausente_na_origem' => 1]),
+        contratoMov(['codigo_empresa' => '0002', 'admissao' => '2024-01-01', 'ausente_na_origem' => 1])
+    );
+    $assert($ca14['eh_transferencia_continua'] === false, 'Caso 14: destino também órfão nunca pode ser o sucessor vigente.');
+
+    // Caso 15 — mesma empresa -> nunca transferência entre empresas (mesma regra do Cenário B).
+    $ca15 = $M::classificarTransferenciaContinua(
+        contratoMov(['codigo_empresa' => '0001', 'demissao' => null, 'ausente_na_origem' => 1]),
+        contratoMov(['codigo_empresa' => '0001', 'admissao' => '2024-01-01', 'ausente_na_origem' => 0])
+    );
+    $assert($ca15['eh_transferencia_continua'] === false, 'Caso 15: mesma empresa nunca é transferência interempresa.');
+
+    // Caso 16 — CPFs diferentes -> nunca é a mesma pessoa.
+    $ca16 = $M::classificarTransferenciaContinua(
+        contratoMov(['cpf' => '10000000001', 'codigo_empresa' => '0001', 'demissao' => null, 'ausente_na_origem' => 1]),
+        contratoMov(['cpf' => '20000000002', 'codigo_empresa' => '0002', 'admissao' => '2024-01-01', 'ausente_na_origem' => 0])
+    );
+    $assert($ca16['eh_transferencia_continua'] === false, 'Caso 16: CPFs diferentes nunca podem ser classificados como a mesma transferência.');
+
+    // ---- identificarTransferenciasContinuas(): só classifica pares INEQUÍVOCOS -------------------
+    $contratosContinua = [
+        // Pessoa 11: par inequívoco (1 órfão + 1 vigente) -> classificado.
+        contratoMov(['identificador' => 'P11-A', 'cpf' => '11000000011', 'codigo_empresa' => '0001', 'admissao' => '2020-01-01', 'demissao' => null, 'ausente_na_origem' => 1]),
+        contratoMov(['identificador' => 'P11-B', 'cpf' => '11000000011', 'codigo_empresa' => '0002', 'admissao' => '2020-01-01', 'demissao' => null, 'ausente_na_origem' => 0]),
+
+        // Pessoa 12: 2 órfãos para o mesmo CPF (ambíguo) -> NENHUM classificado automaticamente.
+        contratoMov(['identificador' => 'P12-A', 'cpf' => '12000000012', 'codigo_empresa' => '0001', 'admissao' => '2019-01-01', 'demissao' => null, 'ausente_na_origem' => 1]),
+        contratoMov(['identificador' => 'P12-B', 'cpf' => '12000000012', 'codigo_empresa' => '0002', 'admissao' => '2019-06-01', 'demissao' => null, 'ausente_na_origem' => 1]),
+        contratoMov(['identificador' => 'P12-C', 'cpf' => '12000000012', 'codigo_empresa' => '0003', 'admissao' => '2020-01-01', 'demissao' => null, 'ausente_na_origem' => 0]),
+
+        // Pessoa 13: órfão sem NENHUM sucessor vigente -> não classificado (sem sucessor confiável).
+        contratoMov(['identificador' => 'P13-A', 'cpf' => '13000000013', 'codigo_empresa' => '0001', 'admissao' => '2018-01-01', 'demissao' => null, 'ausente_na_origem' => 1]),
+
+        // Pessoa 14: só 1 contrato normal (nem órfão) -> irrelevante para este classificador.
+        contratoMov(['identificador' => 'P14-A', 'cpf' => '14000000014', 'codigo_empresa' => '0001', 'admissao' => '2021-01-01', 'demissao' => null, 'ausente_na_origem' => 0]),
+    ];
+    // Pessoa 15 — caso real encontrado na validação com os 66: um emprego ANTERIOR genuinamente
+    // encerrado (com demissão real, NUNCA ausente_na_origem) não pode contar como candidato a
+    // sucessor só por não estar ausente — só um registro VIGENTE DE VERDADE (sem demissão) é
+    // candidato. Sem essa regra, esse grupo pareceria ter 2 "vigentes" e ficaria ambíguo.
+    $contratosContinua[] = contratoMov(['identificador' => 'P15-ANTIGO', 'cpf' => '15000000015', 'codigo_empresa' => '0001', 'admissao' => '2020-01-01', 'demissao' => '2021-06-30', 'ausente_na_origem' => 0]);
+    $contratosContinua[] = contratoMov(['identificador' => 'P15-A', 'cpf' => '15000000015', 'codigo_empresa' => '0005', 'admissao' => '2023-01-01', 'demissao' => null, 'ausente_na_origem' => 1]);
+    $contratosContinua[] = contratoMov(['identificador' => 'P15-B', 'cpf' => '15000000015', 'codigo_empresa' => '0002', 'admissao' => '2023-01-01', 'demissao' => null, 'ausente_na_origem' => 0]);
+
+    $continuas = $M::identificarTransferenciasContinuas($contratosContinua);
+    $paresContinuas = array_map(static fn(array $t) => $t['contrato_origem'] . '->' . $t['contrato_destino'], $continuas);
+    $assert(in_array('P11-A->P11-B', $paresContinuas, true), 'identificarTransferenciasContinuas: par inequívoco da Pessoa 11 deveria ser identificado.');
+    $assert(in_array('P15-A->P15-B', $paresContinuas, true), 'identificarTransferenciasContinuas: Pessoa 15 deveria ser identificada mesmo com um emprego anterior real e encerrado no grupo (não é candidato a sucessor, só a Pessoa 11 e a Pessoa 15 contam).');
+    $assert(count($continuas) === 2, 'identificarTransferenciasContinuas: total esperado de 2 (Pessoa 11 e Pessoa 15 — Pessoa 12 é ambígua, Pessoa 13 não tem sucessor, Pessoa 14 nem é órfã).');
+
+    // ---- classificarMovimentacoes(): combina as duas classes num único resultado -----------------
+    $contratosCombinados = array_merge(
+        $contratosContinua,
+        [
+            contratoMov(['identificador' => 'P20-A', 'cpf' => '20000000020', 'codigo_empresa' => '0001', 'admissao' => '2019-01-01', 'demissao' => '2024-01-10', 'ausente_na_origem' => 0]),
+            contratoMov(['identificador' => 'P20-B', 'cpf' => '20000000020', 'codigo_empresa' => '0002', 'admissao' => '2024-01-11', 'demissao' => null, 'ausente_na_origem' => 0]),
+        ]
+    );
+    $combinado = $M::classificarMovimentacoes($contratosCombinados);
+    $assert(count($combinado['continuas']) === 2, 'classificarMovimentacoes: 2 transferências contínuas (Cenário A: Pessoa 11 e Pessoa 15) na fixture combinada.');
+    $assert(count($combinado['recontratacoes']) === 1, 'classificarMovimentacoes: 1 recontratação (Cenário B) na fixture combinada.');
+    $assert(in_array('P11-A', $combinado['origem_continua_ids'], true) && in_array('P15-A', $combinado['origem_continua_ids'], true), 'classificarMovimentacoes: origem_continua_ids traz as origens do Cenário A (P11-A, P15-A), nunca a do Cenário B.');
+    $assert($combinado['excluir_demissao_ids'] === ['P20-A'], 'classificarMovimentacoes: excluir_demissao_ids traz só a origem do Cenário B (P20-A) — Cenário A nunca entra aqui (nunca tem demissao preenchida).');
+    $assert($combinado['excluir_admissao_ids'] === ['P20-B'], 'classificarMovimentacoes: excluir_admissao_ids traz só o destino do Cenário B (P20-B).');
 
     echo "OK unit_metadados_movimentacao_service\n";
 } catch (Throwable $e) {

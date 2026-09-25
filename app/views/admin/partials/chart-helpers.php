@@ -419,12 +419,22 @@ if (!function_exists('dashboard_grouped_columns')) {
     function dashboard_grouped_columns(array $labels, array $series, string $ariaLabel = 'Gráfico de colunas', array $opcoes = []): string
     {
         $mostrarValores = ($opcoes['valores'] ?? true) !== false;
+        // Rótulos do eixo X inclinados: opt-in (nunca muda o comportamento de quem já chama esta
+        // função) — usado quando as categorias são texto longo (ex.: nomes de Setor) em vez de
+        // rótulos curtos (ex.: meses), que ficariam sobrepostos na horizontal.
+        $rotacionarEixoX = ($opcoes['rotacionar_eixo_x'] ?? false) === true;
         $largura = 720.0;
-        $altura = 280.0;
-        $esq = 40.0;
+        // Altura opt-in (default 280, igual a antes) — usado para caber num card mais compacto
+        // (ex.: metade da largura, ao lado de outro gráfico) sem exigir tanta rolagem vertical.
+        $altura = (float)($opcoes['altura'] ?? 280.0);
+        // Rotacionado, o texto do 1º grupo se estende para a ESQUERDA/CIMA do seu ponto de
+        // ancoragem (text-anchor="end") — margens maiores (e rótulo bem curto, ver abaixo) evitam
+        // cortar esse rótulo na borda do viewBox (o SVG raiz recorta conteúdo fora do viewBox por
+        // padrão do navegador).
+        $esq = $rotacionarEixoX ? 90.0 : 40.0;
         $dir = 12.0;
         $topo = 26.0;
-        $base = 34.0;
+        $base = $rotacionarEixoX ? 80.0 : 34.0;
         $n = max(1, count($labels));
         $k = max(1, count($series));
         $plotW = $largura - $esq - $dir;
@@ -451,7 +461,19 @@ if (!function_exists('dashboard_grouped_columns')) {
         }
         foreach ($labels as $i => $rotulo) {
             $centro = $esq + ($i + 0.5) * $grupoW;
-            $svg .= '<text x="' . dashboard_fmt($centro) . '" y="' . ($altura - 12) . '" text-anchor="middle" font-size="11" fill="#5B5F4E">' . Security::e((string)$rotulo) . '</text>';
+            if ($rotacionarEixoX) {
+                $yEixo = $altura - 14;
+                // Trunca só o texto DESENHADO (o nome completo continua no <title> de cada barra,
+                // no foreach abaixo) — mantém o alcance horizontal/vertical do texto rotacionado
+                // sempre dentro da margem reservada, mesmo para categorias com nomes muito longos.
+                $textoEixo = mb_strlen((string)$rotulo) > 11 ? mb_substr((string)$rotulo, 0, 10) . '…' : (string)$rotulo;
+                // rotate(+45), não -45: com text-anchor="end", um ângulo negativo empurra o INÍCIO
+                // do texto para BAIXO (para fora do viewBox, y crescente) — o positivo é que sobe
+                // o texto para cima-esquerda do ponto de ancoragem, o padrão visual esperado.
+                $svg .= '<text x="' . dashboard_fmt($centro) . '" y="' . dashboard_fmt($yEixo) . '" text-anchor="end" font-size="10" fill="#5B5F4E" transform="rotate(45 ' . dashboard_fmt($centro) . ' ' . dashboard_fmt($yEixo) . ')">' . Security::e($textoEixo) . '</text>';
+            } else {
+                $svg .= '<text x="' . dashboard_fmt($centro) . '" y="' . ($altura - 12) . '" text-anchor="middle" font-size="11" fill="#5B5F4E">' . Security::e((string)$rotulo) . '</text>';
+            }
             foreach ($series as $indice => $s) {
                 $v = $s['values'][$i] ?? null;
                 if ($v === null) {

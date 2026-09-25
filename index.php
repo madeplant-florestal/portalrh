@@ -87,6 +87,7 @@ try {
     // (People Analytics, gate dashboard.visualizar) passou a ser uma funcionalidade própria em /admin/dashboard.
     $router->get('/admin', [AdminCentralController::class, 'index']);
     $router->get('/admin/dashboard', [AdminController::class, 'index']);
+    $router->get('/admin/dashboard/colaboradores/exportar', [AdminController::class, 'exportarColaboradores']);
     // Rota de desenvolvimento da Central (nunca publicada): mantida só como redirecionamento para a URL canônica.
     $router->get('/admin/central', static fn() => redirect('/admin'));
     $router->get('/admin/indicadores-rh', [AdminRhIndicadoresController::class, 'index']);

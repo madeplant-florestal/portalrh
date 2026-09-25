@@ -224,16 +224,18 @@ try {
     // ---- 6) Desligamentos no período são por evento, NÃO deduplicados por pessoa (regra mantida) -
     $check($painelEmp['desligamentos']['periodo'] === 3, '(F) Desligamentos no período = 3 eventos — P5 tem 2 contratos desligados no período (não deduplicados) + P6 = 3, P2 fica de fora (desligado antes do período)');
 
-    // ---- 7) Turnover Geral reaproveita RhIndicadoresService::taxaTurnover(), headcount por
-    //         CONTRATO e âncora inicial "início do período - 1 dia" (mesma convenção de
-    //         Indicadores de RH) --------------------------------------------------------------
+    // ---- 7) Turnover Geral reaproveita a NOVA fórmula oficial (2026-09):
+    //         RhIndicadoresService::taxaTurnoverPeriodo()/ativosNoPeriodo() — desligados do
+    //         período / ativos do período (nunca mais a média de headcount) -------------------
     $headcountInicio = $painelEmp['turnover']['headcount_inicio'];
     $headcountFim = $painelEmp['turnover']['headcount_fim'];
-    $esperadoTurnover = RhIndicadoresService::taxaTurnover($painelEmp['desligamentos']['periodo'], $headcountInicio, $headcountFim);
-    $check($painelEmp['turnover']['geral_percentual'] === $esperadoTurnover, '(G) Turnover Geral bate exatamente com RhIndicadoresService::taxaTurnover() — fórmula não duplicada');
+    $ativosPeriodoEmp = $painelEmp['turnover']['ativos_periodo'];
+    $esperadoTurnover = RhIndicadoresService::taxaTurnoverPeriodo($painelEmp['desligamentos']['periodo'], $ativosPeriodoEmp);
+    $check($painelEmp['turnover']['geral_percentual'] === $esperadoTurnover, '(G) Turnover Geral bate exatamente com RhIndicadoresService::taxaTurnoverPeriodo()/ativosNoPeriodo() — fórmula não duplicada');
     $check($headcountFim === $painelEmp['headcount']['atual'], '(G-correlato) headcount_fim do Turnover é EXATAMENTE o mesmo valor do card Headcount Atual — mesma função, mesma data, nenhuma definição paralela dentro do próprio People Analytics');
     $check($headcountInicio === 6, '(4/G-correlato) Headcount no início do período = 6 contratos (P1: 2, P3: 1, P5: 2, P6: 1, todos ativos em início-1 dia) — P2 já tinha saído antes disso, P4 ainda não tinha entrado');
     $check($headcountFim === 5, '(G-correlato) Headcount no fim do período = 5 contratos (P1: 2, P3: 1, P4: 2) — P5 e P6 já tinham saído até hoje');
+    $check($ativosPeriodoEmp === 8, '(G-nova-formula) Ativos do período = 8 contratos (P1: 2, P3: 1, P4: 2, P5: 2, P6: 1 — todos sobrepõem o período; P6 tem demissao 7 dias atrás, dentro do período de 30 dias, também sobrepõe) — só P2 fica de fora (demissao 200 dias atrás, antes do início do período)');
 
     // ---- 7b) Fixture dedicada — uma única pessoa com DOIS contratos, isolada, prova direta e
     //          inequívoca de que o Headcount NUNCA usa COUNT(DISTINCT codigo_pessoa) -------------
@@ -292,21 +294,23 @@ try {
     $check($itemEmpMB !== null && $itemEmpMB['codigo'] === $empMB && $itemEmpMB['quantidade'] === 1, '(21) Headcount por Empresa: empMB tem 1 contrato ativo, vem depois de empMA');
     $check($itemEmpMB !== null && $itemEmpMB['label'] === $empMB, '(21) Headcount por Empresa: empMB nunca teve nome de Empresa preenchido em nenhum contrato — rótulo cai no próprio código, nunca um nome inventado');
 
-    $headcountInicioEmpMA = RhIndicadoresService::headcountEm([
+    $contratosEmpMA = [
         ['admissao' => $hoje->modify('-500 days')->format('Y-m-d'), 'demissao' => null],
         ['admissao' => $hoje->modify('-450 days')->format('Y-m-d'), 'demissao' => null],
         ['admissao' => $hoje->modify('-400 days')->format('Y-m-d'), 'demissao' => $hoje->modify('-10 days')->format('Y-m-d')],
-    ], $inicio->modify('-1 day'));
-    $esperadoTurnoverEmpMA = RhIndicadoresService::taxaTurnover(1, $headcountInicioEmpMA, 2);
+    ];
+    $ativosPeriodoEmpMA = count(RhIndicadoresService::ativosNoPeriodo($contratosEmpMA, $inicio, $fim));
+    $esperadoTurnoverEmpMA = RhIndicadoresService::taxaTurnoverPeriodo(1, $ativosPeriodoEmpMA);
     $porEmpresaTurnover = [];
     foreach ($painelMulti['turnover']['por_empresa'] as $linha) {
         $porEmpresaTurnover[$linha['codigo']] = $linha;
     }
-    $check(($porEmpresaTurnover[$empMA]['desligamentos'] ?? null) === 1, '(22) Desligamentos por Empresa: empMA tem 1 evento (pMA2) — mesma contagem de RhIndicadoresService::turnoverPorDimensao(), sem fórmula paralela');
+    $check(($porEmpresaTurnover[$empMA]['desligamentos'] ?? null) === 1, '(22) Desligamentos por Empresa: empMA tem 1 evento (pMA2) — mesma contagem de RhIndicadoresService::turnoverPorDimensaoPeriodo(), sem fórmula paralela');
     $check(($porEmpresaTurnover[$empMB]['desligamentos'] ?? null) === 0, '(22) Desligamentos por Empresa: empMB tem 0 eventos no período');
+    $check($ativosPeriodoEmpMA === 3, '(23-base) empMA: os 3 contratos sobrepõem o período (pMA2 tem demissao 10 dias atrás, dentro dos 30 dias do período) — ativos_periodo = 3');
     $check(
         isset($porEmpresaTurnover[$empMA]) && $porEmpresaTurnover[$empMA]['taxa'] === $esperadoTurnoverEmpMA,
-        '(23) Turnover por Empresa: empMA bate exatamente com RhIndicadoresService::taxaTurnover()/headcountEm() com âncora "início do período - 1 dia" — mesma fórmula do Turnover Geral, sem reimplementação'
+        '(23) Turnover por Empresa: empMA bate exatamente com RhIndicadoresService::taxaTurnoverPeriodo()/ativosNoPeriodo() (nova fórmula) — mesma fórmula do Turnover Geral, sem reimplementação'
     );
     $check(
         array_keys($porEmpresaTurnover) === [$empMA, $empMB] || array_values(array_map(static fn(array $l) => $l['codigo'], $painelMulti['turnover']['por_empresa'])) === [$empMA, $empMB],
@@ -551,19 +555,18 @@ try {
     $outros = $painelV['desligamentos']['periodo'] - $painelV['turnover']['voluntario']['eventos'] - $painelV['turnover']['involuntario']['eventos'];
     $check($outros === 4, '(5º ao 8º código "outros") 005/008/016/020 continuam em Desligamentos/Turnover Geral mas somados dão 4 eventos fora dos dois numeradores — Geral ≠ Voluntário + Involuntário');
 
-    $hcInicioV = $painelV['turnover']['headcount_inicio'];
-    $hcFimV = $painelV['turnover']['headcount_fim'];
+    $ativosPeriodoV = $painelV['turnover']['ativos_periodo'];
     $check(
-        $painelV['turnover']['voluntario']['percentual'] === RhIndicadoresService::taxaTurnover(2, $hcInicioV, $hcFimV),
-        '(2) Turnover Voluntário usa RhIndicadoresService::taxaTurnover() com a MESMA base de headcount do Turnover Geral — fórmula não duplicada'
+        $painelV['turnover']['voluntario']['percentual'] === RhIndicadoresService::taxaTurnoverPeriodo(2, $ativosPeriodoV),
+        '(2) Turnover Voluntário usa RhIndicadoresService::taxaTurnoverPeriodo() com a MESMA base de ativos do período do Turnover Geral — fórmula não duplicada'
     );
     $check(
-        $painelV['turnover']['involuntario']['percentual'] === RhIndicadoresService::taxaTurnover(3, $hcInicioV, $hcFimV),
+        $painelV['turnover']['involuntario']['percentual'] === RhIndicadoresService::taxaTurnoverPeriodo(3, $ativosPeriodoV),
         '(2) Turnover Involuntário usa a mesma fórmula/base, só troca o numerador'
     );
     $check(
-        $painelV['turnover']['geral_percentual'] === RhIndicadoresService::taxaTurnover(9, $hcInicioV, $hcFimV),
-        '(2) Turnover Geral desta fixture também bate com taxaTurnover(9, mesma base) — coerência matemática entre os três'
+        $painelV['turnover']['geral_percentual'] === RhIndicadoresService::taxaTurnoverPeriodo(9, $ativosPeriodoV),
+        '(2) Turnover Geral desta fixture também bate com taxaTurnoverPeriodo(9, mesma base) — coerência matemática entre os três'
     );
     $check(
         $painelV['turnover']['geral_percentual'] !== round($painelV['turnover']['voluntario']['percentual'] + $painelV['turnover']['involuntario']['percentual'], 1),
@@ -670,10 +673,11 @@ try {
     $restaurarSessao($sessaoOriginal);
 
     // ---- (30) Turnover por Sexo: PeopleAnalyticsService::montarPainel()['turnover']['genero'] --
-    // Mesmo cenário já validado na fórmula pura (unit_rh_indicadores_service.php Caso 11):
-    // Masculino 10 -> 8 (2 desligamentos) = 22,2%; Feminino 5 -> 5 (1 desligamento, 1 readmissão
-    // no período) = 20,0%. Aqui provamos que PeopleAnalyticsService::montarPainel() realmente
-    // expõe esses números via turnoverPorDimensao('sexo', ...), não só a fórmula isolada.
+    // Nova fórmula oficial (2026-09): desligados / ATIVOS DO PERÍODO (nunca mais a média de
+    // headcount). Aqui provamos que PeopleAnalyticsService::montarPainel() realmente expõe esses
+    // números via RhIndicadoresService::turnoverPorDimensaoPeriodo('sexo', ...), não só a fórmula
+    // isolada. Todos os 10 homens e as 6 mulheres (4 ativas + FD1 desligada + FN1 admitida dentro
+    // do período) sobrepõem o período — nenhum contrato desta fixture fica fora da população.
     $empSexoFixture = 'ZZH' . $suffix;
     $inicioSexo = new DateTimeImmutable('2024-01-01');
     $fimSexo = new DateTimeImmutable('2024-01-31');
@@ -708,9 +712,11 @@ try {
 
     $painelSexo = $service->montarPainel(['codigo_empresa' => $empSexoFixture], $inicioSexo, $fimSexo);
     $check($painelSexo['turnover']['genero']['disponivel'] === true, '(30) Turnover por Sexo: genero.disponivel = true (deixou de ser "Dado ainda não integrado").');
-    $check(abs($painelSexo['turnover']['genero']['masculino']['taxa'] - 22.2) < 0.05, '(30) Turnover por Sexo: Masculino = 2 desligamentos / média(10,8) × 100 = 22,2%, via montarPainel() real.');
+    $check((int)$painelSexo['turnover']['genero']['masculino']['ativos_periodo'] === 10, '(30) Turnover por Sexo: Masculino tem 10 contratos ativos no período (todos sobrepõem, nenhum desligado antes do início) — nova fórmula usa ativos do período, não headcount médio.');
+    $check(abs($painelSexo['turnover']['genero']['masculino']['taxa'] - 20.0) < 0.05, '(30) Turnover por Sexo: Masculino = 2 desligamentos / 10 ativos do período × 100 = 20,0%, via montarPainel() real.');
     $check((int)$painelSexo['turnover']['genero']['masculino']['desligamentos'] === 2, '(30) Turnover por Sexo: Masculino registra 2 desligamentos no período.');
-    $check(abs($painelSexo['turnover']['genero']['feminino']['taxa'] - 20.0) < 0.05, '(30) Turnover por Sexo: Feminino = 1 desligamento / média(5,5) × 100 = 20,0%, via montarPainel() real.');
+    $check((int)$painelSexo['turnover']['genero']['feminino']['ativos_periodo'] === 6, '(30) Turnover por Sexo: Feminino tem 6 contratos ativos no período (4 ativas + FD1 desligada dentro do período + FN1 admitida dentro do período)');
+    $check(abs($painelSexo['turnover']['genero']['feminino']['taxa'] - 16.7) < 0.05, '(30) Turnover por Sexo: Feminino = 1 desligamento / 6 ativos do período × 100 = 16,7%, via montarPainel() real.');
     $check((int)$painelSexo['turnover']['genero']['feminino']['desligamentos'] === 1, '(30) Turnover por Sexo: Feminino registra 1 desligamento no período.');
     $check($painelSexo['turnover']['genero']['nao_informado'] === null, '(30) Turnover por Sexo: sem registro sem sexo neste cenário, "não_informado" fica null (nunca inventado).');
     // Turnover Geral do mesmo painel não pode ter sido afetado pela segmentação por sexo.

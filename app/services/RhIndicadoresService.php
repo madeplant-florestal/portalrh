@@ -159,19 +159,37 @@ class RhIndicadoresService
         return $total;
     }
 
-    /** @return array Contratos cuja admissão caiu dentro de [inicio, fim] (inclusive). */
-    public static function admissoesNoPeriodo(array $contratos, DateTimeImmutable $inicio, DateTimeImmutable $fim): array
+    /**
+     * @param string[]|null $excluirIdentificadores Contratos cujo `identificador` esteja aqui
+     *        nunca contam como Admissão real — usado para excluir "entrada por transferência"
+     *        interempresa (regra congelada em 2026-09: transferência é movimentação interna,
+     *        nunca Admissão) sem alterar nenhum outro chamador (parâmetro opcional, `null` =
+     *        comportamento idêntico ao de antes).
+     * @return array Contratos cuja admissão caiu dentro de [inicio, fim] (inclusive).
+     */
+    public static function admissoesNoPeriodo(array $contratos, DateTimeImmutable $inicio, DateTimeImmutable $fim, ?array $excluirIdentificadores = null): array
     {
-        return array_values(array_filter($contratos, static function (array $contrato) use ($inicio, $fim): bool {
+        return array_values(array_filter($contratos, static function (array $contrato) use ($inicio, $fim, $excluirIdentificadores): bool {
+            if ($excluirIdentificadores !== null && in_array((string)($contrato['identificador'] ?? ''), $excluirIdentificadores, true)) {
+                return false;
+            }
             $admissao = self::normalizeDate($contrato['admissao'] ?? null);
             return $admissao !== null && $admissao >= $inicio && $admissao <= $fim;
         }));
     }
 
-    /** @return array Contratos cuja demissão caiu dentro de [inicio, fim] (inclusive). */
-    public static function desligamentosNoPeriodo(array $contratos, DateTimeImmutable $inicio, DateTimeImmutable $fim): array
+    /**
+     * @param string[]|null $excluirIdentificadores Contratos cujo `identificador` esteja aqui
+     *        nunca contam como Desligamento real — usado para excluir "saída por transferência"
+     *        interempresa (mesma regra/parâmetro opcional de admissoesNoPeriodo()).
+     * @return array Contratos cuja demissão caiu dentro de [inicio, fim] (inclusive).
+     */
+    public static function desligamentosNoPeriodo(array $contratos, DateTimeImmutable $inicio, DateTimeImmutable $fim, ?array $excluirIdentificadores = null): array
     {
-        return array_values(array_filter($contratos, static function (array $contrato) use ($inicio, $fim): bool {
+        return array_values(array_filter($contratos, static function (array $contrato) use ($inicio, $fim, $excluirIdentificadores): bool {
+            if ($excluirIdentificadores !== null && in_array((string)($contrato['identificador'] ?? ''), $excluirIdentificadores, true)) {
+                return false;
+            }
             $demissao = self::normalizeDate($contrato['demissao'] ?? null);
             return $demissao !== null && $demissao >= $inicio && $demissao <= $fim;
         }));
@@ -358,6 +376,221 @@ class RhIndicadoresService
 
         usort($resultado, static fn(array $a, array $b) => $b['taxa'] <=> $a['taxa']);
         return $resultado;
+    }
+
+
+    // -----------------------------------------------------------------------------------------
+    // Nova fórmula oficial de Turnover do People Analytics (2026-09) — Turnover = desligados do
+    // período / ativos do período × 100. Metodologia PARALELA à de taxaTurnover()/
+    // turnoverPorDimensao() (headcount médio) acima: aquelas continuam servindo Indicadores de RH
+    // sem nenhuma alteração. Os métodos abaixo são a ÚNICA fonte desta nova fórmula — nenhuma view
+    // ou service deve reimplementá-la.
+    // -----------------------------------------------------------------------------------------
+
+    /**
+     * Um contrato SOBREPÕE o período [inicio, fim] quando esteve vigente em QUALQUER momento
+     * dentro dele — conceito diferente de contratoAtivoEm() (ativo numa ÚNICA data, usado para
+     * headcount de abertura/fechamento): admissao <= fim E (demissao IS NULL OU demissao >=
+     * inicio). Um contrato admitido e desligado inteiramente DENTRO do período sobrepõe o
+     * período mesmo sem estar "ativo" em nenhuma das duas pontas.
+     */
+    public static function contratoSobrepoePeriodo(array $contrato, DateTimeImmutable $inicio, DateTimeImmutable $fim): bool
+    {
+        $admissao = self::normalizeDate($contrato['admissao'] ?? null);
+        if ($admissao === null || $admissao > $fim) {
+            return false;
+        }
+        $demissao = self::normalizeDate($contrato['demissao'] ?? null);
+        return $demissao === null || $demissao >= $inicio;
+    }
+
+    /**
+     * "Ativos do período" (definição congelada pelo negócio): todos os contratos que estiveram
+     * vigentes em algum momento dentro de [inicio, fim] — nunca só o headcount de fechamento, nem
+     * a média entre início e fim.
+     *
+     * @return array Contratos que sobrepõem o período.
+     */
+    public static function ativosNoPeriodo(array $contratos, DateTimeImmutable $inicio, DateTimeImmutable $fim): array
+    {
+        return array_values(array_filter(
+            $contratos,
+            static fn(array $c): bool => self::contratoSobrepoePeriodo($c, $inicio, $fim)
+        ));
+    }
+
+    /**
+     * Turnover(%) = desligamentos_do_período / ativos_do_período × 100 — nova fórmula oficial do
+     * People Analytics. Sem ativos no período, resultado 0.0 (nunca divisão por zero).
+     */
+    public static function taxaTurnoverPeriodo(int $desligamentos, int $ativos): float
+    {
+        if ($ativos <= 0) {
+            return 0.0;
+        }
+        return round(($desligamentos / $ativos) * 100, 1);
+    }
+
+    /**
+     * Turnover por valor de dimensão no período, nova fórmula: cada grupo usa a PRÓPRIA
+     * população de ativos do período como denominador — nunca a população global do filtro
+     * inteiro. Mesmo princípio de turnoverPorDimensao(), metodologia diferente (ver bloco acima).
+     *
+     * @param string[]|null $excluirDemissaoIds Ver desligamentosNoPeriodo() — exclui "saída por
+     *        transferência" interempresa do numerador, em qualquer dimensão/empresa/setor.
+     * @param array|null $contratosParaAtivos Quando informado, usado SÓ para contar ativos do
+     *        período (nunca para desligamentos) — permite passar uma versão com vigência
+     *        analítica ajustada (MetadadosMovimentacaoService::aplicarVigenciaAnalitica()) sem
+     *        que a data de corte artificial vire um falso evento de desligamento. `null` (padrão)
+     *        usa o mesmo `$contratos` para os dois cálculos, como antes.
+     */
+    public static function turnoverPorDimensaoPeriodo(
+        array $contratos,
+        string $campo,
+        DateTimeImmutable $inicio,
+        DateTimeImmutable $fim,
+        ?array $excluirDemissaoIds = null,
+        ?array $contratosParaAtivos = null
+    ): array {
+        $agrupar = static function (array $lista) use ($campo): array {
+            $grupos = [];
+            foreach ($lista as $contrato) {
+                $valor = trim((string)($contrato[$campo] ?? ''));
+                $chave = $valor !== '' ? $valor : self::NAO_INFORMADO;
+                $grupos[$chave][] = $contrato;
+            }
+            return $grupos;
+        };
+
+        $gruposDesligamentos = $agrupar($contratos);
+        $gruposAtivos = $contratosParaAtivos !== null ? $agrupar($contratosParaAtivos) : $gruposDesligamentos;
+        $labels = array_unique(array_merge(array_keys($gruposAtivos), array_keys($gruposDesligamentos)));
+
+        $resultado = [];
+        foreach ($labels as $label) {
+            $ativos = count(self::ativosNoPeriodo($gruposAtivos[$label] ?? [], $inicio, $fim));
+            $desligamentos = count(self::desligamentosNoPeriodo($gruposDesligamentos[$label] ?? [], $inicio, $fim, $excluirDemissaoIds));
+            $resultado[] = [
+                'label' => $label,
+                'desligamentos' => $desligamentos,
+                'ativos_periodo' => $ativos,
+                'taxa' => self::taxaTurnoverPeriodo($desligamentos, $ativos),
+            ];
+        }
+
+        usort($resultado, static fn(array $a, array $b) => $b['taxa'] <=> $a['taxa']);
+        return $resultado;
+    }
+
+    /**
+     * Série mensal única (ativos do período, desligamentos, admissões e taxa — nova fórmula), um
+     * ponto por mês calendário completo entre $inicio e $fim (mesma convenção de meses inteiros
+     * de turnoverMensal() acima). UM ÚNICO dataset alimenta tanto "Evolução Mensal do Turnover"
+     * quanto "Admissões × Desligamentos" no People Analytics — nenhuma query/loop duplicado.
+     *
+     * @param string[]|null $excluirAdmissaoIds Ver admissoesNoPeriodo().
+     * @param string[]|null $excluirDemissaoIds Ver desligamentosNoPeriodo().
+     * @param int|null $forcarQuantidadeMeses Quando informado, gera exatamente essa quantidade de
+     *        meses a partir de $inicio, IGNORANDO $fim para decidir quando parar — usado só por
+     *        serieMensalComparativa() para garantir que a série comparativa tenha exatamente o
+     *        mesmo número de pontos da série atual (alinhamento determinístico por índice de mês,
+     *        nunca por padding de array de tamanhos possivelmente diferentes).
+     * @param array|null $contratosParaAtivos Ver turnoverPorDimensaoPeriodo() — usado SÓ para
+     *        ativos_periodo (nunca para admissões/desligamentos, que sempre olham as datas
+     *        reais); permite vigência analítica sem criar evento falso de admissão/desligamento.
+     * @return array<int,array{label:string,ativos_periodo:int,desligamentos:int,admissoes:int,taxa:float}>
+     */
+    public static function serieMensalPeriodo(
+        array $contratos,
+        DateTimeImmutable $inicio,
+        DateTimeImmutable $fim,
+        ?array $excluirAdmissaoIds = null,
+        ?array $excluirDemissaoIds = null,
+        ?int $forcarQuantidadeMeses = null,
+        ?array $contratosParaAtivos = null
+    ): array {
+        $contratosAtivos = $contratosParaAtivos ?? $contratos;
+        $meses = [];
+        $cursor = $inicio->modify('first day of this month');
+        $limite = $fim->modify('first day of this month');
+        $indice = 0;
+
+        while ($forcarQuantidadeMeses !== null ? $indice < $forcarQuantidadeMeses : $cursor <= $limite) {
+            $mesInicio = $cursor;
+            $mesFim = $cursor->modify('last day of this month');
+            $ativos = count(self::ativosNoPeriodo($contratosAtivos, $mesInicio, $mesFim));
+            $desligamentos = count(self::desligamentosNoPeriodo($contratos, $mesInicio, $mesFim, $excluirDemissaoIds));
+            $admissoes = count(self::admissoesNoPeriodo($contratos, $mesInicio, $mesFim, $excluirAdmissaoIds));
+            $meses[] = [
+                'label' => self::formatarMes($mesInicio),
+                'ativos_periodo' => $ativos,
+                'desligamentos' => $desligamentos,
+                'admissoes' => $admissoes,
+                'taxa' => self::taxaTurnoverPeriodo($desligamentos, $ativos),
+            ];
+            $cursor = $cursor->modify('+1 month');
+            $indice++;
+        }
+
+        return $meses;
+    }
+
+    /**
+     * Par de séries mensais SEMPRE do mesmo tamanho, alinhadas por ÍNDICE relativo ao início de
+     * cada período ("mês 1 do período selecionado" <-> "mês 1 do comparativo", nunca por posição
+     * bruta de arrays de tamanhos possivelmente diferentes) — corrige o alinhamento antes
+     * aproximado (array_pad) de intervalos personalizados não alinhados a mês (correção de
+     * 2026-09). A quantidade de pontos é sempre a do período ATUAL; o comparativo é gerado com
+     * essa MESMA quantidade a partir do seu próprio início, mesmo que ultrapasse o fim "oficial"
+     * do período comparativo — um dashboard executivo precisa sempre de pares comparáveis.
+     *
+     * @param string[]|null $excluirAdmissaoIds
+     * @param string[]|null $excluirDemissaoIds
+     * @param array|null $contratosParaAtivos Ver serieMensalPeriodo()/turnoverPorDimensaoPeriodo().
+     * @return array{atual: array, comparativo: array}
+     */
+    public static function serieMensalComparativa(
+        array $contratos,
+        DateTimeImmutable $inicioAtual,
+        DateTimeImmutable $fimAtual,
+        DateTimeImmutable $inicioComp,
+        ?array $excluirAdmissaoIds = null,
+        ?array $excluirDemissaoIds = null,
+        ?array $contratosParaAtivos = null
+    ): array {
+        $serieAtual = self::serieMensalPeriodo($contratos, $inicioAtual, $fimAtual, $excluirAdmissaoIds, $excluirDemissaoIds, null, $contratosParaAtivos);
+        $serieComp = self::serieMensalPeriodo($contratos, $inicioComp, $inicioComp, $excluirAdmissaoIds, $excluirDemissaoIds, count($serieAtual), $contratosParaAtivos);
+        return ['atual' => $serieAtual, 'comparativo' => $serieComp];
+    }
+
+    /** Período comparativo padrão: o mesmo intervalo, um ano antes. */
+    public static function periodoMesmoIntervaloAnoAnterior(DateTimeImmutable $inicio, DateTimeImmutable $fim): array
+    {
+        return [$inicio->modify('-1 year'), $fim->modify('-1 year')];
+    }
+
+    /**
+     * Período imediatamente anterior, de duração equivalente. Quando o período selecionado é um
+     * número inteiro de meses calendário (início no dia 1, fim no último dia de um mês), o
+     * comparativo também é esse mesmo número de meses imediatamente anterior (ex.: Jan-Jun/2026
+     * -> Jul-Dez/2025) — nunca um deslocamento por dias corridos, que quebraria o alinhamento de
+     * mês. Fora desse caso (intervalo personalizado não alinhado a mês), usa a mesma quantidade
+     * de dias corridos imediatamente antes do início selecionado.
+     */
+    public static function periodoImediatamenteAnterior(DateTimeImmutable $inicio, DateTimeImmutable $fim): array
+    {
+        $inicioNoDia1 = $inicio->format('d') === '01';
+        $fimNoUltimoDia = $fim->format('Y-m-d') === $fim->modify('last day of this month')->format('Y-m-d');
+
+        if ($inicioNoDia1 && $fimNoUltimoDia) {
+            $meses = ((int)$fim->format('Y') - (int)$inicio->format('Y')) * 12
+                + ((int)$fim->format('n') - (int)$inicio->format('n')) + 1;
+            return [$inicio->modify("-{$meses} months"), $inicio->modify('-1 day')];
+        }
+
+        $dias = $inicio->diff($fim)->days + 1;
+        $novoFim = $inicio->modify('-1 day');
+        return [$novoFim->modify('-' . ($dias - 1) . ' days'), $novoFim];
     }
 
     /**

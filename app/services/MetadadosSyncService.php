@@ -81,7 +81,8 @@ class MetadadosSyncService
             ctr.CENTROCUSTO1                               AS codigo_centro_custo,
             CASE WHEN ctr.DATARESCISAO IS NULL THEN 1 ELSE 0 END AS ativo,
             ctr.SALARIOCONTRATUAL                          AS salario_atual,
-            CONVERT(char(10), ctr.DATAULTALTCARGO, 23)     AS data_inicio_cargo
+            CONVERT(char(10), ctr.DATAULTALTCARGO, 23)     AS data_inicio_cargo,
+            CONVERT(char(10), ctr.DATAULTTRANSFERENCIA, 23) AS data_ultima_transferencia
         FROM RHCONTRATOS ctr
         INNER JOIN RHPESSOAS pes ON pes.EMPRESA = ctr.EMPRESA AND pes.PESSOA = ctr.PESSOA
         INNER JOIN RHEMPRESAS emp ON emp.EMPRESA = ctr.EMPRESA
@@ -150,6 +151,11 @@ class MetadadosSyncService
             'salario_atual' => isset($row['salario_atual']) && $row['salario_atual'] !== '' ? (string)$row['salario_atual'] : null,
             'data_inicio_cargo' => $row['data_inicio_cargo'] ?? null,
             'atualizado_em_origem' => $row['atualizado_em_origem'] ?? null,
+            // Fonte: RHCONTRATOS.DATAULTTRANSFERENCIA — data oficial de transferência interempresa
+            // (ver MetadadosMovimentacaoService::classificarTransferenciaContinua()). Payload de
+            // origem sem esta coluna (versão antiga do SELECT, testes com fixture antiga) continua
+            // compatível: cai em null, nunca quebra a sincronização.
+            'data_ultima_transferencia' => $row['data_ultima_transferencia'] ?? null,
         ];
     }
 

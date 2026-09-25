@@ -11,6 +11,7 @@ class ColaboradorMetadadosRepository
         'demissao', 'motivo_rescisao_codigo', 'motivo_rescisao_descricao', 'unidade',
         'setor', 'centro_custo', 'codigo_setor', 'codigo_cargo', 'codigo_centro_custo',
         'ativo', 'salario_atual', 'data_inicio_cargo', 'atualizado_em_origem',
+        'data_ultima_transferencia',
     ];
 
     private PDO $pdo;
@@ -71,8 +72,8 @@ class ColaboradorMetadadosRepository
                 motivo_rescisao_codigo, motivo_rescisao_descricao, unidade, setor, centro_custo,
                 codigo_setor, codigo_cargo, codigo_centro_custo,
                 ativo, origem_metadados, salario_atual, data_inicio_cargo, atualizado_em_origem,
-                ausente_na_origem, ausente_desde
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,NULL)'
+                data_ultima_transferencia, ausente_na_origem, ausente_desde
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,NULL)'
         );
         $stmt->execute([
             (string)$row['identificador'],
@@ -101,6 +102,7 @@ class ColaboradorMetadadosRepository
             self::nullableString($row['salario_atual'] ?? null),
             self::nullableString($row['data_inicio_cargo'] ?? null),
             self::nullableString($row['atualizado_em_origem'] ?? null),
+            self::nullableString($row['data_ultima_transferencia'] ?? null),
         ]);
     }
 
@@ -118,6 +120,7 @@ class ColaboradorMetadadosRepository
                 codigo_setor = ?, codigo_cargo = ?, codigo_centro_custo = ?,
                 ativo = ?, origem_metadados = ?,
                 salario_atual = ?, data_inicio_cargo = ?, atualizado_em_origem = ?,
+                data_ultima_transferencia = ?,
                 ausente_na_origem = 0, ausente_desde = NULL
              WHERE id = ?'
         );
@@ -145,6 +148,7 @@ class ColaboradorMetadadosRepository
             self::nullableString($row['salario_atual'] ?? null),
             self::nullableString($row['data_inicio_cargo'] ?? null),
             self::nullableString($row['atualizado_em_origem'] ?? null),
+            self::nullableString($row['data_ultima_transferencia'] ?? null),
             $id,
         ]);
     }

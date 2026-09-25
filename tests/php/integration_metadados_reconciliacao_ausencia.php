@@ -16,6 +16,10 @@ require_once __DIR__ . '/../../app/core/bootstrap.php';
  * por execução, limpas em finally).
  */
 $pdo = Database::conn();
+require_once __DIR__ . '/fixture_ausencia_snapshot.php';
+// Snapshot ANTES de qualquer fixture/reconciliação — ver docblock de fixture_ausencia_snapshot.php
+// (esta suíte reconciliando contra lotes de 2-5 linhas já corrompeu dado real em 2026-09-25).
+$snapshotAusencia = ausenciaSnapshot($pdo);
 $hasReconciliacao = (int)$pdo->query(
     "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'colaboradores_metadados' AND COLUMN_NAME = 'ausente_na_origem'"
 )->fetchColumn();
@@ -216,6 +220,7 @@ try {
 
     echo "OK integration_metadados_reconciliacao_ausencia\n";
 } finally {
+    ausenciaRestaurar($pdo, $snapshotAusencia);
     $pdo->prepare('DELETE FROM colaboradores_metadados WHERE codigo_empresa IN (?, ?)')
         ->execute([$empresa, $empresaSim ?? '__nenhum__']);
 }

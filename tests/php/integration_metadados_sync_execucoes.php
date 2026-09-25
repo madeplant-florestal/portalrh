@@ -30,6 +30,13 @@ if (!$tabela('metadados_sync_execucoes') || !$tabela('colaboradores_metadados'))
     exit(0);
 }
 
+// Snapshot ANTES de qualquer fixture/reconciliação — receberLote() SEMPRE reconcilia a dimensão
+// inteira recebida (ver fixture_ausencia_snapshot.php); sem isso, esta suíte marcaria como
+// ausente todo dado real coexistindo no banco de dev compartilhado (foi exatamente o que
+// corrompeu a base local em 2026-09-25).
+require_once __DIR__ . '/fixture_ausencia_snapshot.php';
+$snapshotAusencia = ausenciaSnapshot($pdo);
+
 $segredo = 'segredo-teste-' . bin2hex(random_bytes(4));
 $config = ['shared_secret' => $segredo, 'replay_window_seconds' => 300, 'max_batch_size' => 2000];
 $sufixo = (string)time() . (string)random_int(100, 999);
@@ -182,6 +189,7 @@ try {
 } catch (Throwable $e) {
     $falha = $e->getMessage();
 } finally {
+    ausenciaRestaurar($pdo, $snapshotAusencia);
     $pdo->prepare('DELETE FROM colaboradores_metadados WHERE codigo_empresa = ? AND codigo_unidade = ?')->execute([$empresa, $unidade]);
     $pdo->prepare('DELETE FROM metadados_sync_execucoes WHERE correlacao_id IN (?, ?)')->execute([$correlacao1, $correlacao2]);
     $idsCriados = array_values(array_unique(array_filter($idsCriados)));

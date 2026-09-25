@@ -21,6 +21,9 @@ class ColaboradorMetadadosConsultaRepository
 {
     private const ALLOWED_PER_PAGE = [20, 50, 100];
 
+    /** Sentinela do filtro `codigo_setor` para "Setor não informado" — ver montarFiltros(). */
+    public const SETOR_NAO_INFORMADO = '__sem_setor__';
+
     private ?PDO $pdo;
 
     public function __construct(?PDO $pdo = null)
@@ -119,6 +122,89 @@ class ColaboradorMetadadosConsultaRepository
         ];
     }
 
+
+    /**
+     * Página "executiva" para a listagem de Colaboradores do People Analytics — mesmos filtros
+     * de paginate() (reaproveita montarFiltros()), mas com colunas e JOINs próprios: nunca toca
+     * `cpf`/`salario_atual`/`nascimento`/dados bancários (só o necessário para a listagem
+     * operacional aprovada). `identificador` habilita cruzar com MetadadosMovimentacaoService::
+     * classificarMovimentacoes() (coluna "Situação" = Transferido). Gestor Imediato: usuário
+     * Portal vinculado a este contrato (`usuarios.colaborador_metadados_id`) → o `gestor_usuario_id`
+     * DESSE usuário — nunca `aprovador_usuario_id`. A maioria dos contratos não tem usuário Portal
+     * vinculado (nem todo colaborador tem login) — gestor vem `null`, nunca inventado.
+     *
+     * @return array{items:array,total:int,page:int,per_page:int,pages:int}
+     */
+    public function paginateExecutivo(array $filtros, int $page, int $perPage): array
+    {
+        $perPage = in_array($perPage, self::ALLOWED_PER_PAGE, true) ? $perPage : self::ALLOWED_PER_PAGE[0];
+        $page = max(1, $page);
+
+        [$where, $params] = $this->montarFiltros($filtros);
+        $whereSql = $where === [] ? '' : (' WHERE ' . implode(' AND ', $where));
+
+        $countStmt = $this->connection()->prepare('SELECT COUNT(*) FROM colaboradores_metadados m' . $whereSql);
+        $countStmt->execute($params);
+        $total = (int)$countStmt->fetchColumn();
+
+        $pages = max(1, (int)ceil($total / $perPage));
+        if ($page > $pages) {
+            $page = $pages;
+        }
+        $offset = ($page - 1) * $perPage;
+
+        $sql = 'SELECT
+                    m.id, m.identificador, m.nome, m.cargo, m.empresa, m.setor, m.codigo_setor,
+                    m.unidade, m.codigo_unidade, m.numero_contrato, m.codigo_empresa, m.codigo_pessoa,
+                    m.centro_custo, m.codigo_centro_custo,
+                    m.sexo, m.ausente_na_origem, m.admissao, m.demissao, m.motivo_rescisao_descricao, m.ativo,
+                    gestor.nome AS gestor_nome
+                FROM colaboradores_metadados m
+                LEFT JOIN usuarios u ON u.colaborador_metadados_id = m.id
+                LEFT JOIN usuarios gestor ON gestor.id = u.gestor_usuario_id'
+                . $whereSql
+                . ' ORDER BY m.nome ASC, m.numero_contrato ASC
+                    LIMIT ? OFFSET ?';
+        $stmt = $this->connection()->prepare($sql);
+        $execParams = $params;
+        $execParams[] = $perPage;
+        $execParams[] = $offset;
+        $stmt->execute($execParams);
+
+        return [
+            'items' => $stmt->fetchAll(PDO::FETCH_ASSOC),
+            'total' => $total,
+            'page' => $page,
+            'per_page' => $perPage,
+            'pages' => $pages,
+        ];
+    }
+
+    /**
+     * Mesmos filtros/colunas de paginateExecutivo(), mas SEM paginação — usado só pela
+     * exportação CSV (§16 da correção de 2026-09), que precisa da população filtrada inteira.
+     */
+    public function listarExecutivo(array $filtros): array
+    {
+        [$where, $params] = $this->montarFiltros($filtros);
+        $whereSql = $where === [] ? '' : (' WHERE ' . implode(' AND ', $where));
+
+        $sql = 'SELECT
+                    m.id, m.identificador, m.nome, m.cargo, m.empresa, m.setor, m.codigo_setor,
+                    m.unidade, m.codigo_unidade, m.numero_contrato, m.codigo_empresa, m.codigo_pessoa,
+                    m.centro_custo, m.codigo_centro_custo,
+                    m.sexo, m.ausente_na_origem, m.admissao, m.demissao, m.motivo_rescisao_descricao, m.ativo,
+                    gestor.nome AS gestor_nome
+                FROM colaboradores_metadados m
+                LEFT JOIN usuarios u ON u.colaborador_metadados_id = m.id
+                LEFT JOIN usuarios gestor ON gestor.id = u.gestor_usuario_id'
+                . $whereSql
+                . ' ORDER BY m.nome ASC, m.numero_contrato ASC';
+        $stmt = $this->connection()->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
     /**
      * Valores distintos para os selects de filtro — mesmo critério do Dashboard de Indicadores:
      * empresa agrupada pelo código estável (`codigo_empresa`), exibindo o nome mais recente;
@@ -193,6 +279,20 @@ class ColaboradorMetadadosConsultaRepository
         if ($setor !== '') {
             $where[] = 'm.setor = ?';
             $params[] = $setor;
+        }
+
+        // codigo_setor: filtro por CÓDIGO oficial (mesma identidade usada em todo o People
+        // Analytics — nunca o texto `setor`, que pode variar de grafia). Independente do filtro
+        // `setor` (texto) acima, usado pela tela /admin/colaboradores. Sentinela
+        // self::SETOR_NAO_INFORMADO: "Setor não informado" nunca é escondido do RH (§17 da
+        // correção de 2026-09) — precisa de uma opção explícita, já que WHERE codigo_setor = ''
+        // não é como o filtro comum funciona (vazio = sem filtro em todo o resto do módulo).
+        $codigoSetor = trim((string)($filtros['codigo_setor'] ?? ''));
+        if ($codigoSetor === self::SETOR_NAO_INFORMADO) {
+            $where[] = "(m.codigo_setor IS NULL OR m.codigo_setor = '')";
+        } elseif ($codigoSetor !== '') {
+            $where[] = 'm.codigo_setor = ?';
+            $params[] = $codigoSetor;
         }
 
         $cargo = trim((string)($filtros['cargo'] ?? ''));

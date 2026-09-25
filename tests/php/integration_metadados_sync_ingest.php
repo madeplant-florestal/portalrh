@@ -24,6 +24,13 @@ $hasReconciliacao = (int)$pdo->query(
     "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'colaboradores_metadados' AND COLUMN_NAME = 'ausente_na_origem'"
 )->fetchColumn() > 0;
 
+// Snapshot ANTES de qualquer fixture/reconciliação — receberLote() SEMPRE reconcilia a dimensão
+// inteira recebida (ver fixture_ausencia_snapshot.php); sem isso, os Casos 13a/13b abaixo
+// marcariam como ausente todo dado real coexistindo no banco de dev compartilhado (foi
+// exatamente o que corrompeu a base local em 2026-09-25).
+require_once __DIR__ . '/fixture_ausencia_snapshot.php';
+$snapshotAusencia = ausenciaSnapshot($pdo);
+
 // O receiver agora registra cada sincronização válida em metadados_sync_execucoes (observabilidade).
 // Marca o ponto de partida para limpar só as linhas criadas por este teste no finally.
 $execTableExists = (int)$pdo->query(
@@ -257,6 +264,7 @@ try {
     // erro e só encerra o processo depois que a limpeza já rodou.
     $falha = $e->getMessage();
 } finally {
+    ausenciaRestaurar($pdo, $snapshotAusencia);
     $pdo->prepare('DELETE FROM colaboradores_metadados WHERE codigo_empresa = ? AND codigo_unidade = ?')->execute([$empresa, $unidade]);
     if ($execTableExists) {
         $pdo->prepare('DELETE FROM metadados_sync_execucoes WHERE id > ?')->execute([$execMaxIdInicial]);

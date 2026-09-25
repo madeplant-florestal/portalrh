@@ -41,16 +41,23 @@ class PeopleAnalyticsRepository
      * opcoesFiltro() — nunca a tabela local `empresas` do Recrutamento (catálogo de outra
      * dimensão/geração, id-based, incompleto em relação ao universo do METADADOS).
      *
+     * `identificador` (chave técnica `codigo_empresa-codigo_unidade-numero_contrato`, nunca PII):
+     * usado só para aplicar os conjuntos de exclusão de MetadadosMovimentacaoService::
+     * classificarMovimentacoes() (transferência interempresa) — nunca para exibição direta.
+     *
      * @param array $filtros Chaves aceitas: codigo_empresa, codigo_setor. Ausente/vazio = sem filtro.
-     * @return array Cada item: codigo_pessoa, admissao, demissao, motivo_rescisao_codigo,
-     *               motivo_rescisao_descricao, nascimento, sexo, codigo_setor, ativo,
-     *               codigo_empresa, empresa, ausente_na_origem. `sexo` (RHPESSOAS.SEXO): dimensão
-     *               demográfica agregável, trazida para o diagnóstico "Transferências + Turnover
-     *               por Sexo/Gênero" — nunca renomeada para `genero` nesta camada.
-     *               `ausente_na_origem` (ver migration 2026-09-24-colaboradores-metadados-
-     *               reconciliacao-ausencia.sql): só serve para excluir da população VIGENTE agora
-     *               (card Headcount Atual/Headcount por Empresa) — nunca aplicado a Turnover,
-     *               Admissões ou Desligamentos, que continuam olhando o histórico completo.
+     * @return array Cada item: identificador, codigo_pessoa, admissao, demissao,
+     *               motivo_rescisao_codigo, motivo_rescisao_descricao, nascimento, sexo,
+     *               codigo_setor, ativo, codigo_empresa, empresa, ausente_na_origem. `sexo`
+     *               (RHPESSOAS.SEXO): dimensão demográfica agregável, trazida para o diagnóstico
+     *               "Transferências + Turnover por Sexo/Gênero" — nunca renomeada para `genero`
+     *               nesta camada. `ausente_na_origem` (ver migration 2026-09-24-colaboradores-
+     *               metadados-reconciliacao-ausencia.sql): só serve para excluir da população
+     *               VIGENTE agora (card Headcount Atual/Headcount por Empresa) — nunca aplicado a
+     *               Turnover, Admissões ou Desligamentos, que continuam olhando o histórico
+     *               completo (exceto os pares classificados como transferência interempresa, ver
+     *               buscarContratosParaMovimentacao()). NUNCA seleciona cpf/nome — mesma
+     *               disciplina de privacidade documentada na classe.
      */
     public function buscarContratos(array $filtros = []): array
     {
@@ -61,12 +68,17 @@ class PeopleAnalyticsRepository
             $where[] = 'codigo_empresa = ?';
             $params[] = $filtros['codigo_empresa'];
         }
-        if (!empty($filtros['codigo_setor'])) {
+        // Sentinela ColaboradorMetadadosConsultaRepository::SETOR_NAO_INFORMADO ("Setor não
+        // informado" selecionável no filtro superior, §17 da correção de 2026-09): traduzido
+        // aqui para a condição real, nunca comparado como se fosse um código de setor de verdade.
+        if (($filtros['codigo_setor'] ?? '') === ColaboradorMetadadosConsultaRepository::SETOR_NAO_INFORMADO) {
+            $where[] = "(codigo_setor IS NULL OR codigo_setor = '')";
+        } elseif (!empty($filtros['codigo_setor'])) {
             $where[] = 'codigo_setor = ?';
             $params[] = $filtros['codigo_setor'];
         }
 
-        $sql = 'SELECT codigo_pessoa, admissao, demissao, motivo_rescisao_codigo,
+        $sql = 'SELECT identificador, codigo_pessoa, admissao, demissao, motivo_rescisao_codigo,
                        motivo_rescisao_descricao, nascimento, sexo, codigo_setor, ativo,
                        codigo_empresa, empresa, ausente_na_origem
                 FROM colaboradores_metadados';
@@ -77,6 +89,31 @@ class PeopleAnalyticsRepository
         $stmt = $this->connection()->prepare($sql);
         $stmt->execute($params);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * Fonte MÍNIMA e GLOBAL (nunca filtrada por Empresa/Setor — precisa enxergar as duas pontas
+     * de uma transferência interempresa, que por definição estão em empresas diferentes) para
+     * MetadadosMovimentacaoService::classificarMovimentacoes(). Único ponto do módulo People
+     * Analytics que seleciona `cpf` — exceção deliberada e explicitamente autorizada (correção de
+     * 2026-09, transferências interempresa) à disciplina de privacidade de buscarContratos(): o
+     * CPF nunca sai desta função/do Service que a consome — serve só para parear a MESMA pessoa
+     * entre dois contratos, nunca é devolvido em `$painel` nem chega a nenhuma view.
+     *
+     * `data_ultima_transferencia` (RHCONTRATOS.DATAULTTRANSFERENCIA sincronizado, 2026-09):
+     * fonte oficial da data efetiva de transferência, usada por
+     * classificarTransferenciaContinua() para derivar a vigência analítica — nunca para alterar
+     * admissao/demissao.
+     *
+     * @return array Cada item: identificador, cpf, codigo_empresa, admissao, demissao,
+     *               ausente_na_origem, data_ultima_transferencia.
+     */
+    public function buscarContratosParaMovimentacao(): array
+    {
+        $sql = 'SELECT identificador, cpf, codigo_empresa, admissao, demissao, ausente_na_origem,
+                       data_ultima_transferencia
+                FROM colaboradores_metadados';
+        return $this->connection()->query($sql)->fetchAll(PDO::FETCH_ASSOC);
     }
 
     /**

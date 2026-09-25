@@ -116,6 +116,14 @@ class PeopleAnalyticsService
         $classificacao = MetadadosMovimentacaoService::classificarMovimentacoes($paresMovimentacao);
         $excluirAdmissaoIds = $classificacao['excluir_admissao_ids'];
         $excluirDemissaoIds = $classificacao['excluir_demissao_ids'];
+        // Admissões REAIS (correção de 2026-09: "admissões duplicadas por transferência
+        // contínua") — une Cenário B (excluir_admissao_ids, já existente) com o contrato de
+        // ORIGEM de cada transferência contínua (origem_continua_ids, Cenário A): quando a
+        // admissão original preservada cai dentro do período consultado, o contrato de origem
+        // órfão não pode gerar um segundo evento de Admissão além do já contado pelo contrato de
+        // destino. Ver RhIndicadoresService::admissoesReaisNoPeriodo() — nunca aplicado a
+        // Desligamentos/Turnover/Headcount, que continuam exatamente como antes desta correção.
+        $excluirAdmissaoIdsReais = array_values(array_unique(array_merge($excluirAdmissaoIds, $classificacao['origem_continua_ids'])));
 
         // Vigência analítica (2026-09, RHCONTRATOS.DATAULTTRANSFERENCIA agora sincronizado em
         // `data_ultima_transferencia`): para os pares do Cenário A com data conhecida, deriva uma
@@ -153,10 +161,12 @@ class PeopleAnalyticsService
         // Admissões/Desligamentos SEMPRE a partir de $contratos ORIGINAL (nunca de
         // $contratosConsolidado/vigência analítica) — a data de corte da transferência é uma
         // fronteira de POPULAÇÃO, não um evento; usá-la aqui fabricaria uma admissão/desligamento
-        // que nunca aconteceu de verdade. Cenário A nunca precisa de exclusão de evento (origem
-        // nunca tem demissao real, destino preserva a admissao original) — só o Cenário B usa
-        // $excluirAdmissaoIds/$excluirDemissaoIds.
-        $admissoesContratos = RhIndicadoresService::admissoesNoPeriodo($contratos, $inicio, $fim, $excluirAdmissaoIds);
+        // que nunca aconteceu de verdade. Desligamentos: Cenário A nunca precisa de exclusão de
+        // evento (origem nunca tem demissao real) — só o Cenário B usa $excluirDemissaoIds.
+        // Admissões: usa $excluirAdmissaoIdsReais (Cenário B + origem do Cenário A, correção de
+        // 2026-09) — o contrato de destino já preserva a admissão original; contar também o
+        // contrato de origem quando essa data cai dentro do período duplicaria o mesmo evento.
+        $admissoesContratos = RhIndicadoresService::admissoesReaisNoPeriodo($contratos, $inicio, $fim, $excluirAdmissaoIds, $classificacao['origem_continua_ids']);
         $desligamentos = $this->desligamentosNoPeriodo(
             $this->filtrarPorIdentificadoresExcluidos($contratos, $excluirDemissaoIds),
             $inicio,
@@ -236,7 +246,7 @@ class PeopleAnalyticsService
         );
         $ativosPeriodoComp = count(RhIndicadoresService::ativosNoPeriodo($contratosConsolidado, $compInicio, $compFim));
         $turnoverGeralComp = RhIndicadoresService::taxaTurnoverPeriodo(count($desligamentosComp), $ativosPeriodoComp);
-        $admissoesComp = RhIndicadoresService::admissoesNoPeriodo($contratos, $compInicio, $compFim, $excluirAdmissaoIds);
+        $admissoesComp = RhIndicadoresService::admissoesReaisNoPeriodo($contratos, $compInicio, $compFim, $excluirAdmissaoIds, $classificacao['origem_continua_ids']);
         $headcountFimComp = RhIndicadoresService::headcountEm($contratosConsolidado, $compFim);
 
         // ---- Evolução mensal + Admissões×Desligamentos: um único dataset por período, SEMPRE com
@@ -244,13 +254,15 @@ class PeopleAnalyticsService
         // padding de tamanhos diferentes — ver RhIndicadoresService::serieMensalComparativa()).
         // $contratos original alimenta admissões/desligamentos; $contratosConsolidado (vigência +
         // dedup) alimenta só ativos_periodo de cada mês — nunca fabrica pico de admissão/
-        // desligamento na virada da transferência (ver §21 da correção).
+        // desligamento na virada da transferência (ver §21 da correção). Admissões usa
+        // $excluirAdmissaoIdsReais (correção de 2026-09, admissões duplicadas por transferência
+        // contínua) — mesmo conjunto union já aplicado acima, sem reimplementar a regra aqui.
         $serieMensal = RhIndicadoresService::serieMensalComparativa(
             $contratos,
             $inicio,
             $fim,
             $compInicio,
-            $excluirAdmissaoIds,
+            $excluirAdmissaoIdsReais,
             $excluirDemissaoIds,
             $contratosConsolidado
         );

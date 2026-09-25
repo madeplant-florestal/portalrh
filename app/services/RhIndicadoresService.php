@@ -179,6 +179,42 @@ class RhIndicadoresService
     }
 
     /**
+     * Admissões REAIS no período (correção de 2026-09: "admissões duplicadas por transferência
+     * contínua"): mesma base de admissoesNoPeriodo(), mas o conjunto de exclusão passa a ser a
+     * UNIÃO (set, sem duplicidade) de duas fontes de MetadadosMovimentacaoService::
+     * classificarMovimentacoes() — `excluir_admissao_ids` (Cenário B, comportamento já existente,
+     * preservado) e `origem_continua_ids` (Cenário A: o contrato de ORIGEM de uma transferência
+     * contínua nunca deve gerar um segundo evento de Admissão — o contrato de DESTINO já carrega
+     * a mesma admissão original preservada; contar os dois quando essa data cai dentro do período
+     * consultado duplicaria a entrada real da mesma pessoa no grupo).
+     *
+     * Um identificador que participe de AMBAS as classificações ao mesmo tempo (cadeia: rescisão
+     * + recontratação em Cenário B seguida, depois, de uma transferência contínua em Cenário A —
+     * caso real encontrado na investigação de 2026-09) é excluído uma única vez: `array_unique()`
+     * + a checagem por `in_array()` de admissoesNoPeriodo() já são idempotentes por identificador,
+     * nunca subtraem duas vezes o mesmo contrato.
+     *
+     * Método central e reutilizável — não duplica a regra em cada tela; outros consumidores
+     * (Indicadores de RH, relatórios, exportações) podem chamar este método em vez de reimplementar
+     * a união dos dois conjuntos. `admissoesNoPeriodo()` continua com seu comportamento original
+     * intocado (TurnoverDashboardService e outros chamadores não são afetados por esta correção).
+     *
+     * @param string[] $excluirAdmissaoIds Cenário B — ver classificarMovimentacoes()['excluir_admissao_ids'].
+     * @param string[] $origemContinuaIds Cenário A — ver classificarMovimentacoes()['origem_continua_ids'].
+     * @return array Contratos cuja admissão REAL caiu dentro de [inicio, fim] (inclusive).
+     */
+    public static function admissoesReaisNoPeriodo(
+        array $contratos,
+        DateTimeImmutable $inicio,
+        DateTimeImmutable $fim,
+        array $excluirAdmissaoIds,
+        array $origemContinuaIds
+    ): array {
+        $excluir = array_values(array_unique(array_merge($excluirAdmissaoIds, $origemContinuaIds)));
+        return self::admissoesNoPeriodo($contratos, $inicio, $fim, $excluir);
+    }
+
+    /**
      * @param string[]|null $excluirIdentificadores Contratos cujo `identificador` esteja aqui
      *        nunca contam como Desligamento real — usado para excluir "saída por transferência"
      *        interempresa (mesma regra/parâmetro opcional de admissoesNoPeriodo()).

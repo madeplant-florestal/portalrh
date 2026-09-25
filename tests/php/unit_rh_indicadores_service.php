@@ -239,6 +239,69 @@ try {
     $totalDistribuicaoEmpresa = array_sum(array_column($painelDist['distribuicao_empresa'], 'quantidade'));
     $assert($totalDistribuicaoEmpresa === 1, 'Caso 12b: distribuicao_empresa exclui o registro ausente mesmo com $fim histórico, porque distribuicao() é sempre uma fotografia de agora — só o contrato normal entra.');
 
+    // Caso 15 — admissoesReaisNoPeriodo() (correção de 2026-09: "admissões duplicadas por
+    // transferência contínua"). Cada fixture roda pelo classificador REAL
+    // (MetadadosMovimentacaoService::classificarMovimentacoes()), nunca uma reimplementação
+    // paralela — mesma forma que PeopleAnalyticsService alimenta o método em produção.
+    $inicioP = new DateTimeImmutable('2025-10-01');
+    $fimP = new DateTimeImmutable('2026-09-25');
+
+    // 15-A — admissão normal, sem qualquer transferência: 1 admissão.
+    $a1 = contrato(['identificador' => 'A1', 'cpf' => '10000000001', 'codigo_empresa' => '0001', 'admissao' => '2026-01-10', 'demissao' => null]);
+    $classA = MetadadosMovimentacaoService::classificarMovimentacoes([$a1]);
+    $resA = $S::admissoesReaisNoPeriodo([$a1], $inicioP, $fimP, $classA['excluir_admissao_ids'], $classA['origem_continua_ids']);
+    $assert(count($resA) === 1, '15-A: admissão normal sem transferência conta 1 vez.');
+
+    // 15-B — transferência contínua (Cenário A), admissão preservada DENTRO do período: origem
+    // (órfã) e destino compartilham a MESMA admissao — deve contar 1 admissão total, nunca 2.
+    $bOrigem = contrato(['identificador' => 'B-ORIGEM', 'cpf' => '10000000002', 'codigo_empresa' => '0001', 'admissao' => '2026-02-01', 'demissao' => null, 'ausente_na_origem' => 1]);
+    $bDestino = contrato(['identificador' => 'B-DESTINO', 'cpf' => '10000000002', 'codigo_empresa' => '0002', 'admissao' => '2026-02-01', 'demissao' => null, 'ausente_na_origem' => 0]);
+    $classB = MetadadosMovimentacaoService::classificarMovimentacoes([$bOrigem, $bDestino]);
+    $assert(count($classB['continuas']) === 1, '15-B (pré-condição): o par foi classificado como transferência contínua.');
+    $resB = $S::admissoesReaisNoPeriodo([$bOrigem, $bDestino], $inicioP, $fimP, $classB['excluir_admissao_ids'], $classB['origem_continua_ids']);
+    $assert(count($resB) === 1, '15-B: transferência contínua com admissão preservada dentro do período conta 1 admissão total, nunca 2 (contrato de origem não gera evento duplicado).');
+    $assert($resB[0]['identificador'] === 'B-DESTINO', '15-B: a admissão contabilizada é a do contrato de DESTINO (vigente), nunca a do órfão.');
+
+    // 15-C — mesma transferência contínua, mas a admissão preservada cai FORA do período
+    // consultado: 0 admissões (nem origem nem destino geram evento neste período).
+    $cOrigem = contrato(['identificador' => 'C-ORIGEM', 'cpf' => '10000000003', 'codigo_empresa' => '0001', 'admissao' => '2020-05-01', 'demissao' => null, 'ausente_na_origem' => 1]);
+    $cDestino = contrato(['identificador' => 'C-DESTINO', 'cpf' => '10000000003', 'codigo_empresa' => '0002', 'admissao' => '2020-05-01', 'demissao' => null, 'ausente_na_origem' => 0]);
+    $classC = MetadadosMovimentacaoService::classificarMovimentacoes([$cOrigem, $cDestino]);
+    $resC = $S::admissoesReaisNoPeriodo([$cOrigem, $cDestino], $inicioP, $fimP, $classC['excluir_admissao_ids'], $classC['origem_continua_ids']);
+    $assert(count($resC) === 0, '15-C: admissão original fora do período consultado nunca gera evento — nem origem nem destino contam.');
+
+    // 15-D — recontratação real (mesma empresa, saída e volta genuínas — nunca bate como
+    // transferência, já que exige codigo_empresa diferente): a nova admissão conta normalmente.
+    $dAntigo = contrato(['identificador' => 'D-ANTIGO', 'cpf' => '10000000004', 'codigo_empresa' => '0001', 'admissao' => '2020-01-01', 'demissao' => '2023-01-01']);
+    $dNovo = contrato(['identificador' => 'D-NOVO', 'cpf' => '10000000004', 'codigo_empresa' => '0001', 'admissao' => '2026-03-15', 'demissao' => null]);
+    $classD = MetadadosMovimentacaoService::classificarMovimentacoes([$dAntigo, $dNovo]);
+    $assert($classD['continuas'] === [] && $classD['recontratacoes'] === [], '15-D (pré-condição): mesma empresa nunca é classificada como transferência.');
+    $resD = $S::admissoesReaisNoPeriodo([$dAntigo, $dNovo], $inicioP, $fimP, $classD['excluir_admissao_ids'], $classD['origem_continua_ids']);
+    $assert(count($resD) === 1 && $resD[0]['identificador'] === 'D-NOVO', '15-D: recontratação real (mesma empresa, saída e volta genuínas) conta como admissão normal.');
+
+    // 15-E — Cenário B (rescisão + recontratação em outra empresa, gap curto): comportamento já
+    // existente preservado — o contrato de destino não conta como admissão real.
+    $eOrigem = contrato(['identificador' => 'E-ORIGEM', 'cpf' => '10000000005', 'codigo_empresa' => '0001', 'admissao' => '2020-01-01', 'demissao' => '2026-01-10']);
+    $eDestino = contrato(['identificador' => 'E-DESTINO', 'cpf' => '10000000005', 'codigo_empresa' => '0002', 'admissao' => '2026-01-13', 'demissao' => null]);
+    $classE = MetadadosMovimentacaoService::classificarMovimentacoes([$eOrigem, $eDestino]);
+    $assert(count($classE['recontratacoes']) === 1, '15-E (pré-condição): rescisão + recontratação com gap curto em outra empresa é classificada como Cenário B.');
+    $resE = $S::admissoesReaisNoPeriodo([$eOrigem, $eDestino], $inicioP, $fimP, $classE['excluir_admissao_ids'], $classE['origem_continua_ids']);
+    $assert(count($resE) === 0, '15-E: destino do Cenário B continua excluído de Admissões (comportamento já existente, preservado por esta correção).');
+
+    // 15-F — cenário encadeado: a MESMA pessoa passa por Cenário B (rescisão + recontratação) e,
+    // depois, por Cenário A (transferência contínua) — o contrato do meio participa das DUAS
+    // classificações ao mesmo tempo (destino do Cenário B + origem do Cenário A). A união dos
+    // conjuntos de exclusão precisa remover esse identificador uma ÚNICA vez, nunca subtrair a
+    // mesma admissão duas vezes nem deixar o contrato final de fora por engano.
+    $fContrato1 = contrato(['identificador' => 'F-1', 'cpf' => '10000000006', 'codigo_empresa' => '0001', 'admissao' => '2020-01-01', 'demissao' => '2026-01-10']);
+    $fContrato2 = contrato(['identificador' => 'F-2', 'cpf' => '10000000006', 'codigo_empresa' => '0002', 'admissao' => '2026-01-13', 'demissao' => null, 'ausente_na_origem' => 1]);
+    $fContrato3 = contrato(['identificador' => 'F-3', 'cpf' => '10000000006', 'codigo_empresa' => '0003', 'admissao' => '2026-01-13', 'demissao' => null, 'ausente_na_origem' => 0]);
+    $classF = MetadadosMovimentacaoService::classificarMovimentacoes([$fContrato1, $fContrato2, $fContrato3]);
+    $assert(count($classF['recontratacoes']) === 1 && count($classF['continuas']) === 1, '15-F (pré-condição): o contrato do meio é classificado nas duas movimentações (destino do Cenário B e origem do Cenário A).');
+    $assert(in_array('F-2', $classF['excluir_admissao_ids'], true) && in_array('F-2', $classF['origem_continua_ids'], true), '15-F (pré-condição): F-2 aparece nos DOIS conjuntos de exclusão.');
+    $resF = $S::admissoesReaisNoPeriodo([$fContrato1, $fContrato2, $fContrato3], $inicioP, $fimP, $classF['excluir_admissao_ids'], $classF['origem_continua_ids']);
+    $assert(count($resF) === 1 && $resF[0]['identificador'] === 'F-3', '15-F: cenário encadeado conta exatamente 1 admissão real (F-3) — F-2 é excluído uma única vez (união é set, nunca subtrai duas vezes o mesmo identificador), nunca sobra nem falta.');
+
     echo "OK unit_rh_indicadores_service\n";
 } catch (Throwable $e) {
     fwrite(STDERR, $e->getMessage() . PHP_EOL);

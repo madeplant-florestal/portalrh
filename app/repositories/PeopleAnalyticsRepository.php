@@ -45,7 +45,8 @@ class PeopleAnalyticsRepository
      * usado só para aplicar os conjuntos de exclusão de MetadadosMovimentacaoService::
      * classificarMovimentacoes() (transferência interempresa) — nunca para exibição direta.
      *
-     * @param array $filtros Chaves aceitas: codigo_empresa, codigo_setor. Ausente/vazio = sem filtro.
+     * @param array $filtros Chaves aceitas: codigo_empresa, codigo_setor, sexo ('M'|'F'|
+     *              'nao_informado', Etapa 2). Ausente/vazio = sem filtro.
      * @return array Cada item: identificador, codigo_pessoa, admissao, demissao,
      *               motivo_rescisao_codigo, motivo_rescisao_descricao, nascimento, sexo,
      *               codigo_setor, ativo, codigo_empresa, empresa, ausente_na_origem. `sexo`
@@ -76,6 +77,17 @@ class PeopleAnalyticsRepository
         } elseif (!empty($filtros['codigo_setor'])) {
             $where[] = 'codigo_setor = ?';
             $params[] = $filtros['codigo_setor'];
+        }
+
+        // Sexo (Etapa 2 — interatividade, correção de 2026-09): 'M'/'F' comparam direto contra
+        // RHPESSOAS.SEXO já sincronizado; 'nao_informado' cobre NULL/vazio — nunca um texto livre
+        // buscado no banco (mapeamento seguro, feito só pelo chamador).
+        $sexo = (string)($filtros['sexo'] ?? '');
+        if ($sexo === 'M' || $sexo === 'F') {
+            $where[] = 'sexo = ?';
+            $params[] = $sexo;
+        } elseif ($sexo === 'nao_informado') {
+            $where[] = "(sexo IS NULL OR TRIM(sexo) = '')";
         }
 
         $sql = 'SELECT identificador, codigo_pessoa, admissao, demissao, motivo_rescisao_codigo,

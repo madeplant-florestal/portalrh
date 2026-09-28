@@ -45,9 +45,12 @@ class AdminController extends Controller
             ? RhIndicadoresService::periodoImediatamenteAnterior($inicio, $fim)
             : RhIndicadoresService::periodoMesmoIntervaloAnoAnterior($inicio, $fim);
 
+        $filtrosInterativos = $this->filtrosInterativosDoRequest();
         $filtros = [
             'codigo_empresa' => Security::sanitizeString($_GET['empresa'] ?? ''),
             'codigo_setor' => Security::sanitizeString($_GET['setor'] ?? ''),
+            'sexo' => $filtrosInterativos['sexo'],
+            'motivo_categoria' => $filtrosInterativos['motivo_categoria'],
         ];
         $filtros = array_filter($filtros, static fn(string $v): bool => $v !== '');
 
@@ -58,6 +61,10 @@ class AdminController extends Controller
         }
         $pagina = max(1, (int)($_GET['pagina'] ?? 1));
 
+        $filtrosListagem = $filtros;
+        $filtrosListagem['contexto_lista'] = $filtrosInterativos['contexto_lista'];
+        $filtrosListagem['mes_evento'] = $filtrosInterativos['mes_evento'];
+
         $service = new PeopleAnalyticsService();
         $painel = null;
         $listagem = null;
@@ -65,7 +72,7 @@ class AdminController extends Controller
         try {
             $painel = $service->montarPainel($filtros, $inicio, $fim, $compInicio, $compFim);
             $opcoesFiltro = $service->opcoesFiltro();
-            $listagem = $service->listarColaboradores($filtros, $pagina, $porPagina);
+            $listagem = $service->listarColaboradores($filtrosListagem, $inicio, $fim, $pagina, $porPagina);
         } catch (Throwable $e) {
             Logger::exception($e, 'ERROR', ['controller' => 'AdminController']);
             $erro = 'Não foi possível carregar o painel de People Analytics agora. Tente novamente em instantes.';
@@ -99,11 +106,131 @@ class AdminController extends Controller
                 'empresa' => $filtros['codigo_empresa'] ?? '',
                 'setor' => $filtros['codigo_setor'] ?? '',
             ],
+            'filtrosInterativos' => $filtrosInterativos,
             'periodoInicio' => $inicio,
             'periodoFim' => $fim,
             'ultimaSincronizacao' => $ultimaSincronizacao,
             'listagem' => $listagem,
         ], 'layouts/app-shell');
+    }
+
+    /**
+     * Dados atualizados do painel (Etapa 2 — People Analytics interativo, correção de 2026-09):
+     * mesmo cálculo de index(), devolvendo o HTML já renderizado do bloco de resultado (reaproveita
+     * o MESMO partial, nunca uma versão paralela em JSON+JS) — o front só troca o innerHTML de um
+     * container. Nunca recalcula Turnover/Headcount/Admissões/Desligamentos no JavaScript (§9).
+     */
+    public function dadosDashboard(): void
+    {
+        Auth::requireRole(['admin', 'rh', 'viewer']);
+        Authorization::requirePermissao('dashboard.visualizar');
+
+        $periodoSelecionado = Security::sanitizeString($_GET['periodo'] ?? '12m');
+        if (!array_key_exists($periodoSelecionado, self::PERIODOS)) {
+            $periodoSelecionado = '12m';
+        }
+        $periodoParams = [
+            'mes' => Security::sanitizeString($_GET['mes'] ?? ''),
+            'ano' => Security::sanitizeString($_GET['ano'] ?? ''),
+            'data_inicio' => Security::sanitizeString($_GET['data_inicio'] ?? ''),
+            'data_fim' => Security::sanitizeString($_GET['data_fim'] ?? ''),
+        ];
+        [$inicio, $fim] = $this->resolverPeriodo($periodoSelecionado, $periodoParams);
+
+        $comparativoSelecionado = Security::sanitizeString($_GET['comparativo'] ?? 'ano_anterior');
+        if (!array_key_exists($comparativoSelecionado, self::COMPARATIVOS)) {
+            $comparativoSelecionado = 'ano_anterior';
+        }
+        [$compInicio, $compFim] = $comparativoSelecionado === 'anterior'
+            ? RhIndicadoresService::periodoImediatamenteAnterior($inicio, $fim)
+            : RhIndicadoresService::periodoMesmoIntervaloAnoAnterior($inicio, $fim);
+
+        $filtrosInterativos = $this->filtrosInterativosDoRequest();
+        $filtros = [
+            'codigo_empresa' => Security::sanitizeString($_GET['empresa'] ?? ''),
+            'codigo_setor' => Security::sanitizeString($_GET['setor'] ?? ''),
+            'sexo' => $filtrosInterativos['sexo'],
+            'motivo_categoria' => $filtrosInterativos['motivo_categoria'],
+        ];
+        $filtros = array_filter($filtros, static fn(string $v): bool => $v !== '');
+
+        $porPagina = (int)($_GET['por_pagina'] ?? 20);
+        if (!in_array($porPagina, [20, 50], true)) {
+            $porPagina = 20;
+        }
+        $pagina = max(1, (int)($_GET['pagina'] ?? 1));
+
+        $filtrosListagem = $filtros;
+        $filtrosListagem['contexto_lista'] = $filtrosInterativos['contexto_lista'];
+        $filtrosListagem['mes_evento'] = $filtrosInterativos['mes_evento'];
+
+        header('Content-Type: application/json; charset=UTF-8');
+        try {
+            $service = new PeopleAnalyticsService();
+            $painel = $service->montarPainel($filtros, $inicio, $fim, $compInicio, $compFim);
+            $listagem = $service->listarColaboradores($filtrosListagem, $inicio, $fim, $pagina, $porPagina);
+            $opcoesFiltro = $service->opcoesFiltro();
+
+            $html = $this->view->renderPartial('admin/partials/dashboard/resultado', [
+                'painel' => $painel,
+                'erro' => null,
+                'listagem' => $listagem,
+                'opcoesFiltro' => $opcoesFiltro,
+                'filtrosSelecionados' => [
+                    'empresa' => $filtros['codigo_empresa'] ?? '',
+                    'setor' => $filtros['codigo_setor'] ?? '',
+                ],
+                'filtrosInterativos' => $filtrosInterativos,
+                'comparativos' => self::COMPARATIVOS,
+                'comparativoSelecionado' => $comparativoSelecionado,
+                'periodoSelecionado' => $periodoSelecionado,
+                'periodoParams' => $periodoParams,
+                'porPagina' => $porPagina,
+            ]);
+
+            echo json_encode(['ok' => true, 'html' => $html], JSON_UNESCAPED_UNICODE);
+        } catch (Throwable $e) {
+            Logger::exception($e, 'ERROR', ['controller' => 'AdminController', 'action' => 'dadosDashboard']);
+            http_response_code(500);
+            echo json_encode(['ok' => false, 'mensagem' => 'Não foi possível atualizar o painel agora. Tente novamente em instantes.'], JSON_UNESCAPED_UNICODE);
+        }
+    }
+
+    /**
+     * Filtros interativos (Etapa 2 — People Analytics interativo, correção de 2026-09): sexo,
+     * motivo (categoria do Dashboard de Turnover), contexto da listagem e mês de evento — ponto
+     * único de leitura/sanitização, reaproveitado por index(), dadosDashboard() e
+     * exportarColaboradores(). Mapeamento sempre contra whitelist — nunca um texto livre do
+     * request vira coluna/condição dinâmica na query (§14 da correção).
+     */
+    private function filtrosInterativosDoRequest(): array
+    {
+        $sexo = Security::sanitizeString($_GET['sexo'] ?? '');
+        if (!in_array($sexo, ['M', 'F', 'nao_informado'], true)) {
+            $sexo = '';
+        }
+
+        $motivoCategoria = Security::sanitizeString($_GET['motivo'] ?? '');
+        if (!in_array($motivoCategoria, TurnoverDashboardService::ORDEM_CATEGORIAS, true)) {
+            $motivoCategoria = '';
+        }
+
+        $contextoLista = Security::sanitizeString($_GET['contexto_lista'] ?? 'ativos');
+        if (!in_array($contextoLista, ['ativos', 'desligados', 'admitidos'], true)) {
+            $contextoLista = 'ativos';
+        }
+
+        $mesEvento = Security::sanitizeString($_GET['mes_evento'] ?? '');
+        if (!preg_match('/^\d{4}-\d{2}$/', $mesEvento)) {
+            $mesEvento = '';
+        }
+
+        return [
+            'sexo' => $sexo,
+            'motivo_categoria' => $motivoCategoria,
+            'contexto_lista' => $contextoLista,
+            'mes_evento' => $mesEvento,
+        ];
     }
 
     /**
@@ -117,14 +244,31 @@ class AdminController extends Controller
         Auth::requireRole(['admin', 'rh', 'viewer']);
         Authorization::requirePermissao('dashboard.visualizar');
 
+        $periodoSelecionado = Security::sanitizeString($_GET['periodo'] ?? '12m');
+        if (!array_key_exists($periodoSelecionado, self::PERIODOS)) {
+            $periodoSelecionado = '12m';
+        }
+        $periodoParams = [
+            'mes' => Security::sanitizeString($_GET['mes'] ?? ''),
+            'ano' => Security::sanitizeString($_GET['ano'] ?? ''),
+            'data_inicio' => Security::sanitizeString($_GET['data_inicio'] ?? ''),
+            'data_fim' => Security::sanitizeString($_GET['data_fim'] ?? ''),
+        ];
+        [$inicio, $fim] = $this->resolverPeriodo($periodoSelecionado, $periodoParams);
+
+        $filtrosInterativos = $this->filtrosInterativosDoRequest();
         $filtros = [
             'codigo_empresa' => Security::sanitizeString($_GET['empresa'] ?? ''),
             'codigo_setor' => Security::sanitizeString($_GET['setor'] ?? ''),
+            'sexo' => $filtrosInterativos['sexo'],
+            'motivo_categoria' => $filtrosInterativos['motivo_categoria'],
+            'contexto_lista' => $filtrosInterativos['contexto_lista'],
+            'mes_evento' => $filtrosInterativos['mes_evento'],
         ];
         $filtros = array_filter($filtros, static fn(string $v): bool => $v !== '');
 
         $service = new PeopleAnalyticsService();
-        $linhas = $service->exportarColaboradoresCsv($filtros);
+        $linhas = $service->exportarColaboradoresCsv($filtros, $inicio, $fim);
 
         header('Content-Type: text/csv; charset=UTF-8');
         header('Content-Disposition: attachment; filename="people-analytics-colaboradores-' . date('Ymd-His') . '.csv"');

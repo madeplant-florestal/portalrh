@@ -67,6 +67,11 @@ $mk = function (
 
 try {
     $hoje = new DateTimeImmutable('today');
+    // contexto_lista (Etapa 2) não é usado nestes testes (todos ficam no padrão 'ativos', que
+    // nunca olha $inicio/$fim — ver PeopleAnalyticsService::mapearFiltrosListagem()); intervalo
+    // só precisa ser válido, não específico.
+    $inicio = $hoje->modify('-3 years');
+    $fim = $hoje;
     $service = new PeopleAnalyticsService();
 
     // ---- Tempo de Empresa: anos+meses, só meses (plural correto), só dias -----------------------
@@ -76,7 +81,7 @@ try {
     $rowMesSingular = $mk('TEMPO-MES-SINGULAR', $empTempo, $hoje->modify('-1 month')->format('Y-m-d'), false, 'ST1');
     $rowDias = $mk('TEMPO-DIAS', $empTempo, $hoje->modify('-10 days')->format('Y-m-d'), false, 'ST1');
 
-    $listagemTempo = $service->listarColaboradores(['codigo_empresa' => $empTempo], 1, 20);
+    $listagemTempo = $service->listarColaboradores(['codigo_empresa' => $empTempo], $inicio, $fim, 1, 20);
     $porIdentificadorTempo = [];
     foreach ($listagemTempo['items'] as $item) {
         $porIdentificadorTempo[$item['nome']] = $item;
@@ -103,7 +108,7 @@ try {
     $insertUsuario->execute(['ZZLST Usuario Fixture ' . $suffix, 'zzlst.usuario.' . $suffix . '@fixture.local', $senhaHash, 'rh', 0, $colabComGestor['id'], $gestorId]);
     $criados['usuarios_ids'][] = (int)$pdo->lastInsertId();
 
-    $listagemGestor = $service->listarColaboradores(['codigo_empresa' => $empGestor], 1, 20);
+    $listagemGestor = $service->listarColaboradores(['codigo_empresa' => $empGestor], $inicio, $fim, 1, 20);
     $porNomeGestor = [];
     foreach ($listagemGestor['items'] as $item) {
         $porNomeGestor[$item['nome']] = $item;
@@ -116,12 +121,12 @@ try {
     $mk('SETOR-INFORMADO', $empSetor, $hoje->modify('-100 days')->format('Y-m-d'), false, 'ST3');
     $mk('SETOR-VAZIO', $empSetor, $hoje->modify('-100 days')->format('Y-m-d'), false, null);
 
-    $listagemSetorVazio = $service->listarColaboradores(['codigo_empresa' => $empSetor, 'codigo_setor' => ColaboradorMetadadosConsultaRepository::SETOR_NAO_INFORMADO], 1, 20);
+    $listagemSetorVazio = $service->listarColaboradores(['codigo_empresa' => $empSetor, 'codigo_setor' => ColaboradorMetadadosConsultaRepository::SETOR_NAO_INFORMADO], $inicio, $fim, 1, 20);
     $check($listagemSetorVazio['total'] === 1, '(S-1) Filtro codigo_setor=SETOR_NAO_INFORMADO: localiza exatamente 1 registro (o de codigo_setor vazio) na empresa isolada.');
     $check(($listagemSetorVazio['items'][0]['nome'] ?? null) === 'ZZLST Fixture SETOR-VAZIO', '(S-2) O registro retornado é o de setor vazio, não o informado.');
     $check(($listagemSetorVazio['items'][0]['setor'] ?? null) === 'Não informado', '(S-3) Rótulo exibido para setor vazio: "Não informado" (nunca uma string vazia).');
 
-    $listagemSetorInformado = $service->listarColaboradores(['codigo_empresa' => $empSetor, 'codigo_setor' => 'ST3'], 1, 20);
+    $listagemSetorInformado = $service->listarColaboradores(['codigo_empresa' => $empSetor, 'codigo_setor' => 'ST3'], $inicio, $fim, 1, 20);
     $check($listagemSetorInformado['total'] === 1, '(S-4) Filtro por codigo_setor=ST3 continua funcionando normalmente (coexiste com a sentinela).');
 
     // ---- Paginação: 21 registros vigentes -> página 1 com 20, página 2 com 1 ----------------------
@@ -130,8 +135,8 @@ try {
         $mk('PAG-' . str_pad((string)$i, 2, '0', STR_PAD_LEFT), $empPag, $hoje->modify('-300 days')->format('Y-m-d'), false, 'ST4');
     }
 
-    $pagina1 = $service->listarColaboradores(['codigo_empresa' => $empPag], 1, 20);
-    $pagina2 = $service->listarColaboradores(['codigo_empresa' => $empPag], 2, 20);
+    $pagina1 = $service->listarColaboradores(['codigo_empresa' => $empPag], $inicio, $fim, 1, 20);
+    $pagina2 = $service->listarColaboradores(['codigo_empresa' => $empPag], $inicio, $fim, 2, 20);
     $check($pagina1['total'] === 21, '(P-1) Total de registros vigentes na empresa isolada de paginação: 21.');
     $check($pagina1['pages'] === 2, '(P-2) Com per_page=20 e total=21: 2 páginas.');
     $check(count($pagina1['items']) === 20, '(P-3) Página 1 traz exatamente 20 itens.');
@@ -140,11 +145,11 @@ try {
     $check($pagina1['per_page'] === 20, '(P-6) per_page retornado é 20.');
 
     // per_page não permitido (ex.: 30) cai no padrão (20) — mesma regra do repositório.
-    $paginaPerPageInvalido = $service->listarColaboradores(['codigo_empresa' => $empPag], 1, 30);
+    $paginaPerPageInvalido = $service->listarColaboradores(['codigo_empresa' => $empPag], $inicio, $fim, 1, 30);
     $check($paginaPerPageInvalido['per_page'] === 20, '(P-7) per_page fora da whitelist (30) cai para o padrão (20).');
 
     // ---- Exportação CSV: mesma população, sem paginação -------------------------------------------
-    $exportacao = $service->exportarColaboradoresCsv(['codigo_empresa' => $empPag]);
+    $exportacao = $service->exportarColaboradoresCsv(['codigo_empresa' => $empPag], $inicio, $fim);
     $check(count($exportacao) === 21, '(E-1) exportarColaboradoresCsv() entrega os 21 registros da mesma população filtrada, sem paginação.');
     $check(isset($exportacao[0]['nome'], $exportacao[0]['situacao'], $exportacao[0]['tempo_empresa'], $exportacao[0]['gestor_imediato']), '(E-2) Cada linha exportada tem as mesmas colunas enriquecidas da listagem paginada.');
     $check(!isset($exportacao[0]['salario_atual']) && !isset($exportacao[0]['cpf']), '(E-3) Exportação nunca inclui salário ou CPF — só as colunas operacionais aprovadas.');
@@ -154,9 +159,9 @@ try {
     $empTransfDestino = 'ZZTD' . $suffix;
     $mk('TRANSF-ORIGEM', $empTransfOrigem, $hoje->modify('-500 days')->format('Y-m-d'), true, 'ST5');
     $mk('TRANSF-DESTINO', $empTransfDestino, $hoje->modify('-500 days')->format('Y-m-d'), false, 'ST5');
-    $listagemOrigemTransferida = $service->listarColaboradores(['codigo_empresa' => $empTransfOrigem], 1, 20);
+    $listagemOrigemTransferida = $service->listarColaboradores(['codigo_empresa' => $empTransfOrigem], $inicio, $fim, 1, 20);
     $check($listagemOrigemTransferida['total'] === 0, '(X-1) Registro órfão de transferência (ausente_na_origem=1) nunca aparece na listagem padrão de vigentes — só a empresa de destino conta.');
-    $listagemDestinoTransferido = $service->listarColaboradores(['codigo_empresa' => $empTransfDestino], 1, 20);
+    $listagemDestinoTransferido = $service->listarColaboradores(['codigo_empresa' => $empTransfDestino], $inicio, $fim, 1, 20);
     $check($listagemDestinoTransferido['total'] === 1, '(X-2) Empresa de destino da transferência contínua: o registro vigente aparece normalmente.');
 
     echo "\nPEOPLE_ANALYTICS_LISTAGEM_OK\n";

@@ -210,13 +210,51 @@ if (!function_exists('dashboard_donut')) {
     }
 }
 
+if (!function_exists('dashboard_clique_attrs')) {
+    // Atributos data-pa-* comuns para elementos clicáveis do People Analytics interativo (Etapa 2,
+    // correção de 2026-09) — ponto único, reaproveitado por dashboard_bar_row/vertical_bars/
+    // grouped_columns, nunca reimplementado em cada helper. $clique: ['dimensao'=>string,
+    // 'valor'=>string, 'ativo'=>bool (opcional), 'extra'=>array<string,string> (opcional, ex.:
+    // mes_evento)]. Sem clique-to-filter quando $clique é null (comportamento antigo intocado).
+    function dashboard_clique_attrs(?array $clique, string $labelParaAria): string
+    {
+        if ($clique === null) {
+            return '';
+        }
+        $ativo = !empty($clique['ativo']);
+        $attrs = ' data-pa-dimensao="' . Security::e((string)$clique['dimensao']) . '"'
+            . ' data-pa-valor="' . Security::e((string)$clique['valor']) . '"'
+            . ' tabindex="0" role="button" aria-pressed="' . ($ativo ? 'true' : 'false') . '"'
+            . ' aria-label="Filtrar por ' . Security::e($labelParaAria) . '"';
+        foreach ((array)($clique['extra'] ?? []) as $chave => $valor) {
+            $attrs .= ' data-pa-' . Security::e((string)$chave) . '="' . Security::e((string)$valor) . '"';
+        }
+        return $attrs;
+    }
+}
+
+if (!function_exists('dashboard_clique_class')) {
+    // Classe CSS do clique-to-filter, para o chamador concatenar dentro do SEU PRÓPRIO atributo
+    // class="..." — nunca um class="" separado (dois atributos class no mesmo elemento HTML são
+    // inválidos; o navegador descarta silenciosamente o primeiro).
+    function dashboard_clique_class(?array $clique): string
+    {
+        if ($clique === null) {
+            return '';
+        }
+        return ' dashboard-pa-clicavel' . (!empty($clique['ativo']) ? ' dashboard-pa-clicavel--ativo' : '');
+    }
+}
+
 if (!function_exists('dashboard_bar_row')) {
     // Barra horizontal com rótulo + valor — mesmo padrão visual já usado inline em
     // admin/dashboard.php para comparações de poucas categorias, agora reutilizável.
-    function dashboard_bar_row(string $label, float $value, float $max, string $displayValue, string $color = 'bg-ctlight'): string
+    // $clique (opcional, Etapa 2): ver dashboard_clique_attrs() — torna a linha inteira clicável
+    // como filtro interativo; omitido/null preserva o comportamento original.
+    function dashboard_bar_row(string $label, float $value, float $max, string $displayValue, string $color = 'bg-ctlight', ?array $clique = null): string
     {
         $width = $max > 0 ? min(100, ($value / $max) * 100) : 0;
-        return '<div title="' . Security::e($label) . ': ' . Security::e($displayValue) . '">'
+        return '<div' . dashboard_clique_attrs($clique, $label) . ' class="dashboard-bar-row' . dashboard_clique_class($clique) . '" title="' . Security::e($label) . ': ' . Security::e($displayValue) . '">'
             . '<div class="mb-1 flex items-center justify-between text-[13px]">'
             . '<span class="text-slate-600">' . Security::e($label) . '</span>'
             . '<span class="font-semibold text-slate-800">' . Security::e($displayValue) . '</span>'
@@ -242,7 +280,9 @@ if (!function_exists('dashboard_vertical_bars')) {
         $bars = '';
         foreach ($items as $item) {
             $height = $max > 0 ? min(100, (max(0.0, (float)$item['value']) / $max) * 100) : 0;
-            $bars .= '<div class="flex w-20 flex-shrink-0 flex-col items-center gap-1.5" title="' . Security::e($item['label']) . ': ' . Security::e($item['display']) . '">'
+            // Clique opcional por item (Etapa 2): $item['clique'] ?? null, ver dashboard_clique_attrs().
+            $itemClique = $item['clique'] ?? null;
+            $bars .= '<div' . dashboard_clique_attrs($itemClique, $item['label']) . ' class="flex w-20 flex-shrink-0 flex-col items-center gap-1.5' . dashboard_clique_class($itemClique) . '" title="' . Security::e($item['label']) . ': ' . Security::e($item['display']) . '">'
                 . '<span class="text-xs font-semibold text-slate-700">' . Security::e($item['display']) . '</span>'
                 . '<div class="flex h-28 w-12 items-end rounded-md ' . $trackColor . '">'
                 . '<div class="dashboard-bar-grow-y w-full rounded-md ' . $color . '" style="height: ' . dashboard_fmt($height) . '%"></div>'
@@ -423,6 +463,15 @@ if (!function_exists('dashboard_grouped_columns')) {
         // função) — usado quando as categorias são texto longo (ex.: nomes de Setor) em vez de
         // rótulos curtos (ex.: meses), que ficariam sobrepostos na horizontal.
         $rotacionarEixoX = ($opcoes['rotacionar_eixo_x'] ?? false) === true;
+        // Clique-to-filter opcional (Etapa 2, correção de 2026-09) — dois modos independentes,
+        // nunca combinados na mesma chamada: 'clique_categoria' (indexado por índice de rótulo)
+        // torna o GRUPO inteiro da categoria clicável (ex.: Colaboradores por Setor — Comparativo,
+        // onde clicar em qualquer barra do setor filtra por aquele setor); 'clique_serie'
+        // (indexado por [índice de rótulo][índice de série]) torna CADA barra clicável
+        // separadamente (ex.: Admissões × Desligamentos, onde a barra de Admissões e a de
+        // Desligamentos do mesmo mês precisam virar ações diferentes).
+        $cliqueCategoria = $opcoes['clique_categoria'] ?? [];
+        $cliqueSerie = $opcoes['clique_serie'] ?? [];
         $largura = 720.0;
         // Altura opt-in (default 280, igual a antes) — usado para caber num card mais compacto
         // (ex.: metade da largura, ao lado de outro gráfico) sem exigir tanta rolagem vertical.
@@ -461,6 +510,10 @@ if (!function_exists('dashboard_grouped_columns')) {
         }
         foreach ($labels as $i => $rotulo) {
             $centro = $esq + ($i + 0.5) * $grupoW;
+            $cliqueDaCategoria = $cliqueCategoria[$i] ?? null;
+            if ($cliqueDaCategoria !== null) {
+                $svg .= '<g' . dashboard_clique_attrs($cliqueDaCategoria, (string)$rotulo) . '>';
+            }
             if ($rotacionarEixoX) {
                 $yEixo = $altura - 14;
                 // Trunca só o texto DESENHADO (o nome completo continua no <title> de cada barra,
@@ -485,7 +538,8 @@ if (!function_exists('dashboard_grouped_columns')) {
                 $y = $topo + $plotH - $h;
                 $parcial = !empty(($s['partial'] ?? [])[$i]);
                 $cor = Security::e((string)$s['color']);
-                $svg .= '<g><title>' . Security::e($s['label'] . ' — ' . $rotulo . ': ' . number_format($v, 0, ',', '.') . ($parcial ? ' (parcial)' : '')) . '</title>';
+                $cliqueDaBarra = $cliqueSerie[$i][$indice] ?? null;
+                $svg .= '<g' . dashboard_clique_attrs($cliqueDaBarra, $s['label'] . ' — ' . $rotulo) . '><title>' . Security::e($s['label'] . ' — ' . $rotulo . ': ' . number_format($v, 0, ',', '.') . ($parcial ? ' (parcial)' : '')) . '</title>';
                 if ($h > 0) {
                     $svg .= '<rect x="' . dashboard_fmt($x) . '" y="' . dashboard_fmt($y) . '" width="' . dashboard_fmt($barraW) . '" height="' . dashboard_fmt($h) . '" rx="2" fill="' . $cor . '"'
                         . ($parcial ? ' fill-opacity="0.45" stroke="' . $cor . '" stroke-width="1.5" stroke-dasharray="3 2"' : '') . '></rect>';
@@ -493,6 +547,9 @@ if (!function_exists('dashboard_grouped_columns')) {
                 if ($mostrarValores) {
                     $svg .= '<text x="' . dashboard_fmt($x + $barraW / 2) . '" y="' . dashboard_fmt($y - 4) . '" text-anchor="middle" font-size="9" font-weight="600" fill="#2B2E22">' . Security::e(number_format($v, 0, ',', '.')) . '</text>';
                 }
+                $svg .= '</g>';
+            }
+            if ($cliqueDaCategoria !== null) {
                 $svg .= '</g>';
             }
         }

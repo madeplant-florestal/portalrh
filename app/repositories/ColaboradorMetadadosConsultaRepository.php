@@ -326,6 +326,31 @@ class ColaboradorMetadadosConsultaRepository
             $where[] = 'm.ausente_na_origem = 1';
         }
 
+        // Filtro por EVENTO (Etapa 2 — People Analytics interativo, correção de 2026-09):
+        // listagem contextual "Admitidos no período"/"Desligados no período", nunca pelo status
+        // atual do contrato (`situacao` acima, baseada em `ativo`). `evento_campo` só pode ser
+        // 'admissao'/'demissao' (whitelist explícita antes de entrar na query — nunca uma coluna
+        // dinâmica vinda direto do request).
+        $eventoCampo = (string)($filtros['evento_campo'] ?? '');
+        if (($eventoCampo === 'admissao' || $eventoCampo === 'demissao') && !empty($filtros['evento_inicio']) && !empty($filtros['evento_fim'])) {
+            $where[] = "m.{$eventoCampo} BETWEEN ? AND ?";
+            $params[] = (string)$filtros['evento_inicio'];
+            $params[] = (string)$filtros['evento_fim'];
+        }
+
+        // Exclusão por identificador (Etapa 2): usada para tirar da listagem contextual os
+        // contratos já classificados como transferência interempresa por
+        // MetadadosMovimentacaoService::classificarMovimentacoes() — mesma exclusão já aplicada
+        // aos KPIs de Admissões/Desligamentos, nunca uma lista nova.
+        $excluirIdentificadores = $filtros['excluir_identificadores'] ?? [];
+        if (is_array($excluirIdentificadores) && $excluirIdentificadores !== []) {
+            $placeholders = implode(',', array_fill(0, count($excluirIdentificadores), '?'));
+            $where[] = "m.identificador NOT IN ($placeholders)";
+            foreach ($excluirIdentificadores as $identificador) {
+                $params[] = (string)$identificador;
+            }
+        }
+
         return [$where, $params];
     }
 }

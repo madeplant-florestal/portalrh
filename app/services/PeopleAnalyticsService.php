@@ -97,6 +97,13 @@ class PeopleAnalyticsService
     ): array {
         $codigoEmpresa = $filtros['codigo_empresa'] ?? null;
         $codigoSetor = $filtros['codigo_setor'] ?? null;
+        // Interatividade (Etapa 2, correção de 2026-09): sexo filtra a população INTEIRA (Headcount/
+        // Turnover/Admissões/Desligamentos), igual Empresa/Setor — aplicado direto na query.
+        // Motivo (categoria do Dashboard de Turnover: Voluntário/Involuntário/Justa Causa/Término
+        // de Contrato/Acordo/Outros) só faz sentido para DESLIGAMENTO — nunca filtra Headcount/
+        // Admissões (ver §15 da correção: "não aplicar silenciosamente um filtro impossível").
+        $filtroSexo = trim((string)($filtros['sexo'] ?? ''));
+        $filtroMotivoCategoria = trim((string)($filtros['motivo_categoria'] ?? ''));
 
         if ($compInicio === null || $compFim === null) {
             [$compInicio, $compFim] = RhIndicadoresService::periodoMesmoIntervaloAnoAnterior($inicio, $fim);
@@ -105,6 +112,7 @@ class PeopleAnalyticsService
         $contratos = $this->repository->buscarContratos([
             'codigo_empresa' => $codigoEmpresa,
             'codigo_setor' => $codigoSetor,
+            'sexo' => $filtroSexo !== '' ? $filtroSexo : null,
         ]);
 
         // ---- Transferência interempresa (regra de negócio congelada em 2026-09): movimentação
@@ -116,6 +124,25 @@ class PeopleAnalyticsService
         $classificacao = MetadadosMovimentacaoService::classificarMovimentacoes($paresMovimentacao);
         $excluirAdmissaoIds = $classificacao['excluir_admissao_ids'];
         $excluirDemissaoIds = $classificacao['excluir_demissao_ids'];
+        // Motivo (Etapa 2): reaproveita o MESMO conjunto de exclusão já usado por Turnover/
+        // Desligamentos por transferência — reforça, por UNIÃO (set, nunca dupla subtração, mesmo
+        // padrão já validado na correção de admissões de 2026-09), com o identificador de todo
+        // desligamento cuja categoria de motivo NÃO é a selecionada. Nunca reimplementa a
+        // classificação Voluntário/Involuntário/Outros — reusa TurnoverDashboardService::
+        // categoriaDoMotivo(), ponto único já existente.
+        $excluirDemissaoIdsComFiltros = $excluirDemissaoIds;
+        if ($filtroMotivoCategoria !== '') {
+            foreach ($contratos as $contratoMotivo) {
+                $demissaoMotivo = $this->parseData($contratoMotivo['demissao'] ?? null);
+                if ($demissaoMotivo === null) {
+                    continue;
+                }
+                if (TurnoverDashboardService::categoriaDoMotivo($contratoMotivo['motivo_rescisao_codigo'] ?? null) !== $filtroMotivoCategoria) {
+                    $excluirDemissaoIdsComFiltros[] = (string)($contratoMotivo['identificador'] ?? '');
+                }
+            }
+            $excluirDemissaoIdsComFiltros = array_values(array_unique($excluirDemissaoIdsComFiltros));
+        }
         // Admissões REAIS (correção de 2026-09: "admissões duplicadas por transferência
         // contínua") — une Cenário B (excluir_admissao_ids, já existente) com o contrato de
         // ORIGEM de cada transferência contínua (origem_continua_ids, Cenário A): quando a
@@ -168,7 +195,7 @@ class PeopleAnalyticsService
         // contrato de origem quando essa data cai dentro do período duplicaria o mesmo evento.
         $admissoesContratos = RhIndicadoresService::admissoesReaisNoPeriodo($contratos, $inicio, $fim, $excluirAdmissaoIds, $classificacao['origem_continua_ids']);
         $desligamentos = $this->desligamentosNoPeriodo(
-            $this->filtrarPorIdentificadoresExcluidos($contratos, $excluirDemissaoIds),
+            $this->filtrarPorIdentificadoresExcluidos($contratos, $excluirDemissaoIdsComFiltros),
             $inicio,
             $fim
         );
@@ -230,17 +257,17 @@ class PeopleAnalyticsService
             $fim,
             $nomesEmpresa,
             $headcountPorEmpresa,
-            $excluirDemissaoIds,
+            $excluirDemissaoIdsComFiltros,
             $contratosVigenciaAnalitica
         );
-        $turnoverPorSetor = $this->montarTurnoverPorSetor($contratos, $inicio, $fim, $nomesSetor, $excluirDemissaoIds, $contratosVigenciaAnalitica);
+        $turnoverPorSetor = $this->montarTurnoverPorSetor($contratos, $inicio, $fim, $nomesSetor, $excluirDemissaoIdsComFiltros, $contratosVigenciaAnalitica);
 
         // ---- Comparativo (mesmo intervalo ano anterior OU período imediatamente anterior, ver
         // AdminController) — reaproveita o MESMO array $contratos/$contratosConsolidado
         // (histórico completo, sem filtro de data), nenhuma query adicional por indicador.
         // Admissões/Desligamentos sempre de $contratos original (mesma razão do bloco acima).
         $desligamentosComp = $this->desligamentosNoPeriodo(
-            $this->filtrarPorIdentificadoresExcluidos($contratos, $excluirDemissaoIds),
+            $this->filtrarPorIdentificadoresExcluidos($contratos, $excluirDemissaoIdsComFiltros),
             $compInicio,
             $compFim
         );
@@ -263,7 +290,7 @@ class PeopleAnalyticsService
             $fim,
             $compInicio,
             $excluirAdmissaoIdsReais,
-            $excluirDemissaoIds,
+            $excluirDemissaoIdsComFiltros,
             $contratosConsolidado
         );
 
@@ -274,7 +301,7 @@ class PeopleAnalyticsService
         // técnicas usadas administrativamente para transferência (Cenário B) ficam de fora deste
         // gráfico de motivos reais — nunca apagadas, só reclassificadas para fora do Turnover.
         $desligamentosPorMotivo = TurnoverDashboardService::desligamentosPorMotivo(
-            $this->filtrarPorIdentificadoresExcluidos($contratos, $excluirDemissaoIds),
+            $this->filtrarPorIdentificadoresExcluidos($contratos, $excluirDemissaoIdsComFiltros),
             $inicio,
             $fim
         );
@@ -337,7 +364,7 @@ class PeopleAnalyticsService
                     'eventos' => $outros,
                     'participacao_desligamentos' => $this->participacaoDesligamentos($outros, count($desligamentos)),
                 ],
-                'genero' => $this->montarTurnoverPorSexo($contratos, $inicio, $fim, $compInicio, $compFim, $excluirDemissaoIds, $contratosConsolidado),
+                'genero' => $this->montarTurnoverPorSexo($contratos, $inicio, $fim, $compInicio, $compFim, $excluirDemissaoIdsComFiltros, $contratosConsolidado),
                 'faixa_etaria' => $this->faixaEtariaDesligamentos($desligamentos),
                 'por_empresa' => $turnoverPorEmpresa,
                 'por_setor' => $turnoverPorSetor,
@@ -871,40 +898,117 @@ class PeopleAnalyticsService
     // -----------------------------------------------------------------------------------------
 
     /**
-     * @param array $filtros Chaves aceitas por ColaboradorMetadadosConsultaRepository::
-     *              paginateExecutivo(): codigo_empresa (mapeado para `empresa`), codigo_setor,
-     *              situacao ('ativos'|'desligados'|''), situacao_metadados.
+     * @param array $filtros Chaves aceitas: codigo_empresa, codigo_setor, sexo, motivo_categoria
+     *              (só some efeito com contexto_lista='desligados'), contexto_lista
+     *              ('ativos'|'desligados'|'admitidos', padrão 'ativos'), mes_evento ('YYYY-MM',
+     *              opcional — Etapa 2, restringe o evento a um mês específico dentro do período).
      * @return array{items:array,total:int,page:int,per_page:int,pages:int}
      */
-    public function listarColaboradores(array $filtros, int $page, int $perPage): array
+    public function listarColaboradores(array $filtros, DateTimeImmutable $inicio, DateTimeImmutable $fim, int $page, int $perPage): array
     {
-        $pagina = $this->consultaRepository->paginateExecutivo($this->mapearFiltrosListagem($filtros), $page, $perPage);
+        $pagina = $this->consultaRepository->paginateExecutivo($this->mapearFiltrosListagem($filtros, $inicio, $fim), $page, $perPage);
         $pagina['items'] = $this->enriquecerListagemColaboradores($pagina['items']);
         return $pagina;
     }
 
     /** Mesma população de listarColaboradores(), sem paginação — só para exportação CSV. */
-    public function exportarColaboradoresCsv(array $filtros): array
+    public function exportarColaboradoresCsv(array $filtros, DateTimeImmutable $inicio, DateTimeImmutable $fim): array
     {
-        $linhas = $this->consultaRepository->listarExecutivo($this->mapearFiltrosListagem($filtros));
+        $linhas = $this->consultaRepository->listarExecutivo($this->mapearFiltrosListagem($filtros, $inicio, $fim));
         return $this->enriquecerListagemColaboradores($linhas);
     }
 
     /**
-     * Traduz os filtros do topo do People Analytics (codigo_empresa/codigo_setor) para as
-     * chaves que ColaboradorMetadadosConsultaRepository entende — `empresa` dela é `codigo_empresa`
-     * aqui (mesmo nome de coluna, evita ambiguidade com o texto `empresa` do METADADOS).
+     * Traduz os filtros do topo/interativos do People Analytics para as chaves que
+     * ColaboradorMetadadosConsultaRepository entende — `empresa` dela é `codigo_empresa` aqui
+     * (mesmo nome de coluna, evita ambiguidade com o texto `empresa` do METADADOS).
+     *
+     * Modo 'ativos' (padrão, população = vigentes hoje) preserva 100% o comportamento anterior a
+     * Etapa 2. Modos 'desligados'/'admitidos' (Etapa 2 — People Analytics interativo, correção de
+     * 2026-09) trocam para população por EVENTO (admissao/demissao dentro do período, ou de
+     * `mes_evento` quando informado) — nunca pelo status atual do contrato (`ativo`), e sempre
+     * excluindo os identificadores já classificados como transferência interempresa pela MESMA
+     * MetadadosMovimentacaoService::classificarMovimentacoes() usada em montarPainel(), para a
+     * listagem nunca mostrar como "admitido"/"desligado" um evento que os KPIs já tratam como
+     * movimentação interna.
      */
-    private function mapearFiltrosListagem(array $filtros): array
+    private function mapearFiltrosListagem(array $filtros, DateTimeImmutable $inicio, DateTimeImmutable $fim): array
     {
-        $mapeado = ['situacao' => 'ativos'];
+        $mapeado = [];
         if (!empty($filtros['codigo_empresa'])) {
             $mapeado['empresa'] = $filtros['codigo_empresa'];
         }
         if (!empty($filtros['codigo_setor'])) {
             $mapeado['codigo_setor'] = $filtros['codigo_setor'];
         }
+        $sexo = trim((string)($filtros['sexo'] ?? ''));
+        if ($sexo !== '') {
+            $mapeado['sexo'] = $sexo;
+        }
+
+        $contexto = (string)($filtros['contexto_lista'] ?? 'ativos');
+        if (!in_array($contexto, ['ativos', 'desligados', 'admitidos'], true)) {
+            $contexto = 'ativos';
+        }
+
+        if ($contexto === 'ativos') {
+            $mapeado['situacao'] = 'ativos';
+            return $mapeado;
+        }
+
+        [$eventoInicio, $eventoFim] = $this->resolverJanelaEvento($filtros, $inicio, $fim);
+        $mapeado['evento_campo'] = $contexto === 'desligados' ? 'demissao' : 'admissao';
+        $mapeado['evento_inicio'] = $eventoInicio->format('Y-m-d');
+        $mapeado['evento_fim'] = $eventoFim->format('Y-m-d');
+
+        $classificacao = MetadadosMovimentacaoService::classificarMovimentacoes($this->repository->buscarContratosParaMovimentacao());
+        $excluirIdentificadores = $contexto === 'desligados'
+            ? $classificacao['excluir_demissao_ids']
+            : array_values(array_unique(array_merge($classificacao['excluir_admissao_ids'], $classificacao['origem_continua_ids'])));
+
+        // Motivo (categoria) só faz sentido em contexto 'desligados' — reaproveita
+        // TurnoverDashboardService::categoriaDoMotivo(), nunca reimplementa a classificação.
+        $motivoCategoria = $contexto === 'desligados' ? trim((string)($filtros['motivo_categoria'] ?? '')) : '';
+        if ($motivoCategoria !== '') {
+            foreach ($this->repository->buscarContratos(['codigo_empresa' => $filtros['codigo_empresa'] ?? null]) as $contratoMotivo) {
+                if (empty($contratoMotivo['demissao'])) {
+                    continue;
+                }
+                if (TurnoverDashboardService::categoriaDoMotivo($contratoMotivo['motivo_rescisao_codigo'] ?? null) !== $motivoCategoria) {
+                    $excluirIdentificadores[] = (string)($contratoMotivo['identificador'] ?? '');
+                }
+            }
+        }
+
+        $mapeado['excluir_identificadores'] = array_values(array_unique($excluirIdentificadores));
         return $mapeado;
+    }
+
+    /**
+     * Janela de datas do evento (admissão/demissão) da listagem contextual: o período selecionado
+     * inteiro por padrão, ou só `mes_evento` ('YYYY-MM') quando o clique veio de um mês específico
+     * do gráfico Admissões×Desligamentos (§18/§19 da correção de 2026-09) — nunca altera o período
+     * GLOBAL do dashboard, só o recorte desta listagem. `mes_evento` fora do período selecionado ou
+     * mal formado é ignorado (cai no período inteiro), nunca lançado como erro para o usuário.
+     *
+     * @return array{0:DateTimeImmutable,1:DateTimeImmutable}
+     */
+    private function resolverJanelaEvento(array $filtros, DateTimeImmutable $inicio, DateTimeImmutable $fim): array
+    {
+        $mesEvento = trim((string)($filtros['mes_evento'] ?? ''));
+        if ($mesEvento === '' || !preg_match('/^\d{4}-\d{2}$/', $mesEvento)) {
+            return [$inicio, $fim];
+        }
+        try {
+            $inicioMes = new DateTimeImmutable($mesEvento . '-01');
+        } catch (Throwable) {
+            return [$inicio, $fim];
+        }
+        $fimMes = $inicioMes->modify('last day of this month');
+        if ($fimMes < $inicio || $inicioMes > $fim) {
+            return [$inicio, $fim];
+        }
+        return [max($inicioMes, $inicio), min($fimMes, $fim)];
     }
 
     /**

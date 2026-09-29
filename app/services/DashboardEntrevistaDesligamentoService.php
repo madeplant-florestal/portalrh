@@ -57,12 +57,41 @@ class DashboardEntrevistaDesligamentoService
      * Valida e normaliza os filtros do GET no servidor. Datas em Y-m-d; fim nunca no futuro (desligamento só
      * conta quando efetivado); janela máxima de 60 meses; unidade/cargo só se existirem nas opções oficiais.
      *
+     * Ano/Mês (Etapa 3, 2026-09): seletor complementar a `inicio`/`fim` — só entra em ação quando a chave
+     * `ano` está PRESENTE no GET (o primeiro carregamento sem querystring nenhuma preserva o padrão de
+     * sempre, últimos MESES_PADRAO meses). `ano` vazio = "Todo o período" (usa a janela máxima já
+     * existente, MESES_MAXIMO, sem novo teto); `ano` + `mes` vazio = o ano inteiro; `ano` + `mes` = só
+     * aquele mês. `mes` sozinho (sem `ano`) é ignorado — evita a combinação confusa "mês sem ano".
+     * Nunca duplica o clamping abaixo (fim <= hoje, janela máxima): só computa `inicio`/`fim` e deixa o
+     * resto da função (já testado) validar normalmente.
+     *
      * @return array{inicio:DateTimeImmutable,fim:DateTimeImmutable,unidade:?array,unidade_chave:string,codigo_cargo:string,avisos:string[]}
      */
     public static function normalizarFiltros(array $get, DateTimeImmutable $hoje, array $opcoes): array
     {
         $hoje = $hoje->setTime(0, 0);
         $avisos = [];
+
+        $anoRaw = isset($get['ano']) && is_string($get['ano']) ? trim($get['ano']) : null;
+        if ($anoRaw !== null) {
+            if ($anoRaw !== '' && ctype_digit($anoRaw)) {
+                $anoInt = (int)$anoRaw;
+                $mesRaw = is_string($get['mes'] ?? null) ? trim($get['mes']) : '';
+                $mesInt = (ctype_digit($mesRaw) && (int)$mesRaw >= 1 && (int)$mesRaw <= 12) ? (int)$mesRaw : null;
+                if ($mesInt !== null) {
+                    $get['inicio'] = sprintf('%04d-%02d-01', $anoInt, $mesInt);
+                    $ultimoDia = (int)(new DateTimeImmutable($get['inicio']))->format('t');
+                    $get['fim'] = sprintf('%04d-%02d-%02d', $anoInt, $mesInt, $ultimoDia);
+                } else {
+                    $get['inicio'] = sprintf('%04d-01-01', $anoInt);
+                    $get['fim'] = sprintf('%04d-12-31', $anoInt);
+                }
+            } else {
+                // "Todo o período": mesma janela máxima já aplicada pelo clamping abaixo, nenhum teto novo.
+                $get['inicio'] = $hoje->modify('first day of this month')->modify('-' . (self::MESES_MAXIMO - 1) . ' months')->format('Y-m-d');
+                $get['fim'] = $hoje->format('Y-m-d');
+            }
+        }
 
         $inicio = self::dataValida($get['inicio'] ?? null);
         $fim = self::dataValida($get['fim'] ?? null);

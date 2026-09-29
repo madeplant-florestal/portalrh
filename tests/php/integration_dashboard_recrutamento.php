@@ -401,6 +401,17 @@ try {
         'A view do novo Dashboard não usa Config::app()[\'version\'] para nenhum asset — nenhum asset novo foi introduzido nesta sprint'
     );
 
+    // ---- 9) "Performance do Processo" removido (Etapa 3, 2026-09) — bloco redundante ao lado do
+    // Funil, mesmos cálculos do "Tempo Médio por Etapa" repetidos sem nova consulta; o detalhamento
+    // completo (amostra concluída + candidatos atualmente na etapa) continua intacto no card vizinho.
+    $conteudoDashboardRecrutamento = (string)file_get_contents(APP_PATH . '/views/admin/dashboard-recrutamento.php');
+    $check(!str_contains($conteudoDashboardRecrutamento, 'Performance do Processo'), '(9) Bloco "Performance do Processo" removido do Dashboard de Recrutamento (redundante com "Tempo Médio por Etapa")');
+    $check(!str_contains($conteudoDashboardRecrutamento, 'Taxa de aceite de proposta'), '(9b) Placeholder "Taxa de aceite de proposta" (Dados ainda não disponíveis) saiu junto do bloco removido');
+    $check(!str_contains($conteudoDashboardRecrutamento, 'Taxa de desistência do processo'), '(9c) Placeholder "Taxa de desistência do processo" (Dados ainda não disponíveis) saiu junto do bloco removido');
+    $check(str_contains($conteudoDashboardRecrutamento, 'Tempo Médio por Etapa'), '(9d) "Tempo Médio por Etapa" (o detalhamento MAIS completo — amostra concluída + atualmente na etapa) continua no Dashboard de Recrutamento');
+    $check(str_contains($conteudoDashboardRecrutamento, 'Qualidade da Contratação'), '(9e) "Qualidade da Contratação" (Efetivação/Desligamento na experiência/Pesquisa de Experiência) continua intacta após a remoção do card vizinho');
+    $check(substr_count($conteudoDashboardRecrutamento, "foreach (\$painel['tempo_por_etapa']") === 1, '(9f) tempo_por_etapa agora é iterado só UMA vez na view (a duplicação de "mesmos cálculos... sem nova consulta" foi eliminada, não só escondida)');
+
     echo "\nDASHBOARD_RECRUTAMENTO_OK\n";
 } finally {
     // ---- limpeza (ordem respeita as FKs: filhos antes dos pais) --------------------------------

@@ -48,6 +48,7 @@ class AdminDashboardEntrevistaDesligamentoController extends Controller
             'opcoes' => $opcoes,
             'atalhos' => DashboardEntrevistaDesligamentoService::atalhos($hoje),
             'ultimaSincronizacao' => $ultimaSincronizacao,
+            'hoje' => $hoje,
         ], 'layouts/app-shell');
     }
 }

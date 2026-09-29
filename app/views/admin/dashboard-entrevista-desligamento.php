@@ -25,6 +25,10 @@ $cardKpi = static function (string $rotulo, string $valor, string $sub = '') use
 $queryFiltros = static fn(array $extra): string => http_build_query(array_filter($extra + [
     'unidade' => $filtros['unidade_chave'] ?? '', 'cargo' => $filtros['codigo_cargo'] ?? '',
 ], static fn($v) => $v !== '' && $v !== null));
+// Seletor Ano/Mês (Etapa 3, 2026-09) — só pré-seleciona a option; a validação real acontece em
+// DashboardEntrevistaDesligamentoService::normalizarFiltros(), nunca aqui.
+$anoSelecionado = Security::sanitizeString($_GET['ano'] ?? '');
+$mesSelecionado = Security::sanitizeString($_GET['mes'] ?? '');
 ?>
 <div class="space-y-4">
 
@@ -35,6 +39,25 @@ $queryFiltros = static fn(array $extra): string => http_build_query(array_filter
   <p class="text-ds-caption text-text-secondary">Última atualização do METADADOS: <strong class="text-text-primary"><?= !empty($ultimaSincronizacao) ? Security::e($ultimaSincronizacao) : '—' ?></strong></p>
   <section class="rounded-ds-lg border border-border bg-surface p-4 shadow-resting">
     <form method="get" class="flex flex-wrap items-end gap-2">
+      <div>
+        <label for="filtro-ano" class="block text-[11px] font-semibold uppercase tracking-wide text-text-secondary">Ano</label>
+        <select id="filtro-ano" name="ano" data-autosubmit="1" class="<?= $inputClasses ?>">
+          <option value="">Todo o período</option>
+          <?php for ($anoOpcao = (int)$hoje->format('Y'); $anoOpcao >= (int)$hoje->format('Y') - (DashboardEntrevistaDesligamentoService::MESES_MAXIMO / 12 - 1); $anoOpcao--): ?>
+            <option value="<?= $anoOpcao ?>" <?= $anoSelecionado === (string)$anoOpcao ? 'selected' : '' ?>><?= $anoOpcao ?></option>
+          <?php endfor; ?>
+        </select>
+      </div>
+      <div>
+        <label for="filtro-mes" class="block text-[11px] font-semibold uppercase tracking-wide text-text-secondary">Mês</label>
+        <select id="filtro-mes" name="mes" data-autosubmit="1" class="<?= $inputClasses ?>">
+          <option value="">Todo o período</option>
+          <?php foreach (['1' => 'Janeiro', '2' => 'Fevereiro', '3' => 'Março', '4' => 'Abril', '5' => 'Maio', '6' => 'Junho', '7' => 'Julho', '8' => 'Agosto', '9' => 'Setembro', '10' => 'Outubro', '11' => 'Novembro', '12' => 'Dezembro'] as $mesValor => $mesLabel): ?>
+            <option value="<?= $mesValor ?>" <?= $mesSelecionado === $mesValor ? 'selected' : '' ?>><?= $mesLabel ?></option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+      <p class="w-full text-[11px] text-text-muted">Ano + Mês = só aquele mês · Ano + "Todo o período" = o ano inteiro · os dois em "Todo o período" = todo o histórico disponível (até <?= DashboardEntrevistaDesligamentoService::MESES_MAXIMO ?> meses) · ou informe "De"/"Até" livremente abaixo</p>
       <div>
         <label for="filtro-inicio" class="block text-[11px] font-semibold uppercase tracking-wide text-text-secondary">De</label>
         <input id="filtro-inicio" type="date" name="inicio" value="<?= Security::e($filtros['inicio']->format('Y-m-d')) ?>" class="<?= $inputClasses ?>">

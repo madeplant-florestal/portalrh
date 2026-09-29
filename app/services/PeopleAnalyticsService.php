@@ -72,15 +72,24 @@ class PeopleAnalyticsService
     private PeopleAnalyticsRepository $repository;
     private RecrutamentoIndicadoresRepository $recrutamentoRepository;
     private ColaboradorMetadadosConsultaRepository $consultaRepository;
+    private RecrutamentoIndicadoresService $recrutamentoIndicadoresService;
+    private DashboardEntrevistaDesligamentoService $entrevistaDesligamentoService;
 
     public function __construct(
         ?PeopleAnalyticsRepository $repository = null,
         ?RecrutamentoIndicadoresRepository $recrutamentoRepository = null,
-        ?ColaboradorMetadadosConsultaRepository $consultaRepository = null
+        ?ColaboradorMetadadosConsultaRepository $consultaRepository = null,
+        ?RecrutamentoIndicadoresService $recrutamentoIndicadoresService = null,
+        ?DashboardEntrevistaDesligamentoService $entrevistaDesligamentoService = null
     ) {
         $this->repository = $repository ?? new PeopleAnalyticsRepository();
         $this->recrutamentoRepository = $recrutamentoRepository ?? new RecrutamentoIndicadoresRepository();
         $this->consultaRepository = $consultaRepository ?? new ColaboradorMetadadosConsultaRepository();
+        // Etapa 3 (2026-09): reaproveita os Services JÁ existentes dos dashboards operacionais —
+        // nenhum cálculo de Funil/Tempo por Etapa/Entrevista de Desligamento é duplicado aqui.
+        $this->recrutamentoIndicadoresService = $recrutamentoIndicadoresService
+            ?? new RecrutamentoIndicadoresService($this->recrutamentoRepository);
+        $this->entrevistaDesligamentoService = $entrevistaDesligamentoService ?? new DashboardEntrevistaDesligamentoService();
     }
 
     public function opcoesFiltro(): array
@@ -392,6 +401,8 @@ class PeopleAnalyticsService
                 'continuas' => count($classificacao['continuas']),
                 'recontratacoes' => count($classificacao['recontratacoes']),
             ],
+            'recrutamento' => $this->montarRecrutamentoExecutivo($codigoEmpresa, $inicio, $fim),
+            'entrevista_desligamento' => $this->montarEntrevistaDesligamentoExecutivo($inicio, $fim),
             'banco_horas' => ['disponivel' => false],
             'horas_extras' => ['disponivel' => false],
             'ferias_programadas' => ['disponivel' => false],
@@ -738,6 +749,70 @@ class PeopleAnalyticsService
             'abertas' => (int)($vagasAbertas['total'] ?? 0),
             'fechadas_no_periodo' => (int)($vagasFechadas['total'] ?? 0),
             'empresa_sem_correspondencia' => false,
+        ];
+    }
+
+
+    /**
+     * Recrutamento e Seleção — visão executiva (Etapa 3, 2026-09). Reaproveita INTEGRALMENTE
+     * RecrutamentoIndicadoresService::montarPainel() (mesma coorte, Funil, Tempo por Etapa e
+     * Vagas do Dashboard de Recrutamento) — nenhum cálculo paralelo. Só Empresa e período se
+     * aplicam aqui (mesma tradução codigo_empresa → id local de montarVagas() acima); Setor/Sexo/
+     * Motivo não têm relação segura com Recrutamento e não são aplicados (§9 da Etapa 3: "não
+     * aplicar silenciosamente um filtro impossível"). "Nota média da avaliação de experiência"
+     * fica de fora (§11: refere-se à futura Avaliação 45/90 dias, ainda não implementada).
+     */
+    private function montarRecrutamentoExecutivo(?string $codigoEmpresa, DateTimeImmutable $inicio, DateTimeImmutable $fim): array
+    {
+        $empresaLocalId = null;
+        if ($codigoEmpresa !== null && $codigoEmpresa !== '') {
+            $empresaLocalId = (new EmpresaMetadadosRepository())->findIdByCodigo($codigoEmpresa);
+            if ($empresaLocalId === null) {
+                return ['disponivel' => false, 'empresa_sem_correspondencia' => true];
+            }
+        }
+
+        $painelRecrutamento = $this->recrutamentoIndicadoresService->montarPainel(
+            ['empresa_id' => $empresaLocalId, 'vaga_id' => null],
+            $inicio,
+            $fim
+        );
+        $funil = $painelRecrutamento['funil'];
+        $admitidos = $funil !== [] ? (int)end($funil)['quantidade'] : 0;
+
+        return [
+            'disponivel' => true,
+            'empresa_sem_correspondencia' => false,
+            'vagas' => $painelRecrutamento['vagas'],
+            'candidatos_cohort' => $painelRecrutamento['total_candidaturas_cohort'],
+            'admitidos' => $admitidos,
+            'tempo_contratacao' => $painelRecrutamento['tempo_contratacao'],
+            'funil' => $funil,
+            'tempo_por_etapa' => $painelRecrutamento['tempo_por_etapa'],
+        ];
+    }
+
+    /**
+     * Entrevistas de Desligamento — visão executiva (Etapa 3, 2026-09). Reaproveita INTEGRALMENTE
+     * DashboardEntrevistaDesligamentoService::montarPainel() — mesmas duas populações (desligamentos
+     * oficiais x entrevistas respondidas), mesmo eNPS, mesmos "motivos DECLARADOS na entrevista"
+     * (nunca confundir com `desligamentos_por_motivo`, que é o motivo FORMAL do RHCONTRATOS — ver
+     * §16 da Etapa 3). Só o período do People Analytics se aplica: a "Unidade" deste dashboard é
+     * empresa+unidade física (mais fina que o codigo_empresa do filtro global de Empresa), sem
+     * correspondência segura 1:1 — nunca forçada (§9); fica sempre "consolidado, todas as unidades".
+     */
+    private function montarEntrevistaDesligamentoExecutivo(DateTimeImmutable $inicio, DateTimeImmutable $fim): array
+    {
+        $painelEntrevista = $this->entrevistaDesligamentoService->montarPainel([
+            'inicio' => $inicio,
+            'fim' => $fim,
+            'unidade' => null,
+            'codigo_cargo' => '',
+        ]);
+
+        return [
+            'executivo' => $painelEntrevista['executivo'],
+            'motivos' => $painelEntrevista['motivos'],
         ];
     }
 

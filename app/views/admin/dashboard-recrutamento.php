@@ -122,34 +122,7 @@ $drsValorOuInsuficiente = static function (?float $valor, string $sufixo = ''): 
     </article>
   </section>
 
-  <section class="grid grid-cols-1 gap-6 xl:grid-cols-2">
-    <article class="responsive-panel ring-1 ring-border">
-      <div class="mb-3">
-        <h2 class="text-base font-bold text-text-primary">Performance do Processo</h2>
-        <p class="text-xs text-text-secondary">Consolidado — mesmos cálculos do bloco "Tempo Médio por Etapa" ao lado, sem nova consulta</p>
-      </div>
-      <div class="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <?php foreach ($painel['tempo_por_etapa'] as $etapa): ?>
-          <div class="rounded-xl bg-surface-secondary p-3">
-            <p class="text-[11px] font-semibold uppercase tracking-wide text-text-secondary"><?= Security::e($etapa['label']) ?></p>
-            <p class="mt-1 text-sm font-bold text-text-primary"><?= $drsValorOuInsuficiente($etapa['media_dias'], 'd') ?></p>
-          </div>
-        <?php endforeach; ?>
-      </div>
-      <div class="space-y-3 border-t border-border pt-4">
-        <div class="flex items-center justify-between text-sm">
-          <span class="text-text-secondary">Taxa de aceite de proposta</span>
-          <span class="font-semibold text-text-secondary">Dados ainda não disponíveis</span>
-        </div>
-        <p class="text-xs text-text-muted">Carta Proposta existe no schema, mas ainda não está implementada na aplicação — nenhum dado real a calcular.</p>
-        <div class="flex items-center justify-between text-sm">
-          <span class="text-text-secondary">Taxa de desistência do processo</span>
-          <span class="font-semibold text-text-secondary">Dados ainda não disponíveis</span>
-        </div>
-        <p class="text-xs text-text-muted">Hoje não há motivo estruturado que diferencie desistência de reprovação/abandono/cancelamento.</p>
-      </div>
-    </article>
-
+  <section class="grid grid-cols-1">
     <article class="responsive-panel ring-1 ring-border">
       <div class="mb-3">
         <h2 class="text-base font-bold text-text-primary">Qualidade da Contratação</h2>

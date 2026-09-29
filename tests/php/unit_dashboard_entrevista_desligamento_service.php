@@ -59,6 +59,24 @@ $f7 = $S::normalizarFiltros(['unidade' => "1|01' OR '1'='1", 'cargo' => ['10']],
 $check($f7['unidade'] === null && $f7['codigo_cargo'] === '', '(filtro) Valor fora das opções (injeção/array) é ignorado');
 $f8 = $S::normalizarFiltros(['unidade' => '2|01'], $hoje, $opcoes);
 $check($f8['unidade']['codigo_empresa'] === '2' && $f5['unidade']['codigo_empresa'] === '1', '(unidade) Mesmo código de unidade em empresas diferentes são unidades diferentes');
+
+// ---- filtro Ano/Mês/Todo o período (Etapa 3, 2026-09) ------------------------------------------------------------------
+$fAno1 = $S::normalizarFiltros(['ano' => '2026', 'mes' => '3'], $hoje, $opcoes);
+$check($fAno1['inicio']->format('Y-m-d') === '2026-03-01' && $fAno1['fim']->format('Y-m-d') === '2026-03-31' && $fAno1['avisos'] === [], '(ano/mês) Ano + Mês: só aquele mês (ex.: 2026 + Março → 01/03 a 31/03)');
+$fAno2 = $S::normalizarFiltros(['ano' => '2025'], $hoje, $opcoes);
+$check($fAno2['inicio']->format('Y-m-d') === '2025-01-01' && $fAno2['fim']->format('Y-m-d') === '2025-12-31' && $fAno2['avisos'] === [], '(ano/mês) Ano + "Todo o período" (mês vazio): o ano inteiro (ex.: 2025 → 01/01 a 31/12)');
+$fAno3 = $S::normalizarFiltros(['ano' => '2026', 'mes' => ''], $hoje, $opcoes);
+$check($fAno3['inicio']->format('Y-m-d') === '2026-01-01' && $fAno3['fim']->format('Y-m-d') === '2026-09-19', '(ano/mês) Ano corrente + "Todo o período": fim é clampado para hoje (desligamento futuro não conta), igual ao filtro De/Até');
+$fAno4 = $S::normalizarFiltros(['ano' => ''], $hoje, $opcoes);
+$check($fAno4['inicio']->format('Y-m-d') === '2021-10-01' && $fAno4['fim']->format('Y-m-d') === '2026-09-19', '(ano/mês) "Todo o período" (ano vazio, chave presente): usa a janela máxima já existente (60 meses), mesmo teto de sempre — nenhum novo limite');
+$fAno5 = $S::normalizarFiltros(['mes' => '9'], $hoje, $opcoes);
+$check($fAno5 == $f0, '(ano/mês) Mês sem Ano é ignorado por completo — evita a combinação confusa "mês sem ano"; comportamento idêntico ao padrão sem nenhum filtro');
+$fAno6 = $S::normalizarFiltros(['ano' => '2026', 'mes' => '13'], $hoje, $opcoes);
+$check($fAno6['inicio']->format('Y-m-d') === '2026-01-01', '(ano/mês) Mês inválido (fora de 1-12) junto de um Ano válido: mês é ignorado, vira o ano inteiro');
+$fAno7 = $S::normalizarFiltros(['ano' => 'abc'], $hoje, $opcoes);
+$check($fAno7['inicio'] <= $fAno7['fim'] && $fAno7['fim']->format('Y-m-d') === '2026-09-19', '(ano/mês) Ano não numérico não quebra nem vaza — cai no comportamento de "Todo o período"');
+$check(!isset($fAno1['ano']) && !isset($fAno1['mes']), '(ano/mês) `ano`/`mes` são só entrada — normalizarFiltros() continua devolvendo o mesmo formato inicio/fim/unidade/codigo_cargo/avisos de sempre');
+
 $at = $S::atalhos($hoje);
 $check(count($at) === 5 && $at[0]['inicio'] === '2026-07-01' && $at[0]['fim'] === '2026-09-19' && $at[3]['inicio'] === '2026-01-01' && $at[4]['inicio'] === '2025-01-01' && $at[4]['fim'] === '2025-12-31', '(atalhos) 3/6/12 meses, ano atual e ano anterior');
 

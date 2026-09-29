@@ -451,6 +451,124 @@ $opcoesFiltro = $opcoesFiltro ?? ['empresas' => [], 'setores' => []];
     <?php endif; ?>
   </section>
 
+  <!-- Recrutamento e Seleção: visão executiva (Etapa 3, 2026-09) — reaproveita INTEGRALMENTE
+       RecrutamentoIndicadoresService::montarPainel() via PeopleAnalyticsService::montarRecrutamentoExecutivo();
+       nenhum cálculo de Funil/Tempo por Etapa/Vagas é duplicado aqui. Só Empresa e período se
+       aplicam (Setor/Sexo/Motivo não têm relação segura com Recrutamento). -->
+  <?= $secaoDivisor('Recrutamento e Seleção') ?>
+
+  <?php $rec = $painel['recrutamento']; ?>
+  <?php if (!$rec['disponivel']): ?>
+    <section class="rounded-ds-lg border border-border bg-surface p-4 shadow-resting">
+      <?= $estadoVazio('A Empresa selecionada ainda não tem correspondência no catálogo local de Recrutamento — indicadores de Recrutamento ficam indisponíveis para este filtro.', 'refresh') ?>
+    </section>
+  <?php else: ?>
+    <section class="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
+      <div class="rounded-ds-lg border border-border bg-surface p-3.5">
+        <p class="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">Vagas Abertas</p>
+        <p class="mt-1 text-xl font-bold text-text-primary"><?= $fmtN($rec['vagas']['abertas']) ?></p>
+      </div>
+      <div class="rounded-ds-lg border border-border bg-surface p-3.5">
+        <p class="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">Vagas Fechadas</p>
+        <p class="mt-1 text-xl font-bold text-text-primary"><?= $fmtN($rec['vagas']['fechadas_no_periodo']) ?></p>
+        <p class="text-[11px] text-text-secondary">no período</p>
+      </div>
+      <div class="rounded-ds-lg border border-border bg-surface p-3.5">
+        <p class="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">Candidatos no Processo</p>
+        <p class="mt-1 text-xl font-bold text-text-primary"><?= $fmtN($rec['candidatos_cohort']) ?></p>
+        <p class="text-[11px] text-text-secondary">coorte do período</p>
+      </div>
+      <div class="rounded-ds-lg border border-border bg-surface p-3.5">
+        <p class="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">Admitidos via Recrutamento</p>
+        <p class="mt-1 text-xl font-bold text-text-primary"><?= $fmtN($rec['admitidos']) ?></p>
+      </div>
+      <div class="rounded-ds-lg border border-border bg-surface p-3.5">
+        <p class="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">Tempo Médio de Contratação</p>
+        <p class="mt-1 text-xl font-bold text-text-primary"><?= $rec['tempo_contratacao']['media_dias'] === null ? 'Dados insuficientes' : number_format($rec['tempo_contratacao']['media_dias'], 1, ',', '.') . ' dias' ?></p>
+      </div>
+    </section>
+
+    <section class="grid grid-cols-1 gap-4 xl:grid-cols-2">
+      <article class="rounded-ds-lg border border-border bg-surface p-4 shadow-resting">
+        <h2 class="text-ds-h3 text-text-primary">Funil de Recrutamento</h2>
+        <p class="text-[11px] text-text-secondary">Candidatos da coorte do período com passagem real por cada etapa</p>
+        <?php if ($rec['funil'] === [] || $rec['candidatos_cohort'] === 0): ?>
+          <?= $estadoVazio('Nenhuma candidatura no período/filtros selecionados.', 'refresh') ?>
+        <?php else: ?>
+          <?php $maxFunilPa = $rec['funil'][0]['quantidade'] ?: 1; ?>
+          <div class="mt-3 space-y-2.5">
+            <?php foreach ($rec['funil'] as $etapa): ?>
+              <?= dashboard_bar_row($etapa['label'], $etapa['quantidade'], $maxFunilPa, (string)$etapa['quantidade'], 'bg-primary-600') ?>
+            <?php endforeach; ?>
+          </div>
+        <?php endif; ?>
+      </article>
+
+      <article class="rounded-ds-lg border border-border bg-surface p-4 shadow-resting">
+        <h2 class="text-ds-h3 text-text-primary">Tempo Médio por Etapa</h2>
+        <p class="text-[11px] text-text-secondary">Só passagens concluídas (entrada → próxima movimentação) entram na média</p>
+        <?php $mediasEtapaPa = array_map(static fn(array $e): float => $e['media_dias'] ?? 0.0, $rec['tempo_por_etapa']); ?>
+        <?php $maxTempoPa = $mediasEtapaPa !== [] ? (max($mediasEtapaPa) ?: 1) : 1; ?>
+        <div class="mt-3 space-y-2.5">
+          <?php foreach ($rec['tempo_por_etapa'] as $etapa): ?>
+            <?= dashboard_bar_row(
+                $etapa['label'], $etapa['media_dias'] ?? 0.0, $maxTempoPa,
+                $etapa['media_dias'] === null ? 'Dados insuficientes' : number_format($etapa['media_dias'], 1, ',', '.') . ' dias',
+                'bg-primary-400'
+            ) ?>
+          <?php endforeach; ?>
+        </div>
+      </article>
+    </section>
+  <?php endif; ?>
+
+  <!-- Entrevistas de Desligamento: visão executiva (Etapa 3, 2026-09) — reaproveita INTEGRALMENTE
+       DashboardEntrevistaDesligamentoService::montarPainel(). "Motivo apontado na entrevista" é a
+       RESPOSTA do ex-colaborador — nunca confundir com "Desligamentos por Motivo" acima, que é o
+       motivo FORMAL do RHCONTRATOS (§16 da Etapa 3). Só o período se aplica: "Unidade" deste
+       dashboard é mais fina que o filtro global de Empresa (empresa+unidade física), sem
+       correspondência segura — fica sempre consolidado, todas as unidades. -->
+  <?= $secaoDivisor('Entrevistas de Desligamento') ?>
+
+  <?php $ed = $painel['entrevista_desligamento']['executivo']; ?>
+  <?php $edMotivos = $painel['entrevista_desligamento']['motivos']; ?>
+  <p class="text-[11px] text-text-secondary">Consolidado de todas as unidades (filtro de Empresa não se aplica aqui — ver Dashboard da Entrevista de Desligamento para o detalhamento por Unidade/Cargo)</p>
+  <section class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+    <div class="rounded-ds-lg border border-border bg-surface p-3.5">
+      <p class="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">Desligamentos</p>
+      <p class="mt-1 text-xl font-bold text-text-primary"><?= $fmtN($ed['desligamentos']) ?></p>
+    </div>
+    <div class="rounded-ds-lg border border-border bg-surface p-3.5">
+      <p class="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">Entrevistas Geradas</p>
+      <p class="mt-1 text-xl font-bold text-text-primary"><?= $fmtN($ed['geradas']) ?></p>
+    </div>
+    <div class="rounded-ds-lg border border-border bg-surface p-3.5">
+      <p class="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">Entrevistas Respondidas</p>
+      <p class="mt-1 text-xl font-bold text-text-primary"><?= $fmtN($ed['respondidas']) ?></p>
+      <p class="text-[11px] text-text-secondary"><?= $ed['taxa_resposta'] === null ? 'Sem base' : number_format($ed['taxa_resposta'], 1, ',', '.') . '% de taxa de resposta' ?></p>
+    </div>
+    <div class="rounded-ds-lg border border-border bg-surface p-3.5">
+      <p class="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">eNPS</p>
+      <p class="mt-1 text-xl font-bold text-text-primary"><?= $ed['enps']['valor'] === null ? 'Sem base' : (($ed['enps']['valor'] > 0 ? '+' : '') . number_format($ed['enps']['valor'], 1, ',', '.')) ?></p>
+      <p class="text-[11px] text-text-secondary"><?= (int)$ed['enps']['n'] ?> resposta(s)</p>
+    </div>
+  </section>
+
+  <section class="rounded-ds-lg border border-border bg-surface p-4 shadow-resting">
+    <h2 class="text-ds-h3 text-text-primary">Motivo apontado na entrevista</h2>
+    <p class="text-[11px] text-text-secondary">Resposta do ex-colaborador na Entrevista de Desligamento — diferente do motivo formal da rescisão (ver "Desligamentos por Motivo" acima)</p>
+    <?php if ($edMotivos['total'] === 0): ?>
+      <?= $estadoVazio('Nenhum motivo declarado no período.', 'exit') ?>
+    <?php else: ?>
+      <?php $maxMotivoEd = max(array_column($edMotivos['itens'], 'quantidade')) ?: 1; ?>
+      <div class="mt-3 space-y-2">
+        <?php foreach ($edMotivos['itens'] as $m): ?>
+          <?= dashboard_bar_row($m['rotulo'], $m['quantidade'], $maxMotivoEd, $m['quantidade'] . ' · ' . number_format($m['percentual'], 1, ',', '.') . '%', 'bg-primary-500') ?>
+        <?php endforeach; ?>
+      </div>
+    <?php endif; ?>
+  </section>
+
   <!-- Complementares: faixa etária, empresa, onboarding, dados pendentes -->
   <?= $secaoDivisor('Dados complementares') ?>
 

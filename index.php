@@ -263,6 +263,29 @@ try {
     // Dashboard da Entrevista de Desligamento (agregado) — permissão própria dashboard_entrevista_desligamento.visualizar.
     $router->get('/admin/dashboard-entrevista-desligamento', [AdminDashboardEntrevistaDesligamentoController::class, 'index']);
 
+    // Avaliações e Desenvolvimento (Etapa 4, 2026-09) — Avaliação do Período de Experiência (45/90) +
+    // Feedback. Mesmo padrão de autorização do PDI (permissão individual + escopo por linha via
+    // gestor_usuario_id). Pendências 45/90 são DERIVADAS (ver AvaliacaoExperienciaService) — a
+    // avaliação só ganha linha própria quando salva/concluída, por isso a rota do formulário é
+    // chaveada por {metadadosId}/{tipo}, não por um id que ainda pode não existir.
+    $router->get('/admin/avaliacoes-desenvolvimento', [AdminAvaliacoesDesenvolvimentoController::class, 'index']);
+    $router->get('/admin/avaliacoes-experiencia', [AdminAvaliacoesExperienciaController::class, 'index']);
+    $router->get('/admin/avaliacoes-experiencia/{metadadosId}/{tipo}', [AdminAvaliacoesExperienciaController::class, 'form']);
+    $router->post('/admin/avaliacoes-experiencia/{metadadosId}/{tipo}/salvar', [AdminAvaliacoesExperienciaController::class, 'salvar']);
+    $router->post('/admin/avaliacoes-experiencia/{id}/concluir', [AdminAvaliacoesExperienciaController::class, 'concluir']);
+    $router->post('/admin/avaliacoes-experiencia/{id}/ciencia', [AdminAvaliacoesExperienciaController::class, 'ciencia']);
+    $router->post('/admin/avaliacoes-experiencia/{id}/reabrir', [AdminAvaliacoesExperienciaController::class, 'reabrir']);
+
+    $router->get('/admin/feedbacks', [AdminFeedbacksController::class, 'index']);
+    $router->get('/admin/feedbacks/novo', [AdminFeedbacksController::class, 'novo']);
+    $router->post('/admin/feedbacks', [AdminFeedbacksController::class, 'store']);
+    $router->get('/admin/feedbacks/{id}/editar', [AdminFeedbacksController::class, 'editar']);
+    $router->post('/admin/feedbacks/{id}/editar', [AdminFeedbacksController::class, 'atualizar']);
+    $router->post('/admin/feedbacks/{id}/concluir', [AdminFeedbacksController::class, 'concluir']);
+    $router->post('/admin/feedbacks/{id}/espaco-colaborador', [AdminFeedbacksController::class, 'espacoColaborador']);
+    $router->post('/admin/feedbacks/{id}/ciencia', [AdminFeedbacksController::class, 'ciencia']);
+    $router->post('/admin/feedbacks/{id}/reabrir', [AdminFeedbacksController::class, 'reabrir']);
+
     $router->get('/admin/usuarios', [AdminUsuariosController::class, 'index']);
     $router->get('/admin/usuarios/novo', [AdminUsuariosController::class, 'create']);
     $router->get('/admin/usuarios/metadados/buscar', [AdminUsuariosController::class, 'buscarMetadados']);

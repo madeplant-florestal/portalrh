@@ -442,7 +442,12 @@ if (!function_exists('dashboard_multi_line_chart')) {
                             $abaixo = $p['v'] < (float)$outro || ($p['v'] === (float)$outro && $indiceSerie === 1);
                         }
                     }
-                    $svg .= '<g><title>' . Security::e($s['label'] . ' — ' . $p['rotulo'] . ': ' . $fmt($p['v']) . ($p['parcial'] ? ' (parcial)' : '')) . '</title>'
+                    // Texto extra opcional por ponto (correção de nomenclatura de 2026-09 — People
+                    // Analytics): $s['extra'][$p['i']], ex. "Desligamentos: 9 · Colaboradores no
+                    // mês: 133" — nunca "ativos" como denominador no tooltip. Omitido/null preserva
+                    // o tooltip original (retrocompatível com Indicadores de RH, que não usa isso).
+                    $extraTooltip = isset($s['extra'][$p['i']]) ? ' · ' . $s['extra'][$p['i']] : '';
+                    $svg .= '<g><title>' . Security::e($s['label'] . ' — ' . $p['rotulo'] . ': ' . $fmt($p['v']) . ($p['parcial'] ? ' (parcial)' : '') . $extraTooltip) . '</title>'
                         . '<circle cx="' . dashboard_fmt($p['x']) . '" cy="' . dashboard_fmt($p['y']) . '" r="3.5" fill="' . ($p['parcial'] ? '#ffffff' : $cor) . '" stroke="' . $cor . '" stroke-width="2"></circle>'
                         . ($mostrarValores ? '<text x="' . dashboard_fmt($p['x']) . '" y="' . dashboard_fmt($p['y'] + ($abaixo ? 16 : -8)) . '" text-anchor="middle" font-size="10" font-weight="600" fill="#2B2E22">' . Security::e($fmt($p['v'])) . '</text>' : '') . '</g>';
                 }

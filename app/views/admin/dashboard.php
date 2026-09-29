@@ -5,7 +5,9 @@
  * Consolida Headcount/Turnover/Admissões/Desligamentos/Vagas com comparativos de período e os
  * principais gráficos do Dashboard de Turnover, sob a fórmula oficial de Turnover
  * (PeopleAnalyticsService::montarPainel() / RhIndicadoresService::taxaTurnoverPeriodo()) —
- * Turnover = desligados do período ÷ ativos do período × 100. Nenhum cálculo é feito aqui: a view
+ * Turnover = desligados do período ÷ colaboradores no período × 100 (população = colaboradores
+ * que estiveram ativos em algum momento do período — nunca confundir com Headcount Atual, a
+ * fotografia de agora; correção de nomenclatura de 2026-09). Nenhum cálculo é feito aqui: a view
  * só formata o que o Service já entregou pronto.
  *
  * Narrativa visual: resumo executivo (KPIs) → protagonista (Turnover Geral) → tendência
@@ -126,7 +128,7 @@ $fmtData = static fn(DateTimeImmutable $d): string => $d->format('d/m/Y');
       <?php if ($painel !== null): ?>
         · comparando com <strong class="text-text-primary"><?= Security::e($comparativos[$comparativoSelecionado]) ?></strong> (<?= Security::e($fmtData($painel['comparativo']['periodo']['inicio'])) ?> a <?= Security::e($fmtData($painel['comparativo']['periodo']['fim'])) ?>)
       <?php endif; ?>
-      · Turnover = desligados ÷ ativos do período × 100 · Empresa/Setor usam códigos oficiais do METADADOS
+      · Turnover = desligados ÷ colaboradores no período × 100 · Empresa/Setor usam códigos oficiais do METADADOS
     </p>
     <?php if ($painel !== null && $painel['vagas']['empresa_sem_correspondencia']): ?>
       <p class="mt-1 text-[11px] font-medium text-warning">A Empresa selecionada ainda não tem correspondência no catálogo local de Empresas — Vagas Abertas fica zerada em vez de mostrar o total geral.</p>

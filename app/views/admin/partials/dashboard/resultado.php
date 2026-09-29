@@ -170,7 +170,7 @@ $opcoesFiltro = $opcoesFiltro ?? ['empresas' => [], 'setores' => []];
   <section class="rounded-ds-lg border border-primary-100 bg-surface p-5 shadow-elevated">
     <div class="flex flex-wrap items-baseline justify-between gap-2">
       <h2 class="text-ds-h3 text-text-primary">Turnover Geral</h2>
-      <p class="text-[11px] text-text-secondary">Desligados ÷ ativos do período · <?= $fmtN($painel['turnover']['ativos_periodo']) ?> vigente(s) no intervalo</p>
+      <p class="text-[11px] text-text-secondary">Desligados ÷ colaboradores no período · <?= $fmtN($painel['turnover']['ativos_periodo']) ?> colaboradores no período</p>
     </div>
     <div class="mt-3 flex flex-col gap-5 lg:flex-row lg:items-center">
       <div class="flex-shrink-0 rounded-ds-md bg-primary-50 px-6 py-4 text-center lg:w-[240px]">
@@ -220,6 +220,17 @@ $opcoesFiltro = $opcoesFiltro ?? ['empresas' => [], 'setores' => []];
     $taxaAtual = $pad(array_column($serieAtual, 'taxa'), $nPontos);
     $taxaComp = $pad(array_column($serieComp, 'taxa'), $nPontos);
 
+    // Tooltip da Evolução Mensal (correção de nomenclatura de 2026-09): nunca "ativos" como
+    // denominador — mostra Desligamentos e "Colaboradores no mês" (mesmos números já calculados
+    // em $serieAtual/$serieComp, nenhum cálculo novo). "Colaboradores no mês" porque cada ponto É
+    // um mês (mais específico que "no período", que descreve o intervalo inteiro).
+    $extraTooltipMensal = static fn(array $serie): array => array_map(
+        static fn(array $ponto): string => 'Desligamentos: ' . number_format($ponto['desligamentos'], 0, ',', '.') . ' · Colaboradores no mês: ' . number_format($ponto['ativos_periodo'], 0, ',', '.'),
+        $serie
+    );
+    $extraAtual = $extraTooltipMensal($serieAtual);
+    $extraComp = $extraTooltipMensal($serieComp);
+
     // Mês de evento por ponto da série (Etapa 2, §18/§19) — reconstrói a MESMA sequência mês a mês
     // que RhIndicadoresService::serieMensalPeriodo() usa internamente (a partir do 1º dia do mês
     // de início do período, +1 mês por ponto), nunca lida como string a partir do rótulo já
@@ -255,8 +266,8 @@ $opcoesFiltro = $opcoesFiltro ?? ['empresas' => [], 'setores' => []];
       </div>
       <div class="mt-1">
         <?= dashboard_multi_line_chart($labelsEvolucao, [
-            ['label' => 'Período selecionado', 'color' => $pa['brand500'], 'values' => $taxaAtual],
-            ['label' => 'Comparativo', 'color' => $pa['brand200'], 'values' => $taxaComp],
+            ['label' => 'Período selecionado', 'color' => $pa['brand500'], 'values' => $taxaAtual, 'extra' => $extraAtual],
+            ['label' => 'Comparativo', 'color' => $pa['brand200'], 'values' => $taxaComp, 'extra' => $extraComp],
         ], '%', 1, 'Evolução mensal do turnover, período selecionado comparado ao comparativo') ?>
       </div>
     </article>
@@ -286,7 +297,7 @@ $opcoesFiltro = $opcoesFiltro ?? ['empresas' => [], 'setores' => []];
   <section class="grid grid-cols-1 gap-4 xl:grid-cols-2">
     <article class="rounded-ds-lg border border-border bg-surface p-4 shadow-resting">
       <h2 class="text-ds-h3 text-text-primary">Headcount por Empresa</h2>
-      <p class="text-[11px] text-text-secondary">Contratos ativos agora · clique numa empresa para filtrar a página</p>
+      <p class="text-[11px] text-text-secondary">Colaboradores ativos atualmente · clique numa empresa para filtrar a página</p>
       <?php if ($painel['headcount_por_empresa'] === []): ?>
         <?= $estadoVazio('Nenhum contrato ativo para os filtros selecionados.') ?>
       <?php else: ?>
@@ -341,7 +352,7 @@ $opcoesFiltro = $opcoesFiltro ?? ['empresas' => [], 'setores' => []];
             <?php $valorSetorClique = $item['codigo'] === '' ? ColaboradorMetadadosConsultaRepository::SETOR_NAO_INFORMADO : $item['codigo']; ?>
             <?= dashboard_bar_row(
                 $item['label'], $item['taxa'], $maxSetorTurnover,
-                number_format($item['taxa'], 1, ',', '.') . '% · ' . $item['desligamentos'] . ' desl. · ' . $item['ativos_periodo'] . ' ativo(s)',
+                number_format($item['taxa'], 1, ',', '.') . '% · ' . $item['desligamentos'] . ' deslig. · ' . $item['ativos_periodo'] . ' colaboradores no período',
                 $item['codigo'] === '' ? 'bg-text-muted' : 'bg-primary-600',
                 ['dimensao' => 'setor', 'valor' => $valorSetorClique, 'ativo' => $filtrosSelecionados['setor'] === $valorSetorClique]
             ) ?>
@@ -352,7 +363,7 @@ $opcoesFiltro = $opcoesFiltro ?? ['empresas' => [], 'setores' => []];
 
     <article class="flex flex-col rounded-ds-lg border border-border bg-surface p-4 shadow-resting">
       <h2 class="text-ds-h3 text-text-primary">Colaboradores por Setor — Comparativo</h2>
-      <p class="text-[11px] text-text-secondary">Período selecionado × comparativo, por Setor · clique numa coluna para filtrar</p>
+      <p class="text-[11px] text-text-secondary">Colaboradores que estiveram ativos em algum momento do período · clique numa coluna para filtrar</p>
       <?php
         $porSetorComp = $painel['colaboradores_por_setor_comparativo'];
         $limiteSetorComp = 12;
@@ -402,7 +413,7 @@ $opcoesFiltro = $opcoesFiltro ?? ['empresas' => [], 'setores' => []];
         <div<?= dashboard_clique_attrs($cliqueSexo, $bloco['label']) ?> class="rounded-ds-md bg-background p-3.5 text-center<?= dashboard_clique_class($cliqueSexo) ?>">
           <p class="text-[11px] font-semibold text-text-secondary"><?= Security::e($bloco['label']) ?></p>
           <p class="mt-1 text-2xl font-bold text-text-primary"><?= number_format($bloco['dado']['taxa'], 1, ',', '.') ?>%</p>
-          <p class="text-[11px] text-text-secondary"><?= (int)$bloco['dado']['desligamentos'] ?> desligamento(s) · <?= (int)$bloco['dado']['ativos_periodo'] ?> ativo(s)</p>
+          <p class="text-[11px] text-text-secondary"><?= (int)$bloco['dado']['desligamentos'] ?> desligamento(s) · <?= (int)$bloco['dado']['ativos_periodo'] ?> colaboradores no período</p>
           <?php if ($bloco['dado']['comparativo_taxa'] !== null): ?>
             <p class="mt-1 text-[11px] text-text-muted"><?= Security::e($fmtVariacaoPP(round($bloco['dado']['taxa'] - $bloco['dado']['comparativo_taxa'], 1))) ?> vs. <?= number_format($bloco['dado']['comparativo_taxa'], 1, ',', '.') ?>%</p>
           <?php endif; ?>
@@ -414,7 +425,7 @@ $opcoesFiltro = $opcoesFiltro ?? ['empresas' => [], 'setores' => []];
         <div<?= dashboard_clique_attrs($cliqueSexoNI, 'Não informado') ?> class="rounded-ds-md bg-background p-3.5 text-center<?= dashboard_clique_class($cliqueSexoNI) ?>">
           <p class="text-[11px] font-semibold text-text-secondary">Não informado</p>
           <p class="mt-1 text-2xl font-bold text-text-primary"><?= number_format($naoInformado['taxa'], 1, ',', '.') ?>%</p>
-          <p class="text-[11px] text-text-secondary"><?= (int)$naoInformado['desligamentos'] ?> desligamento(s) · <?= (int)$naoInformado['ativos_periodo'] ?> ativo(s)</p>
+          <p class="text-[11px] text-text-secondary"><?= (int)$naoInformado['desligamentos'] ?> desligamento(s) · <?= (int)$naoInformado['ativos_periodo'] ?> colaboradores no período</p>
         </div>
       <?php endif; ?>
     </div>

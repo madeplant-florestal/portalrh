@@ -167,16 +167,16 @@ class PortalNavegacaoService
                 ['chave' => 'dashboard-entrevista', 'label' => 'Dashboard da Entrevista', 'href' => '/admin/dashboard-entrevista-desligamento', 'regra' => 'perm:dashboard_entrevista_desligamento.visualizar'],
                 ['chave' => 'entrevistas', 'label' => 'Entrevistas de Desligamento', 'href' => '/admin/entrevistas-desligamento', 'regra' => 'perm:entrevista_desligamento.visualizar'],
             ]],
-            // Bloco H — Avaliações e Desenvolvimento (Etapa 5): PDI deixa de ser card isolado da Central e passa a ser
+            // Bloco H — Avaliações e Desenvolvimento (Etapa 5/6): PDI deixa de ser card isolado da Central e passa a ser
             // submódulo aqui. Ordem das abas segue a hierarquia conceitual aprovada — Avaliar/Feedback primeiro (geram
-            // resultados/GAPs), PDI por último (camada de desenvolvimento resultante). Avaliação de Desempenho aponta
-            // temporariamente para a implementação LEGADA (/admin/avaliacoes, model AvaliacaoDesempenho sobre o
-            // Colaborador antigo — nunca colaboradores_metadados) até ser realinhada ao padrão novo (gestor/ciência/
-            // snapshot); nenhuma migração de dados foi feita nesta rodada.
+            // resultados/GAPs), PDI por último (camada de desenvolvimento resultante). Avaliação de Desempenho (Etapa 6)
+            // aponta para a implementação NATIVA (/admin/avaliacoes-desempenho, AvaliacaoDesempenhoService/
+            // colaboradores_metadados) — o legado /admin/avaliacoes (model AvaliacaoDesempenho sobre o Colaborador
+            // antigo) permanece só em Cadastros, sem relação de código com este módulo.
             'avaliacoes-desenvolvimento' => ['titulo' => 'Avaliações e Desenvolvimento', 'abas' => [
                 ['chave' => 'resumo', 'label' => 'Resumo', 'href' => '/admin/avaliacoes-desenvolvimento', 'regra' => 'aberto'],
                 ['chave' => 'avaliacao-experiencia', 'label' => 'Avaliação de Experiência', 'href' => '/admin/avaliacoes-experiencia', 'regra' => 'perm:avaliacao_experiencia.visualizar'],
-                ['chave' => 'avaliacao-desempenho', 'label' => 'Avaliação de Desempenho', 'href' => '/admin/avaliacoes', 'regra' => 'aberto'],
+                ['chave' => 'avaliacao-desempenho', 'label' => 'Avaliação de Desempenho', 'href' => '/admin/avaliacoes-desempenho', 'regra' => 'perm:avaliacao_desempenho.visualizar'],
                 ['chave' => 'feedback', 'label' => 'Feedback', 'href' => '/admin/feedbacks', 'regra' => 'perm:feedback.visualizar'],
                 ['chave' => 'pdi', 'label' => 'PDI', 'href' => '/admin/pdis', 'regra' => 'perm:pdi.visualizar'],
             ]],

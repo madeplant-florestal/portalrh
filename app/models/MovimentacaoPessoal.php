@@ -89,7 +89,7 @@ class MovimentacaoPessoal
             CONSTRAINT fk_movimentacoes_cargo_atual FOREIGN KEY (cargo_atual_id) REFERENCES cargos(id) ON DELETE RESTRICT,
             CONSTRAINT fk_movimentacoes_novo_cargo FOREIGN KEY (novo_cargo_id) REFERENCES cargos(id) ON DELETE SET NULL,
             CONSTRAINT fk_movimentacoes_nova_area FOREIGN KEY (nova_area_setor_id) REFERENCES setores(id) ON DELETE SET NULL,
-            CONSTRAINT fk_movimentacoes_avaliacao FOREIGN KEY (avaliacao_desempenho_id) REFERENCES colaborador_avaliacoes(id) ON DELETE SET NULL,
+            CONSTRAINT fk_movimentacoes_avaliacao FOREIGN KEY (avaliacao_desempenho_id) REFERENCES avaliacoes_desempenho(id) ON DELETE SET NULL,
             CONSTRAINT fk_movimentacoes_gestor_assinante FOREIGN KEY (gestor_assinado_por_usuario_id) REFERENCES usuarios(id) ON DELETE SET NULL,
             CONSTRAINT fk_movimentacoes_rh_assinante FOREIGN KEY (rh_assinado_por_usuario_id) REFERENCES usuarios(id) ON DELETE SET NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
@@ -140,18 +140,24 @@ class MovimentacaoPessoal
                                       LEFT JOIN empresas e ON e.id = c.empresa_id
                                       WHERE c.ativo = 1
                                       ORDER BY c.nome ASC")->fetchAll(PDO::FETCH_ASSOC);
-        $avaliacoes = $pdo->query("SELECT id, colaborador_id, titulo, nota, periodo_referencia, created_at
-                                   FROM colaborador_avaliacoes
-                                   ORDER BY created_at DESC, id DESC")->fetchAll(PDO::FETCH_ASSOC);
+        // Avaliação de Desempenho NATIVA (Etapa 6): só avaliações CONCLUÍDAS, ligadas via a coluna-ponte
+        // `colaboradores.metadados_id` (colaboradores sem metadados_id vinculado ficam sem opção de
+        // avaliação aqui — consequência aceita, ver migration 2026-09-30-movimentacoes-pessoal-fk-avaliacao-desempenho.sql).
+        $avaliacoes = $pdo->query("SELECT ad.id, c.id AS colaborador_id, ad.ciclo, ad.resultado_final, ad.data_realizacao,
+                                          (SELECT AVG(cr.nota_atual) FROM avaliacoes_desempenho_criterios cr WHERE cr.avaliacao_id = ad.id) AS media_nota_atual
+                                   FROM avaliacoes_desempenho ad
+                                   INNER JOIN colaboradores c ON c.metadados_id = ad.metadados_id
+                                   WHERE ad.status = 'concluido'
+                                   ORDER BY ad.data_realizacao DESC, ad.id DESC")->fetchAll(PDO::FETCH_ASSOC);
 
         $avaliacoesByColaborador = [];
         foreach ($avaliacoes as $avaliacao) {
             $avaliacoesByColaborador[(int)$avaliacao['colaborador_id']][] = [
                 'id' => (int)$avaliacao['id'],
-                'titulo' => $avaliacao['titulo'],
-                'nota' => $avaliacao['nota'] !== null ? (float)$avaliacao['nota'] : null,
-                'periodo_referencia' => $avaliacao['periodo_referencia'],
-                'created_at' => $avaliacao['created_at'],
+                'ciclo' => $avaliacao['ciclo'],
+                'resultado_final' => $avaliacao['resultado_final'],
+                'media_nota_atual' => $avaliacao['media_nota_atual'] !== null ? round((float)$avaliacao['media_nota_atual'], 1) : null,
+                'data_realizacao' => $avaliacao['data_realizacao'],
             ];
         }
 
@@ -239,7 +245,8 @@ class MovimentacaoPessoal
                        ca.nome AS cargo_atual_nome, nc.nome AS novo_cargo_nome,
                        s.nome AS setor_nome, ns.nome AS nova_area_nome,
                        rh.nome AS rh_assinante_nome, ga.nome AS gestor_assinante_nome,
-                       av.titulo AS avaliacao_titulo, av.nota AS avaliacao_nota, av.periodo_referencia
+                       av.ciclo AS avaliacao_ciclo, av.resultado_final AS avaliacao_resultado, av.data_realizacao AS avaliacao_data,
+                       (SELECT AVG(cr.nota_atual) FROM avaliacoes_desempenho_criterios cr WHERE cr.avaliacao_id = av.id) AS avaliacao_media_nota
                 FROM movimentacoes_pessoal mp
                 INNER JOIN usuarios u ON u.id = mp.gestor_solicitante_usuario_id
                 LEFT JOIN colaboradores g ON g.id = mp.gestor_solicitante_colaborador_id
@@ -250,7 +257,7 @@ class MovimentacaoPessoal
                 LEFT JOIN setores ns ON ns.id = mp.nova_area_setor_id
                 LEFT JOIN usuarios rh ON rh.id = mp.rh_assinado_por_usuario_id
                 LEFT JOIN usuarios ga ON ga.id = mp.gestor_assinado_por_usuario_id
-                LEFT JOIN colaborador_avaliacoes av ON av.id = mp.avaliacao_desempenho_id
+                LEFT JOIN avaliacoes_desempenho av ON av.id = mp.avaliacao_desempenho_id
                 WHERE mp.id = ?";
         $params = [$id];
         $role = strtolower(trim((string)$role));
@@ -606,8 +613,9 @@ class MovimentacaoPessoal
             throw new InvalidArgumentException('Descreva o impacto caso a movimentação não seja aprovada.');
         }
 
-        $avaliacao = self::findSimple('colaborador_avaliacoes', (int)$normalized['avaliacao_desempenho_id']);
-        if (!$avaliacao || (int)$avaliacao['colaborador_id'] !== $colaboradorId) {
+        $avaliacao = self::findSimple('avaliacoes_desempenho', (int)$normalized['avaliacao_desempenho_id']);
+        $metadadosIdColaborador = $colaborador['metadados_id'] ?? null;
+        if (!$avaliacao || !$metadadosIdColaborador || (int)$avaliacao['metadados_id'] !== (int)$metadadosIdColaborador) {
             throw new InvalidArgumentException('A avaliação selecionada não pertence ao colaborador informado.');
         }
 
@@ -782,10 +790,26 @@ class MovimentacaoPessoal
         return $row ?: null;
     }
 
+    /**
+     * Avaliações de Desempenho NATIVAS (Etapa 6) concluídas do colaborador, via a coluna-ponte
+     * `colaboradores.metadados_id`. Colaborador sem metadados_id vinculado não tem avaliação
+     * disponível aqui — mesma consequência aceita de formDependencies().
+     */
     private static function evaluationsForColaborador(int $colaboradorId): array
     {
-        $stmt = Database::conn()->prepare("SELECT id, titulo FROM colaborador_avaliacoes WHERE colaborador_id = ? ORDER BY created_at DESC, id DESC");
-        $stmt->execute([$colaboradorId]);
+        $colaborador = self::findColaborador($colaboradorId);
+        $metadadosId = $colaborador['metadados_id'] ?? null;
+        if (!$metadadosId) {
+            return [];
+        }
+        $stmt = Database::conn()->prepare(
+            "SELECT ad.id, ad.ciclo, ad.resultado_final, ad.data_realizacao,
+                    (SELECT AVG(cr.nota_atual) FROM avaliacoes_desempenho_criterios cr WHERE cr.avaliacao_id = ad.id) AS media_nota_atual
+             FROM avaliacoes_desempenho ad
+             WHERE ad.metadados_id = ? AND ad.status = 'concluido'
+             ORDER BY ad.data_realizacao DESC, ad.id DESC"
+        );
+        $stmt->execute([(int)$metadadosId]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 

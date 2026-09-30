@@ -5,9 +5,9 @@
  * (Experiência/Desempenho/Feedback) geram resultados/pontos fortes/GAPs que alimentam o PDI — o PDI
  * é a camada de DESENVOLVIMENTO resultante, não mais um card isolado no mesmo nível.
  *
- * `Avaliação de Desempenho` aponta para a implementação LEGADA (/admin/avaliacoes, model
- * AvaliacaoDesempenho sobre o Colaborador antigo) até ser realinhada ao padrão novo — ver nota em
- * PortalNavegacaoService::definicaoAbas()['avaliacoes-desenvolvimento']. Nenhum dado foi migrado.
+ * `Avaliação de Desempenho` aponta para a implementação NATIVA (Etapa 6, /admin/avaliacoes-desempenho,
+ * AvaliacaoDesempenhoService/colaboradores_metadados) — o legado /admin/avaliacoes permanece só em
+ * Cadastros, sem relação de código com este hub.
  */
 require_once APP_PATH . '/views/partials/modulo-topo.php';
 $card = 'rounded-ds-lg border border-border bg-white p-4';
@@ -17,8 +17,8 @@ if ($temExperiencia) {
         'descricao' => 'Acompanhe e realize as avaliações de 45 e 90 dias dos colaboradores em período de experiência.'];
 }
 if ($temDesempenho) {
-    $cardsProcesso[] = ['titulo' => 'Avaliação de Desempenho', 'icone' => 'indicadores', 'href' => $base . '/admin/avaliacoes',
-        'descricao' => 'Registros de avaliação de desempenho (implementação atual — em processo de realinhamento ao novo padrão).'];
+    $cardsProcesso[] = ['titulo' => 'Avaliação de Desempenho', 'icone' => 'indicadores', 'href' => $base . '/admin/avaliacoes-desempenho',
+        'descricao' => 'Avalie o desempenho por ciclo, com critérios estruturados, GAP e resultado final.'];
 }
 if ($temFeedback) {
     $cardsProcesso[] = ['titulo' => 'Feedback', 'icone' => 'mensagens', 'href' => $base . '/admin/feedbacks',
@@ -99,6 +99,23 @@ if ($temPdi) {
           <p class="text-2xl font-bold text-text-primary"><?= (int)$feedbacksDesenvolvimento ?></p>
           <p class="text-xs text-text-secondary">Necessitam acompanhamento específico</p>
         </div>
+      </div>
+    </section>
+  <?php endif; ?>
+
+  <?php if ($temDesempenho): ?>
+    <section class="<?= $card ?>">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <h3 class="text-sm font-bold uppercase tracking-wide text-text-secondary">Resumo — Avaliação de Desempenho</h3>
+        <a href="<?= $base ?>/admin/avaliacoes-desempenho" class="text-xs font-semibold text-primary-700 hover:underline">Ver lista completa →</a>
+      </div>
+      <div class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <?php foreach (AvaliacaoDesempenhoService::ROTULOS_STATUS as $st => $rotuloSt): ?>
+          <a href="<?= $base ?>/admin/avaliacoes-desempenho?status=<?= $st ?>" class="rounded-lg bg-background p-3 hover:bg-surface-secondary">
+            <p class="text-2xl font-bold text-text-primary"><?= (int)($desempenhoPorStatus[$st] ?? 0) ?></p>
+            <p class="text-xs text-text-secondary"><?= Security::e($rotuloSt) ?></p>
+          </a>
+        <?php endforeach; ?>
       </div>
     </section>
   <?php endif; ?>

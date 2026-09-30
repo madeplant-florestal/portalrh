@@ -52,6 +52,52 @@ try {
         $targetColaborador = $deps['colaboradores'][0];
     }
 
+    // Avaliação de Desempenho NATIVA (Etapa 6): a lista `avaliacoes` de formDependencies() só é
+    // populada via a coluna-ponte `colaboradores.metadados_id` (nunca mais colaborador_avaliacoes
+    // legado). Cria-se aqui um fixture mínimo — colaboradores_metadados + avaliacoes_desempenho
+    // concluída — ligado ao colaborador escolhido, sem depender de dados reais pré-existentes.
+    $metadadosIdAlvo = (int)$pdo->query('SELECT metadados_id FROM colaboradores WHERE id = ' . (int)$targetColaborador['id'])->fetchColumn();
+    $metadadosCriadoId = null;
+    if ($metadadosIdAlvo <= 0) {
+        $sufixoAv = (string)time() . (string)random_int(100, 999);
+        $pdo->prepare(
+            'INSERT INTO colaboradores_metadados (
+                identificador, codigo_empresa, codigo_unidade, numero_contrato, codigo_pessoa, cpf, nome, empresa, unidade,
+                codigo_setor, setor, cargo, codigo_cargo, admissao, data_inicio_cargo, ativo, origem_metadados
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)'
+        )->execute([
+            'ZZMP' . $sufixoAv, 'EMPA', 'UNI', 'ZC' . $sufixoAv, 'ZP' . $sufixoAv, null, 'ZZMP Fixture', 'ZZMP Empresa', 'ZZMP Unidade',
+            'ST1', 'ZZMP Setor', 'ZZMP Cargo', 'CG1', date('Y-m-d', strtotime('-400 days')), date('Y-m-d', strtotime('-400 days')), 'zzmp-teste',
+        ]);
+        $metadadosIdAlvo = (int)$pdo->lastInsertId();
+        $metadadosCriadoId = $metadadosIdAlvo;
+        $pdo->prepare('UPDATE colaboradores SET metadados_id = ? WHERE id = ?')->execute([$metadadosIdAlvo, (int)$targetColaborador['id']]);
+    }
+    $agoraAv = date('Y-m-d H:i:s');
+    $pdo->prepare(
+        'INSERT INTO avaliacoes_desempenho (
+            metadados_id, snap_nome, snap_codigo_empresa, snap_empresa, snap_codigo_unidade, snap_unidade,
+            snap_codigo_setor, snap_setor, snap_codigo_cargo, snap_cargo, snap_admissao,
+            gestor_usuario_id, gestor_nome_snapshot, ciclo, periodo_inicio, periodo_fim,
+            status, data_realizacao, resultado_final, criado_por_usuario_id, criado_em, atualizado_em
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \'concluido\', ?, \'atende_expectativas\', ?, ?, ?)'
+    )->execute([
+        $metadadosIdAlvo, (string)$targetColaborador['nome'], 'EMPA', 'ZZMP Empresa', 'UNI', 'ZZMP Unidade',
+        'ST1', 'ZZMP Setor', 'CG1', 'ZZMP Cargo', date('Y-m-d', strtotime('-400 days')),
+        (int)$gestor['usuario_id'], 'ZZMP Gestor Fixture', 'ZZMP-Fixture', date('Y-m-d', strtotime('-30 days')), date('Y-m-d', strtotime('-1 day')),
+        $agoraAv, (int)$admin['id'], $agoraAv, $agoraAv,
+    ]);
+    $avaliacaoFixtureId = (int)$pdo->lastInsertId();
+
+    // Releitura de formDependencies() para que `$targetColaborador['avaliacoes']` reflita o fixture recém-criado.
+    $deps = MovimentacaoPessoal::formDependencies((int)$admin['id']);
+    foreach ($deps['colaboradores'] as $colaborador) {
+        if ((int)$colaborador['id'] === (int)$targetColaborador['id']) {
+            $targetColaborador = $colaborador;
+            break;
+        }
+    }
+
     $payload = [
         'tipo_movimentacao' => 'promocao',
         'data_solicitacao' => date('d/m/Y'),
@@ -104,6 +150,13 @@ try {
 } finally {
     if ($createdId) {
         $pdo->prepare('DELETE FROM movimentacoes_pessoal WHERE id = ?')->execute([$createdId]);
+    }
+    if (!empty($avaliacaoFixtureId)) {
+        $pdo->prepare('DELETE FROM avaliacoes_desempenho WHERE id = ?')->execute([$avaliacaoFixtureId]);
+    }
+    if (!empty($metadadosCriadoId)) {
+        $pdo->prepare('UPDATE colaboradores SET metadados_id = NULL WHERE metadados_id = ?')->execute([$metadadosCriadoId]);
+        $pdo->prepare('DELETE FROM colaboradores_metadados WHERE id = ?')->execute([$metadadosCriadoId]);
     }
     if ($touchedUserLink) {
         if ($touchedUserLink['mode'] === 'update') {

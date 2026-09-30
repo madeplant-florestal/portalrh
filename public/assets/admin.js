@@ -1286,6 +1286,21 @@ if (typeof module !== 'undefined' && module.exports) {
     const impactoWrap = root.querySelector('[data-movimentacao-impacto-wrap="1"]');
 
     const moneyFormatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+    // Espelha AvaliacaoDesempenhoService::RESULTADO_OPCOES (Etapa 6) — só para rótulo do <select>.
+    const avaliacaoResultadoLabels = {
+      supera_expectativas: 'Supera expectativas',
+      atende_expectativas: 'Atende expectativas',
+      atende_parcialmente: 'Atende parcialmente',
+      nao_atende: 'Não atende',
+    };
+    const avaliacaoOptionLabel = (item) => {
+      const partes = [String(item.ciclo || '')];
+      if (item.resultado_final) partes.push(avaliacaoResultadoLabels[item.resultado_final] || item.resultado_final);
+      if (item.media_nota_atual !== null && item.media_nota_atual !== undefined) {
+        partes.push(`média ${Number(item.media_nota_atual).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}`);
+      }
+      return partes.join(' — ');
+    };
 
     const renderSelectOptions = (select, items, selectedValue, placeholder, labelBuilder) => {
       if (!select) return;
@@ -1358,7 +1373,7 @@ if (typeof module !== 'undefined' && module.exports) {
         if (tempoEmpresa) tempoEmpresa.value = '';
         if (salarioAtualHidden) salarioAtualHidden.value = '';
         if (salarioAtualLabel) salarioAtualLabel.value = '';
-        renderSelectOptions(avaliacaoSelect, [], '', 'Selecione', (item) => item.titulo);
+        renderSelectOptions(avaliacaoSelect, [], '', 'Selecione', avaliacaoOptionLabel);
         updateCalculatedValues();
         return;
       }
@@ -1378,7 +1393,7 @@ if (typeof module !== 'undefined' && module.exports) {
         Array.isArray(selected.avaliacoes) ? selected.avaliacoes : [],
         avaliacaoSelect?.value || selected.avaliacoes?.[0]?.id || '',
         'Selecione',
-        (item) => `${item.titulo}${item.nota !== null && item.nota !== undefined ? ` - nota ${Number(item.nota).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })}` : ''}`
+        avaliacaoOptionLabel
       );
       updateCalculatedValues();
     };

@@ -286,6 +286,19 @@ try {
     $router->post('/admin/feedbacks/{id}/ciencia', [AdminFeedbacksController::class, 'ciencia']);
     $router->post('/admin/feedbacks/{id}/reabrir', [AdminFeedbacksController::class, 'reabrir']);
 
+    // Avaliação de Desempenho NATIVA (Etapa 6, 2026-09) — NÃO usa/depende do legado /admin/avaliacoes.
+    // Vários ciclos por contrato são permitidos (sem UNIQUE), por isso o formulário é chaveado pelo
+    // {id} da avaliação já criada, com um fluxo /novo de busca de colaborador (mesmo padrão de feedbacks).
+    $router->get('/admin/avaliacoes-desempenho', [AdminAvaliacoesDesempenhoController::class, 'index']);
+    $router->get('/admin/avaliacoes-desempenho/novo', [AdminAvaliacoesDesempenhoController::class, 'novo']);
+    $router->post('/admin/avaliacoes-desempenho', [AdminAvaliacoesDesempenhoController::class, 'store']);
+    $router->get('/admin/avaliacoes-desempenho/{id}/editar', [AdminAvaliacoesDesempenhoController::class, 'editar']);
+    $router->post('/admin/avaliacoes-desempenho/{id}/editar', [AdminAvaliacoesDesempenhoController::class, 'atualizar']);
+    $router->post('/admin/avaliacoes-desempenho/{id}/concluir', [AdminAvaliacoesDesempenhoController::class, 'concluir']);
+    $router->post('/admin/avaliacoes-desempenho/{id}/cancelar', [AdminAvaliacoesDesempenhoController::class, 'cancelar']);
+    $router->post('/admin/avaliacoes-desempenho/{id}/ciencia', [AdminAvaliacoesDesempenhoController::class, 'ciencia']);
+    $router->post('/admin/avaliacoes-desempenho/{id}/reabrir', [AdminAvaliacoesDesempenhoController::class, 'reabrir']);
+
     $router->get('/admin/usuarios', [AdminUsuariosController::class, 'index']);
     $router->get('/admin/usuarios/novo', [AdminUsuariosController::class, 'create']);
     $router->get('/admin/usuarios/metadados/buscar', [AdminUsuariosController::class, 'buscarMetadados']);

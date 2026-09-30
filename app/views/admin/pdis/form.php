@@ -18,13 +18,12 @@ $unidade = $criar ? (string)($contrato['unidade'] ?? '') : (string)($pdi['snap_u
 $admissao = $criar ? ($contrato['admissao'] ?? null) : ($pdi['snap_admissao'] ?? null);
 ?>
 <div class="space-y-5">
-  <?= ui_breadcrumb($criar
-      ? [['label' => 'Portal RH', 'href' => $base . '/admin'], ['label' => 'PDI', 'href' => $base . '/admin/pdis'], ['label' => 'Novo PDI', 'href' => $base . '/admin/pdis/novo'], ['label' => $nome]]
-      : [['label' => 'Portal RH', 'href' => $base . '/admin'], ['label' => 'PDI', 'href' => $base . '/admin/pdis'], ['label' => $nome, 'href' => $base . '/admin/pdis/' . (int)$pdi['id']], ['label' => 'Editar plano']]) ?>
-  <?= ui_page_header([
+  <?= ui_modulo_topo($base, 'avaliacoes-desenvolvimento', 'pdi', [
       'titulo' => ($criar ? 'Novo PDI' : 'Editar plano') . ' — ' . $nome,
       'descricao' => $criar ? 'O PDI nasce como rascunho e pode ser completado depois.' : 'Alterações de prazo, gestor, origem, competências e ações ficam registradas no histórico.',
-  ]) ?>
+  ], $criar
+      ? [['label' => 'Novo PDI', 'href' => $base . '/admin/pdis/novo'], ['label' => $nome]]
+      : [['label' => $nome, 'href' => $base . '/admin/pdis/' . (int)$pdi['id']], ['label' => 'Editar plano']]) ?>
   <?php if ($erros !== []): ?>
     <div class="rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger" role="alert">
       <p class="font-semibold">Confira os pontos abaixo:</p>

@@ -5,7 +5,7 @@
  * (accordion nativo <details>, compacto por padrão — §33). Mesmo padrão visual de
  * admin/avaliacoes-experiencia/form.php (cabeçalho, $campo/$rotulo/$titulo, ciência compartilhada).
  */
-require_once APP_PATH . '/views/partials/ui-shell.php';
+require_once APP_PATH . '/views/partials/modulo-topo.php';
 
 $criar = $modo === 'criar';
 $campo = 'mt-1 w-full rounded-lg border border-border bg-white px-3 py-2.5 text-sm text-text-primary outline-none focus:border-focus focus:ring-2 focus:ring-primary-100 disabled:bg-background disabled:text-text-secondary';
@@ -17,16 +17,10 @@ $disabled = $somenteLeitura ? 'disabled' : '';
 $v = static fn(string $k): string => $criar ? '' : (string)($feedback[$k] ?? '');
 ?>
 <div class="space-y-5">
-  <?= ui_breadcrumb([
-      ['label' => 'Portal RH', 'href' => $base . '/admin'],
-      ['label' => 'Avaliações e Desenvolvimento', 'href' => $base . '/admin/avaliacoes-desenvolvimento'],
-      ['label' => 'Feedback', 'href' => $base . '/admin/feedbacks'],
-      ['label' => $criar ? 'Novo Feedback' : (string)$feedback['snap_nome']],
-  ]) ?>
-  <?= ui_page_header([
+  <?= ui_modulo_topo($base, 'avaliacoes-desenvolvimento', 'feedback', [
       'titulo' => $criar ? 'Novo Feedback' : 'Feedback — ' . (string)$feedback['snap_nome'],
       'descricao' => 'Reconhecimento, desenvolvimento, alinhamento ou acompanhamento — registro estruturado da conversa entre gestor e colaborador.',
-  ]) ?>
+  ], [['label' => $criar ? 'Novo Feedback' : (string)$feedback['snap_nome']]]) ?>
 
   <?php if (!empty($erro)): ?><div class="rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger"><?= Security::e($erro) ?></div><?php endif; ?>
   <?php if (!empty($_GET['ok'])): ?><div class="rounded-lg border border-success/30 bg-success/10 px-4 py-3 text-sm text-success"><?= Security::e(Security::sanitizeString($_GET['ok'])) ?></div><?php endif; ?>

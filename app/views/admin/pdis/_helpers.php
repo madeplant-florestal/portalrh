@@ -3,6 +3,7 @@
  * Helpers de apresentação do PDI (só formatação — nenhuma regra de negócio). Incluído pelas views de /admin/pdis.
  */
 require_once APP_PATH . '/views/partials/ui-shell.php';
+require_once APP_PATH . '/views/partials/modulo-topo.php';
 
 if (!function_exists('pdi_data_br')) {
     function pdi_data_br(?string $data): string

@@ -275,17 +275,14 @@ class FeedbackService
         if (!array_key_exists($resultado, self::RESULTADO_OPCOES)) {
             return self::falha('Selecione o Resultado Geral.');
         }
-        $validacao = $this->validarValores($dados);
-        if (!($validacao['ok'] ?? false)) {
-            return $validacao;
-        }
+        // O formulário de encerramento só envia resultado_geral/observacoes_finais (nunca valor_*/
+        // comentario_*/pontos_fortes/pontos_desenvolvimento/proximos_passos — esses pertencem ao
+        // formulário principal de rascunho, já persistidos via criar()/atualizar()). Concluir NUNCA
+        // reconstrói nem reenvia esses dados: só altera o que realmente pertence ao encerramento
+        // (mesmo princípio aplicado em AvaliacaoDesempenhoService::concluir()).
         $agoraSql = $agora->format('Y-m-d H:i:s');
-        return $this->repository->transacao(function () use ($id, $dados, $resultado, $validacao, $ator, $ip, $agoraSql): array {
-            $this->repository->salvarValores($id, $validacao['linhas']);
+        return $this->repository->transacao(function () use ($id, $dados, $resultado, $ator, $ip, $agoraSql): array {
             $this->repository->atualizar($id, [
-                'pontos_fortes' => $this->textoOuNull($dados['pontos_fortes'] ?? null),
-                'pontos_desenvolvimento' => $this->textoOuNull($dados['pontos_desenvolvimento'] ?? null),
-                'proximos_passos' => $this->textoOuNull($dados['proximos_passos'] ?? null),
                 'resultado_geral' => $resultado,
                 'observacoes_finais' => $this->textoOuNull($dados['observacoes_finais'] ?? null),
                 'status' => 'concluido', 'concluido_em' => $agoraSql, 'atualizado_em' => $agoraSql,

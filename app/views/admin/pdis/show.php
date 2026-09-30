@@ -23,12 +23,11 @@ $aberto = in_array($status, ['nao_iniciado', 'em_andamento'], true);
 $tomStatus = ['rascunho' => 'neutro', 'nao_iniciado' => 'primary', 'em_andamento' => 'info', 'concluido' => 'success', 'cancelado' => 'danger'][$status] ?? 'neutro';
 ?>
 <div class="space-y-5">
-  <?= ui_breadcrumb([['label' => 'Portal RH', 'href' => $base . '/admin'], ['label' => 'PDI', 'href' => $base . '/admin/pdis'], ['label' => (string)$pdi['snap_nome']]]) ?>
-  <?= ui_page_header([
+  <?= ui_modulo_topo($base, 'avaliacoes-desenvolvimento', 'pdi', [
       'titulo' => 'PDI — ' . (string)$pdi['snap_nome'],
       'descricao' => 'Previsão: ' . pdi_data_br($pdi['data_prevista_conclusao']) . ($status === 'concluido' ? ' · concluído em ' . pdi_data_br($pdi['data_real_conclusao']) : ''),
       'badge' => ['texto' => (string)(PdiService::STATUS[$status] ?? $status), 'tom' => $tomStatus],
-  ]) ?>
+  ], [['label' => (string)$pdi['snap_nome']]]) ?>
   <div class="flex flex-wrap items-center gap-2">
     <?= pdi_atraso_badge($d['prazo']) ?>
     <?php if (!empty($pode['gerenciar'])): ?><a href="<?= $base ?>/admin/pdis/<?= $id ?>/editar" class="<?= $botaoSec ?>">Editar plano</a><?php endif; ?>

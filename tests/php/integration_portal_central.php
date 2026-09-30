@@ -130,15 +130,15 @@ try {
     // ---- viewer sem permissão ----------------------------------------------------------------------------------------------
     $comoUsuario($viewer);
     $cV = $cards();
-    $check(array_keys($cV) === ['indicadores', 'recrutamento', 'colaboradores', 'cadastros'], '(viewer sem permissão) Só os módulos abertos a qualquer autenticado: ' . implode(', ', array_keys($cV)));
+    $check(array_keys($cV) === ['indicadores', 'recrutamento', 'colaboradores', 'avaliacoes-desenvolvimento', 'cadastros'], '(viewer sem permissão) Só os módulos abertos a qualquer autenticado: ' . implode(', ', array_keys($cV)));
     $check($cV['recrutamento'] === '/admin/candidaturas' && $cV['colaboradores'] === '/admin/movimentacoes-pessoal' && $cV['indicadores'] === '/admin/indicadores-rh' && $cV['cadastros'] === '/admin/empresas', '(viewer sem permissão) Entradas caem no primeiro destino aberto de cada área');
-    foreach (['pdi', 'usuarios', 'mensagens', 'solicitacoes-vaga', 'integracao', 'desligamento'] as $ausente) {
+    $check($cV['avaliacoes-desenvolvimento'] === '/admin/avaliacoes-desenvolvimento', '(viewer sem permissão) "Avaliações e Desenvolvimento" é \'aberto\' (Avaliação de Desempenho legada já é aberta hoje em Cadastros) — o card aparece mesmo sem pdi/avaliacao_experiencia/feedback.visualizar; a landing é quem filtra o que mostrar por permissão');
+    foreach (['usuarios', 'mensagens', 'solicitacoes-vaga', 'integracao', 'desligamento'] as $ausente) {
         $check(!isset($cV[$ausente]), "(viewer sem permissão) Sem permissão, o card \"{$ausente}\" não é renderizado");
     }
 
     // ---- permissão individual libera exatamente o card correspondente -------------------------------------------------------
     $casos = [
-        ['pdi.visualizar', 'pdi', '/admin/pdis'],
         ['mensagens.visualizar', 'mensagens', '/admin/mensagens'],
         ['solicitacao_vaga.criar', 'solicitacoes-vaga', '/admin/solicitacoes-vaga'],
         ['solicitacao_vaga.visualizar', 'solicitacoes-vaga', '/admin/solicitacoes-vaga'],
@@ -168,15 +168,15 @@ try {
     $comoUsuario($usuariosPorPerm['pipeline.visualizar']);
     $check($cards()['recrutamento'] === '/admin/candidaturas', '(entrada) Com só o pipeline liberado, a entrada continua em Candidaturas (ordem de preferência)');
     $comoUsuario($usuariosPorPerm['dashboard_entrevista_desligamento.visualizar']);
-    $check(count(array_diff(array_keys($cards()), ['indicadores', 'recrutamento', 'colaboradores', 'cadastros', 'desligamento'])) === 0, '(permissão) Uma permissão libera só o módulo dela — nenhum outro card extra');
+    $check(count(array_diff(array_keys($cards()), ['indicadores', 'recrutamento', 'colaboradores', 'avaliacoes-desenvolvimento', 'cadastros', 'desligamento'])) === 0, '(permissão) Uma permissão libera só o módulo dela — nenhum outro card extra (avaliacoes-desenvolvimento é \'aberto\', sempre presente)');
 
     // ---- RH e supervisor: sem bypass novo ----------------------------------------------------------------------------------
     $comoUsuario($rh);
     $cRh = $cards();
-    $check(isset($cRh['solicitacoes-vaga']) && $cRh['colaboradores'] === '/admin/colaboradores' && !isset($cRh['pdi']) && !isset($cRh['mensagens']) && !isset($cRh['usuarios']) && !isset($cRh['desligamento']), '(RH) Mesmo comportamento da sidebar: staff vê Solicitações/Colaboradores; PDI, Mensagens, Desligamento dependem de permissão individual (sem bypass por role); Usuários não');
+    $check(isset($cRh['solicitacoes-vaga']) && $cRh['colaboradores'] === '/admin/colaboradores' && isset($cRh['avaliacoes-desenvolvimento']) && !isset($cRh['mensagens']) && !isset($cRh['usuarios']) && !isset($cRh['desligamento']), '(RH) Mesmo comportamento da sidebar: staff vê Solicitações/Colaboradores; Mensagens, Desligamento dependem de permissão individual (sem bypass por role); Usuários não. Avaliações e Desenvolvimento é \'aberto\', aparece para qualquer autenticado');
     $comoUsuario($supervisor);
     $cSup = $cards();
-    $check(isset($cSup['usuarios']) && isset($cSup['solicitacoes-vaga']) && !isset($cSup['pdi']) && !isset($cSup['mensagens']), '(supervisor) Vê Usuários e Solicitações como na sidebar, mas NÃO ganha módulos de permissão individual');
+    $check(isset($cSup['usuarios']) && isset($cSup['solicitacoes-vaga']) && isset($cSup['avaliacoes-desenvolvimento']) && !isset($cSup['mensagens']), '(supervisor) Vê Usuários e Solicitações como na sidebar, mas NÃO ganha módulos de permissão individual; Avaliações e Desenvolvimento é \'aberto\'');
 
     // ---- o card não concede acesso -----------------------------------------------------------------------------------------
     $comoUsuario($viewer);
@@ -210,6 +210,7 @@ try {
         '/admin/colaboradores' => [AdminColaboradoresController::class, 'index'],
         '/admin/movimentacoes-pessoal' => [AdminMovimentacoesPessoalController::class, 'index'],
         '/admin/pdis' => [AdminPdisController::class, 'index'],
+        '/admin/avaliacoes-desenvolvimento' => [AdminAvaliacoesDesenvolvimentoController::class, 'index'],
         '/admin/pesquisas-reacao-integracao' => [AdminPesquisaReacaoIntegracaoController::class, 'index'],
         '/admin/pesquisa-integracao-qr' => [AdminPesquisaIntegracaoQrController::class, 'index'],
         '/admin/dashboard-turnover' => [AdminDashboardTurnoverController::class, 'index'],
@@ -241,11 +242,20 @@ try {
         if (preg_match("#Authorization::requirePermissao\('([^']+)'\)#", $corpo, $m)) {
             $codigo = $m[1];
         }
+        if ($roles === null && $codigo === null && str_contains($corpo, 'Auth::check()')) {
+            // Mesmo padrão de PDI/Avaliação de Experiência/Feedback (ver AdminPdisController::exigirLogin): só
+            // sessão autenticada, sem Auth::requireRole nem Authorization::requirePermissao — corresponde à
+            // regra 'aberto' (qualquer usuário autenticado), nunca "gate não reconhecido = bloqueado".
+            return ['roles' => null, 'codigo' => null, 'combinacao' => 'aberto'];
+        }
         return ['roles' => $roles, 'codigo' => $codigo, 'combinacao' => 'e']; // Auth::requireRole + Authorization::requirePermissao são gates SEQUENCIAIS (E), não OR
     };
     $backendPermite = static function (array $gate, string $role, bool $supervisor, callable $temPermissao): bool {
         if ($supervisor) {
             return true; // Auth::requireRole/requireRoleOuPermissao sempre libera quem tem is_supervisor=1 (regra #8 do CLAUDE.md)
+        }
+        if ($gate['combinacao'] === 'aberto') {
+            return true; // Auth::check() apenas — qualquer usuário autenticado, todo perfil deste teste já está logado
         }
         $naLista = $gate['roles'] !== null && in_array(strtolower($role), $gate['roles'], true);
         if ($gate['combinacao'] === 'ou') {
@@ -300,7 +310,7 @@ try {
     $html = $renderizar(static fn() => (new AdminCentralController())->index());
     $check(!preg_match('/Warning:|Notice:|Deprecated:|Fatal error/i', $html) && str_contains($html, 'data-app-shell-v2="1"') && str_contains($html, 'Central do Portal RH') && str_contains($html, 'Escolha um módulo para continuar') && str_contains($html, '<title>Central do Portal RH — Portal RH</title>'), '(página) Renderiza no AppShell V2 com o título e a descrição da Central');
     $check(!str_contains($html, 'data-admin-sidebar') && !str_contains($html, 'class="sidebar') && !str_contains($html, 'app-header"') && !str_contains($html, '<nav aria-label="Trilha'), '(página) Sem sidebar/header antigos e sem breadcrumb redundante na raiz');
-    $check(substr_count($html, '<li class="min-w-0"><a href=') === 4 && str_contains($html, 'href="' . $baseUrl . '/admin/candidaturas"') && !str_contains($html, '/admin/pdis') && !str_contains($html, '/admin/usuarios'), '(página) O viewer sem permissão recebe 4 cards e nenhum link para módulos sem acesso');
+    $check(substr_count($html, '<li class="min-w-0"><a href=') === 5 && str_contains($html, 'href="' . $baseUrl . '/admin/candidaturas"') && str_contains($html, 'href="' . $baseUrl . '/admin/avaliacoes-desenvolvimento"') && !str_contains($html, '/admin/pdis') && !str_contains($html, '/admin/usuarios'), '(página) O viewer sem permissão recebe 5 cards (agora com "Avaliações e Desenvolvimento", \'aberto\') e nenhum link para módulos sem acesso');
     $check(str_contains($html, 'grid-cols-[repeat(auto-fill,minmax(230px,1fr))]') && str_contains($html, 'gap-[18px]') && !str_contains($html, '<script>'), '(página) ModuleGrid elástico (auto-fill/230px/18px), sem JavaScript próprio');
     $comoUsuario($admin);
     $htmlAdmin = $renderizar(static fn() => (new AdminCentralController())->index());

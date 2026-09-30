@@ -1,25 +1,72 @@
 <?php
 /**
- * Resumo da área "Avaliações e Desenvolvimento" (§55 da Etapa 4, 2026-09). Cards executivos ligando
- * para as listas reais — nenhum número novo é calculado aqui (tudo vem pronto do controller). Ainda
- * não integrado ao People Analytics (§65) nem à Central do Portal (§64).
+ * Hub de "Avaliações e Desenvolvimento" (Etapa 5, 2026-09) — duas funções: NAVEGAÇÃO (cards de acesso)
+ * e RESUMO GERENCIAL (contagens reais). Hierarquia conceitual aprovada: os processos de avaliação
+ * (Experiência/Desempenho/Feedback) geram resultados/pontos fortes/GAPs que alimentam o PDI — o PDI
+ * é a camada de DESENVOLVIMENTO resultante, não mais um card isolado no mesmo nível.
+ *
+ * `Avaliação de Desempenho` aponta para a implementação LEGADA (/admin/avaliacoes, model
+ * AvaliacaoDesempenho sobre o Colaborador antigo) até ser realinhada ao padrão novo — ver nota em
+ * PortalNavegacaoService::definicaoAbas()['avaliacoes-desenvolvimento']. Nenhum dado foi migrado.
  */
-require_once APP_PATH . '/views/partials/ui-shell.php';
+require_once APP_PATH . '/views/partials/modulo-topo.php';
 $card = 'rounded-ds-lg border border-border bg-white p-4';
+$cardsProcesso = [];
+if ($temExperiencia) {
+    $cardsProcesso[] = ['titulo' => 'Avaliação do Período de Experiência', 'icone' => 'avaliacoes-desenvolvimento', 'href' => $base . '/admin/avaliacoes-experiencia',
+        'descricao' => 'Acompanhe e realize as avaliações de 45 e 90 dias dos colaboradores em período de experiência.'];
+}
+if ($temDesempenho) {
+    $cardsProcesso[] = ['titulo' => 'Avaliação de Desempenho', 'icone' => 'indicadores', 'href' => $base . '/admin/avaliacoes',
+        'descricao' => 'Registros de avaliação de desempenho (implementação atual — em processo de realinhamento ao novo padrão).'];
+}
+if ($temFeedback) {
+    $cardsProcesso[] = ['titulo' => 'Feedback', 'icone' => 'mensagens', 'href' => $base . '/admin/feedbacks',
+        'descricao' => 'Registre reconhecimentos, alinhamentos, acompanhamentos e oportunidades de desenvolvimento.'];
+}
+$cardsDesenvolvimento = [];
+if ($temPdi) {
+    $cardsDesenvolvimento[] = ['titulo' => 'PDI', 'icone' => 'pdi', 'href' => $base . '/admin/pdis',
+        'descricao' => 'Plano de Desenvolvimento Individual — crie e acompanhe planos, ações e evolução dos colaboradores.'];
+}
 ?>
-<div class="space-y-5">
-  <?= ui_breadcrumb([['label' => 'Portal RH', 'href' => $base . '/admin'], ['label' => 'Avaliações e Desenvolvimento']]) ?>
-  <?= ui_page_header([
+<div class="space-y-6">
+  <?= ui_modulo_topo($base, 'avaliacoes-desenvolvimento', 'resumo', [
       'titulo' => 'Avaliações e Desenvolvimento',
-      'descricao' => 'Avaliação do Período de Experiência (45/90 dias), Feedback e, futuramente, PDI e Avaliação de Desempenho — um só domínio.',
+      'descricao' => 'Acompanhe avaliações, feedbacks, planos de desenvolvimento e a evolução dos colaboradores.',
   ]) ?>
 
   <?php if (!empty($erro)): ?><div class="rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger"><?= Security::e($erro) ?></div><?php endif; ?>
 
+  <?php if ($cardsProcesso !== []): ?>
+    <section class="space-y-3">
+      <h2 class="text-sm font-bold uppercase tracking-wide text-text-secondary">Processos de Avaliação e Acompanhamento</h2>
+      <p class="text-xs text-text-secondary">Avaliar → identificar pontos fortes, GAPs e necessidades de desenvolvimento → alimentar o PDI.</p>
+      <?= ui_module_grid($cardsProcesso, 'Processos de avaliação') ?>
+    </section>
+  <?php endif; ?>
+
+  <?php if ($cardsDesenvolvimento !== []): ?>
+    <div class="flex items-center gap-3 pt-1">
+      <span class="h-px flex-1 bg-border"></span>
+      <span class="text-[11px] font-semibold uppercase tracking-wider text-text-muted">resulta em</span>
+      <span class="h-px flex-1 bg-border"></span>
+    </div>
+    <section class="space-y-3">
+      <h2 class="text-sm font-bold uppercase tracking-wide text-text-secondary">Desenvolvimento</h2>
+      <p class="text-xs text-text-secondary">Planos de ação construídos a partir dos resultados das avaliações e feedbacks.</p>
+      <?= ui_module_grid($cardsDesenvolvimento, 'Desenvolvimento') ?>
+    </section>
+  <?php endif; ?>
+
+  <?php if ($cardsProcesso === [] && $cardsDesenvolvimento === []): ?>
+    <div class="rounded-lg border border-border bg-background px-4 py-6 text-center text-sm text-text-secondary">Você ainda não tem acesso a nenhuma área de Avaliações e Desenvolvimento.</div>
+  <?php endif; ?>
+
   <?php if ($temExperiencia): ?>
     <section class="<?= $card ?>">
       <div class="flex flex-wrap items-center justify-between gap-2">
-        <h3 class="text-sm font-bold uppercase tracking-wide text-text-secondary">Avaliação do Período de Experiência</h3>
+        <h3 class="text-sm font-bold uppercase tracking-wide text-text-secondary">Resumo — Avaliação do Período de Experiência</h3>
         <a href="<?= $base ?>/admin/avaliacoes-experiencia" class="text-xs font-semibold text-primary-700 hover:underline">Ver lista completa →</a>
       </div>
       <div class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
@@ -36,7 +83,7 @@ $card = 'rounded-ds-lg border border-border bg-white p-4';
   <?php if ($temFeedback): ?>
     <section class="<?= $card ?>">
       <div class="flex flex-wrap items-center justify-between gap-2">
-        <h3 class="text-sm font-bold uppercase tracking-wide text-text-secondary">Feedback</h3>
+        <h3 class="text-sm font-bold uppercase tracking-wide text-text-secondary">Resumo — Feedback</h3>
         <a href="<?= $base ?>/admin/feedbacks" class="text-xs font-semibold text-primary-700 hover:underline">Ver lista completa →</a>
       </div>
       <div class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -54,9 +101,5 @@ $card = 'rounded-ds-lg border border-border bg-white p-4';
         </div>
       </div>
     </section>
-  <?php endif; ?>
-
-  <?php if (!$temExperiencia && !$temFeedback): ?>
-    <div class="rounded-lg border border-border bg-background px-4 py-6 text-center text-sm text-text-secondary">Você ainda não tem acesso a nenhuma área de Avaliações e Desenvolvimento.</div>
   <?php endif; ?>
 </div>

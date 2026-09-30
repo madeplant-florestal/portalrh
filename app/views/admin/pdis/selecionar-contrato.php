@@ -7,11 +7,10 @@ $campo = 'mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm
 ?>
 <?php require_once __DIR__ . '/_helpers.php'; ?>
 <div class="space-y-5">
-  <?= ui_breadcrumb([['label' => 'Portal RH', 'href' => $base . '/admin'], ['label' => 'PDI', 'href' => $base . '/admin/pdis'], ['label' => 'Novo PDI']]) ?>
-  <?= ui_page_header([
+  <?= ui_modulo_topo($base, 'avaliacoes-desenvolvimento', 'pdi', [
       'titulo' => 'Novo PDI — escolha o colaborador',
       'descricao' => 'Busque pelo nome, empresa ou unidade. O PDI fica vinculado ao contrato oficial do METADADOS.',
-  ]) ?>
+  ], [['label' => 'Novo PDI']]) ?>
   <?php if (!empty($flashErro)): ?><div class="rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger"><?= Security::e($flashErro) ?></div><?php endif; ?>
 
   <form method="get" action="<?= $base ?>/admin/pdis/novo" class="flex flex-wrap items-end gap-3 rounded-ds-lg border border-border bg-white p-4">

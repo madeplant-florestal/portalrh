@@ -24,6 +24,10 @@ class AdminAvaliacoesDesenvolvimentoController
         $hoje = new DateTimeImmutable('today');
         $temExperiencia = Authorization::temPermissao('avaliacao_experiencia.visualizar');
         $temFeedback = Authorization::temPermissao('feedback.visualizar');
+        $temPdi = Authorization::temPermissao('pdi.visualizar');
+        // Avaliação de Desempenho (legada, /admin/avaliacoes) é 'aberto' — mesma regra já usada em
+        // Cadastros hoje; nenhuma permissão nova foi criada para ela nesta rodada.
+        $temDesempenho = true;
 
         $contagemExperiencia = array_fill_keys(array_keys(AvaliacaoExperienciaService::ROTULOS_STATUS), 0);
         $feedbacksPorStatus = ['rascunho' => 0, 'concluido' => 0];
@@ -48,6 +52,7 @@ class AdminAvaliacoesDesenvolvimentoController
 
         $this->view->render('admin/avaliacoes-desenvolvimento/index', [
             'erro' => $erro, 'temExperiencia' => $temExperiencia, 'temFeedback' => $temFeedback,
+            'temPdi' => $temPdi, 'temDesempenho' => $temDesempenho,
             'contagemExperiencia' => $contagemExperiencia, 'feedbacksPorStatus' => $feedbacksPorStatus,
             'feedbacksDesenvolvimento' => $feedbacksDesenvolvimento,
         ], 'layouts/app-shell');

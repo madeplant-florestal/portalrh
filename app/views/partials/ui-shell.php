@@ -252,6 +252,7 @@ if (!function_exists('ui_module_icon')) {
             'vagas' => '<path d="M8 6h10"/><path d="M8 12h10"/><path d="M8 18h10"/><path d="M4 6h.01"/><path d="M4 12h.01"/><path d="M4 18h.01"/>',
             'colaboradores' => '<circle cx="9" cy="8" r="3"/><path d="M3 20v-1a5 5 0 015-5h2a5 5 0 015 5v1"/><path d="M16 5.2a3 3 0 010 5.6"/><path d="M18 14.3a5 5 0 013 4.7v1"/>',
             'pdi' => '<path d="M5 21V4"/><path d="M5 4h11l-2 4 2 4H5"/>',
+            'avaliacoes-desenvolvimento' => '<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>',
             'integracao' => '<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>',
             'desligamento' => '<path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/>',
             'mensagens' => '<path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>',

@@ -85,10 +85,13 @@ class PortalNavegacaoService
                     ['href' => '/admin/colaboradores', 'regra' => 'staff'], // backend admin/rh por regra documentada (salário) — a sidebar antiga é mais permissiva
                     ['href' => '/admin/movimentacoes-pessoal', 'regra' => 'aberto'],
                 ]],
-            ['chave' => 'pdi', 'titulo' => 'PDI', 'icone' => 'pdi',
-                'descricao' => 'Planos de Desenvolvimento Individual e seu acompanhamento.',
+            ['chave' => 'avaliacoes-desenvolvimento', 'titulo' => 'Avaliações e Desenvolvimento', 'icone' => 'avaliacoes-desenvolvimento',
+                'descricao' => 'Avaliações, feedbacks, período de experiência, PDI e desenvolvimento dos colaboradores.',
                 'itens' => [
-                    ['href' => '/admin/pdis', 'regra' => 'perm:pdi.visualizar'],
+                    // Entrada única: a landing decide o que mostrar por permissão (nunca pula direto para um submódulo — Etapa 5).
+                    // 'aberto' porque Avaliação de Desempenho (legada, /admin/avaliacoes) já é 'aberto' hoje em Cadastros — o hub
+                    // não pode esconder algo que o usuário já enxerga por outro caminho.
+                    ['href' => '/admin/avaliacoes-desenvolvimento', 'regra' => 'aberto'],
                 ]],
             ['chave' => 'integracao', 'titulo' => 'Integração', 'icone' => 'integracao',
                 'descricao' => 'Pesquisas de reação e de integração de novos colaboradores.',
@@ -163,6 +166,19 @@ class PortalNavegacaoService
                 ['chave' => 'turnover', 'label' => 'Turnover', 'href' => '/admin/dashboard-turnover', 'regra' => 'perm:dashboard_turnover.visualizar'],
                 ['chave' => 'dashboard-entrevista', 'label' => 'Dashboard da Entrevista', 'href' => '/admin/dashboard-entrevista-desligamento', 'regra' => 'perm:dashboard_entrevista_desligamento.visualizar'],
                 ['chave' => 'entrevistas', 'label' => 'Entrevistas de Desligamento', 'href' => '/admin/entrevistas-desligamento', 'regra' => 'perm:entrevista_desligamento.visualizar'],
+            ]],
+            // Bloco H — Avaliações e Desenvolvimento (Etapa 5): PDI deixa de ser card isolado da Central e passa a ser
+            // submódulo aqui. Ordem das abas segue a hierarquia conceitual aprovada — Avaliar/Feedback primeiro (geram
+            // resultados/GAPs), PDI por último (camada de desenvolvimento resultante). Avaliação de Desempenho aponta
+            // temporariamente para a implementação LEGADA (/admin/avaliacoes, model AvaliacaoDesempenho sobre o
+            // Colaborador antigo — nunca colaboradores_metadados) até ser realinhada ao padrão novo (gestor/ciência/
+            // snapshot); nenhuma migração de dados foi feita nesta rodada.
+            'avaliacoes-desenvolvimento' => ['titulo' => 'Avaliações e Desenvolvimento', 'abas' => [
+                ['chave' => 'resumo', 'label' => 'Resumo', 'href' => '/admin/avaliacoes-desenvolvimento', 'regra' => 'aberto'],
+                ['chave' => 'avaliacao-experiencia', 'label' => 'Avaliação de Experiência', 'href' => '/admin/avaliacoes-experiencia', 'regra' => 'perm:avaliacao_experiencia.visualizar'],
+                ['chave' => 'avaliacao-desempenho', 'label' => 'Avaliação de Desempenho', 'href' => '/admin/avaliacoes', 'regra' => 'aberto'],
+                ['chave' => 'feedback', 'label' => 'Feedback', 'href' => '/admin/feedbacks', 'regra' => 'perm:feedback.visualizar'],
+                ['chave' => 'pdi', 'label' => 'PDI', 'href' => '/admin/pdis', 'regra' => 'perm:pdi.visualizar'],
             ]],
             'recrutamento' => ['titulo' => 'Recrutamento e Seleção', 'abas' => [
                 ['chave' => 'dashboard', 'label' => 'Dashboard', 'href' => '/admin/dashboard-recrutamento', 'regra' => 'perm:dashboard_recrutamento.visualizar'],

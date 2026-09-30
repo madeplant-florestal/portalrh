@@ -186,6 +186,39 @@ try {
     $check(($detalheConcluido['feedback']['resultado_geral'] ?? null) === 'reconhecido_alinhado', '(29) Resultado geral persistido');
     $check(!empty($detalheConcluido['feedback']['concluido_em']), '(30) Data de conclusão registrada');
 
+    // ---- 8b) REGRESSÃO — concluir() com o payload REAL do <form> de encerramento (admin/feedbacks/form.php)
+    //          NÃO PODE apagar valores culturais nem pontos_fortes/pontos_desenvolvimento/proximos_passos.
+    //          Bug encontrado em 2026-09-30 (auditado junto com a Avaliação de Desempenho): concluir()
+    //          reconstruía esses campos a partir de $_POST via validarValores($dados)/salvarValores(), mas
+    //          o formulário de encerramento só envia csrf/resultado_geral/observacoes_finais — confirmado
+    //          lendo o HTML do form (nenhum campo valor_*/comentario_*/pontos_*/proximos_passos existe
+    //          nesse <form>). Corrigido: concluir() agora só altera resultado_geral/observacoes_finais/
+    //          status/concluido_em — nunca reconstrói o que já está persistido. Este teste falha com a
+    //          implementação antiga (tudo viraria NULL) e passa com a corrigida.
+    $rCriarRegressao = $svc->criar(array_merge([
+        'metadados_id' => (string)$contrato, 'gestor_usuario_id' => (string)$gestorAId, 'tipo' => 'acompanhamento',
+        'data_feedback' => '2026-06-10', 'pontos_fortes' => 'ZZFB regressão pontos fortes.',
+        'pontos_desenvolvimento' => 'ZZFB regressão pontos de desenvolvimento.', 'proximos_passos' => 'ZZFB regressão próximos passos.',
+    ], $dadosValoresBase(['respeito' => ['avaliacao' => 'atende', 'comentario' => 'ZZFB comentário respeito regressão.']])), $atorGestorA, $agora, null);
+    $check($rCriarRegressao['ok'] ?? false, '(30b) [REGRESSÃO] fixture criada com valores culturais e textos preenchidos');
+    $idRegressao = (int)$rCriarRegressao['id'];
+
+    // Payload EXATO do <form action=".../concluir"> em admin/feedbacks/form.php — só isto, nada mais.
+    $payloadEncerramentoReal = ['resultado_geral' => 'em_desenvolvimento', 'observacoes_finais' => 'ZZFB regressão observações finais.'];
+    $rConcluirRegressao = $svc->concluir($idRegressao, $payloadEncerramentoReal, $atorGestorA, $agora, null);
+    $check($rConcluirRegressao['ok'] ?? false, '(30c) [REGRESSÃO] concluir() com o payload REAL do formulário (só resultado_geral/observacoes_finais) tem sucesso');
+
+    $detalheRegressao = $svc->detalhe($idRegressao, $atorGestorA);
+    $check(($detalheRegressao['feedback']['pontos_fortes'] ?? null) === 'ZZFB regressão pontos fortes.', '(30d) [REGRESSÃO] pontos_fortes PERMANECE intacto — não é apagado por concluir()');
+    $check(($detalheRegressao['feedback']['pontos_desenvolvimento'] ?? null) === 'ZZFB regressão pontos de desenvolvimento.', '(30e) [REGRESSÃO] pontos_desenvolvimento PERMANECE intacto');
+    $check(($detalheRegressao['feedback']['proximos_passos'] ?? null) === 'ZZFB regressão próximos passos.', '(30f) [REGRESSÃO] proximos_passos PERMANECE intacto');
+    $check(($detalheRegressao['valores']['respeito']['avaliacao'] ?? null) === 'atende' && ($detalheRegressao['valores']['respeito']['comentario'] ?? null) === 'ZZFB comentário respeito regressão.', '(30g) [REGRESSÃO] valor cultural "respeito" (avaliação + comentário) PERMANECE intacto');
+    $qtdValoresPreenchidos = count(array_filter($detalheRegressao['valores'], static fn(array $v): bool => $v['avaliacao'] !== null));
+    $check($qtdValoresPreenchidos === 6, '(30h) [REGRESSÃO] os 6 valores culturais continuam com avaliação preenchida — nenhum foi zerado por concluir()');
+    $check(($detalheRegressao['feedback']['resultado_geral'] ?? null) === 'em_desenvolvimento', '(30i) resultado_geral persistido corretamente a partir do payload real');
+    $check(($detalheRegressao['feedback']['observacoes_finais'] ?? null) === 'ZZFB regressão observações finais.', '(30j) observacoes_finais persistido corretamente');
+    $check(($detalheRegressao['feedback']['status'] ?? null) === 'concluido' && !empty($detalheRegressao['feedback']['concluido_em']), '(30k) status/concluido_em corretos');
+
     // ---- 9) Imutabilidade após conclusão (§59) ------------------------------------------------------------
     $rEditarConcluido = $svc->atualizar($idFeedback, $dadosValoresBase(), $atorGestorA, $agora, null);
     $check(($rEditarConcluido['ok'] ?? true) === false, '(31) Feedback concluído não pode ser editado silenciosamente (precisa reabrir antes)');

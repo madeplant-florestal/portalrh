@@ -515,13 +515,25 @@ try {
     $publicos = array_map(static fn(ReflectionMethod $m): string => $m->getName(), array_filter((new ReflectionClass(AdminPdisController::class))->getMethods(ReflectionMethod::IS_PUBLIC), static fn(ReflectionMethod $m): bool => $m->class === AdminPdisController::class));
     $check(!preg_grep('/meu|colaborador(?!.*espaco)|portal|autoatend/i', array_diff($publicos, ['espacoColaborador'])) && !preg_grep('/colaborador/i', array_map(static fn(string $r): string => $r, array_filter(file(BASE_PATH . '/index.php'), static fn(string $l): bool => str_contains($l, '/pdi') && !str_contains($l, '/admin/pdis')))), '(colaborador) Não existe rota, método ou portal do colaborador — o espaço dele é registrado por RH/Gestor');
     $fonteIndex = (string)file_get_contents(BASE_PATH . '/index.php');
-    $regraNavPdi = null;
+    // Etapa 5 (2026-09): PDI deixou de ser card isolado da Central — é submódulo (aba) de
+    // "Avaliações e Desenvolvimento". A regra de PERMISSÃO do PDI continua exatamente a mesma
+    // (perm:pdi.visualizar), só a localização na navegação mudou.
+    $regraNavPdiCard = null;
     foreach (PortalNavegacaoService::definicao() as $m) {
         foreach ($m['itens'] as $it) {
-            if ($it['href'] === '/admin/pdis') { $regraNavPdi = $it['regra']; }
+            if ($m['chave'] === 'avaliacoes-desenvolvimento') { $regraNavPdiCard = $it['regra']; }
         }
     }
-    $check($regraNavPdi === 'perm:pdi.visualizar' && str_contains($fonteIndex, "\$router->get('/admin/pdis/novo', [AdminPdisController::class, 'novo'])") && strpos($fonteIndex, "'/admin/pdis/novo'") < strpos($fonteIndex, "'/admin/pdis/{id}'"), '(rota/menu) A Central só oferece PDI sob a regra perm:pdi.visualizar (sidebar removida); /novo registrada antes de /{id}');
+    $regraAbaPdi = null;
+    foreach ((PortalNavegacaoService::definicaoAbas()['avaliacoes-desenvolvimento']['abas'] ?? []) as $aba) {
+        if ($aba['href'] === '/admin/pdis') { $regraAbaPdi = $aba['regra']; }
+    }
+    $check(
+        $regraNavPdiCard === 'aberto' && $regraAbaPdi === 'perm:pdi.visualizar'
+            && str_contains($fonteIndex, "\$router->get('/admin/pdis/novo', [AdminPdisController::class, 'novo'])")
+            && strpos($fonteIndex, "'/admin/pdis/novo'") < strpos($fonteIndex, "'/admin/pdis/{id}'"),
+        '(rota/menu) PDI é submódulo de "Avaliações e Desenvolvimento" (card \'aberto\', aba do PDI sob perm:pdi.visualizar — mesma permissão de sempre, só mudou de lugar); /novo registrada antes de /{id}'
+    );
 
     $comoUsuario($gestorAId, 'viewer');
     $_GET = [];

@@ -4,7 +4,7 @@
  * consulta (AvaliacaoExperienciaService::listarPendencias()) — não existe "tabela de pendências", só
  * as avaliações realmente salvas cruzadas com a janela 45/90 de cada contrato ativo.
  */
-require_once APP_PATH . '/views/partials/ui-shell.php';
+require_once APP_PATH . '/views/partials/modulo-topo.php';
 $rotulo = 'block text-xs font-semibold uppercase tracking-wide text-text-secondary';
 $campo = 'mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-text-primary';
 $f = $filtros ?? [];
@@ -27,8 +27,7 @@ foreach (['pendente', 'vencida', 'futura', 'em_preenchimento', 'aguardando_cienc
 }
 ?>
 <div class="space-y-5">
-  <?= ui_breadcrumb([['label' => 'Portal RH', 'href' => $base . '/admin'], ['label' => 'Avaliações e Desenvolvimento', 'href' => $base . '/admin/avaliacoes-desenvolvimento'], ['label' => 'Avaliação de Experiência']]) ?>
-  <?= ui_page_header([
+  <?= ui_modulo_topo($base, 'avaliacoes-desenvolvimento', 'avaliacao-experiencia', [
       'titulo' => 'Avaliação do Período de Experiência',
       'descricao' => 'Acompanhamento de adaptação, desempenho e alinhamento aos 45 e 90 dias. ' . (AvaliacaoExperienciaService::escopoTotal($ator) ? 'Você vê todos os colaboradores.' : 'Você vê os colaboradores em que é o gestor responsável.'),
   ]) ?>

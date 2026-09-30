@@ -11,8 +11,7 @@ $rotulo = 'block text-xs font-semibold uppercase tracking-wide text-text-seconda
 $unidadeSelecionada = !empty($f['unidade']) ? $f['unidade']['codigo_empresa'] . '|' . $f['unidade']['codigo_unidade'] : '';
 ?>
 <div class="space-y-5">
-  <?= ui_breadcrumb([['label' => 'Portal RH', 'href' => $base . '/admin'], ['label' => 'PDI']]) ?>
-  <?= ui_page_header([
+  <?= ui_modulo_topo($base, 'avaliacoes-desenvolvimento', 'pdi', [
       'titulo' => 'PDI — Plano de Desenvolvimento Individual',
       'descricao' => 'Processo de desenvolvimento acompanhado por RH e gestor. ' . ($escopoTotal ? 'Você vê todos os PDIs.' : 'Você vê os PDIs em que é o gestor responsável.'),
       'acao' => !empty($podeCriar) ? ['label' => 'Novo PDI', 'href' => $base . '/admin/pdis/novo'] : null,

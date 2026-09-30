@@ -3,7 +3,7 @@
  * Lista de Feedbacks (Etapa 4, 2026-09) — no escopo do usuário: Admin/RH veem todos; os demais só os
  * feedbacks em que são o gestor responsável (mesmo padrão de admin/pdis/index.php).
  */
-require_once APP_PATH . '/views/partials/ui-shell.php';
+require_once APP_PATH . '/views/partials/modulo-topo.php';
 $rotulo = 'block text-xs font-semibold uppercase tracking-wide text-text-secondary';
 $campo = 'mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-text-primary';
 $f = $filtros ?? [];
@@ -11,8 +11,7 @@ $tomStatus = ['rascunho' => 'info', 'concluido' => 'success', 'cancelado' => 'ne
 $rotuloStatus = ['rascunho' => 'Em preenchimento', 'concluido' => 'Concluído', 'cancelado' => 'Cancelado'];
 ?>
 <div class="space-y-5">
-  <?= ui_breadcrumb([['label' => 'Portal RH', 'href' => $base . '/admin'], ['label' => 'Avaliações e Desenvolvimento', 'href' => $base . '/admin/avaliacoes-desenvolvimento'], ['label' => 'Feedback']]) ?>
-  <?= ui_page_header([
+  <?= ui_modulo_topo($base, 'avaliacoes-desenvolvimento', 'feedback', [
       'titulo' => 'Feedback e Desenvolvimento',
       'descricao' => 'Reconhecimento, desenvolvimento, alinhamento e acompanhamento entre gestor e colaborador.',
       'acao' => !empty($podeCriar) ? ['label' => 'Novo Feedback', 'href' => $base . '/admin/feedbacks/novo'] : null,

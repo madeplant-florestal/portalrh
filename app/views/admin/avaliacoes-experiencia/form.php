@@ -4,7 +4,7 @@
  * visual de admin/pdis/form.php (cabeçalho de identificação, cards de seção, $campo/$rotulo/$titulo) —
  * mas a ESCALA (1–5) e a estrutura são específicas deste domínio (§4/§56: não uniformizar as escalas).
  */
-require_once APP_PATH . '/views/partials/ui-shell.php';
+require_once APP_PATH . '/views/partials/modulo-topo.php';
 
 $contrato = $ctx['contrato'];
 $avaliacao = $ctx['avaliacao'];
@@ -22,16 +22,10 @@ $v = static fn(string $chave, string $default = ''): string => (string)($avaliac
 $disabled = $somenteLeitura ? 'disabled' : '';
 ?>
 <div class="space-y-5">
-  <?= ui_breadcrumb([
-      ['label' => 'Portal RH', 'href' => $base . '/admin'],
-      ['label' => 'Avaliações e Desenvolvimento', 'href' => $base . '/admin/avaliacoes-desenvolvimento'],
-      ['label' => 'Avaliação de Experiência', 'href' => $base . '/admin/avaliacoes-experiencia'],
-      ['label' => (string)$contrato['nome']],
-  ]) ?>
-  <?= ui_page_header([
+  <?= ui_modulo_topo($base, 'avaliacoes-desenvolvimento', 'avaliacao-experiencia', [
       'titulo' => 'Avaliação de Experiência — ' . AvaliacaoExperienciaService::TIPOS[$tipo] . ' — ' . (string)$contrato['nome'],
       'descricao' => 'Acompanhamento de adaptação, desempenho, alinhamento, comportamentos, competências e aderência aos valores da empresa.',
-  ]) ?>
+  ], [['label' => (string)$contrato['nome']]]) ?>
 
   <?php if (!empty($erro)): ?><div class="rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger"><?= Security::e($erro) ?></div><?php endif; ?>
   <?php if (!empty($_GET['ok'])): ?><div class="rounded-lg border border-success/30 bg-success/10 px-4 py-3 text-sm text-success"><?= Security::e(Security::sanitizeString($_GET['ok'])) ?></div><?php endif; ?>

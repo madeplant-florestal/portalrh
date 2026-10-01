@@ -74,13 +74,17 @@ class PeopleAnalyticsService
     private ColaboradorMetadadosConsultaRepository $consultaRepository;
     private RecrutamentoIndicadoresService $recrutamentoIndicadoresService;
     private DashboardEntrevistaDesligamentoService $entrevistaDesligamentoService;
+    private PeopleAnalyticsAvaliacoesRepository $avaliacoesRepository;
+    private DashboardIntegracaoService $integracaoService;
 
     public function __construct(
         ?PeopleAnalyticsRepository $repository = null,
         ?RecrutamentoIndicadoresRepository $recrutamentoRepository = null,
         ?ColaboradorMetadadosConsultaRepository $consultaRepository = null,
         ?RecrutamentoIndicadoresService $recrutamentoIndicadoresService = null,
-        ?DashboardEntrevistaDesligamentoService $entrevistaDesligamentoService = null
+        ?DashboardEntrevistaDesligamentoService $entrevistaDesligamentoService = null,
+        ?PeopleAnalyticsAvaliacoesRepository $avaliacoesRepository = null,
+        ?DashboardIntegracaoService $integracaoService = null
     ) {
         $this->repository = $repository ?? new PeopleAnalyticsRepository();
         $this->recrutamentoRepository = $recrutamentoRepository ?? new RecrutamentoIndicadoresRepository();
@@ -90,6 +94,11 @@ class PeopleAnalyticsService
         $this->recrutamentoIndicadoresService = $recrutamentoIndicadoresService
             ?? new RecrutamentoIndicadoresService($this->recrutamentoRepository);
         $this->entrevistaDesligamentoService = $entrevistaDesligamentoService ?? new DashboardEntrevistaDesligamentoService();
+        // Etapa 9 (2026-09): "Avaliações e Desenvolvimento" usa um repositório agregado dedicado
+        // (leitura só, snapshot-based); "Integração/Onboarding" reaproveita INTEGRALMENTE
+        // DashboardIntegracaoService::montarPainel() — nenhuma fórmula de NPS paralela aqui.
+        $this->avaliacoesRepository = $avaliacoesRepository ?? new PeopleAnalyticsAvaliacoesRepository();
+        $this->integracaoService = $integracaoService ?? new DashboardIntegracaoService();
     }
 
     public function opcoesFiltro(): array
@@ -249,10 +258,6 @@ class PeopleAnalyticsService
         // dimensão) — não fingimos respeitar esse filtro aqui.
         $vagas = $this->montarVagas($codigoEmpresa, $inicio, $fim);
 
-        $integracoesRealizadas = $this->repository->contarIntegracoesRealizadas($inicio, $fim);
-        $notasNps = $this->repository->buscarNotasNpsIntegracao($inicio, $fim);
-        $avaliacaoExperiencia = $this->repository->avaliacaoExperiencia($inicio, $fim, RhIndicadoresService::LIMITE_TURNOVER_PRECOCE_DIAS);
-
         $nomesEmpresa = $this->mapaNomesEmpresa($contratos);
         $nomesSetor = $this->mapaNomesSetor();
         // Mesma base de contratos do card Headcount Atual (vigente quando $fim é hoje) — garante
@@ -390,11 +395,6 @@ class PeopleAnalyticsService
                 'ativos_periodo' => $ativosPeriodoComp,
                 'turnover_percentual' => $turnoverGeralComp,
             ],
-            'integracao' => [
-                'realizadas_periodo' => $integracoesRealizadas,
-            ],
-            'nps_integracao' => $this->calcularNps($notasNps),
-            'avaliacao_experiencia' => $avaliacaoExperiencia,
             'colaboradores_por_setor' => $this->montarDistribuicaoPorSetor($codigoEmpresa),
             'colaboradores_por_setor_comparativo' => $colaboradoresPorSetorComparativo,
             'transferencias' => [
@@ -403,6 +403,8 @@ class PeopleAnalyticsService
             ],
             'recrutamento' => $this->montarRecrutamentoExecutivo($codigoEmpresa, $inicio, $fim),
             'entrevista_desligamento' => $this->montarEntrevistaDesligamentoExecutivo($inicio, $fim),
+            'avaliacoes_desenvolvimento' => $this->montarAvaliacoesDesenvolvimentoExecutivo($inicio, $fim, $codigoEmpresa, $codigoSetor),
+            'integracao_onboarding' => $this->montarIntegracaoExecutivo($inicio, $fim, $compInicio, $compFim, $codigoEmpresa, $codigoSetor),
             'banco_horas' => ['disponivel' => false],
             'horas_extras' => ['disponivel' => false],
             'ferias_programadas' => ['disponivel' => false],
@@ -888,36 +890,110 @@ class PeopleAnalyticsService
     }
 
     /**
-     * NPS a partir das notas 0-10 respondidas — Promotores 9-10, Neutros 7-8, Detratores 0-6.
-     * Classificação e NPS SEMPRE calculados aqui, nunca persistidos. Amostra zero -> `nps: null`
-     * (nunca 0 falso — ausência de amostra é diferente de "resultado neutro").
+     * Avaliações e Desenvolvimento — visão executiva (Etapa 9, 2026-09). Reaproveita
+     * `PeopleAnalyticsAvaliacoesRepository` (agregações dedicadas, snapshot-based, sem N+1) sobre
+     * Avaliação de Experiência (45/90), Avaliação de Desempenho, Feedback e PDI — incluindo a
+     * "Cobertura de Desenvolvimento" (documentos elegíveis que JÁ geraram PDI via `pdi_origens`,
+     * nunca uma taxa inventada sobre a população toda). Empresa/Setor filtram pelo snapshot
+     * gravado em cada tabela; Setor do PDI usa `colaboradores_metadados` (único domínio sem
+     * snapshot de Setor — ver repositório). Nenhuma regra de negócio dos módulos de origem é
+     * recalculada aqui (status/parecer/resultado já vêm prontos).
      */
-    private function calcularNps(array $notas): array
-    {
-        $amostra = count($notas);
-        if ($amostra === 0) {
-            return ['amostra' => 0, 'nps' => null, 'promotores' => null, 'neutros' => null, 'detratores' => null];
-        }
+    private function montarAvaliacoesDesenvolvimentoExecutivo(
+        DateTimeImmutable $inicio,
+        DateTimeImmutable $fim,
+        ?string $codigoEmpresa,
+        ?string $codigoSetor
+    ): array {
+        $hoje = new DateTimeImmutable('today');
+        $r = $this->avaliacoesRepository;
 
-        $promotores = 0;
-        $detratores = 0;
-        foreach ($notas as $nota) {
-            if ($nota >= 9) {
-                $promotores++;
-            } elseif ($nota <= 6) {
-                $detratores++;
-            }
-        }
-        $neutros = $amostra - $promotores - $detratores;
-        $pctPromotores = ($promotores / $amostra) * 100;
-        $pctDetratores = ($detratores / $amostra) * 100;
+        $coberturaExperiencia = $r->coberturaExperiencia($inicio, $fim, $codigoEmpresa, $codigoSetor);
+        $coberturaFeedback = $r->coberturaFeedback($inicio, $fim, $codigoEmpresa, $codigoSetor);
+        $coberturaDesempenho = $r->coberturaDesempenho($inicio, $fim, $codigoEmpresa, $codigoSetor);
+        $elegiveisTotal = $coberturaExperiencia['elegiveis'] + $coberturaFeedback['elegiveis'] + $coberturaDesempenho['elegiveis'];
+        $vinculadosTotal = $coberturaExperiencia['vinculados'] + $coberturaFeedback['vinculados'] + $coberturaDesempenho['vinculados'];
 
         return [
-            'amostra' => $amostra,
-            'nps' => round($pctPromotores - $pctDetratores, 1),
-            'promotores' => $promotores,
-            'neutros' => $neutros,
-            'detratores' => $detratores,
+            'experiencia' => array_merge(
+                ['realizadas_por_tipo' => $r->experienciaRealizadasPorTipo($inicio, $fim, $codigoEmpresa, $codigoSetor)],
+                $r->experienciaSituacaoAtual($hoje, $codigoEmpresa, $codigoSetor),
+                ['pareceres' => $r->experienciaPareceres($inicio, $fim, $codigoEmpresa, $codigoSetor)]
+            ),
+            'desempenho' => array_merge(
+                $r->desempenhoResumo($inicio, $fim, $codigoEmpresa, $codigoSetor),
+                ['resultados' => $r->desempenhoResultados($inicio, $fim, $codigoEmpresa, $codigoSetor)]
+            ),
+            'feedback' => array_merge(
+                $r->feedbackResumo($inicio, $fim, $codigoEmpresa, $codigoSetor),
+                ['valores_desenvolvimento_necessario' => $r->feedbackValoresDesenvolvimentoNecessario($inicio, $fim, $codigoEmpresa, $codigoSetor)]
+            ),
+            'pdi' => array_merge(
+                $r->pdiSituacaoAtual($codigoEmpresa, $codigoSetor),
+                [
+                    'concluidos_periodo' => $r->pdiConcluidosPeriodo($inicio, $fim, $codigoEmpresa, $codigoSetor),
+                    'vinculos_origem' => $r->pdiVinculosOrigem($codigoEmpresa, $codigoSetor),
+                ]
+            ),
+            'cobertura_desenvolvimento' => [
+                'experiencia' => $coberturaExperiencia,
+                'feedback' => $coberturaFeedback,
+                'desempenho' => $coberturaDesempenho,
+                'total' => [
+                    'elegiveis' => $elegiveisTotal,
+                    'vinculados' => $vinculadosTotal,
+                    'percentual' => $elegiveisTotal === 0 ? null : round(($vinculadosTotal / $elegiveisTotal) * 100, 1),
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * Integração/Onboarding + NPS — visão executiva (Etapa 9, 2026-09). Reaproveita INTEGRALMENTE
+     * `DashboardIntegracaoService::montarPainel()` (mesma fórmula de NPS de
+     * `PesquisaIntegracaoResultadosService::calcularNps()`, nenhuma reimplementação) — chamado uma
+     * vez para o período atual e uma vez para o comparativo, só para o NPS em PONTOS (nunca
+     * variação percentual — §27 da Etapa 9: "+12 pontos", não "+35%"). Sem filtro de Unidade/Gestor
+     * (fora do escopo desta tela — ver §22/§40).
+     */
+    private function montarIntegracaoExecutivo(
+        DateTimeImmutable $inicio,
+        DateTimeImmutable $fim,
+        DateTimeImmutable $compInicio,
+        DateTimeImmutable $compFim,
+        ?string $codigoEmpresa,
+        ?string $codigoSetor
+    ): array {
+        $filtrosBase = [
+            'codigo_empresa' => $codigoEmpresa ?? '',
+            'codigo_unidade' => '',
+            'codigo_setor' => $codigoSetor ?? '',
+        ];
+        $painelAtual = $this->integracaoService->montarPainel(array_merge($filtrosBase, [
+            'inicio' => $inicio->format('Y-m-d'),
+            'fim' => $fim->format('Y-m-d'),
+        ]));
+        $painelComp = $this->integracaoService->montarPainel(array_merge($filtrosBase, [
+            'inicio' => $compInicio->format('Y-m-d'),
+            'fim' => $compFim->format('Y-m-d'),
+        ]));
+
+        $npsAtual = $painelAtual['nps']['nps'];
+        $npsComp = $painelComp['nps']['nps'];
+
+        return [
+            'amostra' => $painelAtual['total_respostas'],
+            'nps' => [
+                'valor' => $npsAtual,
+                'promotores' => $painelAtual['nps']['promotores'],
+                'neutros' => $painelAtual['nps']['neutros'],
+                'detratores' => $painelAtual['nps']['detratores'],
+                'comparativo' => $npsComp,
+                'variacao_pontos' => ($npsAtual !== null && $npsComp !== null) ? round($npsAtual - $npsComp, 1) : null,
+            ],
+            'satisfacao_geral' => $painelAtual['satisfacao_geral'],
+            'fluxo_individual' => $painelAtual['fluxo_individual'],
+            'mensal' => $painelAtual['mensal'],
         ];
     }
 

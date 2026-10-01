@@ -22,12 +22,13 @@
  *   - Turnover Geral reaproveita RhIndicadoresService::taxaTurnover(), sem reimplementar a fórmula;
  *   - Turnover por Faixa Etária ignora desligamentos sem nascimento, e vira null (não 0 falso)
  *     quando nenhum desligamento do período é classificável;
- *   - Integrações Realizadas nunca confunde pesquisa respondida com integração marcada como
- *     realizada (são fontes/condições diferentes);
- *   - NPS Integração usa exclusivamente pesquisas_integracao, ignora respostas fora do período,
- *     e amostra zero nunca vira NPS 0 falso;
- *   - Avaliação de Experiência (Realizadas x Pendentes) usa avaliacao_90_dias real, ancorado ao
- *     vencimento dos 90 dias — não a data de admissão nem updated_at;
+ *   - (Etapa 9, 2026-09) a antiga mini-seção "Integrações + Experiência" (fórmula paralela de NPS +
+ *     solicitacoes_vaga.avaliacao_90_dias) saiu do painel — substituída por "integracao_onboarding"
+ *     (reaproveita DashboardIntegracaoService::montarPainel() integralmente) e
+ *     "avaliacoes_desenvolvimento" (PeopleAnalyticsAvaliacoesRepository, sobre as tabelas reais
+ *     avaliacoes_experiencia/avaliacoes_desempenho/feedbacks/pdis); cobertura exaustiva das duas
+ *     em tests/php/integration_people_analytics_avaliacoes_desenvolvimento.php e no já existente
+ *     tests/php/integration_dashboard_integracao.php;
  *   - dados legados de `colaboradores` (ativo/data_admissao/data_demissao) NUNCA contaminam os
  *     indicadores oficiais (Headcount/Admissões/Desligamentos/Turnover vêm só de
  *     colaboradores_metadados);
@@ -391,63 +392,22 @@ try {
     $check($painelPosContaminacao['headcount']['atual'] === $painelEmp['headcount']['atual'], '(J) Headcount Atual inalterado após inserir colaborador local sem vínculo com METADADOS — colaboradores nunca contamina indicadores oficiais');
     $check($painelPosContaminacao['admissoes']['periodo'] === $painelEmp['admissoes']['periodo'], '(J) Admissões no período inalteradas — colaboradores.data_admissao não é lida para este indicador');
 
-    // ---- 11) Integrações Realizadas: nunca confunde pesquisa respondida com integração realizada
-    $baseIntegracoes = $painelEmp['integracao']['realizadas_periodo'];
-    $baseNps = $painelEmp['nps_integracao'];
+    // ---- 11) Etapa 9 (2026-09): a mini-seção antiga "Integrações + Experiência" (fórmula paralela
+    // de NPS sobre `colaboradores.integracao_status`/`pesquisas_integracao` direto, e
+    // `solicitacoes_vaga.avaliacao_90_dias`) foi SUBSTITUÍDA pelas novas seções executivas
+    // "Avaliações e Desenvolvimento" e "Integração/Onboarding" — ver `montarAvaliacoesDesenvolvimentoExecutivo()`/
+    // `montarIntegracaoExecutivo()` em PeopleAnalyticsService. Prova de que as chaves antigas
+    // realmente saíram do painel (nunca convivendo em paralelo com números potencialmente
+    // divergentes) — cobertura exaustiva das novas chaves fica em
+    // tests/php/integration_people_analytics_avaliacoes_desenvolvimento.php (criado nesta mesma
+    // Etapa) e na suíte já existente de tests/php/integration_dashboard_integracao.php (reaproveitada
+    // sem alteração).
+    $check(!array_key_exists('integracao', $painelEmp), '(15) Chave antiga "integracao" não existe mais no painel — substituída por "integracao_onboarding"');
+    $check(!array_key_exists('nps_integracao', $painelEmp), '(16) Chave antiga "nps_integracao" não existe mais no painel — NPS agora vem de "integracao_onboarding.nps", reaproveitando DashboardIntegracaoService::montarPainel() (mesma fórmula de PesquisaIntegracaoResultadosService::calcularNps(), nunca uma reimplementação paralela)');
+    $check(array_key_exists('integracao_onboarding', $painelEmp) && array_key_exists('nps', $painelEmp['integracao_onboarding']), '(15/16) Nova chave "integracao_onboarding" presente, com "nps" já no formato esperado');
+    $check(array_key_exists('variacao_pontos', $painelEmp['integracao_onboarding']['nps']), '(27) NPS do painel expõe "variacao_pontos" (diferença em PONTOS do comparativo) — nunca variação percentual');
 
-    $colRealizado1 = $mkColaborador('IntegRealizada1', [
-        'integracao_status' => 'realizada',
-        'integracao_data' => $hoje->modify('-6 days')->format('Y-m-d'),
-    ]);
-    $colRealizado2 = $mkColaborador('IntegRealizada2', [
-        'integracao_status' => 'realizada',
-        'integracao_data' => $hoje->modify('-4 days')->format('Y-m-d'),
-    ]);
-    // Pesquisa RESPONDIDA, mas integração NÃO marcada como realizada — não pode contar como
-    // "Integração Realizada" (são condições/fontes diferentes: status manual x pesquisa concluída).
-    $colRespondidaSemRealizada = $mkColaborador('PesquisaSemIntegracaoRealizada', [
-        'integracao_status' => 'pendente',
-    ]);
-
-    $mkPesquisa = static function (int $colaboradorId, ?int $nota, ?DateTimeImmutable $respondidaEm, string $marcador) use ($pdo, &$criados, $hoje): void {
-        $pdo->prepare(
-            'INSERT INTO pesquisas_integracao (colaborador_id, integracao_data_relacionada, token_hash, nota_nps, respondida_em)
-             VALUES (?, ?, ?, ?, ?)'
-        )->execute([
-            $colaboradorId, $hoje->modify('-6 days')->format('Y-m-d'), hash('sha256', $marcador),
-            $nota, $respondidaEm?->format('Y-m-d H:i:s'),
-        ]);
-    };
-
-    $mkPesquisa($colRealizado1, 10, $hoje->modify('-6 days'), 'zzpa-nps-' . $suffix . '-1'); // Promotor
-    $mkPesquisa($colRealizado2, 7, $hoje->modify('-4 days'), 'zzpa-nps-' . $suffix . '-2');  // Neutro
-    $mkPesquisa($colRespondidaSemRealizada, 8, $hoje->modify('-2 days'), 'zzpa-nps-' . $suffix . '-3'); // Neutro, respondida, integração NÃO realizada
-    // Fora do período (não deve contar em nenhum delta).
-    $colForaPeriodo = $mkColaborador('ForaPeriodo', ['integracao_status' => 'realizada', 'integracao_data' => $hoje->modify('-90 days')->format('Y-m-d')]);
-    $mkPesquisa($colForaPeriodo, 3, $hoje->modify('-90 days'), 'zzpa-nps-' . $suffix . '-4');
-    // Pesquisa NÃO respondida — nunca entra na agregação de NPS.
-    $colNaoRespondida = $mkColaborador('NaoRespondida');
-    $mkPesquisa($colNaoRespondida, null, null, 'zzpa-nps-' . $suffix . '-5');
-
-    $painelIntegracao = $service->montarPainel(['codigo_empresa' => $empFixture], $inicio, $fim);
-    $check(($painelIntegracao['integracao']['realizadas_periodo'] - $baseIntegracoes) === 2, '(15) Integrações Realizadas: delta +2 (colRealizado1+2) — a pesquisa respondida sem status "realizada" (colRespondidaSemRealizada) NÃO conta, prova que pesquisa-respondida != integração-realizada');
-
-    $npsDepois = $painelIntegracao['nps_integracao'];
-    $deltaAmostra = $npsDepois['amostra'] - ($baseNps['amostra'] ?? 0);
-    $check($deltaAmostra === 3, '(16) NPS Integração: delta de amostra = 3 (as 3 respostas dentro do período) — a fora do período e a não respondida ficam de fora');
-    $check($npsDepois['amostra'] > 0 && $npsDepois['nps'] !== null, '(16-correlato) Com amostra > 0, NPS nunca fica null');
-
-    // ---- 12) NPS sem amostra não retorna falso zero ---------------------------------------------
-    $painelSemNps = $service->montarPainel(['codigo_empresa' => 'ZZ-SEM-NPS-' . $suffix], $hoje->modify('-1 days'), $hoje->modify('-1 days'));
-    // Este filtro de empresa não tem colaboradores_metadados, mas o cálculo de NPS é global por
-    // período — usa uma janela de 1 dia (ontem) sem nenhuma pesquisa fixture para garantir amostra 0.
-    if ($painelSemNps['nps_integracao']['amostra'] === 0) {
-        $check($painelSemNps['nps_integracao']['nps'] === null, '(16-null) NPS sem nenhuma resposta no período é null, nunca 0 falso');
-    } else {
-        echo "  [aviso] janela de 1 dia (ontem) teve amostra > 0 em DEV (dado residual de outra suíte) — verificação de NPS nulo pulada nesta execução\n";
-    }
-
-    // ---- 13) Avaliação de Experiência: Realizadas ancoradas ao vencimento dos 90 dias; Pendentes
+    // ---- 12) Avaliação de Experiência: Realizadas ancoradas ao vencimento dos 90 dias; Pendentes
     //          são retrato de agora ---------------------------------------------------------------
     $empCodigoResolvido = 'ZZR' . $suffix;
     $pdo->prepare('INSERT INTO empresas (nome, slug, ativo, codigo_empresa) VALUES (?, ?, 1, ?)')
@@ -482,21 +442,16 @@ try {
         return $id;
     };
 
-    $baseAvaliacao = $painelEmp['avaliacao_experiencia'];
-
-    // Realizada: admissão há 95 dias -> vencimento dos 90 dias cai há 5 dias, dentro do período.
+    // As 3 solicitações abaixo alimentam só o teste (13)/"Empresa resolvida filtra Vagas" a seguir
+    // — `avaliacao_90_dias`/`data_admissao` eram lidos pelo extinto PeopleAnalyticsRepository::
+    // avaliacaoExperiencia() (mini-seção antiga, ver nota do bloco 11 acima); a Avaliação de
+    // Experiência REAL (tabela `avaliacoes_experiencia`) tem suíte dedicada em
+    // tests/php/integration_people_analytics_avaliacoes_desenvolvimento.php.
     $mkSolicitacaoAvaliacao($hoje->modify('-95 days'), 'atendeu_plenamente');
-    // Realizada, mas vencimento MUITO antes do período (admissão há 500 dias) -> não deve contar
-    // como "realizada no período".
     $mkSolicitacaoAvaliacao($hoje->modify('-500 days'), 'atendeu_parcialmente');
-    // Pendente: admissão há 100 dias -> prazo de 90 dias já venceu (retrato de agora, não do
-    // período), avaliação ainda não preenchida.
     $mkSolicitacaoAvaliacao($hoje->modify('-100 days'), null);
-
-    $painelAvaliacao = $service->montarPainel(['codigo_empresa' => $empFixture], $inicio, $fim);
-    $avaliacaoDepois = $painelAvaliacao['avaliacao_experiencia'];
-    $check(($avaliacaoDepois['realizadas'] - $baseAvaliacao['realizadas']) === 1, '(17a) Avaliação de Experiência Realizadas: delta +1 — só a avaliação cujo vencimento de 90 dias cai dentro do período conta, a de 500 dias atrás fica de fora');
-    $check(($avaliacaoDepois['pendentes'] - $baseAvaliacao['pendentes']) === 1, '(17b/18) Avaliação de Experiência Pendentes: delta +1 — retrato de agora (prazo já vencido, sem avaliação preenchida)');
+    $check(!array_key_exists('avaliacao_experiencia', $painelEmp), '(17) Chave antiga "avaliacao_experiencia" (baseada em solicitacoes_vaga.avaliacao_90_dias) não existe mais no painel — substituída por "avaliacoes_desenvolvimento.experiencia" (tabela real avaliacoes_experiencia)');
+    $check(array_key_exists('avaliacoes_desenvolvimento', $painelEmp) && array_key_exists('experiencia', $painelEmp['avaliacoes_desenvolvimento']), '(17) Nova chave "avaliacoes_desenvolvimento" presente, com sub-chave "experiencia"');
 
     // ---- 14) Empresa RESOLVIDA no catálogo local filtra Vagas normalmente ----------------------
     $painelEmpresaResolvida = $service->montarPainel(['codigo_empresa' => $empCodigoResolvido], $inicio, $fim);

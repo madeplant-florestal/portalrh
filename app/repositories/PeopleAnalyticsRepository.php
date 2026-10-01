@@ -196,21 +196,6 @@ class PeopleAnalyticsRepository
     }
 
     /**
-     * Integrações (onboarding) marcadas como 'realizada' dentro do período — dado operacional do
-     * Portal (`colaboradores.integracao_status`/`.integracao_data`), nunca do METADADOS.
-     */
-    public function contarIntegracoesRealizadas(DateTimeImmutable $inicio, DateTimeImmutable $fim): int
-    {
-        $stmt = $this->connection()->prepare(
-            "SELECT COUNT(*) FROM colaboradores
-             WHERE integracao_status = 'realizada'
-               AND integracao_data BETWEEN ? AND ?"
-        );
-        $stmt->execute([$inicio->format('Y-m-d'), $fim->format('Y-m-d')]);
-        return (int)$stmt->fetchColumn();
-    }
-
-    /**
      * Notas de NPS da Pesquisa de Integração, só de respostas efetivamente concluídas dentro do
      * período (por `respondida_em`) — nunca de `pesquisas_experiencia` (processo seletivo).
      *
@@ -227,35 +212,4 @@ class PeopleAnalyticsRepository
         return array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
     }
 
-    /**
-     * Avaliação de Período de Experiência (90 dias) — campo real já existente em
-     * `solicitacoes_vaga.avaliacao_90_dias`, preenchido no "controle interno de RH" após a
-     * admissão. "Realizadas" ancoradas ao período pela data em que o prazo de 90 dias vence
-     * (`data_admissao + 90 dias`) — nunca `updated_at` (sem comprovação semântica). "Pendentes" é
-     * um retrato de AGORA (mesma convenção de "Vagas Abertas" — backlog atual, não histórico).
-     */
-    public function avaliacaoExperiencia(DateTimeImmutable $inicio, DateTimeImmutable $fim, int $limiteDias): array
-    {
-        $pdo = $this->connection();
-
-        $stmtRealizadas = $pdo->prepare(
-            "SELECT COUNT(*) FROM solicitacoes_vaga
-             WHERE avaliacao_90_dias IS NOT NULL
-               AND data_admissao IS NOT NULL
-               AND DATE_ADD(data_admissao, INTERVAL ? DAY) BETWEEN ? AND ?"
-        );
-        $stmtRealizadas->execute([$limiteDias, $inicio->format('Y-m-d'), $fim->format('Y-m-d')]);
-        $realizadas = (int)$stmtRealizadas->fetchColumn();
-
-        $stmtPendentes = $pdo->prepare(
-            "SELECT COUNT(*) FROM solicitacoes_vaga
-             WHERE avaliacao_90_dias IS NULL
-               AND data_admissao IS NOT NULL
-               AND DATE_ADD(data_admissao, INTERVAL ? DAY) <= CURDATE()"
-        );
-        $stmtPendentes->execute([$limiteDias]);
-        $pendentes = (int)$stmtPendentes->fetchColumn();
-
-        return ['realizadas' => $realizadas, 'pendentes' => $pendentes];
-    }
 }

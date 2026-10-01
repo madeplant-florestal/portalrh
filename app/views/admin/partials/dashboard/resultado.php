@@ -604,43 +604,222 @@ $opcoesFiltro = $opcoesFiltro ?? ['empresas' => [], 'setores' => []];
     </article>
   </section>
 
-  <!-- Integrações + Experiência: um único painel, dividido internamente (menos "blocos soltos") -->
-  <section class="rounded-ds-lg border border-border bg-surface p-4 shadow-resting">
-    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:divide-x sm:divide-border">
-      <div>
-        <h2 class="text-ds-h3 text-text-primary">Integrações</h2>
-        <p class="text-[11px] text-text-secondary">Realizadas no período</p>
-        <p class="mt-1.5 text-2xl font-bold text-text-primary"><?= number_format($painel['integracao']['realizadas_periodo'], 0, ',', '.') ?></p>
-        <div class="mt-2.5 border-t border-border pt-2.5">
-          <p class="text-[11px] text-text-secondary">NPS Integração</p>
-          <?php if ($painel['nps_integracao']['amostra'] === 0): ?>
-            <p class="mt-0.5 text-sm text-text-secondary">Dados insuficientes</p>
-          <?php else: ?>
-            <p class="mt-0.5 text-xl font-bold text-text-primary"><?= number_format($painel['nps_integracao']['nps'], 1, ',', '.') ?></p>
-            <p class="text-[11px] text-text-secondary"><?= (int)$painel['nps_integracao']['amostra'] ?> resposta(s)</p>
-          <?php endif; ?>
-        </div>
-      </div>
+  <!-- Avaliações e Desenvolvimento (Etapa 9, 2026-09): Experiência 45/90, Desempenho, Feedback, PDI
+       e Cobertura de Desenvolvimento — fonte real (avaliacoes_experiencia/avaliacoes_desempenho/
+       feedbacks/pdis/pdi_origens), nunca o legado solicitacoes_vaga.avaliacao_90_dias. Densidade
+       contida (3-5 KPIs/subseção, 1-2 gráficos fortes) — o detalhe operacional completo de cada
+       domínio fica nos módulos próprios (/admin/pdis, /admin/avaliacoes-desenvolvimento, etc.). -->
+  <?= $secaoDivisor('Avaliações e Desenvolvimento') ?>
 
-      <div class="sm:pl-4">
-        <h2 class="text-ds-h3 text-text-primary">Experiência</h2>
-        <p class="text-[11px] text-text-secondary">Avaliação do período de 90 dias</p>
-        <div class="mt-1.5 grid grid-cols-2 gap-2 text-center">
+  <?php $ad = $painel['avaliacoes_desenvolvimento']; ?>
+  <section class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+    <article class="rounded-ds-lg border border-border bg-surface p-4 shadow-resting">
+      <h2 class="text-ds-h3 text-text-primary">Avaliação de Experiência (45/90 dias)</h2>
+      <div class="mt-2.5 grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
+        <div class="rounded-ds-md bg-background p-2">
+          <p class="text-xl font-bold text-text-primary"><?= $fmtN(($ad['experiencia']['realizadas_por_tipo']['45'] ?? 0) + ($ad['experiencia']['realizadas_por_tipo']['90'] ?? 0)) ?></p>
+          <p class="text-[11px] text-text-secondary">Realizadas no período</p>
+        </div>
+        <div class="rounded-ds-md bg-background p-2">
+          <p class="text-xl font-bold text-warning"><?= $fmtN($ad['experiencia']['pendentes']) ?></p>
+          <p class="text-[11px] text-text-secondary">Pendentes</p>
+        </div>
+        <div class="rounded-ds-md bg-background p-2">
+          <p class="text-xl font-bold text-danger"><?= $fmtN($ad['experiencia']['vencidas']) ?></p>
+          <p class="text-[11px] text-text-secondary">Vencidas</p>
+        </div>
+        <div class="rounded-ds-md bg-background p-2">
+          <p class="text-xl font-bold text-text-primary"><?= $fmtN($ad['experiencia']['aguardando_ciencia']) ?></p>
+          <p class="text-[11px] text-text-secondary">Aguardando ciência</p>
+        </div>
+      </div>
+      <p class="mt-2 text-[11px] text-text-secondary">Realizadas no período: <?= $fmtN($ad['experiencia']['realizadas_por_tipo']['45'] ?? 0) ?> do tipo 45 dias · <?= $fmtN($ad['experiencia']['realizadas_por_tipo']['90'] ?? 0) ?> do tipo 90 dias.</p>
+      <?php if ($ad['experiencia']['pareceres'] === []): ?>
+        <?= $estadoVazio('Nenhuma avaliação de experiência concluída no período.', 'book') ?>
+      <?php else: ?>
+        <?php $rotulosParecer = ['apto_efetivacao' => 'Apto à efetivação', 'efetivacao_acompanhamento' => 'Efetivação c/ acompanhamento', 'prorrogacao_experiencia' => 'Prorrogação', 'nao_recomendado' => 'Não recomendado']; ?>
+        <?php $maxParecer = max($ad['experiencia']['pareceres']) ?: 1; ?>
+        <div class="mt-3 space-y-2">
+          <?php foreach ($ad['experiencia']['pareceres'] as $parecer => $qtd): ?>
+            <?= dashboard_bar_row($rotulosParecer[$parecer] ?? $parecer, $qtd, $maxParecer, (string)$qtd, 'bg-primary-500') ?>
+          <?php endforeach; ?>
+        </div>
+      <?php endif; ?>
+    </article>
+
+    <article class="rounded-ds-lg border border-border bg-surface p-4 shadow-resting">
+      <h2 class="text-ds-h3 text-text-primary">Avaliação de Desempenho</h2>
+      <div class="mt-2.5 grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
+        <div class="rounded-ds-md bg-background p-2">
+          <p class="text-xl font-bold text-text-primary"><?= $fmtN($ad['desempenho']['concluidas']) ?></p>
+          <p class="text-[11px] text-text-secondary">Concluídas no período</p>
+        </div>
+        <div class="rounded-ds-md bg-background p-2">
+          <p class="text-xl font-bold text-text-primary"><?= $ad['desempenho']['media_nota_atual'] === null ? '—' : number_format($ad['desempenho']['media_nota_atual'], 1, ',', '.') ?></p>
+          <p class="text-[11px] text-text-secondary">Nota atual média</p>
+        </div>
+        <div class="rounded-ds-md bg-background p-2">
+          <p class="text-xl font-bold text-text-primary"><?= $ad['desempenho']['media_nota_esperada'] === null ? '—' : number_format($ad['desempenho']['media_nota_esperada'], 1, ',', '.') ?></p>
+          <p class="text-[11px] text-text-secondary">Nota esperada média</p>
+        </div>
+        <div class="rounded-ds-md bg-background p-2">
+          <p class="text-xl font-bold text-warning"><?= $ad['desempenho']['gap_medio'] === null ? '—' : number_format($ad['desempenho']['gap_medio'], 1, ',', '.') ?></p>
+          <p class="text-[11px] text-text-secondary">GAP médio</p>
+        </div>
+      </div>
+      <?php if ($ad['desempenho']['resultados'] === []): ?>
+        <?= $estadoVazio('Nenhuma avaliação de desempenho concluída no período.', 'target') ?>
+      <?php else: ?>
+        <?php $rotulosResultado = ['supera_expectativas' => 'Supera expectativas', 'atende_expectativas' => 'Atende expectativas', 'atende_parcialmente' => 'Atende parcialmente', 'nao_atende' => 'Não atende']; ?>
+        <?php $maxResultado = max($ad['desempenho']['resultados']) ?: 1; ?>
+        <div class="mt-3 space-y-2">
+          <?php foreach ($ad['desempenho']['resultados'] as $resultado => $qtd): ?>
+            <?= dashboard_bar_row($rotulosResultado[$resultado] ?? $resultado, $qtd, $maxResultado, (string)$qtd, 'bg-primary-400') ?>
+          <?php endforeach; ?>
+        </div>
+      <?php endif; ?>
+    </article>
+
+    <article class="rounded-ds-lg border border-border bg-surface p-4 shadow-resting">
+      <h2 class="text-ds-h3 text-text-primary">Feedback</h2>
+      <div class="mt-2.5 grid grid-cols-2 gap-2 text-center">
+        <div class="rounded-ds-md bg-background p-2">
+          <p class="text-xl font-bold text-text-primary"><?= $fmtN(array_sum($ad['feedback']['por_tipo'])) ?></p>
+          <p class="text-[11px] text-text-secondary">Concluídos no período</p>
+        </div>
+        <div class="rounded-ds-md bg-background p-2">
+          <p class="text-xl font-bold text-warning"><?= $fmtN($ad['feedback']['desenvolvimento_necessario']) ?></p>
+          <p class="text-[11px] text-text-secondary">Com "Desenvolvimento Necessário"</p>
+        </div>
+      </div>
+      <?php if ($ad['feedback']['valores_desenvolvimento_necessario'] === []): ?>
+        <?= $estadoVazio('Nenhum valor cultural marcado como "Desenvolvimento Necessário" no período.', 'smile') ?>
+      <?php else: ?>
+        <?php $rotulosValor = ['respeito' => 'Respeito', 'honestidade' => 'Honestidade', 'lealdade' => 'Lealdade', 'etica' => 'Ética', 'ousadia' => 'Ousadia', 'coragem' => 'Coragem']; ?>
+        <?php $maxValor = max(array_column($ad['feedback']['valores_desenvolvimento_necessario'], 'n')) ?: 1; ?>
+        <p class="mt-3 text-[11px] text-text-secondary">Valores culturais mais incidentes em "Desenvolvimento Necessário"</p>
+        <div class="mt-1.5 space-y-2">
+          <?php foreach ($ad['feedback']['valores_desenvolvimento_necessario'] as $v): ?>
+            <?= dashboard_bar_row($rotulosValor[$v['valor']] ?? $v['valor'], (int)$v['n'], $maxValor, (string)$v['n'], 'bg-warning') ?>
+          <?php endforeach; ?>
+        </div>
+      <?php endif; ?>
+    </article>
+
+    <article class="rounded-ds-lg border border-border bg-surface p-4 shadow-resting">
+      <h2 class="text-ds-h3 text-text-primary">PDI — Plano de Desenvolvimento Individual</h2>
+      <div class="mt-2.5 grid grid-cols-2 gap-2 text-center">
+        <div class="rounded-ds-md bg-background p-2">
+          <p class="text-xl font-bold text-text-primary"><?= $fmtN($ad['pdi']['ativos']) ?></p>
+          <p class="text-[11px] text-text-secondary">Ativos (em andamento)</p>
+        </div>
+        <div class="rounded-ds-md bg-background p-2">
+          <p class="text-xl font-bold text-success"><?= $fmtN($ad['pdi']['concluidos_periodo']) ?></p>
+          <p class="text-[11px] text-text-secondary">Concluídos no período</p>
+        </div>
+      </div>
+      <p class="mt-3 text-[11px] text-text-secondary">Vínculos de origem (um PDI pode ter mais de uma origem — cada vínculo conta na sua própria categoria)</p>
+      <?php $vinculos = $ad['pdi']['vinculos_origem']; $totalVinculos = array_sum($vinculos); ?>
+      <?php if ($totalVinculos === 0): ?>
+        <?= $estadoVazio('Nenhum PDI vinculado a uma Avaliação/Feedback ainda.', 'academic') ?>
+      <?php else: ?>
+        <?php $rotulosOrigem = ['avaliacao_experiencia' => 'Avaliação de Experiência', 'feedback' => 'Feedback', 'avaliacao_desempenho' => 'Avaliação de Desempenho', 'manual' => 'Manual']; ?>
+        <div class="mt-1.5 space-y-2">
+          <?php foreach ($vinculos as $origem => $qtd): ?>
+            <?php if ($qtd > 0): ?>
+              <?= dashboard_bar_row($rotulosOrigem[$origem] ?? $origem, $qtd, max($vinculos), (string)$qtd, 'bg-primary-600') ?>
+            <?php endif; ?>
+          <?php endforeach; ?>
+        </div>
+      <?php endif; ?>
+    </article>
+  </section>
+
+  <section class="rounded-ds-lg border border-border bg-surface p-4 shadow-resting">
+    <h2 class="text-ds-h3 text-text-primary">Cobertura de Desenvolvimento</h2>
+    <p class="text-[11px] text-text-secondary">Entre os documentos concluídos no período com sinal real de necessidade de desenvolvimento (parecer/resultado/GAP), quantos já geraram um PDI vinculado — nunca uma taxa sobre toda a população de colaboradores.</p>
+    <?php $cob = $ad['cobertura_desenvolvimento']; ?>
+    <?php if ($cob['total']['elegiveis'] === 0): ?>
+      <?= $estadoVazio('Nenhum documento com sinal de necessidade de desenvolvimento no período.', 'smile') ?>
+    <?php else: ?>
+      <div class="mt-2.5 grid grid-cols-1 gap-2 sm:grid-cols-4">
+        <div class="rounded-ds-md bg-background p-2 text-center sm:col-span-1">
+          <p class="text-xl font-bold text-text-primary"><?= $cob['total']['percentual'] === null ? '—' : number_format($cob['total']['percentual'], 1, ',', '.') . '%' ?></p>
+          <p class="text-[11px] text-text-secondary"><?= $fmtN($cob['total']['vinculados']) ?> de <?= $fmtN($cob['total']['elegiveis']) ?> documentos elegíveis já viraram PDI</p>
+        </div>
+        <div class="sm:col-span-3 grid grid-cols-3 gap-2 text-center">
           <div class="rounded-ds-md bg-background p-2">
-            <p class="text-xl font-bold text-success"><?= (int)$painel['avaliacao_experiencia']['realizadas'] ?></p>
-            <p class="text-[11px] text-text-secondary">Realizadas</p>
+            <p class="text-sm font-bold text-text-primary"><?= $fmtN($cob['experiencia']['vinculados']) ?>/<?= $fmtN($cob['experiencia']['elegiveis']) ?></p>
+            <p class="text-[11px] text-text-secondary">Experiência</p>
           </div>
           <div class="rounded-ds-md bg-background p-2">
-            <p class="text-xl font-bold text-warning"><?= (int)$painel['avaliacao_experiencia']['pendentes'] ?></p>
-            <p class="text-[11px] text-text-secondary">Pendentes</p>
+            <p class="text-sm font-bold text-text-primary"><?= $fmtN($cob['feedback']['vinculados']) ?>/<?= $fmtN($cob['feedback']['elegiveis']) ?></p>
+            <p class="text-[11px] text-text-secondary">Feedback</p>
+          </div>
+          <div class="rounded-ds-md bg-background p-2">
+            <p class="text-sm font-bold text-text-primary"><?= $fmtN($cob['desempenho']['vinculados']) ?>/<?= $fmtN($cob['desempenho']['elegiveis']) ?></p>
+            <p class="text-[11px] text-text-secondary">Desempenho</p>
           </div>
         </div>
-        <?php if ((int)$painel['avaliacao_experiencia']['realizadas'] === 0 && (int)$painel['avaliacao_experiencia']['pendentes'] === 0): ?>
-          <p class="mt-1.5 text-[11px] text-text-secondary">O controle interno de RH em Solicitação de Vaga ainda não foi utilizado para nenhuma contratação.</p>
-        <?php endif; ?>
       </div>
-    </div>
+    <?php endif; ?>
   </section>
+
+  <!-- Integração/Onboarding + NPS (Etapa 9, 2026-09): reaproveita INTEGRALMENTE
+       DashboardIntegracaoService::montarPainel() — mesma fórmula de NPS do Dashboard de Integração
+       próprio, nenhum cálculo paralelo. Sem filtro de Unidade/Gestor nesta tela (fora do escopo). -->
+  <?= $secaoDivisor('Integração / Onboarding') ?>
+
+  <?php $io = $painel['integracao_onboarding']; ?>
+  <?php if ($io['amostra'] === 0): ?>
+    <?= $estadoVazio('Nenhuma resposta de Integração no período/filtros selecionados.', 'users') ?>
+  <?php else: ?>
+    <section class="grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <article class="rounded-ds-lg border border-border bg-surface p-4 shadow-resting lg:col-span-1">
+        <h2 class="text-ds-h3 text-text-primary">NPS de Integração</h2>
+        <div class="mt-3 flex items-center justify-center">
+          <?= dashboard_donut([
+              ['label' => 'Promotores', 'value' => $io['nps']['promotores'], 'color' => '#16a34a'],
+              ['label' => 'Neutros', 'value' => $io['nps']['neutros'], 'color' => '#d97706'],
+              ['label' => 'Detratores', 'value' => $io['nps']['detratores'], 'color' => '#dc2626'],
+          ]) ?>
+        </div>
+        <p class="mt-2 text-center text-2xl font-bold text-text-primary"><?= $io['nps']['valor'] === null ? '—' : (($io['nps']['valor'] > 0 ? '+' : '') . number_format($io['nps']['valor'], 1, ',', '.')) ?></p>
+        <p class="text-center text-[11px] text-text-secondary">
+          <?= $fmtN($io['amostra']) ?> resposta(s)
+          <?php if ($io['nps']['variacao_pontos'] !== null): ?>
+            · <?= ($io['nps']['variacao_pontos'] >= 0 ? '+' : '') . number_format($io['nps']['variacao_pontos'], 1, ',', '.') ?> pontos vs. comparativo
+          <?php endif; ?>
+        </p>
+      </article>
+
+      <article class="rounded-ds-lg border border-border bg-surface p-4 shadow-resting lg:col-span-2">
+        <h2 class="text-ds-h3 text-text-primary">Satisfação geral e fluxo individual</h2>
+        <div class="mt-2.5 grid grid-cols-2 gap-2 text-center sm:grid-cols-3">
+          <div class="rounded-ds-md bg-background p-2">
+            <p class="text-xl font-bold text-text-primary"><?= $io['satisfacao_geral']['media'] === null ? '—' : number_format($io['satisfacao_geral']['media'], 1, ',', '.') ?></p>
+            <p class="text-[11px] text-text-secondary">Satisfação geral (1–5) · <?= $fmtN($io['satisfacao_geral']['n']) ?> resposta(s)</p>
+          </div>
+          <div class="rounded-ds-md bg-background p-2">
+            <p class="text-xl font-bold text-text-primary"><?= $fmtN($io['fluxo_individual']['geradas']) ?></p>
+            <p class="text-[11px] text-text-secondary">Pesquisas individuais geradas</p>
+          </div>
+          <div class="rounded-ds-md bg-background p-2">
+            <p class="text-xl font-bold text-text-primary"><?= $io['fluxo_individual']['taxa_resposta'] === null ? 'Sem base' : number_format($io['fluxo_individual']['taxa_resposta'], 1, ',', '.') . '%' ?></p>
+            <p class="text-[11px] text-text-secondary">Taxa de resposta (só fluxo individual)</p>
+          </div>
+        </div>
+        <?php if (count($io['mensal']['labels']) >= 2): ?>
+          <p class="mt-3 text-[11px] text-text-secondary">Evolução do NPS por mês</p>
+          <div class="mt-1.5"><?= dashboard_multi_line_chart(
+              $io['mensal']['labels'],
+              [['label' => 'NPS', 'color' => '#2563eb', 'values' => $io['mensal']['nps']]],
+              '', 1, 'NPS de Integração por mês', ['min' => -100, 'max' => 100]
+          ) ?></div>
+        <?php endif; ?>
+      </article>
+    </section>
+  <?php endif; ?>
 
   <!-- Colaboradores — listagem operacional, agora CONTEXTUAL (Etapa 2, §16/§17): a população
        muda conforme o contexto de interação (Ativos/Admitidos no período/Desligados no período),

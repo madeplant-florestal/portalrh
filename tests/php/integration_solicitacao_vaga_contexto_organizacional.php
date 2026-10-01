@@ -58,7 +58,7 @@ $check = static function (bool $cond, string $msg) use (&$falhas): void {
 
 $mk = 'ZZSV2_' . substr(md5(uniqid('', true)), 0, 6);
 $sfx = strtolower($mk);
-$criados = ['solicitacoes' => [], 'usuarios' => [], 'centros' => [], 'cargos' => [], 'setores' => [], 'colaboradores' => [], 'vinculos' => []];
+$criados = ['solicitacoes' => [], 'usuarios' => [], 'centros' => [], 'cargos' => [], 'setores' => [], 'colaboradores' => [], 'vinculos' => [], 'jornadas' => []];
 
 $limparSolicitacao = static function (int $id) use ($pdo): void {
     foreach (['solicitacao_vaga_aprovacoes', 'solicitacao_vaga_beneficios', 'solicitacao_vaga_competencias', 'solicitacao_vaga_auditoria'] as $t) {
@@ -126,11 +126,16 @@ try {
         return $id;
     };
 
+    // Bloco 1 (2026-10): Jornada de Trabalho estruturada — SolicitacaoVaga::create() exige
+    // jornada_trabalho_id de uma jornada cadastrada (CadastroOrganizacional, reaproveitado).
+    $jornadaId = CadastroOrganizacional::create('jornadas_trabalho', ['nome' => 'JORNADA CTX ORG ' . $sfx, 'ativo' => 1]);
+    $criados['jornadas'][] = $jornadaId;
+
     $payloadBase = [
         'quantidade_vagas' => 1, 'cargo_id' => $cargoOficial,
         'tipo_vaga' => 'nova_posicao', 'tipo_contratacao' => 'pj',
         'salario_previsto' => 'R$ 5.000,00',
-        'previsto_orcamento' => '1', 'jornada_trabalho' => '44h semanais',
+        'previsto_orcamento' => '1', 'jornada_trabalho_id' => $jornadaId,
         'escolaridade_minima' => 'medio', 'nivel_responsabilidade' => 'operacional', 'urgencia' => 'media',
         'data_prevista_inicio' => date('d/m/Y', strtotime('+30 days')),
         'entregas_esperadas' => str_repeat('Entrega detalhada da funcao com pelo menos cem caracteres para passar na validacao de conteudo. ', 2),
@@ -388,6 +393,9 @@ try {
     }
     foreach ($criados['setores'] as $id) {
         $pdo->prepare('DELETE FROM setores WHERE id = ?')->execute([(int)$id]);
+    }
+    foreach ($criados['jornadas'] as $id) {
+        $pdo->prepare('DELETE FROM jornadas_trabalho WHERE id = ?')->execute([(int)$id]);
     }
 }
 

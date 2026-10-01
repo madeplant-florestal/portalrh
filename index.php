@@ -169,6 +169,12 @@ try {
     $router->post('/admin/cargos/excluir/{id}', [AdminCargosController::class, 'delete']);
     $router->post('/admin/cargos/{cargoId}/setores/vincular', [AdminCargoSetoresController::class, 'storeByCargo']);
     $router->post('/admin/cargos/{cargoId}/setores/{setorId}/desvincular', [AdminCargoSetoresController::class, 'destroyByCargo']);
+    $router->get('/admin/jornadas-trabalho', [AdminJornadasTrabalhoController::class, 'index']);
+    $router->get('/admin/jornadas-trabalho/novo', [AdminJornadasTrabalhoController::class, 'create']);
+    $router->post('/admin/jornadas-trabalho/novo', [AdminJornadasTrabalhoController::class, 'store']);
+    $router->get('/admin/jornadas-trabalho/editar/{id}', [AdminJornadasTrabalhoController::class, 'edit']);
+    $router->post('/admin/jornadas-trabalho/editar/{id}', [AdminJornadasTrabalhoController::class, 'update']);
+    $router->post('/admin/jornadas-trabalho/excluir/{id}', [AdminJornadasTrabalhoController::class, 'delete']);
 
     $router->get('/admin/vagas', [AdminVagasController::class, 'index']);
     $router->get('/admin/vagas/novo', [AdminVagasController::class, 'create']);

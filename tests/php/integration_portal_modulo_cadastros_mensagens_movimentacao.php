@@ -3,7 +3,7 @@
 /**
  * Integração — Nova UI, Bloco G (final): Cadastros (Empresas, Setores, Cargos, Benefícios, Avaliações) + Mensagens + Movimentação de Pessoal + Manual
  * no AppShell V2. Fixtures ZZPGT-* com limpeza. Prova, contra o banco e as fontes:
- *   - módulo de abas `cadastros`: as cinco abas são destinos reais, abertos às roles admin/rh/viewer no backend (gate lido do controller) e iguais
+ *   - módulo de abas `cadastros`: as seis abas são destinos reais, abertos às roles admin/rh/viewer no backend (gate lido do controller) e iguais
  *     ao card da Central; nenhum perfil vê aba que leve a 403; nenhuma permissão nova;
  *   - Mensagens mantém as permissões individuais (visualizar/criar/editar) e Movimentação/Manual mantêm seu gate de role; sem ModuleTabs artificiais;
  *   - as telas renderizam no AppShell V2 (sem sidebar), com breadcrumb, PageHeader e <title>; sem <script> executável, <style> nem handlers inline;
@@ -88,15 +88,18 @@ try {
 
     // ---- abas de Cadastros ------------------------------------------------------------------------------------------------------------
     $def = PortalNavegacaoService::definicaoAbas()['cadastros'];
-    $check(array_column($def['abas'], 'chave') === ['empresas', 'setores', 'cargos', 'beneficios', 'avaliacoes'] && array_unique(array_column($def['abas'], 'regra')) === ['aberto'], '(abas) Empresas | Setores | Cargos | Benefícios | Avaliações — todas `aberto`, como a Central e o gate de leitura dos controllers (sem Unidades: não existe tela própria)');
+    // Bloco 1 (2026-10): Jornadas de Trabalho entrou como sexta aba irmã (mesmo gate `aberto`,
+    // mesmo AdminCatalogosController::renderIndex() de Empresas/Cargos).
+    $check(array_column($def['abas'], 'chave') === ['empresas', 'setores', 'cargos', 'jornadas-trabalho', 'beneficios', 'avaliacoes'] && array_unique(array_column($def['abas'], 'regra')) === ['aberto'], '(abas) Empresas | Setores | Cargos | Jornadas de Trabalho | Benefícios | Avaliações — todas `aberto`, como a Central e o gate de leitura dos controllers (sem Unidades: não existe tela própria)');
     $central = array_values(array_filter(PortalNavegacaoService::definicao(), static fn(array $m): bool => $m['chave'] === 'cadastros'));
-    $check(array_column($central[0]['itens'], 'href') === array_column($def['abas'], 'href'), '(Central) O card Cadastros e as abas apontam para os mesmos cinco destinos');
+    $check(array_column($central[0]['itens'], 'href') === array_column($def['abas'], 'href'), '(Central) O card Cadastros e as abas apontam para os mesmos seis destinos');
     $gates = [
         '/admin/setores' => $corpoDe('AdminSetoresController', 'index'),
         '/admin/beneficios' => $corpoDe('AdminBeneficiosController', 'index'),
         '/admin/avaliacoes' => $corpoDe('AdminAvaliacoesController', 'index'),
         '/admin/empresas' => $corpoDe('AdminCatalogosController', 'renderIndex'),
         '/admin/cargos' => $corpoDe('AdminCatalogosController', 'renderIndex'),
+        '/admin/jornadas-trabalho' => $corpoDe('AdminCatalogosController', 'renderIndex'),
     ];
     $problemas = [];
     foreach ($gates as $href => $corpo) {
@@ -110,7 +113,7 @@ try {
     foreach ($perfis as $rotulo => $u) {
         $comoUsuario($u);
         $abas = array_column((new PortalNavegacaoService())->abas('cadastros'), 'chave');
-        $check($abas === ['empresas', 'setores', 'cargos', 'beneficios', 'avaliacoes'], "(abas) {$rotulo} vê as cinco abas (todos os roles do gate abrem a listagem)");
+        $check($abas === ['empresas', 'setores', 'cargos', 'jornadas-trabalho', 'beneficios', 'avaliacoes'], "(abas) {$rotulo} vê as seis abas (todos os roles do gate abrem a listagem)");
     }
     $check((int)$pdo->query('SELECT COUNT(*) FROM permissoes')->fetchColumn() === $permissoesAntes, '(permissões) Nenhuma permissão nova foi criada');
 

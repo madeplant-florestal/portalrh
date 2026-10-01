@@ -112,11 +112,12 @@ class PortalNavegacaoService
                     ['href' => '/admin/mensagens', 'regra' => 'perm:mensagens.visualizar'],
                 ]],
             ['chave' => 'cadastros', 'titulo' => 'Cadastros', 'icone' => 'cadastros',
-                'descricao' => 'Empresas, setores, cargos, benefícios e avaliações.',
+                'descricao' => 'Empresas, setores, cargos, jornadas de trabalho, benefícios e avaliações.',
                 'itens' => [
                     ['href' => '/admin/empresas', 'regra' => 'aberto'],
                     ['href' => '/admin/setores', 'regra' => 'aberto'],
                     ['href' => '/admin/cargos', 'regra' => 'aberto'],
+                    ['href' => '/admin/jornadas-trabalho', 'regra' => 'aberto'],
                     ['href' => '/admin/beneficios', 'regra' => 'aberto'],
                     ['href' => '/admin/avaliacoes', 'regra' => 'aberto'],
                 ]],
@@ -147,12 +148,14 @@ class PortalNavegacaoService
                 ['chave' => 'people-analytics', 'label' => 'People Analytics', 'href' => '/admin/dashboard', 'regra' => 'perm:dashboard.visualizar'],
                 ['chave' => 'indicadores-rh', 'label' => 'Indicadores de RH', 'href' => '/admin/indicadores-rh', 'regra' => 'aberto'],
             ]],
-            // Bloco G — Cadastros: cinco áreas irmãs reais (mesmo agrupamento do card da Central). Todas abertas às roles admin/rh/viewer no backend
+            // Bloco G — Cadastros: seis áreas irmãs reais (mesmo agrupamento do card da Central; Jornadas de
+            // Trabalho entrou no Bloco 1, 2026-10). Todas abertas às roles admin/rh/viewer no backend
             // (a listagem de cada uma só exige `Auth::requireRole`), como a sidebar antiga e a Central. Escrita continua gateada por controller.
             'cadastros' => ['titulo' => 'Cadastros', 'abas' => [
                 ['chave' => 'empresas', 'label' => 'Empresas', 'href' => '/admin/empresas', 'regra' => 'aberto'],
                 ['chave' => 'setores', 'label' => 'Setores', 'href' => '/admin/setores', 'regra' => 'aberto'],
                 ['chave' => 'cargos', 'label' => 'Cargos', 'href' => '/admin/cargos', 'regra' => 'aberto'],
+                ['chave' => 'jornadas-trabalho', 'label' => 'Jornadas de Trabalho', 'href' => '/admin/jornadas-trabalho', 'regra' => 'aberto'],
                 ['chave' => 'beneficios', 'label' => 'Benefícios', 'href' => '/admin/beneficios', 'regra' => 'aberto'],
                 ['chave' => 'avaliacoes', 'label' => 'Avaliações', 'href' => '/admin/avaliacoes', 'regra' => 'aberto'],
             ]],

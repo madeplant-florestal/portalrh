@@ -4,10 +4,9 @@ $isShow = ($mode ?? 'create') === 'show';
 $currentRole = strtolower((string)($currentRole ?? 'viewer'));
 $isSupervisor = !empty($_SESSION['user_is_supervisor']);
 $currentAccess = $dependencies['current_access'] ?? null;
-$gestores = $dependencies['gestores'] ?? [];
 $colaboradores = $dependencies['colaboradores'] ?? [];
-$competencias = $dependencies['competencias'] ?? ['tecnica' => [], 'comportamental' => []];
 $beneficiosByCargo = $dependencies['beneficios_by_cargo'] ?? [];
+$jornadasTrabalho = $dependencies['jornadas_trabalho'] ?? [];
 $schoolOptions = $dependencies['escolaridades'] ?? [];
 
 // Matriz oficial Cargo x Setor (`cargo_setores_metadados`, espelho técnico do METADADOS):
@@ -19,6 +18,7 @@ $elegiveisSolicitantes = $dependencies['elegiveis_solicitantes'] ?? [];
 $solicitanteContexto = $dependencies['solicitante_contexto'] ?? [
     'usuario_id' => 0, 'nome' => null, 'cargo_rotulo' => null,
     'setores' => [], 'cargos_por_setor' => [], 'centros_custo_by_setor' => [], 'bloqueado_sem_setor' => true,
+    'aprovador_nome' => null, 'etapa_lider_dispensada' => false,
 ];
 $setoresSolicitante = $solicitanteContexto['setores'] ?? [];
 
@@ -94,14 +94,8 @@ $statusLabels = [
 ];
 
 $selectedBenefitIds = array_map('intval', $form['beneficio_ids'] ?? []);
-$selectedTecnicaIds = array_map('intval', $form['competencia_tecnica_ids'] ?? []);
-$selectedComportamentalIds = array_map('intval', $form['competencia_comportamental_ids'] ?? []);
-// Sprint 2026-09-09: a autorização e a hierarquia migraram para `usuarios`. Não há mais trava de
-// setor pelo gestor. O campo "Gestor solicitante" é opcional e só aparece para RH/Admin (contexto
-// legado); usuário comum/PJ nem o vê e a solicitação nasce com gestor NULL.
-$mostrarGestor = !$isShow && $canEditRh;
 $defaultSetorId = (int)($form['setor_id'] ?? 0);
-$defaultGestorId = (int)($form['gestor_solicitante_colaborador_id'] ?? 0);
+$defaultJornadaTrabalhoId = (int)($form['jornada_trabalho_id'] ?? 0);
 $aviso = $aviso ?? '';
 
 // Setor "atual" para a renderização inicial do servidor (JS reajusta ao trocar Setor/solicitante):
@@ -138,7 +132,6 @@ $canApproveRh = $isShow
 $canEditRhSection = $isShow && $canEditRh && in_array((string)($record['status_fluxo'] ?? ''), ['aprovada', 'concluida'], true);
 
 $payload = [
-    'gestores' => $gestores,
     'beneficios_by_cargo' => $beneficiosByCargo,
     'solicitante_contexto' => $solicitanteContexto,
     'pode_fallback_cargo_administrativo' => $podeFallbackCargoAdministrativo,
@@ -244,18 +237,19 @@ $payload = [
             <p class="mt-1 text-xs text-text-secondary">Somente Cargos oficialmente vinculados ao Setor selecionado (matriz do METADADOS). O Cargo do solicitante é só contexto — não define o Cargo da vaga.</p>
             <p id="solicitacao-cargo-faixa" class="mt-1 text-xs text-text-secondary" data-solicitacao-faixa-label="1" aria-live="polite"></p>
           </div>
-          <?php if ($mostrarGestor): ?>
+          <?php if (!$isShow): ?>
           <div>
-            <label class="block text-sm font-medium text-text-primary">Gestor solicitante <span class="text-text-muted">(opcional — contexto legado)</span></label>
-            <select name="gestor_solicitante_colaborador_id" class="mt-1 w-full rounded border px-3 py-2" data-solicitacao-gestor="1">
-              <option value="">Não informar</option>
-              <?php foreach ($gestores as $gestor): ?>
-                <option value="<?= (int)$gestor['colaborador_id'] ?>" <?= (int)$defaultGestorId === (int)$gestor['colaborador_id'] ? 'selected' : '' ?>>
-                  <?= Security::e($gestor['nome'] . ' - ' . $gestor['cargo_nome']) ?>
-                </option>
-              <?php endforeach; ?>
-            </select>
-            <p class="mt-1 text-xs text-text-secondary">A identidade do solicitante é o Usuário selecionado acima. Este campo é apenas contexto opcional (histórico).</p>
+            <label class="block text-sm font-medium text-text-primary">Gestor aprovador</label>
+            <div class="mt-1 rounded border bg-surface-secondary px-3 py-2 text-sm text-text-primary" data-solicitacao-aprovador-label="1">
+              <?php if ($solicitanteContexto['aprovador_nome'] ?? null): ?>
+                <?= Security::e((string)$solicitanteContexto['aprovador_nome']) ?>
+              <?php elseif (!empty($solicitanteContexto['etapa_lider_dispensada'])): ?>
+                Etapa de líder dispensada — vai direto para o RH
+              <?php else: ?>
+                Nenhum aprovador configurado
+              <?php endif; ?>
+            </div>
+            <p class="mt-1 text-xs text-text-secondary">Quem vai aprovar esta solicitação na 1ª etapa, conforme o cadastro do Solicitante em Usuários (somente leitura).</p>
           </div>
           <?php endif; ?>
         </div>
@@ -387,11 +381,15 @@ $payload = [
         <div class="grid gap-4 lg:grid-cols-2">
           <div>
             <label class="block text-sm font-medium text-text-primary">Jornada de trabalho *</label>
-            <input type="text" name="jornada_trabalho" value="<?= Security::e($form['jornada_trabalho'] ?? '') ?>" class="mt-1 w-full rounded border px-3 py-2" placeholder="Ex.: 44h semanais" required>
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-text-primary">Escala (se aplicável)</label>
-            <input type="text" name="escala" value="<?= Security::e($form['escala'] ?? '') ?>" class="mt-1 w-full rounded border px-3 py-2" placeholder="Ex.: 5x1, 12x36">
+            <select name="jornada_trabalho_id" class="mt-1 w-full rounded border px-3 py-2" required>
+              <option value="">Selecione</option>
+              <?php foreach ($jornadasTrabalho as $jornada): ?>
+                <option value="<?= (int)$jornada['id'] ?>" <?= $defaultJornadaTrabalhoId === (int)$jornada['id'] ? 'selected' : '' ?>><?= Security::e($jornada['nome']) ?></option>
+              <?php endforeach; ?>
+            </select>
+            <?php if ($jornadasTrabalho === []): ?>
+              <p class="mt-1 text-xs text-danger">Nenhuma Jornada de Trabalho cadastrada. <a href="<?= $base ?>/admin/jornadas-trabalho/novo" class="underline" target="_blank" rel="noopener">Cadastrar agora</a>.</p>
+            <?php endif; ?>
           </div>
         </div>
         <div>
@@ -431,6 +429,10 @@ $payload = [
           <textarea name="experiencia_necessaria" rows="4" class="mt-1 w-full rounded border px-3 py-2"><?= Security::e($form['experiencia_necessaria'] ?? '') ?></textarea>
         </div>
         <div>
+          <label class="block text-sm font-medium text-text-primary">Pré-requisitos</label>
+          <textarea name="pre_requisitos" rows="3" class="mt-1 w-full rounded border px-3 py-2" placeholder="Ex.: CNH A/B, veículo próprio, certificações..."><?= Security::e($form['pre_requisitos'] ?? '') ?></textarea>
+        </div>
+        <div>
           <label class="block text-sm font-medium text-text-primary">Entregas esperadas da Função *</label>
           <textarea name="entregas_esperadas" rows="6" minlength="100" class="mt-1 w-full rounded border px-3 py-2" required><?= Security::e($form['entregas_esperadas'] ?? '') ?></textarea>
           <p class="mt-1 text-xs text-text-secondary">Descreva os principais resultados esperados para a função com no mínimo 100 caracteres.</p>
@@ -438,25 +440,11 @@ $payload = [
         <div class="grid gap-4 xl:grid-cols-2">
           <div>
             <label class="block text-sm font-medium text-text-primary">Competências técnicas</label>
-            <div class="mt-2 grid gap-3">
-              <?php foreach ($competencias['tecnica'] as $competencia): ?>
-                <label class="flex items-start gap-2 rounded border px-3 py-2 text-sm">
-                  <input type="checkbox" name="competencia_tecnica_ids[]" value="<?= (int)$competencia['id'] ?>" <?= in_array((int)$competencia['id'], $selectedTecnicaIds, true) ? 'checked' : '' ?>>
-                  <span><?= Security::e($competencia['nome']) ?></span>
-                </label>
-              <?php endforeach; ?>
-            </div>
+            <textarea name="competencias_tecnicas" rows="3" class="mt-1 w-full rounded border px-3 py-2"><?= Security::e($form['competencias_tecnicas'] ?? '') ?></textarea>
           </div>
           <div>
             <label class="block text-sm font-medium text-text-primary">Competências comportamentais</label>
-            <div class="mt-2 grid gap-3">
-              <?php foreach ($competencias['comportamental'] as $competencia): ?>
-                <label class="flex items-start gap-2 rounded border px-3 py-2 text-sm">
-                  <input type="checkbox" name="competencia_comportamental_ids[]" value="<?= (int)$competencia['id'] ?>" <?= in_array((int)$competencia['id'], $selectedComportamentalIds, true) ? 'checked' : '' ?>>
-                  <span><?= Security::e($competencia['nome']) ?></span>
-                </label>
-              <?php endforeach; ?>
-            </div>
+            <textarea name="competencias_comportamentais" rows="3" class="mt-1 w-full rounded border px-3 py-2"><?= Security::e($form['competencias_comportamentais'] ?? '') ?></textarea>
           </div>
         </div>
         <div>
@@ -605,10 +593,24 @@ $payload = [
           <dl class="mt-4 space-y-3 text-sm">
             <div><dt class="font-semibold text-text-primary">Escolaridade mínima</dt><dd class="text-text-secondary"><?= Security::e($schoolOptions[$record['escolaridade_minima']] ?? $record['escolaridade_minima']) ?></dd></div>
             <div><dt class="font-semibold text-text-primary">Formação acadêmica</dt><dd class="text-text-secondary"><?= Security::e($record['formacao_academica'] ?: 'Não informada') ?></dd></div>
+            <div><dt class="font-semibold text-text-primary">Pré-requisitos</dt><dd class="text-text-secondary"><?= nl2br(Security::e($record['pre_requisitos'] ?: 'Não informados')) ?></dd></div>
             <div><dt class="font-semibold text-text-primary">Experiência necessária</dt><dd class="text-text-secondary"><?= nl2br(Security::e($record['experiencia_necessaria'] ?: 'Não informada')) ?></dd></div>
             <div><dt class="font-semibold text-text-primary">Entregas esperadas</dt><dd class="text-text-secondary"><?= nl2br(Security::e($record['entregas_esperadas'])) ?></dd></div>
-            <div><dt class="font-semibold text-text-primary">Competências técnicas</dt><dd class="text-text-secondary"><?= !empty($record['competencias_tecnicas']) ? Security::e(implode(', ', array_column($record['competencias_tecnicas'], 'nome'))) : 'Nenhuma informada' ?></dd></div>
-            <div><dt class="font-semibold text-text-primary">Competências comportamentais</dt><dd class="text-text-secondary"><?= !empty($record['competencias_comportamentais']) ? Security::e(implode(', ', array_column($record['competencias_comportamentais'], 'nome'))) : 'Nenhuma informada' ?></dd></div>
+            <?php
+              // competencias_*_texto (Bloco 1, 2026-10) é a fonte para solicitações novas; o array
+              // competencias_* (catálogo) continua alimentando a exibição de solicitações antigas,
+              // criadas antes desta mudança — nunca reescrito.
+              $competenciasTecnicasExibicao = $record['competencias_tecnicas_texto'] ?? '';
+              if ($competenciasTecnicasExibicao === '' && !empty($record['competencias_tecnicas'])) {
+                  $competenciasTecnicasExibicao = implode(', ', array_column($record['competencias_tecnicas'], 'nome'));
+              }
+              $competenciasComportamentaisExibicao = $record['competencias_comportamentais_texto'] ?? '';
+              if ($competenciasComportamentaisExibicao === '' && !empty($record['competencias_comportamentais'])) {
+                  $competenciasComportamentaisExibicao = implode(', ', array_column($record['competencias_comportamentais'], 'nome'));
+              }
+            ?>
+            <div><dt class="font-semibold text-text-primary">Competências técnicas</dt><dd class="text-text-secondary"><?= $competenciasTecnicasExibicao !== '' ? nl2br(Security::e($competenciasTecnicasExibicao)) : 'Nenhuma informada' ?></dd></div>
+            <div><dt class="font-semibold text-text-primary">Competências comportamentais</dt><dd class="text-text-secondary"><?= $competenciasComportamentaisExibicao !== '' ? nl2br(Security::e($competenciasComportamentaisExibicao)) : 'Nenhuma informada' ?></dd></div>
             <div><dt class="font-semibold text-text-primary">Nível de responsabilidade</dt><dd class="text-text-secondary"><?= Security::e($nivelLabels[$record['nivel_responsabilidade']] ?? $record['nivel_responsabilidade']) ?></dd></div>
           </dl>
         </div>

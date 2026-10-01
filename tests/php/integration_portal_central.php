@@ -220,6 +220,7 @@ try {
         '/admin/empresas' => [AdminEmpresasController::class, 'index'],
         '/admin/setores' => [AdminSetoresController::class, 'index'],
         '/admin/cargos' => [AdminCargosController::class, 'index'],
+        '/admin/jornadas-trabalho' => [AdminJornadasTrabalhoController::class, 'index'],
         '/admin/beneficios' => [AdminBeneficiosController::class, 'index'],
         '/admin/avaliacoes' => [AdminAvaliacoesController::class, 'index'],
         '/admin/usuarios' => [AdminUsuariosController::class, 'index'],

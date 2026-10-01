@@ -32,7 +32,7 @@ $check = static function (bool $cond, string $msg) use (&$falhas): void {
 
 $mk = 'ZZUVA_' . substr(md5(uniqid('', true)), 0, 8);
 $emailMk = strtolower($mk) . '@teste.local';
-$criados = ['solicitacoes' => [], 'usuarios' => [], 'centros' => [], 'cargos' => [], 'setores' => [], 'metadados' => []];
+$criados = ['solicitacoes' => [], 'usuarios' => [], 'centros' => [], 'cargos' => [], 'setores' => [], 'metadados' => [], 'jornadas' => []];
 
 $limparSolicitacao = static function (int $id) use ($pdo): void {
     foreach (['solicitacao_vaga_aprovacoes', 'solicitacao_vaga_beneficios', 'solicitacao_vaga_competencias', 'solicitacao_vaga_auditoria'] as $t) {
@@ -87,11 +87,16 @@ try {
         return $id;
     };
 
+    // Bloco 1 (2026-10): Jornada de Trabalho estruturada — SolicitacaoVaga::create() exige
+    // jornada_trabalho_id de uma jornada cadastrada (CadastroOrganizacional, reaproveitado).
+    $jornadaId = CadastroOrganizacional::create('jornadas_trabalho', ['nome' => 'JORNADA ' . $mk, 'ativo' => 1]);
+    $criados['jornadas'][] = $jornadaId;
+
     $payloadBase = [
         'setor_id' => $setorId, 'quantidade_vagas' => 1, 'cargo_id' => $cargoId,
         'tipo_vaga' => 'nova_posicao', 'tipo_contratacao' => 'pj',
         'salario_previsto' => 'R$ 5.000,00',
-        'previsto_orcamento' => '1', 'jornada_trabalho' => '44h semanais',
+        'previsto_orcamento' => '1', 'jornada_trabalho_id' => $jornadaId,
         'escolaridade_minima' => 'medio', 'nivel_responsabilidade' => 'operacional', 'urgencia' => 'media',
         'data_prevista_inicio' => date('d/m/Y', strtotime('+30 days')),
         'entregas_esperadas' => str_repeat('Entrega detalhada da funcao com pelo menos cem caracteres para passar na validacao de conteudo. ', 2),
@@ -225,6 +230,9 @@ try {
     }
     foreach ($criados['metadados'] as $id) {
         $pdo->prepare('DELETE FROM colaboradores_metadados WHERE id = ?')->execute([(int)$id]);
+    }
+    foreach ($criados['jornadas'] as $id) {
+        $pdo->prepare('DELETE FROM jornadas_trabalho WHERE id = ?')->execute([(int)$id]);
     }
 }
 

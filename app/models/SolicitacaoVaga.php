@@ -81,6 +81,21 @@ class SolicitacaoVaga
             UNIQUE KEY uniq_competencias_nome_tipo (nome, tipo)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
+        // Bloco 1 (2026-10): substitui a digitação livre de Jornada de Trabalho por um cadastro
+        // próprio — mesmo padrão minimalista de `competencias` acima, reaproveitado via
+        // CadastroOrganizacional/AdminCatalogosController (ver usageCount() especial em
+        // CadastroOrganizacional.php). `solicitacoes_vaga.jornada_trabalho_id` referencia esta
+        // tabela; a coluna de texto legada `jornada_trabalho` continua gravada como snapshot.
+        $pdo->exec("CREATE TABLE IF NOT EXISTS jornadas_trabalho (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            nome VARCHAR(120) NOT NULL,
+            slug VARCHAR(160) NOT NULL,
+            ativo TINYINT(1) NOT NULL DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uniq_jornadas_trabalho_nome (nome),
+            UNIQUE KEY uniq_jornadas_trabalho_slug (slug)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
         $pdo->exec("CREATE TABLE IF NOT EXISTS usuario_colaboradores (
             id INT AUTO_INCREMENT PRIMARY KEY,
             usuario_id INT NOT NULL,
@@ -164,6 +179,14 @@ class SolicitacaoVaga
         self::addColumnIfMissing('solicitacoes_vaga', 'cancelada_por_usuario_id', 'ALTER TABLE solicitacoes_vaga ADD COLUMN cancelada_por_usuario_id INT NULL AFTER cancelada_em');
         self::addColumnIfMissing('solicitacoes_vaga', 'fechada_em', 'ALTER TABLE solicitacoes_vaga ADD COLUMN fechada_em DATETIME NULL AFTER cancelada_por_usuario_id');
         self::addColumnIfMissing('solicitacoes_vaga', 'fechada_por_usuario_id', 'ALTER TABLE solicitacoes_vaga ADD COLUMN fechada_por_usuario_id INT NULL AFTER fechada_em');
+        // Bloco 1 (2026-10): Jornada estruturada (FK, nullable — solicitações antigas não têm) +
+        // Pré-requisitos e Competências técnicas/comportamentais em texto livre (substituem a
+        // seleção por catálogo só no formulário de criação; solicitacao_vaga_competencias
+        // continua intocada para exibição de registros antigos).
+        self::addColumnIfMissing('solicitacoes_vaga', 'jornada_trabalho_id', 'ALTER TABLE solicitacoes_vaga ADD COLUMN jornada_trabalho_id INT NULL AFTER jornada_trabalho, ADD CONSTRAINT fk_solicitacoes_jornada_trabalho FOREIGN KEY (jornada_trabalho_id) REFERENCES jornadas_trabalho(id) ON DELETE RESTRICT');
+        self::addColumnIfMissing('solicitacoes_vaga', 'pre_requisitos_encrypted', 'ALTER TABLE solicitacoes_vaga ADD COLUMN pre_requisitos_encrypted TEXT NULL AFTER experiencia_necessaria_encrypted');
+        self::addColumnIfMissing('solicitacoes_vaga', 'competencias_tecnicas_encrypted', 'ALTER TABLE solicitacoes_vaga ADD COLUMN competencias_tecnicas_encrypted TEXT NULL AFTER pre_requisitos_encrypted');
+        self::addColumnIfMissing('solicitacoes_vaga', 'competencias_comportamentais_encrypted', 'ALTER TABLE solicitacoes_vaga ADD COLUMN competencias_comportamentais_encrypted TEXT NULL AFTER competencias_tecnicas_encrypted');
 
         $pdo->exec("CREATE TABLE IF NOT EXISTS solicitacao_vaga_beneficios (
             solicitacao_id INT NOT NULL,
@@ -296,6 +319,10 @@ class SolicitacaoVaga
             ];
         }
 
+        $jornadasTrabalho = $pdo->query(
+            "SELECT id, nome FROM jornadas_trabalho WHERE ativo = 1 ORDER BY nome ASC"
+        )->fetchAll(PDO::FETCH_ASSOC);
+
         $competencias = $pdo->query(
             "SELECT id, nome, tipo FROM competencias WHERE ativo = 1 ORDER BY nome ASC"
         )->fetchAll(PDO::FETCH_ASSOC);
@@ -410,6 +437,9 @@ class SolicitacaoVaga
                 ];
             }, $colaboradores),
             'beneficios_by_cargo' => $beneficiosByCargo,
+            'jornadas_trabalho' => array_map(static function (array $row): array {
+                return ['id' => (int)$row['id'], 'nome' => $row['nome']];
+            }, $jornadasTrabalho),
             'competencias' => $competenciasByType,
             'escolaridades' => [
                 'fundamental' => 'Fundamental',
@@ -438,6 +468,11 @@ class SolicitacaoVaga
      * `cargo_setores_metadados` e os Centros de Custo de cada um. Alimenta tanto a renderização
      * inicial do formulário quanto o endpoint JSON usado quando Admin/RH troca o solicitante.
      *
+     * `aprovador_nome`/`etapa_lider_dispensada` (Bloco 1, 2026-10): mesma leitura de
+     * `usuarios.aprovador_usuario_id` usada por resolveApprover() — aqui só para EXIBIÇÃO (sem as
+     * exceções de autorização de resolveApprover(), que continua sendo o único guard real,
+     * chamado dentro de validateForSubmission()). Nunca infere aprovador por cargo/setor/METADADOS.
+     *
      * Reaproveita UsuarioContextoOrganizacionalService (Etapa 1) — não duplica a leitura de
      * `usuario_setores`.
      *
@@ -446,7 +481,7 @@ class SolicitacaoVaga
      *   setores:array<int, array{id:int, nome:string, principal:bool}>,
      *   cargos_por_setor:array<int, array<int, array{id:int, nome:string, salario_min:float, salario_max:float, requires_machine_description:bool}>>,
      *   centros_custo_by_setor:array<int, array<int, array{id:int, codigo:string, nome:string}>>,
-     *   bloqueado_sem_setor:bool
+     *   bloqueado_sem_setor:bool, aprovador_nome:?string, etapa_lider_dispensada:bool
      * }
      */
     public static function contextoOrganizacionalSolicitante(int $usuarioId): array
@@ -461,6 +496,8 @@ class SolicitacaoVaga
                 'cargos_por_setor' => [],
                 'centros_custo_by_setor' => [],
                 'bloqueado_sem_setor' => true,
+                'aprovador_nome' => null,
+                'etapa_lider_dispensada' => false,
             ];
         }
 
@@ -490,6 +527,19 @@ class SolicitacaoVaga
             $centrosPorSetor[$setor['id']] = self::centrosCustoDoSetor($setor['id']);
         }
 
+        $access = self::userAccessProfile($usuarioId);
+        $isRhAdmin = $access !== null && (
+            in_array(strtolower($access['role']), ['admin', 'rh'], true) || $access['is_supervisor'] === 1
+        );
+        $aprovadorNome = null;
+        $etapaLiderDispensada = false;
+        if ($access !== null && $access['aprovador_usuario_id'] !== null) {
+            $aprovadorUsuario = User::findById($access['aprovador_usuario_id']);
+            $aprovadorNome = $aprovadorUsuario->nome ?? null;
+        } elseif ($isRhAdmin) {
+            $etapaLiderDispensada = true;
+        }
+
         return [
             'usuario_id' => $usuarioId,
             'nome' => $usuario->nome,
@@ -498,6 +548,8 @@ class SolicitacaoVaga
             'cargos_por_setor' => $cargosPorSetor,
             'centros_custo_by_setor' => $centrosPorSetor,
             'bloqueado_sem_setor' => $setores === [],
+            'aprovador_nome' => $aprovadorNome,
+            'etapa_lider_dispensada' => $etapaLiderDispensada,
         ];
     }
 
@@ -759,12 +811,13 @@ class SolicitacaoVaga
                     gestor_solicitante_colaborador_id, solicitante_usuario_id, tipo_vaga,
                     colaborador_substituido_id, data_desligamento, motivo_saida, motivo_saida_outros_encrypted,
                     tipo_contratacao, salario_previsto, centro_custo_id, previsto_orcamento,
-                    justificativa_orcamento_encrypted, jornada_trabalho, escala_encrypted, turno,
+                    justificativa_orcamento_encrypted, jornada_trabalho, jornada_trabalho_id, escala_encrypted, turno,
                     escolaridade_minima, formacao_academica_encrypted, experiencia_necessaria_encrypted,
-                    entregas_esperadas_encrypted, nivel_responsabilidade, data_prevista_inicio,
+                    entregas_esperadas_encrypted, pre_requisitos_encrypted, competencias_tecnicas_encrypted,
+                    competencias_comportamentais_encrypted, nivel_responsabilidade, data_prevista_inicio,
                     urgencia, data_limite_fechamento, lider_imediato_colaborador_id, lider_imediato_usuario_id,
                     status_fluxo, situacao_kanban_id
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
             );
 
             $stmt->execute([
@@ -785,12 +838,16 @@ class SolicitacaoVaga
                 $normalized['previsto_orcamento'],
                 self::encryptNullable($normalized['justificativa_orcamento']),
                 $normalized['jornada_trabalho'],
+                $normalized['jornada_trabalho_id'],
                 self::encryptNullable($normalized['escala']),
                 $normalized['turno'],
                 $normalized['escolaridade_minima'],
                 self::encryptNullable($normalized['formacao_academica']),
                 self::encryptNullable($normalized['experiencia_necessaria']),
                 self::encryptRequired($normalized['entregas_esperadas']),
+                self::encryptNullable($normalized['pre_requisitos']),
+                self::encryptNullable($normalized['competencias_tecnicas']),
+                self::encryptNullable($normalized['competencias_comportamentais']),
                 $normalized['nivel_responsabilidade'],
                 $normalized['data_prevista_inicio'],
                 $normalized['urgencia'],
@@ -803,8 +860,6 @@ class SolicitacaoVaga
 
             $solicitacaoId = (int)$pdo->lastInsertId();
             self::syncBenefits($solicitacaoId, $normalized['beneficio_ids']);
-            self::syncCompetencies($solicitacaoId, $normalized['competencia_tecnica_ids'], self::TIPO_COMPETENCIA_TECNICA);
-            self::syncCompetencies($solicitacaoId, $normalized['competencia_comportamental_ids'], self::TIPO_COMPETENCIA_COMPORTAMENTAL);
             self::seedApprovalRows($solicitacaoId, $approver['usuario_id'], $etapaLiderDispensada, $actorUserId);
 
             // Auditoria: `actor_usuario_id` é sempre quem EXECUTOU a operação (pode ser o próprio
@@ -1106,10 +1161,13 @@ class SolicitacaoVaga
         );
         $turno = self::nullableEnum($input['turno'] ?? '', ['diurno', 'noturno', 'misto']);
 
-        $jornada = trim((string)($input['jornada_trabalho'] ?? ''));
-        if ($jornada === '') {
-            throw new InvalidArgumentException('Informe a jornada de trabalho.');
-        }
+        // Jornada estruturada (Bloco 1, 2026-10): seleção obrigatória do catálogo
+        // jornadas_trabalho — substitui a digitação livre. `jornada_trabalho` (texto) vira o
+        // snapshot do nome escolhido, mesmo padrão de snapshot já usado em outras partes do
+        // sistema; preserva o texto livre de solicitações antigas, que nunca são reescritas.
+        $jornadaTrabalhoId = self::requiredEntityId($input['jornada_trabalho_id'] ?? null, 'jornadas_trabalho', 'Jornada de trabalho');
+        $jornadaTrabalhoRow = self::findSimple('jornadas_trabalho', $jornadaTrabalhoId);
+        $jornada = (string)($jornadaTrabalhoRow['nome'] ?? '');
 
         $salarioPrevisto = self::parseMoney($input['salario_previsto'] ?? '');
         if ($salarioPrevisto === null) {
@@ -1159,12 +1217,14 @@ class SolicitacaoVaga
         }
 
         $beneficioIds = self::filterSelectedIds($input['beneficio_ids'] ?? []);
-        $competenciaTecnicaIds = self::filterSelectedIds($input['competencia_tecnica_ids'] ?? []);
-        $competenciaComportamentalIds = self::filterSelectedIds($input['competencia_comportamental_ids'] ?? []);
-
         self::assertBenefitSelection($cargoId, $beneficioIds);
-        self::assertCompetencySelection(self::TIPO_COMPETENCIA_TECNICA, $competenciaTecnicaIds);
-        self::assertCompetencySelection(self::TIPO_COMPETENCIA_COMPORTAMENTAL, $competenciaComportamentalIds);
+
+        // Bloco 1 (2026-10): Pré-requisitos e Competências técnicas/comportamentais em texto livre,
+        // opcionais — substituem a seleção por catálogo (solicitacao_vaga_competencias) só aqui;
+        // a tabela de catálogo não é tocada (continua alimentando a exibição de registros antigos).
+        $preRequisitos = trim((string)($input['pre_requisitos'] ?? ''));
+        $competenciasTecnicasTexto = trim((string)($input['competencias_tecnicas'] ?? ''));
+        $competenciasComportamentaisTexto = trim((string)($input['competencias_comportamentais'] ?? ''));
 
         $colaboradorSubstituidoId = null;
         $dataDesligamento = null;
@@ -1213,14 +1273,16 @@ class SolicitacaoVaga
             'previsto_orcamento' => $previstoOrcamento,
             'justificativa_orcamento' => $justificativaOrcamento,
             'jornada_trabalho' => $jornada,
+            'jornada_trabalho_id' => $jornadaTrabalhoId,
             'escala' => trim((string)($input['escala'] ?? '')),
             'turno' => $turno,
             'escolaridade_minima' => $escolaridade,
             'formacao_academica' => trim((string)($input['formacao_academica'] ?? '')),
             'experiencia_necessaria' => trim((string)($input['experiencia_necessaria'] ?? '')),
             'entregas_esperadas' => $entregasEsperadas,
-            'competencia_tecnica_ids' => $competenciaTecnicaIds,
-            'competencia_comportamental_ids' => $competenciaComportamentalIds,
+            'pre_requisitos' => $preRequisitos,
+            'competencias_tecnicas' => $competenciasTecnicasTexto,
+            'competencias_comportamentais' => $competenciasComportamentaisTexto,
             'nivel_responsabilidade' => $nivelResponsabilidade,
             'data_prevista_inicio' => $dataPrevistaInicio,
             'urgencia' => $urgencia,
@@ -1793,6 +1855,9 @@ class SolicitacaoVaga
         $row['motivo_saida_outros'] = Cipher::decrypt($row['motivo_saida_outros_encrypted'] ?? null) ?? '';
         $row['justificativa_orcamento'] = Cipher::decrypt($row['justificativa_orcamento_encrypted'] ?? null) ?? '';
         $row['escala'] = Cipher::decrypt($row['escala_encrypted'] ?? null) ?? '';
+        $row['pre_requisitos'] = Cipher::decrypt($row['pre_requisitos_encrypted'] ?? null) ?? '';
+        $row['competencias_tecnicas_texto'] = Cipher::decrypt($row['competencias_tecnicas_encrypted'] ?? null) ?? '';
+        $row['competencias_comportamentais_texto'] = Cipher::decrypt($row['competencias_comportamentais_encrypted'] ?? null) ?? '';
         $row['formacao_academica'] = Cipher::decrypt($row['formacao_academica_encrypted'] ?? null) ?? '';
         $row['experiencia_necessaria'] = Cipher::decrypt($row['experiencia_necessaria_encrypted'] ?? null) ?? '';
         $row['entregas_esperadas'] = Cipher::decrypt($row['entregas_esperadas_encrypted'] ?? null) ?? '';

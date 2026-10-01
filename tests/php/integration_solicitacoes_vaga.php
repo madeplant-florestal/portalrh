@@ -16,6 +16,7 @@ $cleanup = [
     'cargos' => [],
     'setores' => [],
     'usuarios_extra' => [],
+    'jornadas' => [],
 ];
 
 try {
@@ -64,6 +65,11 @@ try {
     $centroId = (int)$pdo->lastInsertId();
     $cleanup['centros'][] = $centroId;
 
+    // Bloco 1 (2026-10): Jornada de Trabalho estruturada — SolicitacaoVaga::create() exige
+    // jornada_trabalho_id de uma jornada cadastrada (CadastroOrganizacional, reaproveitado).
+    $jornadaId = CadastroOrganizacional::create('jornadas_trabalho', ['nome' => 'JORNADA TESTE INTEGRACAO ' . $sufixo, 'ativo' => 1]);
+    $cleanup['jornadas'][] = $jornadaId;
+
     // Correção de direção (2026-09-14): Cargo agora depende do Setor via a matriz oficial
     // (cargo_setores_metadados, espelho técnico do METADADOS) — sem esse vínculo, este Cargo/Setor
     // de fixture seria rejeitado por SolicitacaoVaga::create() mais abaixo.
@@ -96,8 +102,6 @@ try {
     }
 
     $beneficios = $deps['beneficios_by_cargo'][$cargoId] ?? [];
-    $competenciasTecnicas = $deps['competencias']['tecnica'] ?? [];
-    $competenciasComportamentais = $deps['competencias']['comportamental'] ?? [];
 
     $payload = [
         'setor_id' => $setorId,
@@ -110,15 +114,15 @@ try {
         'beneficio_ids' => array_slice(array_map(static fn(array $row): int => (int)$row['id'], $beneficios), 0, 2),
         'centro_custo_id' => $centroId,
         'previsto_orcamento' => '1',
-        'jornada_trabalho' => '44h semanais',
-        'escala' => '5x2',
+        'jornada_trabalho_id' => $jornadaId,
         'turno' => 'diurno',
         'escolaridade_minima' => 'medio',
         'formacao_academica' => 'Ensino médio completo',
         'experiencia_necessaria' => 'Experiência prévia em processos de rotina da área solicitante.',
         'entregas_esperadas' => str_repeat('Resultado esperado com aderência aos indicadores da área e conformidade com as políticas internas. ', 2),
-        'competencia_tecnica_ids' => array_slice(array_map(static fn(array $row): int => (int)$row['id'], $competenciasTecnicas), 0, 2),
-        'competencia_comportamental_ids' => array_slice(array_map(static fn(array $row): int => (int)$row['id'], $competenciasComportamentais), 0, 2),
+        'pre_requisitos' => 'CNH B, disponibilidade para viagens.',
+        'competencias_tecnicas' => 'Excel avançado, rotinas administrativas.',
+        'competencias_comportamentais' => 'Comunicação, proatividade.',
         'nivel_responsabilidade' => 'operacional',
         'data_prevista_inicio' => date('d/m/Y', strtotime('+20 days')),
         'urgencia' => 'alta',
@@ -317,6 +321,9 @@ try {
     if ($createdId) {
         $stmt = $pdo->prepare('DELETE FROM solicitacoes_vaga WHERE id = ?');
         $stmt->execute([$createdId]);
+    }
+    foreach ($cleanup['jornadas'] as $jornadaId) {
+        $pdo->prepare('DELETE FROM jornadas_trabalho WHERE id = ?')->execute([(int)$jornadaId]);
     }
     if ($usuarioSetorConcedido !== null) {
         $pdo->prepare('DELETE FROM usuario_setores WHERE usuario_id = ? AND setor_id = ?')

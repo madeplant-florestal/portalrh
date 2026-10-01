@@ -17,6 +17,11 @@ class CadastroOrganizacional
             'plural' => 'Cargos',
             'reference_column' => 'cargo_id',
         ],
+        'jornadas_trabalho' => [
+            'singular' => 'Jornada de Trabalho',
+            'plural' => 'Jornadas de Trabalho',
+            'reference_column' => 'jornada_trabalho_id',
+        ],
     ];
 
     public static function meta(string $table): array
@@ -189,6 +194,17 @@ class CadastroOrganizacional
             return self::colaboradoresAtivosPorEmpresa($id);
         }
 
+        // Jornada de Trabalho (Bloco 1, 2026-10): não se relaciona com `colaboradores` — "uso"
+        // aqui é quantas Solicitações de Vaga referenciam esta jornada.
+        if ($table === 'jornadas_trabalho') {
+            if (!self::tableExists('solicitacoes_vaga')) {
+                return 0;
+            }
+            $stmt = Database::conn()->prepare('SELECT COUNT(*) FROM solicitacoes_vaga WHERE jornada_trabalho_id = ?');
+            $stmt->execute([$id]);
+            return (int)$stmt->fetchColumn();
+        }
+
         if (!self::tableExists('colaboradores')) {
             return 0;
         }
@@ -211,6 +227,16 @@ class CadastroOrganizacional
         // ativo no espelho (não é soma das linhas por empresa, ver colaboradoresAtivosTotal()).
         if ($table === 'empresas') {
             return self::colaboradoresAtivosTotal();
+        }
+
+        // Jornada de Trabalho (Bloco 1, 2026-10): mesma fonte especial de usageCount() — não se
+        // relaciona com `colaboradores`, e sim com Solicitações de Vaga.
+        if ($table === 'jornadas_trabalho') {
+            if (!self::tableExists('solicitacoes_vaga')) {
+                return 0;
+            }
+            $stmt = Database::conn()->query('SELECT COUNT(DISTINCT jornada_trabalho_id) FROM solicitacoes_vaga WHERE jornada_trabalho_id IS NOT NULL');
+            return (int)$stmt->fetchColumn();
         }
 
         if (!self::tableExists('colaboradores')) {

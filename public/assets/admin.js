@@ -893,6 +893,7 @@ if (typeof module !== 'undefined' && module.exports) {
     const cargoBloqueioWrap = root.querySelector('[data-solicitacao-cargo-bloqueio="1"]');
     const cargoFallbackAvisoWrap = root.querySelector('[data-solicitacao-cargo-fallback-aviso="1"]');
     const gestorSelect = root.querySelector('[data-solicitacao-gestor="1"]');
+    const aprovadorLabel = root.querySelector('[data-solicitacao-aprovador-label="1"]');
     const centroSelect = root.querySelector('[data-solicitacao-centro-custo="1"]');
     const centroLabel = root.querySelector('[data-solicitacao-centro-label="1"]');
     const centroVazioMsg = root.querySelector('[data-solicitacao-centro-vazio="1"]');
@@ -1121,6 +1122,15 @@ if (typeof module !== 'undefined' && module.exports) {
       contexto = novoContexto && typeof novoContexto === 'object' ? novoContexto : contextoVazio;
       if (cargoSolicitanteLabel) {
         cargoSolicitanteLabel.textContent = contexto.cargo_rotulo ? `Cargo do solicitante: ${contexto.cargo_rotulo}` : '';
+      }
+      if (aprovadorLabel) {
+        if (contexto.aprovador_nome) {
+          aprovadorLabel.textContent = contexto.aprovador_nome;
+        } else if (contexto.etapa_lider_dispensada) {
+          aprovadorLabel.textContent = 'Etapa de líder dispensada — vai direto para o RH';
+        } else {
+          aprovadorLabel.textContent = 'Nenhum aprovador configurado';
+        }
       }
       // Trocar de solicitante troca o contexto de Setores/Cargos disponíveis — nunca preservar um
       // Cargo selecionado sob o contexto anterior.

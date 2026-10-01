@@ -158,6 +158,21 @@ try {
     $check(($ctxConcluida['avaliacao']['status'] ?? null) === 'concluido', '(15) Após concluir, status vira "concluido"');
     $check(($ctxConcluida['avaliacao']['parecer'] ?? null) === 'apto_efetivacao', '(16) Parecer registrado exatamente como informado — nenhuma efetivação automática é executada (§20/§21)');
 
+    // ---- 5b) REGRESSÃO — concluir() com o payload REAL do <form> de encerramento (admin/avaliacoes-
+    //          experiencia/form.php) NÃO PODE apagar notas/comentários dos valores culturais, avaliação
+    //          técnica, adaptação nem feedback geral. Bug encontrado em 2026-09-30 (auditado junto com a
+    //          Etapa 7 — Avaliações/Feedback → PDI): concluir() reconstruía esses campos a partir de
+    //          $_POST via montarNotas($dados)/atualizar($id,[...]), mas o formulário de encerramento só
+    //          envia csrf/parecer/parecer_justificativa — confirmado lendo o HTML do form (nenhum campo
+    //          nota_*/valores_comentario_*/tecnica_*/adaptacao_*/feedback_geral existe nesse <form>).
+    //          Corrigido: concluir() agora só altera parecer/parecer_justificativa/status/data_realizacao.
+    //          Este teste falha com a implementação antiga (tudo viraria NULL) e passa com a corrigida.
+    $check(($ctxConcluida['avaliacao']['feedback_geral'] ?? null) === 'ZZAE feedback geral.', '(16b) [REGRESSÃO] feedback_geral PERMANECE intacto após concluir() com payload real (não é apagado)');
+    $check(($ctxConcluida['avaliacao']['tecnica_capacidade'] ?? null) === 'sim', '(16c) [REGRESSÃO] tecnica_capacidade PERMANECE intacto');
+    $check(($ctxConcluida['avaliacao']['adaptacao_nivel'] ?? null) === 'boa', '(16d) [REGRESSÃO] adaptacao_nivel PERMANECE intacto');
+    $check(($ctxConcluida['avaliacao']['valores_comentario_respeito'] ?? null) === 'Comentário ZZAE respeito', '(16e) [REGRESSÃO] valores_comentario_respeito PERMANECE intacto');
+    $check(($ctxConcluida['criterios']['respeito'][1] ?? null) === 2, '(16f) [REGRESSÃO] nota do critério 1 de "respeito" PERMANECE intacta — concluir() não zera nem recalcula os 24 critérios');
+
     // status derivado agora: aguardando_ciencia (concluído, sem ciência do colaborador)
     $listaAposConcluir = $svc->listarPendencias([], $atorGestorA, $hoje);
     $itemAposConcluir = null;

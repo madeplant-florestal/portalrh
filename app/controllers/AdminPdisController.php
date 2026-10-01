@@ -108,9 +108,39 @@ class AdminPdisController extends Controller
         $this->view->render('admin/pdis/show', [
             'd' => $detalhe,
             'hoje' => new DateTimeImmutable('today'),
+            'linksOrigem' => $this->linksOrigem($detalhe['origens']),
             'flashOk' => Security::sanitizeString($_GET['ok'] ?? ''),
             'flashErro' => Security::sanitizeString($_GET['erro'] ?? ''),
         ], 'layouts/app-shell');
+    }
+
+    /**
+     * Resolve a URL de "Ver documento" de cada origem (§17/§18). Feedback e Avaliação de Desempenho são
+     * roteados pelo próprio id (`/admin/.../{id}/editar`); Avaliação de Experiência é roteada por
+     * `{metadados_id}/{tipo}` — por isso precisa de uma consulta extra para resolver esses dois campos
+     * a partir do id salvo em pdi_origens.origem_ref_id.
+     *
+     * @return array<int,?string> indexado pelo `id` de pdi_origens
+     */
+    private function linksOrigem(array $origens): array
+    {
+        $links = [];
+        $repoExperiencia = null;
+        foreach ($origens as $o) {
+            $tipo = (string)$o['origem_tipo'];
+            $refId = (int)$o['origem_ref_id'];
+            $links[(int)$o['id']] = match ($tipo) {
+                'feedback' => url('/admin/feedbacks/' . $refId . '/editar'),
+                'avaliacao_desempenho' => url('/admin/avaliacoes-desempenho/' . $refId . '/editar'),
+                'avaliacao_experiencia' => (function () use (&$repoExperiencia, $refId): ?string {
+                    $repoExperiencia ??= new AvaliacaoExperienciaRepository();
+                    $av = $repoExperiencia->buscarPorId($refId);
+                    return $av !== null ? url('/admin/avaliacoes-experiencia/' . (int)$av['metadados_id'] . '/' . (string)$av['tipo']) : null;
+                })(),
+                default => null,
+            };
+        }
+        return $links;
     }
 
     public function editar(string $id): void
@@ -245,6 +275,83 @@ class AdminPdisController extends Controller
         }
         $r = $service->manterAposDesligamento((int)$id, (string)($_POST['justificativa'] ?? ''), $ator, new DateTimeImmutable('now'), Security::clientIp());
         $this->responder($r, (int)$id, 'Decisão registrada: o PDI foi mantido.');
+    }
+
+    // ------------------------------------------------------------------ origens (Etapa 7 — Avaliações/Feedback → PDI)
+
+    /**
+     * Tela intermediária "Gerar/Adicionar ao PDI" (§14/§15): mostra o contexto do documento de origem
+     * (necessidades selecionáveis) e as duas opções — criar um PDI novo ou vincular a um PDI existente do
+     * MESMO colaborador. Nunca altera o documento de origem nem cria nada só ao abrir esta tela.
+     */
+    public function origem(): void
+    {
+        $this->exigirLogin();
+        Authorization::requirePermissao('pdi.gerenciar');
+
+        $ator = PdiService::atorDaSessao();
+        $tipo = (string)($_GET['tipo'] ?? '');
+        $ref = ctype_digit((string)($_GET['ref'] ?? '')) ? (int)$_GET['ref'] : 0;
+        $service = new PdiService();
+        $contexto = in_array($tipo, PdiService::ORIGENS_DOCUMENTAIS, true) && $ref > 0 ? $service->contextoOrigem($tipo, $ref, $ator) : null;
+        if ($contexto === null) {
+            http_response_code(404);
+            echo 'Documento de origem não encontrado, não concluído ou fora do seu acesso.';
+            return;
+        }
+        $this->view->render('admin/pdis/origem', [
+            'origemTipo' => $tipo,
+            'origemRefId' => $ref,
+            'contexto' => $contexto,
+            'pdisExistentes' => $service->pdisDoContrato($contexto['metadados_id'], $ator),
+            'rotuloOrigem' => PdiService::ORIGENS[$tipo] ?? $tipo,
+            'flashErro' => Security::sanitizeString($_GET['erro'] ?? ''),
+        ], 'layouts/app-shell');
+    }
+
+    public function criarDeOrigem(): void
+    {
+        [$ator, $service] = $this->entrarPost('pdi.gerenciar');
+        if ($ator === null) {
+            return;
+        }
+        $tipo = (string)($_POST['origem_tipo'] ?? '');
+        $ref = ctype_digit((string)($_POST['origem_ref_id'] ?? '')) ? (int)$_POST['origem_ref_id'] : 0;
+        if (!in_array($tipo, PdiService::ORIGENS_DOCUMENTAIS, true) || $ref <= 0) {
+            http_response_code(400);
+            echo 'Origem inválida.';
+            return;
+        }
+        $itens = is_array($_POST['itens'] ?? null) ? $_POST['itens'] : [];
+        $resultado = $service->criarDeOrigem($tipo, $ref, $itens, $ator, new DateTimeImmutable('now'), Security::clientIp());
+        if (!($resultado['ok'] ?? false)) {
+            $msg = mb_substr(implode(' • ', (array)($resultado['erros'] ?? [$resultado['error'] ?? 'Não foi possível criar o PDI.'])), 0, 500);
+            redirect('/admin/pdis/origem?tipo=' . urlencode($tipo) . '&ref=' . $ref . '&erro=' . urlencode($msg));
+        }
+        redirect('/admin/pdis/' . (int)$resultado['id'] . '/editar?ok=' . urlencode('PDI criado a partir da origem selecionada. Complete o plano (ações, competências) e libere quando estiver pronto.'));
+    }
+
+    public function vincularExistente(): void
+    {
+        [$ator, $service] = $this->entrarPost('pdi.gerenciar');
+        if ($ator === null) {
+            return;
+        }
+        $tipo = (string)($_POST['origem_tipo'] ?? '');
+        $ref = ctype_digit((string)($_POST['origem_ref_id'] ?? '')) ? (int)$_POST['origem_ref_id'] : 0;
+        $pdiId = ctype_digit((string)($_POST['pdi_id'] ?? '')) ? (int)$_POST['pdi_id'] : 0;
+        if (!in_array($tipo, PdiService::ORIGENS_DOCUMENTAIS, true) || $ref <= 0 || $pdiId <= 0) {
+            http_response_code(400);
+            echo 'Dados inválidos.';
+            return;
+        }
+        $itens = is_array($_POST['itens'] ?? null) ? $_POST['itens'] : [];
+        $resultado = $service->vincularOrigem($pdiId, $tipo, $ref, $ator, new DateTimeImmutable('now'), Security::clientIp(), false, $itens);
+        if (!($resultado['ok'] ?? false)) {
+            $msg = mb_substr(implode(' • ', (array)($resultado['erros'] ?? [$resultado['error'] ?? 'Não foi possível vincular a origem.'])), 0, 500);
+            redirect('/admin/pdis/origem?tipo=' . urlencode($tipo) . '&ref=' . $ref . '&erro=' . urlencode($msg));
+        }
+        redirect('/admin/pdis/' . $pdiId . '?ok=' . urlencode('Origem vinculada ao PDI.') . '#origens');
     }
 
     // ------------------------------------------------------------------ helpers

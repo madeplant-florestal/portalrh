@@ -421,6 +421,48 @@ class AvaliacaoDesempenhoService
         return $this->repository->listar($filtros, self::escopoGestor($ator), 200);
     }
 
+    /**
+     * Candidatos a "necessidade de desenvolvimento" para alimentar um PDI (Etapa 7, §12/§13) — só avaliações
+     * CONCLUÍDAS, no escopo do ator. GAP continua DERIVADO (nota_esperada - nota_atual): aparece só como
+     * indicador no texto do item, nunca é recalculado/persistido aqui. Nunca altera a avaliação original.
+     *
+     * @return array{metadados_id:int,snap_nome:string,gestor_usuario_id:int,itens:array<int,array{chave:string,texto:string}>}|null
+     */
+    public function candidatosParaPdi(int $id, array $ator): ?array
+    {
+        $d = $this->detalhe($id, $ator);
+        if ($d === null || (string)$d['avaliacao']['status'] !== 'concluido') {
+            return null;
+        }
+        $av = $d['avaliacao'];
+        $itens = [];
+        foreach ($d['criterios'] as $c) {
+            $atual = $c['nota_atual'] !== null ? (int)$c['nota_atual'] : null;
+            $esperada = $c['nota_esperada'] !== null ? (int)$c['nota_esperada'] : null;
+            if ($atual !== null && $esperada !== null && $esperada > $atual) {
+                $comentario = trim((string)($c['comentario'] ?? ''));
+                $texto = (string)$c['competencia_texto'] . ' — GAP ' . ($esperada - $atual) . ' (nota atual ' . $atual . ', esperada ' . $esperada . ')';
+                $itens[] = ['chave' => 'criterio_' . $c['id'], 'texto' => $texto . ($comentario !== '' ? ': ' . $comentario : '')];
+            }
+        }
+        if (trim((string)($av['gaps_identificados'] ?? '')) !== '') {
+            $itens[] = ['chave' => 'gaps_identificados', 'texto' => 'GAPs identificados: ' . trim((string)$av['gaps_identificados'])];
+        }
+        if (trim((string)($av['plano_acao_sugerido'] ?? '')) !== '') {
+            $itens[] = ['chave' => 'plano_acao_sugerido', 'texto' => 'Plano de ação sugerido: ' . trim((string)$av['plano_acao_sugerido'])];
+        }
+        if (trim((string)($av['parecer_comentario'] ?? '')) !== '') {
+            $rotuloResultado = self::RESULTADO_OPCOES[$av['resultado_final']] ?? (string)$av['resultado_final'];
+            $itens[] = ['chave' => 'parecer', 'texto' => 'Parecer (' . $rotuloResultado . '): ' . trim((string)$av['parecer_comentario'])];
+        }
+        return [
+            'metadados_id' => (int)$av['metadados_id'],
+            'snap_nome' => (string)$av['snap_nome'],
+            'gestor_usuario_id' => (int)$av['gestor_usuario_id'],
+            'itens' => $itens,
+        ];
+    }
+
     private function textoOuNull(mixed $v): ?string
     {
         $t = trim((string)$v);

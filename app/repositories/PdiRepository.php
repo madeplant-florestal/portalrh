@@ -339,4 +339,60 @@ class PdiRepository
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         )->execute([$pdiId, $tipo, $campo, $anterior, $novo, $atorUsuarioId, $atorPapel, $emNomeDoColaborador ? 1 : 0, $ip, $agora]);
     }
+
+    // ------------------------------------------------------------------ origens (Etapa 7 — múltiplas origens por PDI)
+
+    /** @return array<int,array<string,mixed>> origens do PDI, mais recente primeiro. */
+    public function origensDoPdi(int $pdiId): array
+    {
+        return $this->todas(
+            'SELECT o.id, o.pdi_id, o.origem_tipo, o.origem_ref_id, o.contexto_snapshot, o.criado_por_usuario_id, o.criado_em, u.nome AS criado_por_nome
+             FROM pdi_origens o LEFT JOIN usuarios u ON u.id = o.criado_por_usuario_id
+             WHERE o.pdi_id = ? ORDER BY o.criado_em DESC, o.id DESC',
+            [$pdiId]
+        );
+    }
+
+    /** Navegação REVERSA: em quais PDIs (id, snap_nome, status) este documento já está vinculado. */
+    public function pdisPorOrigem(string $origemTipo, int $origemRefId): array
+    {
+        return $this->todas(
+            'SELECT p.id, p.snap_nome, p.status, o.criado_em AS vinculado_em
+             FROM pdi_origens o INNER JOIN pdis p ON p.id = o.pdi_id
+             WHERE o.origem_tipo = ? AND o.origem_ref_id = ?
+             ORDER BY o.criado_em DESC, o.id DESC',
+            [$origemTipo, $origemRefId]
+        );
+    }
+
+    public function origemVinculada(int $pdiId, string $origemTipo, int $origemRefId): bool
+    {
+        $stmt = $this->connection()->prepare('SELECT 1 FROM pdi_origens WHERE pdi_id = ? AND origem_tipo = ? AND origem_ref_id = ? LIMIT 1');
+        $stmt->execute([$pdiId, $origemTipo, $origemRefId]);
+        return $stmt->fetchColumn() !== false;
+    }
+
+    public function inserirOrigem(int $pdiId, string $origemTipo, int $origemRefId, ?string $contextoSnapshot, int $criadoPorUsuarioId, string $agora): int
+    {
+        $this->connection()->prepare(
+            'INSERT INTO pdi_origens (pdi_id, origem_tipo, origem_ref_id, contexto_snapshot, criado_por_usuario_id, criado_em) VALUES (?, ?, ?, ?, ?, ?)'
+        )->execute([$pdiId, $origemTipo, $origemRefId, $contextoSnapshot, $criadoPorUsuarioId, $agora]);
+        return (int)$this->connection()->lastInsertId();
+    }
+
+    /** PDIs do MESMO contrato (para "Adicionar a PDI existente" — nunca de outro colaborador, §15). */
+    public function pdisDoContrato(int $metadadosId, ?int $escopoGestor): array
+    {
+        $where = 'p.metadados_id = ?';
+        $params = [$metadadosId];
+        if ($escopoGestor !== null) {
+            $where .= ' AND p.gestor_usuario_id = ?';
+            $params[] = $escopoGestor;
+        }
+        return $this->todas(
+            "SELECT p.id, p.snap_nome, p.status, p.origem_tipo, p.data_abertura, p.data_prevista_conclusao
+             FROM pdis p WHERE {$where} ORDER BY CASE p.status WHEN 'em_andamento' THEN 1 WHEN 'nao_iniciado' THEN 2 WHEN 'rascunho' THEN 3 WHEN 'concluido' THEN 4 ELSE 5 END, p.id DESC",
+            $params
+        );
+    }
 }

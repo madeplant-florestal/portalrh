@@ -221,6 +221,8 @@ $v = static fn(string $k): string => $criar ? '' : (string)($feedback[$k] ?? '')
       $acaoCiencia = $base . '/admin/feedbacks/' . $documentoId . '/ciencia';
       $podeRegistrarCiencia = $podeAvaliar ?? true;
       include APP_PATH . '/views/admin/partials/avaliacoes-desenvolvimento/_ciencia.php';
+      $concluida = $concluido;
+      include APP_PATH . '/views/admin/partials/avaliacoes-desenvolvimento/_pdi.php';
     ?>
   <?php endif; ?>
 </div>

@@ -189,6 +189,7 @@ $disabled = $somenteLeitura ? 'disabled' : '';
       $acaoCiencia = $base . '/admin/avaliacoes-experiencia/' . $documentoId . '/ciencia';
       $podeRegistrarCiencia = $podeAvaliar ?? false;
       include APP_PATH . '/views/admin/partials/avaliacoes-desenvolvimento/_ciencia.php';
+      include APP_PATH . '/views/admin/partials/avaliacoes-desenvolvimento/_pdi.php';
     ?>
   <?php endif; ?>
 </div>

@@ -93,6 +93,7 @@ class PdiService
         'espaco_colaborador' => 'Espaço do colaborador registrado (em nome do colaborador)',
         'evidencias' => 'Evidências de evolução atualizadas',
         'decisao_contrato_desligado' => 'Decisão sobre PDI de contrato desligado',
+        'origem_vinculada' => 'Origem vinculada',
     ];
 
     private PdiRepository $repository;
@@ -500,6 +501,7 @@ class PdiService
             'acoes' => $acoes,
             'acompanhamentos' => $this->repository->acompanhamentos($id),
             'eventos' => $this->repository->eventos($id),
+            'origens' => $this->repository->origensDoPdi($id),
             'prazo' => self::situacaoPrazo($pdi, $hoje),
             'progresso' => self::progressoAcoes($acoes),
             'divergencias' => self::divergencias($pdi, $hoje),
@@ -511,6 +513,129 @@ class PdiService
                 'reabrir' => (string)$pdi['status'] === 'concluido' && self::escopoTotal($ator) && self::temPermissao($ator, 'pdi.acompanhar'),
             ],
         ];
+    }
+
+    // ================================================================== origens (Etapa 7 — Avaliações/Feedback → PDI)
+
+    /**
+     * Tipos de origem DOCUMENTAL suportados por `pdi_origens` (nunca 'manual'/'desenvolvimento_carreira' — um PDI
+     * manual não tem documento de origem, então não gera linha nesta tabela).
+     */
+    public const ORIGENS_DOCUMENTAIS = ['avaliacao_experiencia', 'feedback', 'avaliacao_desempenho'];
+
+    private static function servicoDaOrigem(string $tipo): ?object
+    {
+        return match ($tipo) {
+            'avaliacao_experiencia' => new AvaliacaoExperienciaService(),
+            'feedback' => new FeedbackService(),
+            'avaliacao_desempenho' => new AvaliacaoDesempenhoService(),
+            default => null,
+        };
+    }
+
+    /**
+     * Contexto de um documento de origem (candidatos a "necessidade de desenvolvimento" + metadados_id/gestor para
+     * validar escopo) — delega ao Service DONO do documento (AvaliacaoExperienciaService::candidatosParaPdi() etc.),
+     * que já aplica a MESMA autorização/escopo usada para abrir o documento (nunca confia em origem_ref_id cru).
+     *
+     * @return array{metadados_id:int,snap_nome:string,gestor_usuario_id:int,itens:array<int,array{chave:string,texto:string}>}|null
+     */
+    public function contextoOrigem(string $tipo, int $refId, array $ator): ?array
+    {
+        if (!in_array($tipo, self::ORIGENS_DOCUMENTAIS, true) || $refId <= 0) {
+            return null;
+        }
+        $servico = self::servicoDaOrigem($tipo);
+        return $servico?->candidatosParaPdi($refId, $ator);
+    }
+
+    /** PDIs do mesmo colaborador do documento de origem, no escopo do ator — para "Adicionar a PDI existente" (§15). */
+    public function pdisDoContrato(int $metadadosId, array $ator): array
+    {
+        if (self::semPermissao($ator, 'pdi.gerenciar') !== null) {
+            return [];
+        }
+        return $this->repository->pdisDoContrato($metadadosId, self::escopoGestor($ator));
+    }
+
+    /** @return array{itens:array,texto:string} filtra os candidatos pelas chaves marcadas e junta os textos selecionados. */
+    private static function selecionarItens(array $candidatos, array $chavesSelecionadas): array
+    {
+        $chavesSelecionadas = array_map('strval', $chavesSelecionadas);
+        $itens = array_values(array_filter($candidatos, static fn(array $c): bool => in_array((string)$c['chave'], $chavesSelecionadas, true)));
+        return ['itens' => $itens, 'texto' => implode("\n\n", array_column($itens, 'texto'))];
+    }
+
+    /**
+     * "Criar novo PDI" a partir de uma origem (§14): reaproveita INTEGRALMENTE criar() (mesma validação, mesmo
+     * snapshot, mesma regra de gestor) — só pré-monta o POST com a origem e o resumo das necessidades selecionadas
+     * como objetivo_esperado, depois registra o vínculo em pdi_origens na MESMA transação de criar().
+     */
+    public function criarDeOrigem(string $origemTipo, int $origemRefId, array $chavesSelecionadas, array $ator, DateTimeImmutable $agora, ?string $ip): array
+    {
+        if ($erro = self::semPermissao($ator, 'pdi.gerenciar')) {
+            return $erro;
+        }
+        $contexto = $this->contextoOrigem($origemTipo, $origemRefId, $ator);
+        if ($contexto === null) {
+            return self::falha('Documento de origem não encontrado ou não concluído.');
+        }
+        $selecao = self::selecionarItens($contexto['itens'], $chavesSelecionadas);
+        $hoje = $agora->format('Y-m-d');
+        $post = [
+            'metadados_id' => (string)$contexto['metadados_id'],
+            'gestor_usuario_id' => (string)$contexto['gestor_usuario_id'],
+            'origem_tipo' => $origemTipo,
+            'origem_ref_tipo' => $origemTipo,
+            'origem_ref_id' => (string)$origemRefId,
+            'data_abertura' => $hoje,
+            'data_prevista_conclusao' => $agora->modify('+90 days')->format('Y-m-d'),
+            'objetivo_esperado' => $selecao['texto'] !== '' ? $selecao['texto'] : null,
+        ];
+        $resultado = $this->criar($post, $ator, $agora, $ip);
+        if (!($resultado['ok'] ?? false)) {
+            return $resultado;
+        }
+        $vinculo = $this->vincularOrigem((int)$resultado['id'], $origemTipo, $origemRefId, $ator, $agora, $ip, true, $chavesSelecionadas);
+        if (!($vinculo['ok'] ?? false)) {
+            // O PDI já foi criado (header sempre com esta origem gravada, via criar()) — a linha de pdi_origens é só
+            // rastreabilidade adicional; uma falha aqui não desfaz o PDI, apenas é reportada.
+            Logger::exception(new RuntimeException('Falha ao vincular pdi_origens após criarDeOrigem: ' . ($vinculo['error'] ?? '')), 'ERROR', ['pdi_id' => $resultado['id']]);
+        }
+        return $resultado;
+    }
+
+    /**
+     * "Adicionar a PDI existente" (§15) ou registro do vínculo logo após criarDeOrigem(). Exige: permissão
+     * pdi.gerenciar, acesso ao PDI alvo (escopo por linha), MESMO colaborador do documento de origem (§15/§24 —
+     * nunca permite vincular origem de um colaborador a PDI de outro) e não duplica silenciosamente (§16).
+     */
+    public function vincularOrigem(int $pdiId, string $origemTipo, int $origemRefId, array $ator, DateTimeImmutable $agora, ?string $ip, bool $viaCriacao = false, array $chavesSelecionadas = []): array
+    {
+        if ($erro = self::semPermissao($ator, 'pdi.gerenciar')) {
+            return $erro;
+        }
+        $pdi = $this->pdiAcessivel($pdiId, $ator);
+        if ($pdi === null) {
+            return self::falha('PDI não encontrado.');
+        }
+        $contexto = $this->contextoOrigem($origemTipo, $origemRefId, $ator);
+        if ($contexto === null) {
+            return self::falha('Documento de origem não encontrado, não concluído ou fora do seu acesso.');
+        }
+        if ((int)$contexto['metadados_id'] !== (int)$pdi['metadados_id']) {
+            return self::falha('O documento de origem pertence a um colaborador diferente do PDI selecionado.');
+        }
+        if ($this->repository->origemVinculada($pdiId, $origemTipo, $origemRefId)) {
+            return $viaCriacao ? ['ok' => true, 'ja_vinculado' => true] : self::falha('Esta origem já está vinculada a este PDI.');
+        }
+        $selecao = self::selecionarItens($contexto['itens'], $chavesSelecionadas);
+        $agoraSql = $agora->format('Y-m-d H:i:s');
+        return $this->repository->transacao(function () use ($pdiId, $origemTipo, $origemRefId, $selecao, $ator, $ip, $agoraSql): array {
+            $this->repository->inserirOrigem($pdiId, $origemTipo, $origemRefId, $selecao['texto'] !== '' ? $selecao['texto'] : null, (int)$ator['id'], $agoraSql);
+            $this->repository->inserirEvento($pdiId, 'origem_vinculada', 'origem', null, self::ORIGENS[$origemTipo] . ' #' . $origemRefId, (int)$ator['id'], self::papelDoAtor($ator), false, $ip, $agoraSql);
+            return ['ok' => true];
+        });
     }
 
     /** Contratos ativos para a criação (busca por nome/empresa/unidade). Exige pdi.gerenciar. */

@@ -377,6 +377,47 @@ class FeedbackService
         return $this->repository->listar($filtros, self::escopoGestor($ator), 200);
     }
 
+    /**
+     * Candidatos a "necessidade de desenvolvimento" para alimentar um PDI (Etapa 7, §11) — só feedbacks
+     * CONCLUÍDOS, no escopo do ator. Prioriza valores marcados "Desenvolvimento Necessário", mas também expõe
+     * pontos de desenvolvimento/próximos passos/observações mesmo em feedbacks de reconhecimento (§10 — a
+     * decisão de gerar PDI é sempre do gestor/RH, nunca automática). Nunca altera o feedback original (§11).
+     *
+     * @return array{metadados_id:int,snap_nome:string,gestor_usuario_id:int,itens:array<int,array{chave:string,texto:string}>}|null
+     */
+    public function candidatosParaPdi(int $id, array $ator): ?array
+    {
+        $d = $this->detalhe($id, $ator);
+        if ($d === null || (string)$d['feedback']['status'] !== 'concluido') {
+            return null;
+        }
+        $f = $d['feedback'];
+        $itens = [];
+        if (trim((string)($f['pontos_desenvolvimento'] ?? '')) !== '') {
+            $itens[] = ['chave' => 'pontos_desenvolvimento', 'texto' => 'Pontos de desenvolvimento: ' . trim((string)$f['pontos_desenvolvimento'])];
+        }
+        foreach ($d['valores'] as $valor => $v) {
+            $comentario = trim((string)($v['comentario'] ?? ''));
+            if (($v['avaliacao'] ?? null) === 'desenvolvimento_necessario') {
+                $rotulo = self::VALORES_CULTURAIS[$valor]['label'] ?? $valor;
+                $itens[] = ['chave' => 'valor_' . $valor, 'texto' => $rotulo . ' — Desenvolvimento Necessário' . ($comentario !== '' ? ': ' . $comentario : '')];
+            }
+        }
+        if (trim((string)($f['proximos_passos'] ?? '')) !== '') {
+            $itens[] = ['chave' => 'proximos_passos', 'texto' => 'Próximos passos: ' . trim((string)$f['proximos_passos'])];
+        }
+        if (trim((string)($f['observacoes_finais'] ?? '')) !== '') {
+            $rotuloResultado = self::RESULTADO_OPCOES[$f['resultado_geral']] ?? (string)$f['resultado_geral'];
+            $itens[] = ['chave' => 'observacoes_finais', 'texto' => 'Observações finais (' . $rotuloResultado . '): ' . trim((string)$f['observacoes_finais'])];
+        }
+        return [
+            'metadados_id' => (int)$f['metadados_id'],
+            'snap_nome' => (string)$f['snap_nome'],
+            'gestor_usuario_id' => (int)$f['gestor_usuario_id'],
+            'itens' => $itens,
+        ];
+    }
+
     private function textoOuNull(mixed $v): ?string
     {
         $t = trim((string)$v);

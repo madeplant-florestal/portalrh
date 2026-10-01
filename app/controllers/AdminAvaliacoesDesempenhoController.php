@@ -113,6 +113,8 @@ class AdminAvaliacoesDesempenhoController
             'contrato' => null, 'gestorSugerido' => null, 'avaliacoesAnteriores' => [], 'contratosBusca' => [], 'busca' => '',
             'usuarios' => [], 'escopoTotal' => AvaliacaoDesempenhoService::escopoTotal($ator),
             'podeAvaliar' => Authorization::temPermissao('avaliacao_desempenho.avaliar'),
+            'podeGerarPdi' => Authorization::temPermissao('pdi.gerenciar'),
+            'pdisRelacionados' => (new PdiRepository())->pdisPorOrigem('avaliacao_desempenho', (int)$id),
             'erro' => Security::sanitizeString($_GET['erro'] ?? ''),
         ], 'layouts/app-shell');
     }

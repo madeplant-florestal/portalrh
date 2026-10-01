@@ -39,7 +39,7 @@ $tomStatus = ['rascunho' => 'neutro', 'nao_iniciado' => 'primary', 'em_andamento
     <?php endif; ?>
   </div>
   <nav aria-label="Seções do PDI" class="flex flex-wrap gap-x-4 gap-y-1 text-ds-caption text-primary-700">
-    <?php foreach (['identificacao' => 'Identificação', 'desenvolvimento' => 'Desenvolvimento', 'competencias' => 'Competências', 'plano-de-acao' => 'Plano de ação', 'acompanhamentos' => 'Acompanhamentos', 'avaliacao-final' => 'Avaliação final', 'historico' => 'Histórico'] as $ancora => $rotuloAncora): ?>
+    <?php foreach (['identificacao' => 'Identificação', 'origens' => 'Origem / Evidências', 'desenvolvimento' => 'Desenvolvimento', 'competencias' => 'Competências', 'plano-de-acao' => 'Plano de ação', 'acompanhamentos' => 'Acompanhamentos', 'avaliacao-final' => 'Avaliação final', 'historico' => 'Histórico'] as $ancora => $rotuloAncora): ?>
       <a href="#<?= $ancora ?>" class="rounded-ds-sm hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"><?= $rotuloAncora ?></a>
     <?php endforeach; ?>
   </nav>
@@ -86,6 +86,33 @@ $tomStatus = ['rascunho' => 'neutro', 'nao_iniciado' => 'primary', 'em_andamento
       <div><dt class="text-xs text-text-secondary">Prevista para conclusão</dt><dd><?= Security::e(pdi_data_br($pdi['data_prevista_conclusao'])) ?></dd></div>
     </dl>
     <p class="mt-2 text-xs text-text-secondary">Criado por <?= Security::e((string)($pdi['criado_por_nome'] ?? '—')) ?> em <?= Security::e(pdi_data_hora_br($pdi['criado_em'])) ?>. Dados do colaborador conforme o METADADOS na abertura.</p>
+  </section>
+
+  <section id="origens" class="<?= $card ?>">
+    <h3 class="<?= $titulo ?>">Origem / Evidências</h3>
+    <p class="mt-1 text-xs text-text-secondary">Avaliações e feedbacks que alimentam este PDI (Etapa 7) — nunca alteram o PDI sozinhos; o vínculo é sempre uma decisão explícita do gestor/RH.</p>
+    <?php if ($d['origens'] === []): ?>
+      <p class="mt-3 text-sm text-text-secondary">Nenhuma origem documental vinculada ainda.</p>
+    <?php else: ?>
+      <ul class="mt-3 space-y-3">
+        <?php foreach ($d['origens'] as $o):
+          $rotuloTipo = PdiService::ORIGENS[$o['origem_tipo']] ?? (string)$o['origem_tipo'];
+          $rotaDocumento = $linksOrigem[(int)$o['id']] ?? null;
+        ?>
+          <li class="rounded-ds-md border border-border p-3">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <p class="text-sm font-medium text-text-primary"><?= Security::e($rotuloTipo) ?> <span class="text-text-secondary">#<?= (int)$o['origem_ref_id'] ?></span></p>
+              <?php if ($rotaDocumento !== null): ?><a href="<?= Security::e($rotaDocumento) ?>" class="text-xs font-semibold text-primary-700 hover:underline">Ver documento →</a><?php endif; ?>
+            </div>
+            <?php if (!empty($o['contexto_snapshot'])): ?><p class="mt-1 text-sm text-text-primary"><?= nl2br(Security::e((string)$o['contexto_snapshot'])) ?></p><?php endif; ?>
+            <p class="mt-1 text-xs text-text-secondary">Vinculado por <?= Security::e((string)($o['criado_por_nome'] ?? '—')) ?> em <?= Security::e(pdi_data_hora_br($o['criado_em'])) ?></p>
+          </li>
+        <?php endforeach; ?>
+      </ul>
+    <?php endif; ?>
+    <?php if (!empty($pode['gerenciar'])): ?>
+      <p class="mt-3 text-xs text-text-secondary">Para adicionar outra origem, abra a avaliação/feedback concluído e use "Gerar/Adicionar ao PDI".</p>
+    <?php endif; ?>
   </section>
 
   <section id="desenvolvimento" class="<?= $card ?>">

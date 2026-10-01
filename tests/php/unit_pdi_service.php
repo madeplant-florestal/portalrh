@@ -162,7 +162,7 @@ $check(!preg_match('/name="(colaborador_id|metadados_id)"\s+value="<\?= Security
 
 $rotasFonte = (string)file_get_contents(BASE_PATH . '/index.php');
 preg_match_all("#\\\$router->(get|post)\\('(/[^']*pdi[^']*)'#i", $rotasFonte, $rotas);
-$check(count($rotas[2]) === 16 && count(array_filter($rotas[2], static fn(string $r): bool => !str_starts_with($r, '/admin/pdis'))) === 0, '(colaborador) As 16 rotas do PDI ficam todas sob /admin/pdis (login global) — não existe rota/portal do colaborador');
+$check(count($rotas[2]) === 19 && count(array_filter($rotas[2], static fn(string $r): bool => !str_starts_with($r, '/admin/pdis'))) === 0, '(colaborador) As 19 rotas do PDI (16 + 3 da Etapa 7 — origem/vincular) ficam todas sob /admin/pdis (login global) — não existe rota/portal do colaborador');
 $seed = preg_replace('/^--.*$/m', '', (string)file_get_contents(BASE_PATH . '/database/migrations/2026-09-23-pdi-permissoes-seed.sql'));
 $check(str_contains($seed, 'INSERT IGNORE INTO permissoes') && !preg_match('/usuario_permissoes|\b(CREATE|ALTER|DROP)\s+(TABLE|DATABASE)/i', $seed) && str_contains($seed, "'pdi.visualizar'") && str_contains($seed, "'pdi.gerenciar'") && str_contains($seed, "'pdi.acompanhar'") && str_contains($seed, ', 660, 1)') && str_contains($seed, ', 670, 1)') && str_contains($seed, ', 680, 1);'), '(seed) Só cadastra as 3 permissões (660/670/680), sem conceder');
 $check(is_file(BASE_PATH . '/database/migrations/2026-09-23-pdi-rollback.sql') && substr_count((string)file_get_contents(BASE_PATH . '/database/migrations/2026-09-23-pdi-rollback.sql'), 'DROP TABLE IF EXISTS') === 5, '(migration) Rollback remove as 5 tabelas');

@@ -214,7 +214,7 @@ try {
     $svcNav = (string)$fonte('app/services/PortalNavegacaoService.php');
     $check(preg_match("#'/admin/pdis'[^\\n]*perm:pdi\\.visualizar#", $svcNav) === 1 || (str_contains($svcNav, '/admin/pdis') && str_contains($svcNav, 'perm:pdi.visualizar')), '(Central) O card de PDI continua na Central com a regra perm:pdi.visualizar');
     $controller = $fonte('app/controllers/AdminPdisController.php');
-    $check(!str_contains($controller, "'layouts/admin'") && substr_count($controller, "'layouts/app-shell'") === 4, '(controller) As quatro renderizações usam o AppShell V2; nada mais mudou de layout');
+    $check(!str_contains($controller, "'layouts/admin'") && substr_count($controller, "'layouts/app-shell'") === 5, '(controller) As cinco renderizações (as 4 originais + origem(), da Etapa 7) usam o AppShell V2; nada mais mudou de layout');
     $check(substr_count($controller, 'requirePermissao(') >= 4, '(controller) Gates por permissão preservados');
     foreach (['_helpers', 'form', 'index', 'selecionar-contrato', 'show'] as $v) {
         $c = $fonte("app/views/admin/pdis/{$v}.php");

@@ -68,6 +68,8 @@ class AdminAvaliacoesExperienciaController
             'ctx' => $ctx, 'ator' => $ator,
             'podeAvaliar' => Authorization::temPermissao('avaliacao_experiencia.avaliar'),
             'escopoTotal' => AvaliacaoExperienciaService::escopoTotal($ator),
+            'podeGerarPdi' => Authorization::temPermissao('pdi.gerenciar'),
+            'pdisRelacionados' => $ctx['avaliacao'] !== null ? (new PdiRepository())->pdisPorOrigem('avaliacao_experiencia', (int)$ctx['avaliacao']['id']) : [],
             'erro' => Security::sanitizeString($_GET['erro'] ?? ''),
         ], 'layouts/app-shell');
     }

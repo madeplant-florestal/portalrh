@@ -331,21 +331,14 @@ class AvaliacaoExperienciaService
             return self::falha('Justificativa obrigatória para este parecer.');
         }
 
+        // O formulário de encerramento só envia parecer/parecer_justificativa (nunca as notas dos critérios
+        // nem valores_comentario_*/tecnica_*/adaptacao_*/feedback_geral — esses pertencem ao formulário
+        // principal de rascunho, já persistidos via salvarRascunho()). Concluir NUNCA reconstrói nem
+        // reenvia esses dados: só altera o que realmente pertence ao encerramento (mesmo princípio
+        // aplicado em FeedbackService::concluir() e AvaliacaoDesempenhoService::concluir()).
         $agoraSql = $agora->format('Y-m-d H:i:s');
-        return $this->repository->transacao(function () use ($id, $parecer, $justificativa, $dados, $ator, $ip, $agoraSql): array {
-            $this->repository->salvarCriterios($id, $this->montarNotas($dados));
+        return $this->repository->transacao(function () use ($id, $parecer, $justificativa, $ator, $ip, $agoraSql): array {
             $this->repository->atualizar($id, [
-                'valores_comentario_respeito' => $dados['valores_comentario_respeito'] ?? null,
-                'valores_comentario_honestidade' => $dados['valores_comentario_honestidade'] ?? null,
-                'valores_comentario_lealdade' => $dados['valores_comentario_lealdade'] ?? null,
-                'valores_comentario_etica' => $dados['valores_comentario_etica'] ?? null,
-                'valores_comentario_ousadia' => $dados['valores_comentario_ousadia'] ?? null,
-                'valores_comentario_coragem' => $dados['valores_comentario_coragem'] ?? null,
-                'tecnica_capacidade' => $dados['tecnica_capacidade'] ?? null,
-                'tecnica_comentarios' => $dados['tecnica_comentarios'] ?? null,
-                'adaptacao_nivel' => $dados['adaptacao_nivel'] ?? null,
-                'adaptacao_comentarios' => $dados['adaptacao_comentarios'] ?? null,
-                'feedback_geral' => $dados['feedback_geral'] ?? null,
                 'parecer' => $parecer, 'parecer_justificativa' => $justificativa !== '' ? $justificativa : null,
                 'status' => 'concluido', 'data_realizacao' => $agoraSql,
                 'atualizado_em' => $agoraSql,
@@ -415,6 +408,47 @@ class AvaliacaoExperienciaService
     public function opcoesFiltro(): array
     {
         return $this->repository->opcoesFiltro();
+    }
+
+    /**
+     * Candidatos a "necessidade de desenvolvimento" para alimentar um PDI (Etapa 7, §9) — só avaliações
+     * CONCLUÍDAS, no escopo do ator (mesma checagem de detalhe()). Nunca altera a avaliação original (§19).
+     *
+     * @return array{metadados_id:int,snap_nome:string,gestor_usuario_id:int,itens:array<int,array{chave:string,texto:string}>}|null
+     */
+    public function candidatosParaPdi(int $id, array $ator): ?array
+    {
+        $d = $this->detalhe($id, $ator);
+        if ($d === null || (string)$d['avaliacao']['status'] !== 'concluido') {
+            return null;
+        }
+        $a = $d['avaliacao'];
+        $itens = [];
+        foreach (self::VALORES_CULTURAIS as $valor => $grupo) {
+            $comentario = trim((string)($a['valores_comentario_' . $valor] ?? ''));
+            if ($comentario !== '') {
+                $itens[] = ['chave' => 'valor_' . $valor, 'texto' => $grupo['label'] . ': ' . $comentario];
+            }
+        }
+        if (trim((string)($a['tecnica_comentarios'] ?? '')) !== '') {
+            $itens[] = ['chave' => 'tecnica', 'texto' => 'Avaliação técnica: ' . trim((string)$a['tecnica_comentarios'])];
+        }
+        if (trim((string)($a['adaptacao_comentarios'] ?? '')) !== '') {
+            $itens[] = ['chave' => 'adaptacao', 'texto' => 'Adaptação: ' . trim((string)$a['adaptacao_comentarios'])];
+        }
+        if (trim((string)($a['feedback_geral'] ?? '')) !== '') {
+            $itens[] = ['chave' => 'feedback_geral', 'texto' => 'Feedback geral do gestor: ' . trim((string)$a['feedback_geral'])];
+        }
+        if (trim((string)($a['parecer_justificativa'] ?? '')) !== '') {
+            $rotuloParecer = self::PARECER_OPCOES[$a['parecer']] ?? (string)$a['parecer'];
+            $itens[] = ['chave' => 'parecer', 'texto' => 'Parecer (' . $rotuloParecer . '): ' . trim((string)$a['parecer_justificativa'])];
+        }
+        return [
+            'metadados_id' => (int)$a['metadados_id'],
+            'snap_nome' => (string)$a['snap_nome'],
+            'gestor_usuario_id' => (int)$a['gestor_usuario_id'],
+            'itens' => $itens,
+        ];
     }
 
     /** @return array<int,array{0:string,1:int,2:?int}> [valor, indice, nota] a partir de notas_<valor>_<indice> do POST */

@@ -110,6 +110,8 @@ class AdminFeedbacksController
             'contrato' => null, 'gestorSugerido' => null, 'contratosBusca' => [], 'busca' => '',
             'usuarios' => [], 'escopoTotal' => FeedbackService::escopoTotal($ator),
             'podeAvaliar' => Authorization::temPermissao('feedback.avaliar'),
+            'podeGerarPdi' => Authorization::temPermissao('pdi.gerenciar'),
+            'pdisRelacionados' => (new PdiRepository())->pdisPorOrigem('feedback', (int)$id),
             'erro' => Security::sanitizeString($_GET['erro'] ?? ''),
         ], 'layouts/app-shell');
     }

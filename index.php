@@ -247,6 +247,10 @@ try {
     $router->get('/admin/pdis', [AdminPdisController::class, 'index']);
     $router->get('/admin/pdis/novo', [AdminPdisController::class, 'novo']);
     $router->post('/admin/pdis', [AdminPdisController::class, 'store']);
+    // Etapa 7 — Avaliações/Feedback → PDI: rotas estáticas antes de /{id}.
+    $router->get('/admin/pdis/origem', [AdminPdisController::class, 'origem']);
+    $router->post('/admin/pdis/origem/criar', [AdminPdisController::class, 'criarDeOrigem']);
+    $router->post('/admin/pdis/origem/vincular', [AdminPdisController::class, 'vincularExistente']);
     $router->get('/admin/pdis/{id}', [AdminPdisController::class, 'show']);
     $router->get('/admin/pdis/{id}/editar', [AdminPdisController::class, 'editar']);
     $router->post('/admin/pdis/{id}/editar', [AdminPdisController::class, 'atualizar']);

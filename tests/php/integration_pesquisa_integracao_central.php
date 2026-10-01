@@ -247,7 +247,14 @@ try {
     $htmlResultadoReacao = $renderizar(static fn() => (new AdminPesquisaReacaoIntegracaoController())->resultados((string)(int)$campanha['id']));
     $check(str_contains($htmlResultadoReacao, 'Resultados da campanha') && str_contains($htmlResultadoReacao, 'Nenhuma resposta recebida até o momento.'), '(9) Resultados da campanha da Reação continuam funcionando');
 
-    $notasPa = (new PeopleAnalyticsRepository())->buscarNotasNpsIntegracao(new DateTimeImmutable('today'), new DateTimeImmutable('today'));
+    // `respondida_em` é gravado via NOW() do MySQL (fixture e produção, ver PesquisaIntegracaoQr::inserirResposta()).
+    // A janela de consulta usa o CURDATE() do MESMO banco (não `new DateTimeImmutable('today')`, que é o relógio
+    // do PHP) — em dev, PHP e MySQL podem rodar em timezones diferentes (ex.: Laragon), e perto da virada da
+    // meia-noite um "hoje" calculado por cada lado pode divergir por algumas horas, fazendo uma linha recém-
+    // inserida "sumir" da janela. Comparar sempre contra o relógio que efetivamente carimbou o dado evita esse
+    // falso negativo, em qualquer ambiente, sem alterar a query de produção (que já recebe as datas prontas).
+    $hojeDb = new DateTimeImmutable((string)$pdo->query('SELECT CURDATE()')->fetchColumn());
+    $notasPa = (new PeopleAnalyticsRepository())->buscarNotasNpsIntegracao($hojeDb, $hojeDb);
     $check(count($notasPa) >= 5, '(16) People Analytics segue lendo as respostas de pesquisas_integracao (QR + individual) normalmente, sem alteração');
 
     foreach ([APP_PATH . '/services/PesquisaIntegracaoResultadosService.php', APP_PATH . '/controllers/AdminPesquisaIntegracaoResultadosController.php'] as $arq) {

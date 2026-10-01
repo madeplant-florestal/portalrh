@@ -315,7 +315,12 @@ try {
     $criados['pesquisas'][] = (int)$linha['id'];
     $check($linha['colaborador_id'] === null && $linha['token_hash'] === null, '(10) Linha nova: sem colaborador_id e sem token individual');
     $check($linha['integracao_data_relacionada'] === $dataSessao, '(12) integracao_data_relacionada = data da SESSÃO de integração (10 dias atrás), não a data da resposta');
-    $check(substr((string)$linha['respondida_em'], 0, 10) === date('Y-m-d') && $linha['respondida_em'] !== null, '(12) respondida_em = instante real do envio, independente da data da integração');
+    // Comparado contra o CURDATE() do MySQL (não date('Y-m-d') do PHP): respondida_em é gravado via NOW() do
+    // próprio banco em registrarResposta()/inserirResposta() — em dev, PHP e MySQL podem estar em timezones
+    // diferentes, e perto da virada da meia-noite os dois "hoje" podem divergir por algumas horas. Comparar
+    // contra o relógio que efetivamente gravou o dado evita um falso negativo, em qualquer ambiente.
+    $hojeDb = (string)$pdo->query('SELECT CURDATE()')->fetchColumn();
+    $check(substr((string)$linha['respondida_em'], 0, 10) === $hojeDb && $linha['respondida_em'] !== null, '(12) respondida_em = instante real do envio, independente da data da integração');
     $check($linha['integracao_data_relacionada'] !== substr((string)$linha['respondida_em'], 0, 10), '(12) As duas datas NÃO se confundem');
     $check((int)$linha['nota_nps'] === 9 && (int)$linha['nota_clareza'] === 5 && $linha['comentarios'] === 'Ótima integração', 'Notas e comentário do instrumento atual persistidos');
     $colunasPesquisa = $pdo->query('SHOW COLUMNS FROM pesquisas_integracao')->fetchAll(PDO::FETCH_COLUMN);
@@ -514,7 +519,10 @@ try {
     }
 
     // People Analytics continua lendo as novas respostas (NPS) sem alteração
-    $notasPeriodo = (new PeopleAnalyticsRepository())->buscarNotasNpsIntegracao(new DateTimeImmutable('today'), new DateTimeImmutable('today'));
+    // Mesma observação de timezone PHP vs MySQL do check (12) acima: ancorar a janela ao CURDATE() do banco,
+    // não ao relógio do PHP, já que respondida_em é gravado via NOW() do MySQL.
+    $hojeDbPeriodo = new DateTimeImmutable((string)$pdo->query('SELECT CURDATE()')->fetchColumn());
+    $notasPeriodo = (new PeopleAnalyticsRepository())->buscarNotasNpsIntegracao($hojeDbPeriodo, $hojeDbPeriodo);
     $check(count($notasPeriodo) >= 1, '(People Analytics) buscarNotasNpsIntegracao() inclui as respostas do fluxo QR (colaborador_id NULL) — nenhuma alteração necessária');
 
     // Fluxo individual antigo: página pública continua respondendo

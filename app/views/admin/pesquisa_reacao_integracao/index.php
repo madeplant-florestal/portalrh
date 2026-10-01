@@ -26,9 +26,12 @@ $agora = new DateTimeImmutable('now');
   <!-- BLOCO 1 — Pesquisa de Integração (respostas via QR Code). Instrumento próprio: NPS e notas NÃO
        se misturam com os da Pesquisa de Reação abaixo. Visível só com integracao_colaborador.visualizar. -->
   <section class="space-y-3" aria-labelledby="bloco-integracao-qr">
-    <div>
-      <h3 id="bloco-integracao-qr" class="text-base font-bold text-text-primary">Pesquisa de Integração — Respostas via QR Code</h3>
-      <p class="text-xs text-text-secondary">Resultados por data de integração. O QR Code e a abertura/encerramento da integração ficam em <a href="<?= $base ?>/admin/pesquisa-integracao-qr" class="text-primary-700 underline">Integração via QR Code</a>.</p>
+    <div class="flex flex-wrap items-start justify-between gap-2">
+      <div>
+        <h3 id="bloco-integracao-qr" class="text-base font-bold text-text-primary">Pesquisa de Integração — Respostas via QR Code</h3>
+        <p class="text-xs text-text-secondary">Resultados por data de integração. O QR Code e a abertura/encerramento da integração ficam em <a href="<?= $base ?>/admin/pesquisa-integracao-qr" class="text-primary-700 underline">Integração via QR Code</a>.</p>
+      </div>
+      <a href="<?= $base ?>/admin/pesquisas-reacao-integracao/integracao/dashboard" class="<?= ui_btn('secundario') ?>">Ver Dashboard de Integração</a>
     </div>
     <div class="responsive-table-wrap rounded-ds-lg border border-border bg-surface shadow-resting">
       <table class="min-w-full text-sm">

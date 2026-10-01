@@ -231,6 +231,8 @@ try {
     $router->get('/admin/pesquisas-reacao-integracao/{id}/resultados', [AdminPesquisaReacaoIntegracaoController::class, 'resultados']);
     // Resultados da Pesquisa de Integração (via QR) por data de integração — permissão da Integração.
     $router->get('/admin/pesquisas-reacao-integracao/integracao/{data}/resultados', [AdminPesquisaIntegracaoResultadosController::class, 'resultados']);
+    // Dashboard de Integração/Onboarding (Etapa 8, 2026-10) — painel agregado, mesma permissão.
+    $router->get('/admin/pesquisas-reacao-integracao/integracao/dashboard', [AdminPesquisaIntegracaoResultadosController::class, 'dashboard']);
 
     $router->get('/admin/pesquisa-integracao-qr', [AdminPesquisaIntegracaoQrController::class, 'index']);
     $router->post('/admin/pesquisa-integracao-qr/sessao', [AdminPesquisaIntegracaoQrController::class, 'abrir']);

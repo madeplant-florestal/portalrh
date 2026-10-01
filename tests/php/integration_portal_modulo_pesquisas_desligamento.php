@@ -117,7 +117,7 @@ try {
 
     // ---- abas e cards ------------------------------------------------------------------------------------------------------------
     $modulos = PortalNavegacaoService::definicaoAbas();
-    $check(array_column($modulos['integracao']['abas'], 'chave') === ['pesquisas', 'qr'] && array_column($modulos['desligamento']['abas'], 'chave') === ['turnover', 'dashboard-entrevista', 'entrevistas'], '(abas) Integração: Pesquisas e resultados | QR; Turnover e Desligamento: Turnover | Dashboard da Entrevista | Entrevistas — sem megabarra');
+    $check(array_column($modulos['integracao']['abas'], 'chave') === ['pesquisas', 'qr', 'dashboard'] && array_column($modulos['desligamento']['abas'], 'chave') === ['turnover', 'dashboard-entrevista', 'entrevistas'], '(abas) Integração: Pesquisas e resultados | QR | Dashboard (Etapa 8); Turnover e Desligamento: Turnover | Dashboard da Entrevista | Entrevistas — sem megabarra');
     $problemas = [];
     $visiveis = [];
     foreach ($perfis as $rotulo => $u) {
@@ -138,10 +138,10 @@ try {
         }
     }
     $check($problemas === [], '(regra de ouro) Toda aba e todo card do bloco leva a um destino que o controller realmente aceita, para ' . count($perfis) . ' perfis' . ($problemas === [] ? '' : ': ' . implode(' | ', $problemas)));
-    $check($visiveis['Admin'] === ['integracao' => ['pesquisas', 'qr'], 'desligamento' => ['turnover', 'dashboard-entrevista', 'entrevistas']], '(abas) Admin vê tudo (bypass central)');
+    $check($visiveis['Admin'] === ['integracao' => ['pesquisas', 'qr', 'dashboard'], 'desligamento' => ['turnover', 'dashboard-entrevista', 'entrevistas']], '(abas) Admin vê tudo (bypass central)');
     $check($visiveis['RH sem permissão'] === ['integracao' => [], 'desligamento' => []] && $visiveis['viewer sem permissão'] === ['integracao' => [], 'desligamento' => []] && $visiveis['supervisor sem permissão'] === ['integracao' => [], 'desligamento' => []], '(abas) RH, viewer e supervisor SEM permissão individual não veem nenhuma aba (o backend exige a permissão; supervisor não ganha escopo extra)');
     $check($visiveis['só turnover']['desligamento'] === ['turnover'] && $visiveis['só dashboard entrevista']['desligamento'] === ['dashboard-entrevista'] && $visiveis['só entrevistas']['desligamento'] === ['entrevistas'], '(abas) Cada permissão de Turnover/Desligamento libera só a própria aba');
-    $check($visiveis['só reação']['integracao'] === ['pesquisas'] && $visiveis['só integração']['integracao'] === ['pesquisas', 'qr'], '(abas) Reação abre só a Central; Integração abre a Central (resultados por QR) e o QR');
+    $check($visiveis['só reação']['integracao'] === ['pesquisas'] && $visiveis['só integração']['integracao'] === ['pesquisas', 'qr', 'dashboard'], '(abas) Reação abre só a Central; Integração abre a Central (resultados por QR), o QR e o Dashboard (Etapa 8)');
     $comoUsuario($perfis['só integração']);
     $cardInteg = array_values(array_filter((new PortalNavegacaoService())->modulos(), static fn(array $c): bool => $c['chave'] === 'integracao'));
     $comoUsuario($perfis['só entrevistas']);

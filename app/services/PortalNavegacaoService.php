@@ -161,6 +161,10 @@ class PortalNavegacaoService
             'integracao' => ['titulo' => 'Integração', 'abas' => [
                 ['chave' => 'pesquisas', 'label' => 'Pesquisas e resultados', 'href' => '/admin/pesquisas-reacao-integracao', 'regra' => 'perm_qualquer:pesquisa_reacao_integracao.visualizar,integracao_colaborador.visualizar'],
                 ['chave' => 'qr', 'label' => 'QR Code da Integração', 'href' => '/admin/pesquisa-integracao-qr', 'regra' => 'perm:integracao_colaborador.visualizar'],
+                // Dashboard de Integração/Onboarding (Etapa 8, 2026-10) — mesma permissão dos resultados
+                // (integracao_colaborador.visualizar); não é uma capacidade nova, é a visão agregada dos
+                // mesmos dados já existentes.
+                ['chave' => 'dashboard', 'label' => 'Dashboard', 'href' => '/admin/pesquisas-reacao-integracao/integracao/dashboard', 'regra' => 'perm:integracao_colaborador.visualizar'],
             ]],
             'desligamento' => ['titulo' => 'Turnover e Desligamento', 'abas' => [
                 ['chave' => 'turnover', 'label' => 'Turnover', 'href' => '/admin/dashboard-turnover', 'regra' => 'perm:dashboard_turnover.visualizar'],

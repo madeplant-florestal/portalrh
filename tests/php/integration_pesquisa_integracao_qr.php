@@ -116,21 +116,25 @@ try {
     $permEdit = (int)$pdo->query("SELECT id FROM permissoes WHERE codigo = 'integracao_colaborador.editar'")->fetchColumn();
     $check($permVis > 0 && $permEdit > 0, 'Fixture: permissões integracao_colaborador.visualizar/.editar já existem (reaproveitadas, sem seed novo)');
 
-    $userVisId = User::create('ZZQR So Visualizar', 'vis.zzqr.' . $suffix . '@teste.local', $senha, 'rh');
+    // Bloco 4 (2026-10, pedido do RH): role='rh' ganhou bypass central de TODAS as permissões
+    // individuais — estes 3 usuários testam especificamente a INDEPENDÊNCIA entre permissões
+    // (.visualizar vs .editar vs nenhuma), então usam 'viewer' (sem bypass central), nunca
+    // 'admin'/'rh'. A prova de que RH tem bypass central vive em outro arquivo.
+    $userVisId = User::create('ZZQR So Visualizar', 'vis.zzqr.' . $suffix . '@teste.local', $senha, 'viewer');
     User::setActiveStatus($userVisId, true);
     $criados['usuarios'][] = $userVisId;
     Authorization::sincronizar($userVisId, [$permVis]);
-    $userEditId = User::create('ZZQR Editar', 'edit.zzqr.' . $suffix . '@teste.local', $senha, 'rh');
+    $userEditId = User::create('ZZQR Editar', 'edit.zzqr.' . $suffix . '@teste.local', $senha, 'viewer');
     User::setActiveStatus($userEditId, true);
     $criados['usuarios'][] = $userEditId;
     Authorization::sincronizar($userEditId, [$permVis, $permEdit]);
-    $userNadaId = User::create('ZZQR Sem Permissao', 'nada.zzqr.' . $suffix . '@teste.local', $senha, 'rh');
+    $userNadaId = User::create('ZZQR Sem Permissao', 'nada.zzqr.' . $suffix . '@teste.local', $senha, 'viewer');
     User::setActiveStatus($userNadaId, true);
     $criados['usuarios'][] = $userNadaId;
 
     $check(Authorization::usuarioTemPermissao($userVisId, 'integracao_colaborador.visualizar') && !Authorization::usuarioTemPermissao($userVisId, 'integracao_colaborador.editar'), '(admin) Usuário só com .visualizar vê o QR mas NÃO abre/encerra integração');
     $check(Authorization::usuarioTemPermissao($userEditId, 'integracao_colaborador.editar'), '(admin) Usuário com .editar abre/encerra integração');
-    $check(!Authorization::usuarioTemPermissao($userNadaId, 'integracao_colaborador.visualizar'), '(admin) Usuário sem permissão não acessa a área (RH não ganha acesso só pela role)');
+    $check(!Authorization::usuarioTemPermissao($userNadaId, 'integracao_colaborador.visualizar'), '(admin) Usuário viewer sem nenhuma permissão individual não acessa a área');
 
     $corpoDoMetodo = static function (string $classe, string $metodo): string {
         $reflexao = new ReflectionMethod($classe, $metodo);

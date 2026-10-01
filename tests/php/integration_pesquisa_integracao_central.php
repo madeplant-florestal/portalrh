@@ -75,8 +75,14 @@ $renderizar = static function (callable $acao): string {
 
 try {
     // ---- usuários / permissões -----------------------------------------------------------------
+    // Bloco 4 (2026-10, pedido do RH): role='rh' ganhou bypass central de TODAS as permissões
+    // individuais (Authorization::usuarioTemPermissao()) — estes 3 atores testam especificamente
+    // a INDEPENDÊNCIA entre permissões (ter uma não concede a outra), então precisam de um role
+    // SEM bypass central. Trocado de 'rh' para 'viewer' (nunca 'admin'/'rh') para preservar o
+    // propósito original do teste; a prova de que RH tem bypass central vive em outro arquivo
+    // (ex.: integration_permissoes_individuais.php).
     $mkUser = static function (string $rotulo, array $codigos) use ($pdo, &$criados, $suffix, $senha): int {
-        $id = User::create('ZZCE ' . $rotulo, strtolower($rotulo) . '.zzce.' . $suffix . '@teste.local', $senha, 'rh');
+        $id = User::create('ZZCE ' . $rotulo, strtolower($rotulo) . '.zzce.' . $suffix . '@teste.local', $senha, 'viewer');
         User::setActiveStatus($id, true);
         $criados['usuarios'][] = $id;
         $ids = [];
@@ -153,12 +159,15 @@ try {
     $check($det['perguntas'][0]['media'] === 3.5, '(4) Média da 1ª pergunta = (5+5+3+1)/4 = 3,5');
     $check($det['perguntas'][0]['distribuicao'] === [1 => 1, 2 => 0, 3 => 1, 4 => 0, 5 => 2], '(4) Distribuição 1-5 da 1ª pergunta correta');
     $check(count($det['comentarios']) === 2, '(5) Só comentários preenchidos aparecem (vazio/branco e o da pesquisa individual ficam de fora)');
-    $porNome = [];
+    // Bloco 3 (2026-10, pedido do RH): comentários nunca trazem o Nome do respondente — só
+    // Cargo/Empresa como contexto agregado. Reindexa por cargo (único por contrato nesta fixture)
+    // já que `nome` não existe mais no retorno.
+    $porCargo = [];
     foreach ($det['comentarios'] as $c) {
-        $porNome[(string)$c['nome']] = $c;
+        $porCargo[(string)$c['cargo']] = $c;
     }
-    $check(($porNome['ZZCE Ana Souza']['cargo'] ?? null) === 'ZZCE Operadora' && ($porNome['ZZCE Ana Souza']['empresa'] ?? null) === 'ZZCE Empresa Alfa', '(6) Nome/Cargo/Empresa do comentário vêm do espelho oficial (contrato)');
-    $check(!array_key_exists('cpf', $det['comentarios'][0]) && !array_key_exists('nascimento', $det['comentarios'][0]) && !array_key_exists('metadados_id', $det['comentarios'][0]), '(6) Nenhum CPF/nascimento/metadados_id nos dados de detalhe');
+    $check(($porCargo['ZZCE Operadora']['empresa'] ?? null) === 'ZZCE Empresa Alfa', '(6) Cargo/Empresa do comentário vêm do espelho oficial (contrato)');
+    $check(!array_key_exists('nome', $det['comentarios'][0]) && !array_key_exists('cpf', $det['comentarios'][0]) && !array_key_exists('nascimento', $det['comentarios'][0]) && !array_key_exists('metadados_id', $det['comentarios'][0]), '(6) Nenhum Nome/CPF/nascimento/metadados_id nos dados de detalhe — identidade do respondente nunca exposta (Bloco 3)');
     $vazio = PesquisaIntegracaoResultadosService::resultadosDaIntegracao($D3);
     $check($vazio['total'] === 0 && $vazio['nps'] === null && $vazio['comentarios'] === [] && $vazio['perguntas'][0]['media'] === null, '(7) Integração sem respostas: total 0, NPS/médias nulos, sem comentários');
     $check(PesquisaIntegracaoResultadosService::dataValida('2001-02-30') === null && PesquisaIntegracaoResultadosService::dataValida('abc') === null && PesquisaIntegracaoResultadosService::dataValida($D1) === $D1, 'Parâmetro de data é validado estritamente (Y-m-d real)');
@@ -182,10 +191,10 @@ try {
     $check(!str_contains($htmlAdmin, 'COMENTARIO-INDIVIDUAL') && !str_contains($htmlAdmin, $cpfFixture) && !str_contains($htmlAdmin, '1975'), '(10) Central não expõe comentários, CPF ou nascimento');
 
     // permissões independentes
-    $comoUsuario($soReacaoId, 'rh');
+    $comoUsuario($soReacaoId, 'viewer');
     $htmlSoReacao = $renderizar(static fn() => (new AdminPesquisaReacaoIntegracaoController())->index());
     $check(str_contains($htmlSoReacao, 'id="bloco-reacao"') && !str_contains($htmlSoReacao, 'Respostas via QR Code') && !str_contains($htmlSoReacao, '05/03/2001'), '(11) Usuário só com a permissão da Reação vê as campanhas e NÃO vê dados QR');
-    $comoUsuario($soIntegracaoId, 'rh');
+    $comoUsuario($soIntegracaoId, 'viewer');
     $htmlSoIntegracao = $renderizar(static fn() => (new AdminPesquisaReacaoIntegracaoController())->index());
     $check(str_contains($htmlSoIntegracao, 'Respostas via QR Code') && str_contains($htmlSoIntegracao, '05/03/2001'), '(12) Usuário só com integracao_colaborador.visualizar vê os resultados QR');
     $check(!str_contains($htmlSoIntegracao, 'id="bloco-reacao"') && !str_contains($htmlSoIntegracao, 'Gerar link') && !str_contains($htmlSoIntegracao, 'Desativar') && !str_contains($htmlSoIntegracao, '/admin/pesquisas-reacao-integracao/' . (int)$campanha['id'] . '/resultados'), '(12) ...mas NÃO recebe o bloco, os dados nem as ações administrativas das campanhas da Reação');
@@ -207,13 +216,13 @@ try {
     $check(str_contains($corpoIndex, "Authorization::requirePermissao('pesquisa_reacao_integracao.visualizar')") && str_contains($corpoIndex, "Auth::requireRole(['admin', 'rh', 'viewer'])"), '(13) index() continua travado por Auth::requireRole + requirePermissao quando não há nenhuma capability');
 
     // detalhamento
-    $comoUsuario($soIntegracaoId, 'rh');
+    $comoUsuario($soIntegracaoId, 'viewer');
     $htmlDetalhe = $renderizar(static fn() => (new AdminPesquisaIntegracaoResultadosController())->resultados($D1));
     $check(!preg_match('/Warning:|Notice:|Deprecated:|Fatal error/i', $htmlDetalhe), '(14) Detalhamento renderiza sem Warning/Notice/Fatal');
     $check(str_contains($htmlDetalhe, 'Resultados — Pesquisa de Integração') && str_contains($htmlDetalhe, 'Data da Integração:') && str_contains($htmlDetalhe, '05/03/2001'), '(14) Cabeçalho com "Resultados — Pesquisa de Integração" e a data');
     $check(str_contains($htmlDetalhe, 'Total de Respostas') && str_contains($htmlDetalhe, 'NPS') && str_contains($htmlDetalhe, 'Promotores') && str_contains($htmlDetalhe, 'Neutros') && str_contains($htmlDetalhe, 'Detratores'), '(14) Cards principais');
     $check(str_contains($htmlDetalhe, $rotulosReais[0]) && !str_contains($htmlDetalhe, 'história, propósito e valores'), '(14) Exibe as perguntas reais da Pesquisa de Integração e nenhuma da Pesquisa de Reação');
-    $check(str_contains($htmlDetalhe, 'Comentários dos colaboradores') && str_contains($htmlDetalhe, 'Ótima recepção, muito claro.') && str_contains($htmlDetalhe, 'ZZCE Ana Souza') && str_contains($htmlDetalhe, 'ZZCE Operadora') && str_contains($htmlDetalhe, 'ZZCE Empresa Alfa'), '(14) Comentários com Nome · Cargo · Empresa oficiais');
+    $check(str_contains($htmlDetalhe, 'Comentários dos colaboradores') && str_contains($htmlDetalhe, 'Ótima recepção, muito claro.') && str_contains($htmlDetalhe, 'ZZCE Operadora') && str_contains($htmlDetalhe, 'ZZCE Empresa Alfa') && !str_contains($htmlDetalhe, 'ZZCE Ana Souza'), '(14) Comentários com Cargo · Empresa oficiais, SEM o nome do respondente (Bloco 3, 2026-10)');
     $check(!str_contains($htmlDetalhe, 'COMENTARIO-INDIVIDUAL') && !str_contains($htmlDetalhe, 'ZZCE Legado') && !str_contains($htmlDetalhe, 'ZZCE Bruno Lima'), '(14) Não lista respondentes sem comentário nem a pesquisa individual — resultado agregado, não listagem nominal');
     $check(!str_contains($htmlDetalhe, $cpfFixture) && !str_contains($htmlDetalhe, '390.533.447-05') && !str_contains($htmlDetalhe, '1975') && !str_contains($htmlDetalhe, '09/04'), '(15) Nenhum CPF nem nascimento é exibido');
     $htmlVazio = $renderizar(static fn() => (new AdminPesquisaIntegracaoResultadosController())->resultados($D3));

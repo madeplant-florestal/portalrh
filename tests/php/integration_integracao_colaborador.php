@@ -102,8 +102,9 @@ try {
 
     $check(Authorization::usuarioTemPermissao($adminId, 'integracao_colaborador.visualizar') === true, 'Admin visualiza integração pelo bypass central');
     $check(Authorization::usuarioTemPermissao($adminId, 'integracao_colaborador.editar') === true, 'Admin edita integração pelo bypass central');
-    $check(Authorization::usuarioTemPermissao($rhId, 'integracao_colaborador.visualizar') === false, 'RH sem permissão individual NÃO visualiza integração só por role=rh');
-    $check(Authorization::usuarioTemPermissao($rhId, 'integracao_colaborador.editar') === false, 'RH sem permissão individual NÃO edita integração só por role=rh');
+    // Bloco 4 (2026-10, pedido do RH): bypass central de RH em Authorization::usuarioTemPermissao().
+    $check(Authorization::usuarioTemPermissao($rhId, 'integracao_colaborador.visualizar') === true, 'RH visualiza integração pelo bypass central (Bloco 4), mesmo sem permissão individual');
+    $check(Authorization::usuarioTemPermissao($rhId, 'integracao_colaborador.editar') === true, 'RH edita integração pelo bypass central (Bloco 4), mesmo sem permissão individual');
     $check(Authorization::usuarioTemPermissao($gestorId, 'integracao_colaborador.visualizar') === false, 'usuário sem a permissão não visualiza integração');
     $check(Authorization::usuarioTemPermissao($gestorId, 'integracao_colaborador.editar') === false, 'usuário sem a permissão não edita integração');
 

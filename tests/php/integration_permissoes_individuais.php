@@ -115,15 +115,19 @@ try {
         'Bypass do Admin não grava nenhuma linha em usuario_permissoes (é decisão do resolver, não do dado)'
     );
 
-    // ---- 2. RH: role = rh NÃO dá acesso total a permissão individual --------------------------
+    // ---- 2. RH: bypass central (Bloco 4, 2026-10, pedido do RH) ---------------------------------
+    // Antes desta rodada, role=rh NÃO dava acesso total a permissão individual (igual Supervisor,
+    // ver seção 3 abaixo). Decisão de produto confirmada nesta rodada: RH passou a ter o MESMO
+    // bypass central que o Admin em Authorization::usuarioTemPermissao() — único lugar no sistema
+    // com essa regra (ver docblock de usuarioEhRh()).
     $rhId = $mkUser('rh', 'rh');
     $check(
-        Authorization::usuarioTemPermissao($rhId, 'kanban_vagas.movimentar') === false,
-        'RH sem permissão individual NÃO tem kanban_vagas.movimentar só por role=rh'
+        Authorization::usuarioTemPermissao($rhId, 'kanban_vagas.movimentar') === true,
+        'RH tem kanban_vagas.movimentar pelo bypass central (Bloco 4), mesmo sem nenhuma permissão individual'
     );
     $check(
-        Authorization::usuarioTemPermissao($rhId, 'solicitacao_vaga.visualizar') === false,
-        'RH sem permissão individual NÃO tem solicitacao_vaga.visualizar só por role=rh'
+        Authorization::usuarioTemPermissao($rhId, 'solicitacao_vaga.visualizar') === true,
+        'RH tem solicitacao_vaga.visualizar pelo bypass central (Bloco 4), mesmo sem nenhuma permissão individual'
     );
     // RH continua criando Solicitação hoje pelo caminho antigo (userCanEditRh), preservado — não é
     // a permissão individual que autoriza o RH, é a regra legada intacta (ver canCreate()).
@@ -169,10 +173,12 @@ try {
     $check($podeMoverGestor === false, 'Tentativa direta de mover card pelo Gestor é rejeitada pela mesma checagem usada em move() (backend, não só UI)');
 
     // ---- 4b. Kanban: kanban_vagas.visualizar é gate REAL de index(), não só cosmético ----------
-    // Fonte-única do bypass de Admin é `Authorization` — nem role='rh' nem is_supervisor=1 dão
-    // acesso ao módulo Kanban por si só; RH/Supervisor sem a permissão são bloqueados, com ela
-    // acessam. Confirma também que `index()`/`move()` chamam a checagem certa no CÓDIGO (não só
-    // que a condição em si retorna o valor certo isoladamente).
+    // Fonte-única do bypass de Admin (e, desde o Bloco 4, de RH) é `Authorization` —
+    // is_supervisor=1 sozinho NÃO dá acesso ao módulo Kanban; Supervisor sem a permissão
+    // individual é bloqueado, com ela acessa. Confirma também que `index()`/`move()` chamam a
+    // checagem certa no CÓDIGO (não só que a condição em si retorna o valor certo isoladamente).
+    // A demonstração de que permissões são INDEPENDENTES (ter uma não concede outra) já está
+    // coberta pelo caso do Gestor acima (linhas 158-164, role=viewer, sem bypass central).
     $corpoIndex = $corpoDoMetodo(AdminSolicitacoesVagaKanbanController::class, 'index');
     $check(str_contains($corpoIndex, "Authorization::requirePermissao('kanban_vagas.visualizar')"), "index() do Kanban chama Authorization::requirePermissao('kanban_vagas.visualizar') no código-fonte");
 
@@ -181,14 +187,7 @@ try {
     $check(!str_contains($corpoMove, 'userCanEditRh'), 'move() do Kanban NÃO tem mais bypass de role/is_supervisor (userCanEditRh) para movimentar — só Authorization');
 
     $check(Authorization::usuarioTemPermissao($adminId, 'kanban_vagas.visualizar') === true, '(1) Admin acessa o Kanban pelo bypass central');
-
-    $check(Authorization::usuarioTemPermissao($rhId, 'kanban_vagas.visualizar') === false, '(2) RH sem kanban_vagas.visualizar é bloqueado (mesma checagem de index())');
-    $syncRh = Authorization::sincronizar($rhId, [(int)array_search('kanban_vagas.visualizar', $idsPermissao, true)]);
-    $check(($syncRh['ok'] ?? false) === true, 'concede kanban_vagas.visualizar ao RH para o próximo teste');
-    $check(Authorization::usuarioTemPermissao($rhId, 'kanban_vagas.visualizar') === true, '(3) RH COM kanban_vagas.visualizar concedida individualmente acessa o Kanban');
-    // Prova que role e permissão não se confundem: mesmo com a permissão de Kanban, RH continua
-    // sem kanban_vagas.movimentar (não foi essa a permissão concedida).
-    $check(Authorization::usuarioTemPermissao($rhId, 'kanban_vagas.movimentar') === false, 'RH com só kanban_vagas.visualizar continua sem poder movimentar (permissões são independentes)');
+    $check(Authorization::usuarioTemPermissao($rhId, 'kanban_vagas.visualizar') === true && Authorization::usuarioTemPermissao($rhId, 'kanban_vagas.movimentar') === true, '(2) RH acessa e movimenta no Kanban pelo bypass central (Bloco 4), sem nenhuma permissão individual concedida');
 
     $check(Authorization::usuarioTemPermissao($supervisorId, 'kanban_vagas.visualizar') === false, '(4) Supervisor sem kanban_vagas.visualizar é bloqueado');
 

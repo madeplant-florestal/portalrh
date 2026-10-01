@@ -171,7 +171,7 @@ $mesSelecionado = Security::sanitizeString($_GET['mes'] ?? '');
             <?php foreach ($painel['comentarios'] as $c): ?>
               <div class="rounded-ds-md bg-background p-3">
                 <p class="text-xs font-semibold text-text-secondary">
-                  <?= Security::e(implode(' · ', array_filter([(string)($c['nome'] ?? ''), (string)($c['cargo'] ?? ''), (string)($c['empresa'] ?? '')], static fn(string $v): bool => $v !== '')) ?: 'Colaborador não identificado') ?>
+                  <?= Security::e(implode(' · ', array_filter([(string)($c['cargo'] ?? ''), (string)($c['empresa'] ?? '')], static fn(string $v): bool => $v !== '')) ?: 'Sem contexto adicional') ?>
                   · <?= Security::e(date('d/m/Y H:i', strtotime($c['respondida_em']))) ?>
                 </p>
                 <p class="mt-1 text-sm text-text-primary"><?= nl2br(Security::e($c['comentario'])) ?></p>

@@ -103,7 +103,11 @@ class PesquisaIntegracaoResultadosService
         }
         $resultado['perguntas'] = $perguntas;
 
-        // Comentários (só os preenchidos), com Nome/Cargo/Empresa oficiais do contrato — sem CPF.
+        // Comentários (só os preenchidos), com Cargo/Empresa oficiais do contrato — contexto
+        // agregado, nunca o Nome do respondente (Bloco 3, 2026-10, pedido do RH: identidade nunca
+        // exposta nos resultados) nem CPF. O nome continua intocado em colaboradores_metadados —
+        // só deixou de ser incluído NESTE retorno (defesa em profundidade: nenhuma tela que
+        // reaproveitar resultadosDaIntegracao() recebe o nome por engano).
         $comComentario = array_values(array_filter($respostas, static fn(array $r): bool => trim((string)($r['comentarios'] ?? '')) !== ''));
         $contratos = PesquisaIntegracaoQr::contratosPorIds(array_map(static fn(array $r): int => (int)$r['metadados_id'], $comComentario));
         $comentarios = [];
@@ -112,7 +116,6 @@ class PesquisaIntegracaoResultadosService
             $comentarios[] = [
                 'comentario' => trim((string)$r['comentarios']),
                 'respondida_em' => (string)$r['respondida_em'],
-                'nome' => $contrato['nome'] ?? null,
                 'cargo' => $contrato['cargo'] ?? null,
                 'empresa' => $contrato['empresa'] ?? null,
             ];

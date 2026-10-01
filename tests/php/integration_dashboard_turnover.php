@@ -82,7 +82,8 @@ try {
 
     $check(Authorization::usuarioTemPermissao($adminId, 'dashboard_turnover.visualizar') === true, '(permissão) Admin acessa pelo bypass central');
     $check(Authorization::usuarioTemPermissao($comPermId, 'dashboard_turnover.visualizar') === true, '(permissão) Usuário com a permissão individual acessa');
-    $check(Authorization::usuarioTemPermissao($rhSemPermId, 'dashboard_turnover.visualizar') === false, '(permissão) RH SEM a permissão individual NÃO acessa — role sozinha não basta');
+    // Bloco 4 (2026-10, pedido do RH): bypass central de RH em Authorization::usuarioTemPermissao().
+    $check(Authorization::usuarioTemPermissao($rhSemPermId, 'dashboard_turnover.visualizar') === true, '(permissão) RH acessa pelo bypass central (Bloco 4), mesmo sem a permissão individual');
     $concedidosFora = (int)$pdo->query(
         "SELECT COUNT(*) FROM usuario_permissoes up INNER JOIN permissoes p ON p.id = up.permissao_id
          WHERE p.codigo = 'dashboard_turnover.visualizar' AND up.usuario_id NOT IN (" . (int)$comPermId . ")"
@@ -186,7 +187,9 @@ try {
     foreach (['Dashboard de Turnover', 'Evolução Mensal do Turnover — 2003 × 2004', 'Admissões × Desligamentos — 2004', 'Desligamentos por Motivo', 'Tempo de Empresa dos Desligados', 'Turnover por Cargo', 'Turnover por Empresa'] as $titulo) {
         $check(str_contains($html, $titulo), "(página) Exibe \"{$titulo}\"");
     }
-    $check(substr_count($html, '<svg viewBox="0 0 720 280"') === 2, '(página) Os dois gráficos multissérie (linha e colunas agrupadas) são SVG próprio');
+    // Bloco 2 (2026-10, correção RH): dashboard_multi_line_chart() cresceu de 280 para 300 de
+    // altura (margem inferior maior, sem mudar a escala) — dashboard_grouped_columns() não mudou.
+    $check(substr_count($html, '<svg viewBox="0 0 720 300"') === 1 && substr_count($html, '<svg viewBox="0 0 720 280"') === 1, '(página) Os dois gráficos multissérie (linha e colunas agrupadas) são SVG próprio');
     $check(substr_count($html, 'Ver valores em tabela') >= 5 && str_contains($html, '<caption class="sr-only">'), '(acessibilidade) Valores também em tabela acessível (não dependem só do SVG nem de hover)');
     $check(str_contains($html, 'name="ano"') && str_contains($html, 'name="empresa"') && str_contains($html, 'name="cargo"') && str_contains($html, '2004 × 2003'), '(filtros) Ano, Empresa e Cargo na página; ano selecionado compara com o anterior');
     $check(str_contains($html, '<option value="' . $empA . '" selected'), '(filtros) A Empresa selecionada permanece marcada');

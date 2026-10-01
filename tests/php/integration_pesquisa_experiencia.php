@@ -184,7 +184,8 @@ try {
     $rhId = $mkUser('rh', 'rh');
     $gestorId = $mkUser('gestor', 'viewer');
     $check(Authorization::usuarioTemPermissao($adminId, 'pesquisa_experiencia.visualizar') === true, 'Admin acessa o resultado da pesquisa pelo bypass central');
-    $check(Authorization::usuarioTemPermissao($rhId, 'pesquisa_experiencia.visualizar') === false, 'RH sem permissão individual NÃO acessa o resultado só por role=rh');
+    // Bloco 4 (2026-10, pedido do RH): role='rh' tem bypass central de todas as permissões.
+    $check(Authorization::usuarioTemPermissao($rhId, 'pesquisa_experiencia.visualizar') === true, 'RH acessa o resultado da pesquisa pelo bypass central (Bloco 4)');
     $check(Authorization::usuarioTemPermissao($gestorId, 'pesquisa_experiencia.visualizar') === false, 'usuário sem a permissão não acessa o resultado administrativo da pesquisa');
 
     $corpoShowCandidatura = $corpoDoMetodo(AdminCandidaturasController::class, 'show');

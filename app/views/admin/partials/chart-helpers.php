@@ -361,11 +361,15 @@ if (!function_exists('dashboard_multi_line_chart')) {
     function dashboard_multi_line_chart(array $labels, array $series, string $suffix = '%', int $decimals = 1, string $ariaLabel = 'Gráfico de linhas', array $opcoes = []): string
     {
         $largura = 720.0;
-        $altura = 280.0;
+        // Bloco 2 (2026-10, correção RH): $altura e $base cresceram pelo MESMO delta (antes:
+        // 280/34) — $plotH (e por isso a escala/posição de cada ponto) fica bit a bit idêntica a
+        // antes; só sobra mais respiro abaixo do gráfico para o rótulo de valor "abaixo do ponto"
+        // (ver $abaixo mais adiante) nunca encostar no nome do mês. Nenhuma fórmula/valor mudou.
+        $altura = 300.0;
         $esq = 44.0;
         $dir = 16.0;
         $topo = 30.0;
-        $base = 34.0;
+        $base = 54.0;
         $n = max(1, count($labels));
         $plotW = $largura - $esq - $dir;
         $plotH = $altura - $topo - $base;
@@ -558,7 +562,16 @@ if (!function_exists('dashboard_grouped_columns')) {
                 $svg .= '</g>';
             }
         }
-        return '<div class="overflow-x-auto"><div class="min-w-[560px]">' . $svg . '</svg></div></div>';
+        // Bloco 2 (2026-10, correção RH): com rótulos rotacionados (ex.: nomes de Setor), 560px
+        // fixos para qualquer quantidade de categorias deixava pouco espaço por rótulo e os nomes
+        // se sobrepunham entre si. A largura mínima agora cresce com o nº de categorias — como o
+        // SVG usa viewBox + w-full, um contêiner mais largo renderiza TUDO proporcionalmente maior
+        // (barras, espaçamento, fonte), nunca muda a ESCALA/proporção interna (nenhuma fórmula ou
+        // valor muda). O wrapper com overflow-x-auto já existia e segue garantindo que é só o
+        // CARTÃO do gráfico que rola horizontalmente — nunca a página inteira. Sem rotação, mantém
+        // exatamente os 560px de antes (nenhum outro gráfico que usa este helper é afetado).
+        $larguraMinimaPx = $rotacionarEixoX ? max(560, $n * 70) : 560;
+        return '<div class="overflow-x-auto"><div style="min-width: ' . dashboard_fmt((float)$larguraMinimaPx) . 'px">' . $svg . '</svg></div></div>';
     }
 }
 }

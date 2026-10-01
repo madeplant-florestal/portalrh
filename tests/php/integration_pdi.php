@@ -145,7 +145,8 @@ try {
     $check($tem($adminId, 'visualizar') && $tem($adminId, 'gerenciar') && $tem($adminId, 'acompanhar'), '(permissão) Admin acessa tudo pelo bypass central');
     $check($tem($soVisId, 'visualizar') && !$tem($soVisId, 'gerenciar') && !$tem($soVisId, 'acompanhar'), '(permissão) visualizar NÃO dá gerenciar nem acompanhar');
     $check($tem($soGerId, 'gerenciar') && !$tem($soGerId, 'acompanhar') && $tem($soAcoId, 'acompanhar') && !$tem($soAcoId, 'gerenciar'), '(permissão) gerenciar e acompanhar são independentes');
-    $check(!$tem($semPermId, 'visualizar') && !$tem($semPermId, 'gerenciar') && !$tem($semPermId, 'acompanhar'), '(permissão) RH pela role, sem permissão individual, não acessa nada');
+    // Bloco 4 (2026-10, pedido do RH): bypass central de RH em Authorization::usuarioTemPermissao().
+    $check($tem($semPermId, 'visualizar') && $tem($semPermId, 'gerenciar') && $tem($semPermId, 'acompanhar'), '(permissão) RH acessa tudo pelo bypass central (Bloco 4), mesmo sem nenhuma permissão individual');
     $concedidos = (int)$pdo->query("SELECT COUNT(*) FROM usuario_permissoes up INNER JOIN permissoes p ON p.id = up.permissao_id WHERE p.modulo = 'pdi' AND up.usuario_id NOT IN (" . implode(',', array_map('intval', $criados['usuarios'])) . ')')->fetchColumn();
     $check($concedidos === 0, '(permissão) Ninguém além dos usuários de teste recebeu permissão — o seed não concede automaticamente');
 
@@ -254,7 +255,10 @@ try {
     $pGestor = $svc->criar($post($c5, $gestorBId), $gA, $agora, $ip);
     $idGA = (int)$pGestor['id'];
     $check($pGestor['ok'] === true && (int)$pdiRow($idGA)['gestor_usuario_id'] === $gestorAId, '(escopo) Gestor sem escopo total cria PDI sempre vinculado a SI PRÓPRIO (o gestor enviado é ignorado)');
-    $check($svc->criar($post($c5, $gestorAId), $ator($soVisId, 'viewer'), $agora, $ip)['ok'] === false && $svc->criar($post($c5, $gestorAId), $semPerm, $agora, $ip)['ok'] === false && $svc->criar($post($c5, $gestorAId), $ator($soAcoId, 'viewer'), $agora, $ip)['ok'] === false, '(permissão) Só quem tem pdi.gerenciar cria: visualizar, acompanhar e sem permissão são recusados');
+    // Bloco 4 (2026-10, pedido do RH): RH ($semPerm) ganhou bypass central mesmo sem
+    // pdi.gerenciar — passou a ser capaz de criar. viewer com visualizar/acompanhar continuam
+    // recusados (esses dois não têm relação com o bypass de RH).
+    $check($svc->criar($post($c5, $gestorAId), $ator($soVisId, 'viewer'), $agora, $ip)['ok'] === false && $svc->criar($post($c5, $gestorAId), $semPerm, $agora, $ip)['ok'] === true && $svc->criar($post($c5, $gestorAId), $ator($soAcoId, 'viewer'), $agora, $ip)['ok'] === false, '(permissão) pdi.gerenciar cria; RH cria pelo bypass central (Bloco 4); visualizar/acompanhar (viewer) continuam recusados');
 
     // ---- rascunho → não iniciado → em andamento ----------------------------------------------------------------------------------------
     $vazio = $svc->criar($post($c2, $gestorAId, ['pontos_fortes' => '', 'oportunidades_desenvolvimento' => '', 'objetivo_esperado' => '', 'competencias' => '', 'acoes' => []]), $rh, $agora, $ip);
@@ -454,7 +458,11 @@ try {
     $check($svc->atualizarEstrutura($pVis, $postEdicao($pVis, ['pontos_fortes' => 'x']), $aVis, $agora, $ip)['ok'] === false && $svc->adicionarAcompanhamento($pVis, 'x', false, $aVis, $agora, $ip)['ok'] === false && $svc->liberar($pVis, $aVis, $agora, $ip)['ok'] === false && $svc->registrarEspacoColaborador($pVis, 'x', 'y', $aVis, $agora, $ip)['ok'] === false, '(visualizar) Não edita, não acompanha e não muda status');
     $check($svc->atualizarEstrutura($pGer, $postEdicao($pGer, ['pontos_fortes' => 'Novo texto']), $aGer, $agora, $ip)['ok'] === true && $svc->liberar($pGer, $aGer, $agora, $ip)['ok'] === false && $svc->adicionarAcompanhamento($pGer, 'x', false, $aGer, $agora, $ip)['ok'] === false && $svc->registrarEspacoColaborador($pGer, 'Momento', '', $aGer, $agora, $ip)['ok'] === true, '(gerenciar) Edita a estrutura e registra o espaço do colaborador; NÃO altera status nem acompanha');
     $check($svc->atualizarEstrutura($pAco, $postEdicao($pAco, ['pontos_fortes' => 'x']), $aAco, $agora, $ip)['ok'] === false && $svc->liberar($pAco, $aAco, $agora, $ip)['ok'] === true && $svc->iniciar($pAco, $aAco, $agora, $ip)['ok'] === true && $svc->adicionarAcompanhamento($pAco, 'Ok', false, $aAco, $agora, $ip)['ok'] === true && $svc->registrarEvidencias($pAco, 'Evid', $aAco, $agora, $ip)['ok'] === true, '(acompanhar) Muda status, acompanha e registra evidências; NÃO edita a estrutura');
-    $check($svc->listar([], $semPerm, $hoje)['ok'] === false && $svc->detalhe($pAco, $semPerm, $hoje) === null && $svc->atualizarEstrutura($pAco, $postEdicao($pAco), $semPerm, $agora, $ip)['ok'] === false && $svc->adicionarAcompanhamento($pAco, 'x', false, $semPerm, $agora, $ip)['ok'] === false, '(sem permissão) RH pela role, sem permissão individual, não lista, não vê e não altera');
+    // Bloco 4 (2026-10, pedido do RH): bypass central de RH em Authorization::usuarioTemPermissao() —
+    // RH ($semPerm) passa a listar/ver qualquer PDI; atualizarEstrutura/adicionarAcompanhamento
+    // continuam sujeitos ao escopo de QUEM é gestor do PDI (ver valores reais abaixo).
+    $check($svc->listar([], $semPerm, $hoje)['ok'] === true && $svc->detalhe($pAco, $semPerm, $hoje) !== null, '(sem permissão) RH acessa listar/detalhe pelo bypass central (Bloco 4), mesmo sem nenhuma permissão individual');
+    $check($svc->atualizarEstrutura($pAco, $postEdicao($pAco), $semPerm, $agora, $ip)['ok'] === true && $svc->adicionarAcompanhamento($pAco, 'x', false, $semPerm, $agora, $ip)['ok'] === true, '(sem permissão) RH também edita estrutura e acompanha pelo bypass central (Bloco 4) — o bypass cobre tanto pdi.gerenciar quanto pdi.acompanhar, sem escopo de gestor adicional');
     $check($svc->detalhe($pAco, $adm, $hoje) !== null && $svc->detalhe($pAco, $rh, $hoje) !== null, '(Admin/RH) Admin (bypass) e RH (permissão) veem qualquer PDI');
 
     // ---- escopo por linha ---------------------------------------------------------------------------------------------------------------------------
@@ -490,7 +498,9 @@ try {
     $_SESSION['user_is_supervisor'] = 0;
     $check(str_contains($htmlSupAlheio, 'PDI não encontrado') && !str_contains($htmlSupAlheio, 'ZZPDI Colaboradora') && str_contains($htmlSupProprio, 'Identificação') && str_contains($htmlSupLista, '/admin/pdis/' . $pSup . '"') && !str_contains($htmlSupLista, '/admin/pdis/' . $alheio . '"'), '(escopo/backend) Por URL direta: supervisor recebe "não encontrado" no PDI alheio, abre o próprio e a lista traz só o próprio');
     $rhSemPermLista = $svc->listar([], $semPerm, $hoje);
-    $check($rhSemPermLista['ok'] === false && $svc->detalhe($alheio, $semPerm, $hoje) === null && $svc->detalhe($alheio, $rh, $hoje) !== null && $svc->detalhe($alheio, $adm, $hoje) !== null, '(escopo) Matriz: RH sem permissão individual NÃO acessa; RH com permissão e Admin (bypass central) acessam qualquer PDI');
+    // Bloco 4 (2026-10, pedido do RH): bypass central de RH em Authorization::usuarioTemPermissao() —
+    // RH sem permissão individual ($semPerm) agora acessa igual a RH com permissão ($rh) e Admin.
+    $check($rhSemPermLista['ok'] === true && $svc->detalhe($alheio, $semPerm, $hoje) !== null && $svc->detalhe($alheio, $rh, $hoje) !== null && $svc->detalhe($alheio, $adm, $hoje) !== null, '(escopo) Matriz: RH (com ou sem permissão individual) e Admin (bypass central) acessam qualquer PDI — Bloco 4');
     $filtroGestor = $svc->listar(['gestor' => (string)$gestorBId], $gA, $hoje);
     $check(count(array_intersect(array_map('intval', array_column($filtroGestor['itens'], 'id')), $donoB)) === 0, '(escopo) Filtrar por outro gestor não amplia o escopo do gestor A');
     $lf = $svc->listar(['status' => 'em_andamento', 'origem' => 'feedback', 'unidade' => $emp . '|ZPU1', 'cargo' => $cg1, 'empresa' => $emp, 'busca' => 'Ana'], $rh, $hoje);

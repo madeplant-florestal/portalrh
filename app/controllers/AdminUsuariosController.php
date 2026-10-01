@@ -102,20 +102,33 @@ class AdminUsuariosController extends Controller
         redirect('/admin/usuarios');
     }
 
+    /**
+     * Ajuste pós-Bloco 4 (2026-10, pedido do RH): RH também altera perfil (admin/rh/viewer) de
+     * outro usuário — não só Admin/supervisor. `canManageUser()`/proteção de supervisor e a
+     * whitelist de perfis permanecem como estavam. Autoelevação: o ator nunca altera o PRÓPRIO
+     * perfil por aqui (vale também para Admin — evita autorrebaixamento acidental), então um RH
+     * nunca consegue se promover a admin através desta ação.
+     */
     public function updateRole(string $id): void
     {
-        Auth::requireRole(['admin']);
+        Auth::requireRole(['admin', 'rh']);
         SchemaManager::ensure();
         if (!Security::csrfCheck($_POST['csrf'] ?? '')) {
             http_response_code(400);
             echo 'Falha na verificação de segurança (CSRF).';
             return;
         }
+        $atorId = (int)($_SESSION['user_id'] ?? 0);
+        if ((int)$id === $atorId) {
+            http_response_code(403);
+            echo 'Não é possível alterar o próprio perfil.';
+            return;
+        }
         $role = Security::sanitizeString($_POST['role'] ?? 'viewer');
         if (!in_array($role, ['admin', 'rh', 'viewer'], true)) {
             $role = 'viewer';
         }
-        $actor = User::findById((int)($_SESSION['user_id'] ?? 0));
+        $actor = User::findById($atorId);
         $ok = User::attemptRoleUpdate((int)$id, $role, $actor, Security::clientIp());
         if (!$ok) {
             http_response_code(403);
@@ -184,6 +197,7 @@ class AdminUsuariosController extends Controller
             'cargosOficiais' => (new CatalogoMetadadosRepository('cargos'))->listarOficiais(),
             'setoresOficiais' => (new CatalogoMetadadosRepository('setores'))->listarOficiais(),
             'isAdminAtor' => $this->isAdminAtor(),
+            'podeAlterarPerfil' => $this->isAdminOuRhAtor() && (int)$user->id !== (int)($_SESSION['user_id'] ?? 0),
             'catalogoPermissoes' => Authorization::catalogoPorModulo(),
             'permissoesAtribuidas' => Authorization::idsAtribuidos((int)$user->id),
             'flashError' => Security::sanitizeString($_GET['erro'] ?? ''),
@@ -195,6 +209,17 @@ class AdminUsuariosController extends Controller
     private function isAdminAtor(): bool
     {
         return strtolower((string)Auth::role()) === 'admin' || !empty($_SESSION['user_is_supervisor']);
+    }
+
+    /**
+     * Admin ou RH — usado SOMENTE para liberar a edição de Perfil (updateRole), ajuste pós-Bloco 4.
+     * Não confundir com isAdminAtor(): as demais seções admin-only (CRUD, status, senha, exclusão)
+     * continuam fora do escopo de RH.
+     */
+    private function isAdminOuRhAtor(): bool
+    {
+        $role = strtolower((string)Auth::role());
+        return $role === 'admin' || $role === 'rh' || !empty($_SESSION['user_is_supervisor']);
     }
 
     /**

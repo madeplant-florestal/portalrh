@@ -74,8 +74,11 @@ $comoUsuario = static function (array $u): void {
 
 try {
     $viewer = $novoUsuario('Viewer', 'viewer');
-    $comPesquisaExperiencia = $novoUsuario('Com Pesquisa Exp', 'rh', ['pesquisa_experiencia.visualizar']);
-    $semPesquisaExperiencia = $novoUsuario('Sem Pesquisa Exp', 'rh');
+    // Bloco 4 (2026-10, pedido do RH): role='rh' ganhou bypass central de permissões individuais.
+    // Este par testa a independência da permissão pesquisa_experiencia.visualizar em si, não o
+    // bypass de RH, então usa 'viewer' (sem bypass central).
+    $comPesquisaExperiencia = $novoUsuario('Com Pesquisa Exp', 'viewer', ['pesquisa_experiencia.visualizar']);
+    $semPesquisaExperiencia = $novoUsuario('Sem Pesquisa Exp', 'viewer');
 
     // ---- Manual: renderização e estrutura --------------------------------------------------------------------------------------
     $comoUsuario($viewer);

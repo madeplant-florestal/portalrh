@@ -133,7 +133,8 @@ try {
     $check($tem($visId, 'visualizar') && !$tem($visId, 'gerenciar') && !$tem($visId, 'resultados'), '(permissão) visualizar NÃO dá gerenciar nem resultados (não lê respostas)');
     $check($tem($gerId, 'gerenciar') && !$tem($gerId, 'resultados'), '(permissão) gerenciar NÃO dá resultados');
     $check($tem($resId, 'resultados') && !$tem($resId, 'gerenciar'), '(permissão) resultados NÃO dá gerenciar');
-    $check(!$tem($rhSemId, 'visualizar') && !$tem($rhSemId, 'gerenciar') && !$tem($rhSemId, 'resultados'), '(permissão) RH pela role, sem permissão individual, não acessa nada');
+    // Bloco 4 (2026-10, pedido do RH): bypass central de RH em Authorization::usuarioTemPermissao().
+    $check($tem($rhSemId, 'visualizar') && $tem($rhSemId, 'gerenciar') && $tem($rhSemId, 'resultados'), '(permissão) RH acessa tudo pelo bypass central (Bloco 4), mesmo sem nenhuma permissão individual');
     $concedidos = (int)$pdo->query(
         "SELECT COUNT(*) FROM usuario_permissoes up INNER JOIN permissoes p ON p.id = up.permissao_id
          WHERE p.modulo = 'entrevista_desligamento' AND up.usuario_id NOT IN (" . implode(',', array_map('intval', $criados['usuarios'])) . ')'

@@ -116,7 +116,9 @@ abstract class AdminCatalogosController extends Controller
 
     protected function handleDelete(string $table, int $id): void
     {
-        Auth::requireRole(['admin']);
+        // Bloco 4 (2026-10, pedido do RH): ver AdminAvaliacoesController::delete(). Afeta todos os
+        // cadastros que reaproveitam este helper — Empresas/Setores/Cargos/Jornadas de Trabalho.
+        Auth::requireRole(['admin', 'rh']);
         if (!Security::csrfCheck($_POST['csrf'] ?? '')) {
             http_response_code(400);
             echo 'CSRF inválido';

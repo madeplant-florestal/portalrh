@@ -130,7 +130,9 @@ try {
     }
     $check($problemas === [], '(regra de ouro) Para ' . count($perfis) . ' perfis, toda aba visível leva a um destino que o controller realmente aceita — nunca a um 403' . ($problemas === [] ? '' : ': ' . implode(' | ', $problemas)));
     $check($visiveis['Admin'] === ['dashboard', 'solicitacoes', 'vagas', 'candidaturas', 'pipeline', 'indicacoes', 'webhooks'], '(Admin) Vê as 7 abas (bypass central para o dashboard)');
-    $check($visiveis['RH'] === ['solicitacoes', 'vagas', 'candidaturas', 'pipeline', 'indicacoes', 'webhooks'], '(RH) Vê tudo, menos o Dashboard (que exige a permissão individual — RH não tem bypass)');
+    // Bloco 4 (2026-10, pedido do RH): role='rh' tem bypass central de todas as permissões
+    // individuais, incluindo dashboard_recrutamento.visualizar.
+    $check($visiveis['RH'] === ['dashboard', 'solicitacoes', 'vagas', 'candidaturas', 'pipeline', 'indicacoes', 'webhooks'], '(RH) Vê as 7 abas, incluindo o Dashboard — bypass central de Authorization (Bloco 4)');
     $check($visiveis['viewer'] === ['vagas', 'candidaturas'], '(viewer sem permissão) Só Vagas e Candidaturas, abertas por role');
     $check($visiveis['gestor de vaga'] === ['solicitacoes', 'vagas', 'candidaturas'], '(gestor) Solicitações + as abertas');
     $check($visiveis['viewer+dashboard'] === ['dashboard', 'vagas', 'candidaturas'], '(viewer+dashboard) O Dashboard aparece com a permissão individual');

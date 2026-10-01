@@ -110,7 +110,10 @@ class AdminAvaliacoesController extends Controller
 
     public function delete(string $id): void
     {
-        Auth::requireRole(['admin']);
+        // Bloco 4 (2026-10, pedido do RH): RH ganha acesso equivalente ao Admin nas
+        // funcionalidades administrativas do produto — exclusão de cadastros está entre elas
+        // (nunca ações estruturalmente sensíveis como gestão de usuários/supervisor).
+        Auth::requireRole(['admin', 'rh']);
         if (!Security::csrfCheck($_POST['csrf'] ?? '')) {
             http_response_code(400);
             echo 'CSRF inválido';

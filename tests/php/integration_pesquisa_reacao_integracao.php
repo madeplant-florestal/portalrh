@@ -77,17 +77,21 @@ try {
     $permGerId = (int)($permGerStmt->fetchColumn() ?: 0);
     $check($permGerId > 0, 'Fixture: permissão pesquisa_reacao_integracao.gerenciar existe no catálogo (seedada nesta sprint)');
 
-    $userSoVisualizarId = User::create('ZZPR So Visualizar', 'visualizar.zzpr.' . $suffix . '@teste.local', $senha, 'rh');
+    // Bloco 4 (2026-10, pedido do RH): role='rh' ganhou bypass central de TODAS as permissões
+    // individuais — estes 3 usuários testam especificamente a INDEPENDÊNCIA entre permissões
+    // (.visualizar vs .gerenciar vs nenhuma), então usam 'viewer' (sem bypass central), nunca
+    // 'admin'/'rh'. A prova de que RH tem bypass central vive em outro arquivo.
+    $userSoVisualizarId = User::create('ZZPR So Visualizar', 'visualizar.zzpr.' . $suffix . '@teste.local', $senha, 'viewer');
     User::setActiveStatus($userSoVisualizarId, true);
     $criados['usuarios'][] = $userSoVisualizarId;
     Authorization::sincronizar($userSoVisualizarId, [$permVisId]);
 
-    $userGerenciarId = User::create('ZZPR Gerenciar', 'gerenciar.zzpr.' . $suffix . '@teste.local', $senha, 'rh');
+    $userGerenciarId = User::create('ZZPR Gerenciar', 'gerenciar.zzpr.' . $suffix . '@teste.local', $senha, 'viewer');
     User::setActiveStatus($userGerenciarId, true);
     $criados['usuarios'][] = $userGerenciarId;
     Authorization::sincronizar($userGerenciarId, [$permVisId, $permGerId]);
 
-    $userSemPermissaoId = User::create('ZZPR Sem Permissao', 'sempermissao.zzpr.' . $suffix . '@teste.local', $senha, 'rh');
+    $userSemPermissaoId = User::create('ZZPR Sem Permissao', 'sempermissao.zzpr.' . $suffix . '@teste.local', $senha, 'viewer');
     User::setActiveStatus($userSemPermissaoId, true);
     $criados['usuarios'][] = $userSemPermissaoId;
 
@@ -96,7 +100,7 @@ try {
     $check(Authorization::usuarioTemPermissao($userSoVisualizarId, 'pesquisa_reacao_integracao.visualizar') === true, '(14) Usuário com .visualizar acessa a listagem/resultados');
     $check(Authorization::usuarioTemPermissao($userSoVisualizarId, 'pesquisa_reacao_integracao.gerenciar') === false, '(14) Usuário só com .visualizar NÃO consegue gerar/desativar');
     $check(Authorization::usuarioTemPermissao($userGerenciarId, 'pesquisa_reacao_integracao.gerenciar') === true, '(15) Usuário com .gerenciar consegue gerar/desativar');
-    $check(Authorization::usuarioTemPermissao($userSemPermissaoId, 'pesquisa_reacao_integracao.visualizar') === false, '(16) Usuário sem nenhuma das duas permissões não acessa nem a listagem — RH não ganha acesso automático pela role');
+    $check(Authorization::usuarioTemPermissao($userSemPermissaoId, 'pesquisa_reacao_integracao.visualizar') === false, '(16) Usuário viewer sem nenhuma das duas permissões não acessa nem a listagem');
     $check(Authorization::usuarioTemPermissao($userSemPermissaoId, 'pesquisa_reacao_integracao.gerenciar') === false, '(16) ...nem a capacidade de gerenciar');
 
     // ---- Reflexão de fonte: backend travado corretamente em cada ação (nunca só pela UI) --------

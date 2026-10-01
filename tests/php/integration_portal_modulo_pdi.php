@@ -199,11 +199,16 @@ try {
     $htmlRhLista = $renderizar(static fn() => (new AdminPdisController())->index());
     $check(str_contains($htmlRhLista, 'ZZPDU Alheio Do B'), '(escopo) RH com permissão vê todos');
 
+    // Bloco 4 (2026-10, pedido do RH): role='rh' tem bypass central de todas as permissões
+    // individuais — RH sem permissão concedida passa a ter pdi.visualizar e a listar/abrir
+    // qualquer PDI, igual ao RH com permissão explícita acima. Supervisor não bypassa a
+    // Authorization (só Auth::requireRole()) e continua bloqueado.
+    $atorSemPerm = ['id' => $semPerm['id'], 'role' => $semPerm['role'], 'supervisor' => $semPerm['supervisor']];
+    $check(Authorization::usuarioTemPermissao($semPerm['id'], 'pdi.visualizar') && $svc->detalhe($grande, $atorSemPerm, $hoje) !== null && $svc->listar([], $atorSemPerm, $hoje)['ok'] === true, '(autorização) RH sem permissão individual tem pdi.visualizar pelo bypass central, abre o detalhe e lista (Bloco 4)');
+
     // Bloqueados: o gate `requirePermissao` responde 403 com exit (não dá para renderizar); prova-se pela permissão e pelo serviço.
-    foreach ([['RH sem permissão individual', $semPerm], ['Supervisor sem permissão', $supSem]] as [$rotulo, $u]) {
-        $ator = ['id' => $u['id'], 'role' => $u['role'], 'supervisor' => $u['supervisor']];
-        $check(!Authorization::usuarioTemPermissao($u['id'], 'pdi.visualizar') && $svc->detalhe($grande, $ator, $hoje) === null && $svc->listar([], $ator, $hoje)['ok'] === false, "(autorização) {$rotulo} não tem pdi.visualizar, não abre o detalhe e não lista");
-    }
+    $atorSupSem = ['id' => $supSem['id'], 'role' => $supSem['role'], 'supervisor' => $supSem['supervisor']];
+    $check(!Authorization::usuarioTemPermissao($supSem['id'], 'pdi.visualizar') && $svc->detalhe($grande, $atorSupSem, $hoje) === null && $svc->listar([], $atorSupSem, $hoje)['ok'] === false, '(autorização) Supervisor sem permissão individual não tem pdi.visualizar, não abre o detalhe e não lista');
     $regrasNav = (string)file_get_contents(BASE_PATH . '/app/services/PortalNavegacaoService.php');
     $check(str_contains($regrasNav, 'perm:pdi.visualizar'), '(autorização) A Central só mostra o card de PDI a quem tem pdi.visualizar');
     $comoUsuario($soVis);

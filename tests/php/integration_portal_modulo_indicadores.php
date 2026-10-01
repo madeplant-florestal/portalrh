@@ -128,7 +128,11 @@ try {
     }
     $check($problemas === [], '(regra de ouro) Toda aba e o card de Indicadores levam a um destino que o controller aceita, para ' . count($perfis) . ' perfis' . ($problemas === [] ? '' : ': ' . implode(' | ', $problemas)));
     $check($visiveis['Admin'] === ['people-analytics', 'indicadores-rh'] && $visiveis['RH com dashboard'] === ['people-analytics', 'indicadores-rh'] && $visiveis['viewer com dashboard'] === ['people-analytics', 'indicadores-rh'], '(abas) Admin (bypass) e quem tem dashboard.visualizar veem as duas abas');
-    $check($visiveis['RH sem permissão'] === ['indicadores-rh'] && $visiveis['viewer sem permissão'] === ['indicadores-rh'] && $visiveis['supervisor sem permissão'] === ['indicadores-rh'], '(abas) RH, viewer e supervisor SEM dashboard.visualizar veem só Indicadores de RH — nenhuma role dispensa a permissão do People Analytics (supervisor não ganha escopo extra)');
+    // Bloco 4 (2026-10, pedido do RH): role='rh' tem bypass central de todas as permissões
+    // individuais, incluindo dashboard.visualizar — diferente de viewer/supervisor, que continuam
+    // exigindo a permissão explícita (supervisor não ganha escopo extra na Authorization).
+    $check($visiveis['RH sem permissão'] === ['people-analytics', 'indicadores-rh'], '(abas) RH vê as duas abas mesmo sem dashboard.visualizar concedida — bypass central de Authorization (Bloco 4)');
+    $check($visiveis['viewer sem permissão'] === ['indicadores-rh'] && $visiveis['supervisor sem permissão'] === ['indicadores-rh'], '(abas) viewer e supervisor SEM dashboard.visualizar veem só Indicadores de RH — nenhuma dessas roles dispensa a permissão do People Analytics (supervisor não ganha escopo extra)');
     $check($cards['Admin'] === '/admin/dashboard' && $cards['viewer com dashboard'] === '/admin/dashboard' && $cards['viewer sem permissão'] === '/admin/indicadores-rh' && $cards['supervisor sem permissão'] === '/admin/indicadores-rh', '(Central) O card Indicadores de RH segue apontando para o primeiro destino acessível (dashboard.visualizar → People Analytics; senão → Indicadores de RH)');
     $check((int)$pdo->query('SELECT COUNT(*) FROM permissoes')->fetchColumn() === $permissoesAntes, '(permissões) Nenhuma permissão nova foi criada');
 

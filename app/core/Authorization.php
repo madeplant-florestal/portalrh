@@ -87,9 +87,11 @@ class Authorization
     }
 
     /**
-     * Bypass de Admin fica SOMENTE aqui. `usuarios.role = 'admin'` sempre tem acesso total,
-     * independente de linhas em `usuario_permissoes` — evita que o rollout desta sprint tire
-     * acesso de um administrador por falta de seed.
+     * Bypass de Admin E de RH (Bloco 4, 2026-10) ficam SOMENTE aqui. `usuarios.role = 'admin'` ou
+     * `'rh'` sempre têm acesso total a permissões individuais, independente de linhas em
+     * `usuario_permissoes` — evita que o RH dependa de marcar cada permissão manualmente, e evita
+     * que o rollout desta sprint tire acesso de um administrador por falta de seed. Não cobre
+     * `Auth::requireRole()` — ver usuarioEhRh() para o escopo exato do bypass de RH.
      */
     public static function usuarioTemPermissao(int $usuarioId, string $codigo): bool
     {
@@ -100,7 +102,7 @@ class Authorization
         // migration ainda não rodou. Centralizado aqui (em vez de em cada controller/view que usa
         // permissão) — chamada é idempotente e barata (SchemaManager::ensure() só age 1x/request).
         SchemaManager::ensure();
-        if (self::usuarioEhAdmin($usuarioId)) {
+        if (self::usuarioEhAdmin($usuarioId) || self::usuarioEhRh($usuarioId)) {
             return true;
         }
         $concedidas = self::permissoesConcedidas($usuarioId);
@@ -109,13 +111,32 @@ class Authorization
 
     private static function usuarioEhAdmin(int $usuarioId): bool
     {
+        return self::usuarioTemRole($usuarioId, 'admin');
+    }
+
+    /**
+     * Bypass de RH (Bloco 4, 2026-10, pedido do RH): mesma lógica do Admin acima, mas SOMENTE
+     * para este mecanismo (permissões individuais em `usuario_permissoes`) — nunca para
+     * `Auth::requireRole()` "admin"-only usado por ações estruturalmente sensíveis
+     * (AdminSupervisorController, a maior parte de AdminUsuariosController: criar/excluir
+     * usuário, alterar role/permissões de outro usuário), que continuam exigindo admin literal.
+     * Essa é a ÚNICA regra de bypass de RH no sistema — nenhuma outra exceção "if RH" deve ser
+     * duplicada em controllers.
+     */
+    private static function usuarioEhRh(int $usuarioId): bool
+    {
+        return self::usuarioTemRole($usuarioId, 'rh');
+    }
+
+    private static function usuarioTemRole(int $usuarioId, string $role): bool
+    {
         if ($usuarioId === (int)($_SESSION['user_id'] ?? 0)) {
-            $role = strtolower(trim((string)(Auth::role() ?? '')));
-            return $role === 'admin';
+            $atual = strtolower(trim((string)(Auth::role() ?? '')));
+            return $atual === $role;
         }
         $stmt = Database::conn()->prepare('SELECT role FROM usuarios WHERE id = ?');
         $stmt->execute([$usuarioId]);
-        return strtolower(trim((string)$stmt->fetchColumn())) === 'admin';
+        return strtolower(trim((string)$stmt->fetchColumn())) === $role;
     }
 
     /** Códigos de permissão ATIVA concedidos ao usuário — cacheado por request. */

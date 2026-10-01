@@ -47,6 +47,22 @@
  */
 class PeopleAnalyticsService
 {
+    /**
+     * Bloco 2 (2026-10, pedido explícito do RH): estas 3 empresas somem SÓ das quebras "por
+     * Empresa" (Headcount por Empresa, Turnover por Empresa, Desligamentos por Empresa) — nunca
+     * dos cadastros/dados em si, nunca dos KPIs totais (Headcount Atual, Turnover Geral,
+     * Admissões, Desligamentos, Colaboradores por Setor etc. continuam somando TODAS as empresas).
+     * Por isso a soma das barras de Headcount por Empresa deixa de bater com o card Headcount
+     * Atual quando alguma dessas 3 tem contratos ativos — divergência intencional, não bug.
+     * Códigos oficiais (`colaboradores_metadados.codigo_empresa`), nunca nome em texto (frágil a
+     * grafia — ex.: "CELSO LUIZ..." na base, "CELSO LUIS..." no pedido original).
+     */
+    private const CODIGOS_EMPRESA_EXCLUIDOS_VISOES_POR_EMPRESA = [
+        '0001', // FOREST SERVICES LTDA
+        '0003', // MC REFLORESTADORA EIRELI
+        '0004', // CELSO LUIZ MELLO CORREA
+    ];
+
     /** Mesma convenção de faixas já usada no dashboard legado (CollaboratorDashboardDataService::
      *  buildTurnoverByAge) — reaproveitada aqui, não redefinida. */
     private const FAIXAS_ETARIAS = [
@@ -466,7 +482,9 @@ class PeopleAnalyticsService
      * período selecionado) do card "Headcount Atual" — nunca `RhIndicadoresService::distribuicao()`
      * aqui, porque ela avalia sempre em "hoje" (hardcoded), o que divergiria do card superior
      * sempre que o período selecionado não terminar hoje (ex.: filtro "Ano anterior"). A soma das
-     * barras deste gráfico é sempre idêntica ao valor do card Headcount Atual.
+     * barras deste gráfico é idêntica ao valor do card Headcount Atual, EXCETO quando alguma
+     * empresa de CODIGOS_EMPRESA_EXCLUIDOS_VISOES_POR_EMPRESA tem contratos ativos (Bloco 2,
+     * 2026-10) — exclusão intencional só desta visualização, nunca do card.
      *
      * @return array Lista ordenada por quantidade desc: [['codigo' , 'label', 'quantidade'], ...]
      */
@@ -475,6 +493,9 @@ class PeopleAnalyticsService
         $porEmpresa = [];
         foreach ($contratos as $contrato) {
             $codigo = (string)($contrato['codigo_empresa'] ?? '');
+            if (in_array($codigo, self::CODIGOS_EMPRESA_EXCLUIDOS_VISOES_POR_EMPRESA, true)) {
+                continue;
+            }
             $chave = $codigo !== '' ? $codigo : RhIndicadoresService::NAO_INFORMADO;
             $porEmpresa[$chave][] = $contrato;
         }
@@ -691,6 +712,11 @@ class PeopleAnalyticsService
         $porCodigo = [];
         foreach ($porDimensao as $linha) {
             $codigo = $linha['label'];
+            // Bloco 2 (2026-10): mesma exclusão de montarHeadcountPorEmpresa() — só estas 2 visões
+            // ("Turnover por Empresa"/"Desligamentos por Empresa"), nunca o Turnover Geral.
+            if (in_array($codigo, self::CODIGOS_EMPRESA_EXCLUIDOS_VISOES_POR_EMPRESA, true)) {
+                continue;
+            }
             $porCodigo[$codigo] = [
                 'codigo' => $codigo,
                 'label' => $nomesEmpresa[$codigo] ?? $codigo,
@@ -982,6 +1008,10 @@ class PeopleAnalyticsService
         $npsComp = $painelComp['nps']['nps'];
 
         return [
+            // Bloco 3 (2026-10, pedido do RH): "Integrações realizadas" (fonte oficial
+            // colaboradores.integracao_status) é um KPI DISTINTO de "amostra" (pesquisas
+            // respondidas) — nunca usar um como substituto do outro na view.
+            'integracoes_realizadas' => $painelAtual['integracoes_realizadas'],
             'amostra' => $painelAtual['total_respostas'],
             'nps' => [
                 'valor' => $npsAtual,

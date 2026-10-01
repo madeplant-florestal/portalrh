@@ -119,7 +119,8 @@ try {
     $tem = static fn(int $u): bool => Authorization::usuarioTemPermissao($u, 'dashboard_entrevista_desligamento.visualizar');
     $check($tem($adminId) === true, '(permissão) Admin acessa pelo bypass central');
     $check($tem($comPermId) === true, '(permissão) Usuário com a permissão individual acessa');
-    $check($tem($rhSemId) === false, '(permissão) RH SEM a permissão individual NÃO acessa — role sozinha não basta');
+    // Bloco 4 (2026-10, pedido do RH): bypass central de RH em Authorization::usuarioTemPermissao().
+    $check($tem($rhSemId) === true, '(permissão) RH acessa pelo bypass central (Bloco 4), mesmo sem a permissão individual');
     $check($tem($soResultadosId) === false && Authorization::usuarioTemPermissao($soResultadosId, 'entrevista_desligamento.resultados') === true, '(permissão) `entrevista_desligamento.resultados` NÃO substitui a permissão do dashboard (recurso próprio)');
     $concedidosFora = (int)$pdo->query(
         "SELECT COUNT(*) FROM usuario_permissoes up INNER JOIN permissoes p ON p.id = up.permissao_id
@@ -292,7 +293,10 @@ try {
     foreach (['Dashboard da Entrevista de Desligamento', 'Cobertura da pesquisa', 'Top 5 motivos principais', 'declarados nas entrevistas', 'Fatores contribuintes mais recorrentes', 'Evolução mensal', 'Liderança', 'Cultura e valores', 'Integração e desenvolvimento', 'Resumo por Unidade', 'Resumo por Cargo', 'Permanência média'] as $titulo) {
         $check(str_contains($html, $titulo), "(página) Exibe \"{$titulo}\"");
     }
-    $check(substr_count($html, '<svg viewBox="0 0 720 280"') === 5, '(página) Cinco gráficos mensais em SVG próprio (colunas, taxa, eNPS, satisfação, liderança)');
+    // Bloco 2 (2026-10, correção RH): dashboard_multi_line_chart() cresceu de 280 para 300 de
+    // altura (mais respiro para o rótulo de valor nunca sobrepor o nome do mês) — dashboard_
+    // grouped_columns() não mudou. Dos 5 gráficos mensais, 1 é colunas (280) e 4 são linha (300).
+    $check(substr_count($html, '<svg viewBox="0 0 720 280"') === 1 && substr_count($html, '<svg viewBox="0 0 720 300"') === 4, '(página) Cinco gráficos mensais em SVG próprio (colunas, taxa, eNPS, satisfação, liderança)');
     $check(str_contains($html, 'name="inicio"') && str_contains($html, 'name="fim"') && str_contains($html, 'name="unidade"') && str_contains($html, 'name="cargo"') && str_contains($html, 'value="2025-01-01"') && str_contains($html, '<option value="' . $chaveU1E1 . '" selected'), '(filtros) Período, Unidade e Cargo na página; seleção preservada');
     $check(!str_contains($html, 'name="area"') && !str_contains($html, 'name="gestor"') && !str_contains($html, 'name="tipo"'), '(escopo) Sem filtros de Área, Gestor ou Tipo de desligamento');
     $check(str_contains($html, 'Sem base') && str_contains($html, '2 respostas') && str_contains($html, '66,7%'), '(página) "Sem base" onde não há dados; quantidade de respostas junto do indicador; taxa 66,7%');
@@ -308,7 +312,7 @@ try {
     $_GET = ['inicio' => '2099-01-01', 'fim' => '2099-12-31', 'unidade' => $chaveU1E1];
     $htmlVazio = $renderizar(static fn() => (new AdminDashboardEntrevistaDesligamentoController())->index());
     $check(!preg_match('/Warning:|Notice:|Deprecated:|Fatal error/i', $htmlVazio) && str_contains($htmlVazio, 'Sem base no período selecionado') && str_contains($htmlVazio, 'entrevistas respondidas suficientes para calcular a avaliação média da liderança'), '(liderança) Sem base em todos os meses: estado compacto "Sem base no período selecionado" com texto auxiliar');
-    $check(substr_count($htmlVazio, '<svg viewBox="0 0 720 280"') === 4 && str_contains($htmlVazio, 'Avaliação média da liderança (1 a 5)') && str_contains($htmlVazio, 'Liderança (1–5)'), '(liderança) Sem base: não renderiza o gráfico vazio, mantém o título e a tabela acessível "Ver valores em tabela"');
+    $check(substr_count($htmlVazio, '<svg viewBox="0 0 720 280"') === 1 && substr_count($htmlVazio, '<svg viewBox="0 0 720 300"') === 3 && str_contains($htmlVazio, 'Avaliação média da liderança (1 a 5)') && str_contains($htmlVazio, 'Liderança (1–5)'), '(liderança) Sem base: não renderiza o gráfico vazio, mantém o título e a tabela acessível "Ver valores em tabela"');
     $_GET = ['inicio' => '2025-01-01', 'fim' => '2025-06-30', 'unidade' => $chaveU1E1];
     $comoUsuario($soResultadosId, 'viewer');
     $htmlSem = $renderizar(static function () use ($service) {

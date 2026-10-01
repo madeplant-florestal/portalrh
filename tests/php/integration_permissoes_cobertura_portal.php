@@ -104,7 +104,8 @@ try {
 
     foreach (['colaboradores.visualizar', 'pipeline.visualizar', 'vagas.excluir', 'movimentacao_pessoal.assinar'] as $codigo) {
         $check(Authorization::usuarioTemPermissao($adminId, $codigo) === true, "(3) Admin tem '{$codigo}' pelo bypass central, sem nenhuma linha em usuario_permissoes");
-        $check(Authorization::usuarioTemPermissao($rhId, $codigo) === false, "(4) RH NÃO tem '{$codigo}' automaticamente só por role=rh");
+        // Bloco 4 (2026-10, pedido do RH): bypass central de RH em Authorization::usuarioTemPermissao().
+        $check(Authorization::usuarioTemPermissao($rhId, $codigo) === true, "(4) RH tem '{$codigo}' pelo bypass central (Bloco 4), mesmo sem nenhuma linha em usuario_permissoes");
         $check(Authorization::usuarioTemPermissao($supervisorId, $codigo) === false, "(5) Supervisor NÃO tem '{$codigo}' automaticamente só por is_supervisor=1");
     }
 
@@ -203,10 +204,12 @@ try {
         return $semComentarios("<?php\n" . implode('', array_slice($linhas, $r->getStartLine() - 1, $r->getEndLine() - $r->getStartLine() + 1)));
     };
     $portoesPreExistentes = [
-        'index' => "['admin']", 'create' => "['admin']", 'store' => "['admin']", 'updateRole' => "['admin']",
+        'index' => "['admin']", 'create' => "['admin']", 'store' => "['admin']",
         'delete' => "['admin']", 'updateVagaAcesso' => "['admin']", 'updatePermissoes' => "['admin']", 'updateStatus' => "['admin']",
         'show' => "['admin', 'rh']", 'vincularMetadados' => "['admin', 'rh']", 'updateContextoOrganizacional' => "['admin', 'rh']",
         'buscarMetadados' => "['admin', 'rh']",
+        // Ajuste pós-Bloco 4 (2026-10, pedido do RH): alteração de Perfil passou a admitir RH também.
+        'updateRole' => "['admin', 'rh']",
     ];
     foreach ($portoesPreExistentes as $metodo => $perfis) {
         $corpo = $corpoMetodo(AdminUsuariosController::class, $metodo);
@@ -246,7 +249,7 @@ try {
     // ---- 20. nenhum módulo recebeu bypass novo por role=rh/is_supervisor -------------------------
     $fonteNavegacao = (string)file_get_contents(__DIR__ . '/../../app/services/PortalNavegacaoService.php');
     $check(str_contains($fonteNavegacao, 'Authorization::temPermissao($codigo)') && substr_count($fonteNavegacao, "'rh'") === 1, 'condição aditiva da navegação (PortalNavegacaoService) usa Authorization::temPermissao() como fonte da permissão nova; a única comparação de role==="rh" continua sendo a definição canônica de $staff, sem nenhum bypass novo isolado');
-    $check(Authorization::usuarioTemPermissao($rhId, 'vagas.excluir') === false, 'confirmação direta: RH continua sem a permissão nova vagas.excluir automaticamente');
+    $check(Authorization::usuarioTemPermissao($rhId, 'vagas.excluir') === true, 'confirmação direta: RH tem a permissão nova vagas.excluir automaticamente, pelo bypass central (Bloco 4)');
     $check(Authorization::usuarioTemPermissao($supervisorId, 'vagas.excluir') === false, 'confirmação direta: Supervisor continua sem a permissão nova vagas.excluir automaticamente');
 
     if ($falhas !== []) {

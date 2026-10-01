@@ -104,4 +104,43 @@ class DashboardIntegracaoRepository
                 ORDER BY empresa, unidade, setor";
         return $this->connection()->query($sql)->fetchAll(PDO::FETCH_ASSOC);
     }
+
+    /**
+     * Integrações REALIZADAS no período (Bloco 3, 2026-10, pedido do RH) — fonte oficial já
+     * existente do processo de Integração (`colaboradores.integracao_status = 'realizada'`, o
+     * mesmo campo que já gateia a geração da Pesquisa de Integração individual em
+     * PesquisaIntegracaoService::criarParaIntegracao() — nunca reinterpretado aqui). Conceito
+     * DISTINTO de "pesquisas respondidas": uma integração pode estar realizada sem nenhuma
+     * pesquisa respondida (e vice-versa, se o status for corrigido depois). Ancorado em
+     * `integracao_data` (data do EVENTO, mesma semântica de período das demais consultas deste
+     * repositório). Empresa/Unidade/Setor via `colaboradores.metadados_id` quando existir —
+     * `integracao_status` NÃO exige METADADOS (PJ/terceiro), então um colaborador sem vínculo
+     * simplesmente não casa com um filtro de Empresa/Setor ativo (mesmo comportamento já usado em
+     * todo o restante do Portal para colaboradores sem METADADOS).
+     *
+     * @param array{inicio:string,fim:string,codigo_empresa:string,codigo_unidade:string,codigo_setor:string} $filtros
+     */
+    public function integracoesRealizadas(array $filtros): int
+    {
+        $where = ["c.integracao_status = 'realizada'", 'c.integracao_data BETWEEN ? AND ?'];
+        $params = [$filtros['inicio'], $filtros['fim']];
+        if ($filtros['codigo_empresa'] !== '') {
+            $where[] = 'cm.codigo_empresa = ?';
+            $params[] = $filtros['codigo_empresa'];
+        }
+        if ($filtros['codigo_unidade'] !== '') {
+            $where[] = 'cm.codigo_unidade = ?';
+            $params[] = $filtros['codigo_unidade'];
+        }
+        if ($filtros['codigo_setor'] !== '') {
+            $where[] = 'cm.codigo_setor = ?';
+            $params[] = $filtros['codigo_setor'];
+        }
+        $sql = 'SELECT COUNT(*) FROM colaboradores c
+                LEFT JOIN colaboradores_metadados cm ON cm.id = c.metadados_id
+                WHERE ' . implode(' AND ', $where);
+        $stmt = $this->connection()->prepare($sql);
+        $stmt->execute($params);
+        return (int)$stmt->fetchColumn();
+    }
 }

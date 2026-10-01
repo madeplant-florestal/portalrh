@@ -209,14 +209,22 @@ class DashboardIntegracaoService
             if ($texto === '') {
                 continue;
             }
-            $comentarios[] = ['comentario' => $texto, 'respondida_em' => (string)$r['respondida_em'], 'nome' => $r['nome'], 'cargo' => $r['cargo'], 'empresa' => $r['empresa']];
+            // Bloco 3 (2026-10, pedido do RH): nunca o Nome do respondente — só Cargo/Empresa como
+            // contexto agregado. O nome continua intocado em colaboradores_metadados.
+            $comentarios[] = ['comentario' => $texto, 'respondida_em' => (string)$r['respondida_em'], 'cargo' => $r['cargo'], 'empresa' => $r['empresa']];
             if (count($comentarios) >= 15) {
                 break;
             }
         }
 
+        // Integrações REALIZADAS (Bloco 3, 2026-10, pedido do RH) — fonte oficial já existente
+        // (colaboradores.integracao_status = 'realizada'), conceito DISTINTO de "respostas
+        // recebidas": nunca usar a contagem de pesquisas como substituto.
+        $integracoesRealizadas = $this->repository->integracoesRealizadas($filtros);
+
         return [
             'total_respostas' => count($respostas),
+            'integracoes_realizadas' => $integracoesRealizadas,
             'nps' => $npsGeral,
             'satisfacao_geral' => $satisfacaoGeral,
             'perguntas' => $perguntas,

@@ -86,7 +86,8 @@ class AdminBeneficiosController extends Controller
 
     public function delete(string $id): void
     {
-        Auth::requireRole(['admin']);
+        // Bloco 4 (2026-10, pedido do RH): ver AdminAvaliacoesController::delete().
+        Auth::requireRole(['admin', 'rh']);
         if (!Security::csrfCheck($_POST['csrf'] ?? '')) { http_response_code(400); echo 'CSRF inválido'; return; }
         $existing = Beneficio::find((int)$id);
         Beneficio::delete((int)$id);

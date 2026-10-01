@@ -9,6 +9,7 @@ $vinculoMetadados = $vinculoMetadados ?? null;
 // (Cargo/Setores/vínculo METADADOS) desta tela. Acesso operacional (Solicitação de Vagas),
 // status da conta e senha continuam exclusivos de Admin/supervisor.
 $isAdminAtor = !empty($isAdminAtor);
+$podeAlterarPerfil = !empty($podeAlterarPerfil);
 ?>
 <div class="space-y-4">
   <?= ui_modulo_topo($base, 'pessoas', 'usuarios', [
@@ -49,8 +50,25 @@ $isAdminAtor = !empty($isAdminAtor);
       <div class="font-medium text-text-primary"><?= Security::e($user->email) ?></div>
     </div>
     <div>
-      <div class="text-text-secondary">Permissão</div>
-      <div class="font-medium text-text-primary"><?= Security::e(strtoupper($user->role)) ?></div>
+      <div class="text-text-secondary">Perfil</div>
+      <?php if ($podeAlterarPerfil): ?>
+        <!-- Ajuste pós-Bloco 4 (2026-10, pedido do RH): expõe o endpoint /admin/usuarios/{id}/role,
+             que já existia no backend (User::attemptRoleUpdate(), com validação de perfil permitido,
+             usuário existente e proteção do supervisor), agora também para RH — não só Admin. O ator
+             nunca vê/edita o PRÓPRIO perfil por aqui ($podeAlterarPerfil já exclui esse caso no
+             controller), o que também impede autoelevação. -->
+        <form action="<?= $base ?>/admin/usuarios/<?= (int)$user->id ?>/role" method="post" class="mt-1 flex items-center gap-2">
+          <input type="hidden" name="csrf" value="<?= Security::e($csrf) ?>">
+          <select name="role" class="rounded border border-border px-2 py-1 text-sm">
+            <?php foreach (['admin' => 'Admin', 'rh' => 'RH', 'viewer' => 'Viewer'] as $valorPerfil => $rotuloPerfil): ?>
+              <option value="<?= $valorPerfil ?>" <?= $user->role === $valorPerfil ? 'selected' : '' ?>><?= $rotuloPerfil ?></option>
+            <?php endforeach; ?>
+          </select>
+          <button class="<?= ui_btn('secundario') ?> h-8 px-3 text-xs">Salvar</button>
+        </form>
+      <?php else: ?>
+        <div class="font-medium text-text-primary"><?= Security::e(strtoupper($user->role)) ?></div>
+      <?php endif; ?>
     </div>
     <div>
       <div class="text-text-secondary">Status</div>
@@ -318,7 +336,7 @@ $isAdminAtor = !empty($isAdminAtor);
     <h3 class="text-lg font-semibold text-text-primary">Permissões de acesso</h3>
     <p class="mt-1 text-sm text-text-secondary">
       Controla o que este usuário pode fazer em cada módulo, independentemente do papel (Permissão)
-      dele. Administradores sempre têm acesso total; para os demais, só o que estiver marcado aqui.
+      dele. Administradores e RH possuem acesso total; para os demais, só o que estiver marcado aqui.
     </p>
 
     <form action="<?= $base ?>/admin/usuarios/<?= (int)$user->id ?>/permissoes" method="post" class="mt-4 space-y-5">

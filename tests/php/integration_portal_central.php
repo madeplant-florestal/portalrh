@@ -170,10 +170,13 @@ try {
     $comoUsuario($usuariosPorPerm['dashboard_entrevista_desligamento.visualizar']);
     $check(count(array_diff(array_keys($cards()), ['indicadores', 'recrutamento', 'colaboradores', 'avaliacoes-desenvolvimento', 'cadastros', 'desligamento'])) === 0, '(permissão) Uma permissão libera só o módulo dela — nenhum outro card extra (avaliacoes-desenvolvimento é \'aberto\', sempre presente)');
 
-    // ---- RH e supervisor: sem bypass novo ----------------------------------------------------------------------------------
+    // ---- RH: bypass central (Bloco 4, 2026-10) de toda regra 'perm:'/'perm_qualquer:' ---------------------------------------
     $comoUsuario($rh);
     $cRh = $cards();
-    $check(isset($cRh['solicitacoes-vaga']) && $cRh['colaboradores'] === '/admin/colaboradores' && isset($cRh['avaliacoes-desenvolvimento']) && !isset($cRh['mensagens']) && !isset($cRh['usuarios']) && !isset($cRh['desligamento']), '(RH) Mesmo comportamento da sidebar: staff vê Solicitações/Colaboradores; Mensagens, Desligamento dependem de permissão individual (sem bypass por role); Usuários não. Avaliações e Desenvolvimento é \'aberto\', aparece para qualquer autenticado');
+    $check(
+        array_keys($cRh) === array_values(array_diff($todasChaves, ['usuarios'])),
+        '(RH) Bloco 4: RH vê todos os módulos que dependem de permissão individual (perm:/perm_qualquer:), pelo bypass central de Authorization — só "Usuários e Acessos" continua fora (regra admin_supervisor, não é perm:)'
+    );
     $comoUsuario($supervisor);
     $cSup = $cards();
     $check(isset($cSup['usuarios']) && isset($cSup['solicitacoes-vaga']) && isset($cSup['avaliacoes-desenvolvimento']) && !isset($cSup['mensagens']), '(supervisor) Vê Usuários e Solicitações como na sidebar, mas NÃO ganha módulos de permissão individual; Avaliações e Desenvolvimento é \'aberto\'');

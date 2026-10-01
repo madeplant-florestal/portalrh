@@ -177,7 +177,9 @@ try {
     $adminId = $mkUser('admin', 'admin');
     $gestorId = $mkUser('gestor', 'viewer');
     $check(Authorization::usuarioTemPermissao($adminId, 'comunicacoes.visualizar') === true, 'Admin acessa o histórico de comunicação pelo bypass central');
-    $check(Authorization::usuarioTemPermissao($rhUsuarioId, 'comunicacoes.visualizar') === false, 'RH sem permissão individual NÃO acessa o histórico só por role=rh');
+    // Bloco 4 (2026-10, pedido do RH): RH ganhou bypass central em Authorization::usuarioTemPermissao()
+    // (equivalente ao Admin) — não depende mais de nenhuma permissão individual marcada.
+    $check(Authorization::usuarioTemPermissao($rhUsuarioId, 'comunicacoes.visualizar') === true, 'RH acessa o histórico pelo bypass central de role=rh (Bloco 4), mesmo sem permissão individual');
     $check(Authorization::usuarioTemPermissao($gestorId, 'comunicacoes.visualizar') === false, 'usuário sem a permissão não acessa o histórico de comunicação');
 
     $reflexao = new ReflectionMethod(AdminCandidaturasController::class, 'show');

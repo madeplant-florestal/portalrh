@@ -232,9 +232,10 @@ try {
     $check(Authorization::usuarioTemPermissao($adminId, 'mensagens.criar') === true, 'Admin também tem mensagens.criar pelo bypass central');
     $check(Authorization::usuarioTemPermissao($adminId, 'mensagens.editar') === true, 'Admin também tem mensagens.editar pelo bypass central');
 
-    $check(Authorization::usuarioTemPermissao($rhId, 'mensagens.visualizar') === false, '(15) RH sem permissão individual NÃO acessa a listagem só por role=rh');
-    $check(Authorization::usuarioTemPermissao($rhId, 'mensagens.criar') === false, 'RH sem permissão individual não cadastra');
-    $check(Authorization::usuarioTemPermissao($rhId, 'mensagens.editar') === false, 'RH sem permissão individual não edita');
+    // Bloco 4 (2026-10, pedido do RH): bypass central de RH em Authorization::usuarioTemPermissao().
+    $check(Authorization::usuarioTemPermissao($rhId, 'mensagens.visualizar') === true, '(15) RH acessa a listagem pelo bypass central (Bloco 4), mesmo sem permissão individual');
+    $check(Authorization::usuarioTemPermissao($rhId, 'mensagens.criar') === true, 'RH cadastra pelo bypass central (Bloco 4)');
+    $check(Authorization::usuarioTemPermissao($rhId, 'mensagens.editar') === true, 'RH edita pelo bypass central (Bloco 4)');
 
     $check(Authorization::usuarioTemPermissao($gestorId, 'mensagens.visualizar') === false, '(11) usuário sem mensagens.visualizar não acessa a listagem');
     $check(Authorization::usuarioTemPermissao($gestorId, 'mensagens.criar') === false, '(12) usuário sem mensagens.criar não cadastra');

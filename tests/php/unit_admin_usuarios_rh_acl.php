@@ -1,8 +1,10 @@
 <?php
 
 /**
- * Sprint Solicitação de Vaga — Etapa 2 / Decisão D: RH administra SOMENTE o bloco de Contexto
+ * Sprint Solicitação de Vaga — Etapa 2 / Decisão D: RH administra o bloco de Contexto
  * Organizacional em AdminUsuariosController; o restante do CRUD de usuários continua admin-only.
+ * Ajuste pós-Bloco 4 (2026-10, pedido do RH): updateRole() (alteração de Perfil) passou a admitir
+ * RH também — é a única exceção adicional fora do bloco de Contexto Organizacional.
  *
  * `Auth::requireRole()` termina o processo (`exit`) quando nega acesso, então não dá para invocar
  * os métodos do controller diretamente num script de teste único para provar a NEGAÇÃO de acesso.
@@ -51,18 +53,31 @@ foreach (['show', 'vincularMetadados', 'updateContextoOrganizacional', 'buscarMe
 }
 
 // ---- Fora do escopo de RH: continuam admin-only ----------------------------
-foreach (['index', 'create', 'store', 'updateRole', 'updateStatus', 'delete'] as $metodo) {
+foreach (['index', 'create', 'store', 'updateStatus', 'delete'] as $metodo) {
     $corpo = $corpoDoMetodo($source, $metodo);
     $check($corpo !== '', "método {$metodo} encontrado em AdminUsuariosController");
     $check(
         (bool)preg_match("/Auth::requireRole\(\['admin'\]\)/", $corpo),
-        "{$metodo}: Auth::requireRole(['admin']) — RH NÃO recebe acesso (CRUD geral/perfil/status/senha)"
+        "{$metodo}: Auth::requireRole(['admin']) — RH NÃO recebe acesso (CRUD geral/status/senha)"
     );
     $check(
         !preg_match("/Auth::requireRole\(\['admin',\s*'rh'\]\)/", $corpo),
         "{$metodo}: não amplia a ACL para 'rh'"
     );
 }
+
+// ---- Ajuste pós-Bloco 4 (2026-10, pedido do RH): updateRole (alteração de Perfil) passa a admitir
+// RH, com proteção extra contra autoelevação (ator não altera o próprio perfil por aqui). ----------
+$corpoUpdateRole = $corpoDoMetodo($source, 'updateRole');
+$check($corpoUpdateRole !== '', 'método updateRole encontrado em AdminUsuariosController');
+$check(
+    (bool)preg_match("/Auth::requireRole\(\['admin',\s*'rh'\]\)/", $corpoUpdateRole),
+    "updateRole: Auth::requireRole(['admin','rh']) — RH também altera Perfil"
+);
+$check(
+    str_contains($corpoUpdateRole, '$atorId') && str_contains($corpoUpdateRole, 'Não é possível alterar o próprio perfil'),
+    'updateRole: recusa explicitamente alterar o próprio perfil (anti-autoelevação)'
+);
 
 // ---- adminChangePasswordApi: continua checando admin/supervisor manualmente (não Auth::requireRole)
 $corpoSenha = $corpoDoMetodo($source, 'adminChangePasswordApi');

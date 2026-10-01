@@ -76,7 +76,8 @@ try {
     $check(Authorization::usuarioTemPermissao($adminId, 'dashboard_recrutamento.visualizar') === true, '(1) Admin acessa via bypass central, sem nenhuma permissão individual concedida');
     $check(Authorization::usuarioTemPermissao($viewerComId, 'dashboard_recrutamento.visualizar') === true, '(2) Usuário com a permissão individual acessa');
     $check(Authorization::usuarioTemPermissao($viewerSemId, 'dashboard_recrutamento.visualizar') === false, '(3) Usuário viewer sem a permissão NÃO acessa');
-    $check(Authorization::usuarioTemPermissao($rhSemId, 'dashboard_recrutamento.visualizar') === false, '(3b) RH sem a permissão individual NÃO acessa — role sozinha não basta, diferente do padrão aditivo legado');
+    // Bloco 4 (2026-10, pedido do RH): bypass central de RH em Authorization::usuarioTemPermissao().
+    $check(Authorization::usuarioTemPermissao($rhSemId, 'dashboard_recrutamento.visualizar') === true, '(3b) RH acessa pelo bypass central (Bloco 4), mesmo sem a permissão individual');
 
     $corpoDoMetodo = static function (string $classe, string $metodo): string {
         $reflexao = new ReflectionMethod($classe, $metodo);

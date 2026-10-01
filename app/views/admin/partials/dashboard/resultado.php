@@ -771,8 +771,8 @@ $opcoesFiltro = $opcoesFiltro ?? ['empresas' => [], 'setores' => []];
   <?= $secaoDivisor('Integração / Onboarding') ?>
 
   <?php $io = $painel['integracao_onboarding']; ?>
-  <?php if ($io['amostra'] === 0): ?>
-    <?= $estadoVazio('Nenhuma resposta de Integração no período/filtros selecionados.', 'users') ?>
+  <?php if ($io['amostra'] === 0 && $io['integracoes_realizadas'] === 0): ?>
+    <?= $estadoVazio('Nenhuma integração realizada nem resposta de pesquisa no período/filtros selecionados.', 'users') ?>
   <?php else: ?>
     <section class="grid grid-cols-1 gap-4 lg:grid-cols-3">
       <article class="rounded-ds-lg border border-border bg-surface p-4 shadow-resting lg:col-span-1">
@@ -794,19 +794,24 @@ $opcoesFiltro = $opcoesFiltro ?? ['empresas' => [], 'setores' => []];
       </article>
 
       <article class="rounded-ds-lg border border-border bg-surface p-4 shadow-resting lg:col-span-2">
-        <h2 class="text-ds-h3 text-text-primary">Satisfação geral e fluxo individual</h2>
-        <div class="mt-2.5 grid grid-cols-2 gap-2 text-center sm:grid-cols-3">
+        <h2 class="text-ds-h3 text-text-primary">Integrações, respostas e satisfação</h2>
+        <p class="text-[11px] text-text-secondary">Conceitos distintos: Integrações Realizadas (processo de onboarding concluído) × Pesquisas Respondidas (quem respondeu a pesquisa) × Taxa de Resposta (só do fluxo individual, geradas vs. respondidas)</p>
+        <div class="mt-2.5 grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
+          <div class="rounded-ds-md bg-background p-2">
+            <p class="text-xl font-bold text-text-primary"><?= $fmtN($io['integracoes_realizadas']) ?></p>
+            <p class="text-[11px] text-text-secondary">Integrações realizadas</p>
+          </div>
+          <div class="rounded-ds-md bg-background p-2">
+            <p class="text-xl font-bold text-text-primary"><?= $fmtN($io['amostra']) ?></p>
+            <p class="text-[11px] text-text-secondary">Pesquisas respondidas</p>
+          </div>
           <div class="rounded-ds-md bg-background p-2">
             <p class="text-xl font-bold text-text-primary"><?= $io['satisfacao_geral']['media'] === null ? '—' : number_format($io['satisfacao_geral']['media'], 1, ',', '.') ?></p>
             <p class="text-[11px] text-text-secondary">Satisfação geral (1–5) · <?= $fmtN($io['satisfacao_geral']['n']) ?> resposta(s)</p>
           </div>
           <div class="rounded-ds-md bg-background p-2">
-            <p class="text-xl font-bold text-text-primary"><?= $fmtN($io['fluxo_individual']['geradas']) ?></p>
-            <p class="text-[11px] text-text-secondary">Pesquisas individuais geradas</p>
-          </div>
-          <div class="rounded-ds-md bg-background p-2">
             <p class="text-xl font-bold text-text-primary"><?= $io['fluxo_individual']['taxa_resposta'] === null ? 'Sem base' : number_format($io['fluxo_individual']['taxa_resposta'], 1, ',', '.') . '%' ?></p>
-            <p class="text-[11px] text-text-secondary">Taxa de resposta (só fluxo individual)</p>
+            <p class="text-[11px] text-text-secondary">Taxa de resposta — fluxo individual (<?= $fmtN($io['fluxo_individual']['respondidas']) ?> de <?= $fmtN($io['fluxo_individual']['geradas']) ?> geradas)</p>
           </div>
         </div>
         <?php if (count($io['mensal']['labels']) >= 2): ?>

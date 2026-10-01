@@ -1,7 +1,8 @@
 <?php
 /**
- * Resultados — Pesquisa de Integração (via QR Code) de UMA integração. Agregados primeiro; Nome/
- * Cargo/Empresa (espelho oficial) aparecem só junto aos comentários. Nunca CPF/nascimento.
+ * Resultados — Pesquisa de Integração (via QR Code) de UMA integração. Agregados primeiro;
+ * Cargo/Empresa (espelho oficial) aparecem só junto aos comentários, como contexto — nunca o Nome
+ * do respondente (Bloco 3, 2026-10), nem CPF/nascimento.
  * NPS = %Promotores - %Detratores (nunca a média das notas).
  */
 require_once APP_PATH . '/views/partials/modulo-topo.php';
@@ -77,7 +78,7 @@ $dataFormatada = date('d/m/Y', strtotime((string)$resultados['data_integracao'])
           <?php foreach ($resultados['comentarios'] as $c): ?>
             <div class="rounded-ds-md bg-background p-3">
               <p class="text-xs font-semibold text-text-secondary">
-                <?= Security::e(implode(' · ', array_filter([(string)($c['nome'] ?? ''), (string)($c['cargo'] ?? ''), (string)($c['empresa'] ?? '')], static fn(string $v): bool => $v !== '')) ?: 'Colaborador não identificado') ?>
+                <?= Security::e(implode(' · ', array_filter([(string)($c['cargo'] ?? ''), (string)($c['empresa'] ?? '')], static fn(string $v): bool => $v !== '')) ?: 'Sem contexto adicional') ?>
                 · <?= Security::e(date('d/m/Y H:i', strtotime($c['respondida_em']))) ?>
               </p>
               <p class="mt-1 text-sm text-text-primary"><?= nl2br(Security::e($c['comentario'])) ?></p>

@@ -105,7 +105,8 @@ try {
     $check(Authorization::usuarioTemPermissao($adminId, 'dashboard.visualizar') === true, '(1) Admin acessa via bypass central, sem nenhuma permissão individual concedida');
     $check(Authorization::usuarioTemPermissao($viewerComId, 'dashboard.visualizar') === true, '(2) Usuário com a permissão individual acessa');
     $check(Authorization::usuarioTemPermissao($viewerSemId, 'dashboard.visualizar') === false, '(3) Usuário viewer sem a permissão NÃO acessa — usuário sem permissão recebe 403 no backend');
-    $check(Authorization::usuarioTemPermissao($rhSemId, 'dashboard.visualizar') === false, '(3b) RH sem a permissão individual NÃO acessa — role sozinha não basta');
+    // Bloco 4 (2026-10, pedido do RH): role='rh' tem bypass central de todas as permissões.
+    $check(Authorization::usuarioTemPermissao($rhSemId, 'dashboard.visualizar') === true, '(3b) RH acessa pelo bypass central (Bloco 4), mesmo sem permissão individual concedida');
 
     $corpoDoMetodo = static function (string $classe, string $metodo): string {
         $reflexao = new ReflectionMethod($classe, $metodo);

@@ -71,14 +71,34 @@ try {
 
     $deps = MovimentacaoPessoal::formDependencies((int)$actor['id']);
 
+    // ============================================================================================
+    // TRACK A — Parametrização manual de RH (matrícula/salário/datas)
+    //
+    // Colaborador::updateRhData() só permite editar estes campos manualmente quando o colaborador
+    // NÃO tem metadados_id (tem_extensao_oficial=false — ver Colaborador::mesclarComEspelhoOficial());
+    // com metadados_id, esses campos vêm do espelho oficial do METADADOS e são somente leitura.
+    // ============================================================================================
+    $semMetadadosRow = $pdo->prepare(
+        "SELECT id FROM colaboradores
+         WHERE ativo = 1 AND id != ? AND metadados_id IS NULL
+         ORDER BY id ASC LIMIT 1"
+    );
+    $semMetadadosRow->execute([(int)$gestorColaborador['id']]);
+    $semMetadadosRow = $semMetadadosRow->fetch(PDO::FETCH_ASSOC);
+    if (!$semMetadadosRow) {
+        throw new RuntimeException('Nenhum colaborador ativo sem metadados_id disponível para o teste de parametrização manual de RH.');
+    }
+
     $targetColaborador = null;
     foreach ($deps['colaboradores'] as $colaborador) {
-        if ((int)$colaborador['id'] !== (int)$gestorColaborador['id']) {
+        if ((int)$colaborador['id'] === (int)$semMetadadosRow['id']) {
             $targetColaborador = $colaborador;
             break;
         }
     }
-    $targetColaborador = $targetColaborador ?: $deps['colaboradores'][0];
+    if (!$targetColaborador) {
+        throw new RuntimeException('O colaborador sem metadados_id selecionado não apareceu nas dependências do formulário de movimentação.');
+    }
 
     $originalColaborador = $pdo->prepare(
         "SELECT id, matricula, salario_atual, data_admissao, data_inicio_cargo
@@ -123,34 +143,6 @@ try {
         throw new RuntimeException('A data de início no cargo não foi persistida corretamente.');
     }
 
-    $createdEvaluation = AvaliacaoDesempenho::create([
-        'colaborador_id' => (int)$targetColaborador['id'],
-        'titulo' => 'Avaliação de Integração RH',
-        'nota' => '8,7',
-        'periodo_referencia' => '2026 - 1º semestre',
-        'resumo' => 'Registro criado pelo teste automatizado para validar o CRUD administrativo de avaliações.',
-    ]);
-    if (!($createdEvaluation['ok'] ?? false)) {
-        throw new RuntimeException('Falha ao criar avaliação de desempenho: ' . ($createdEvaluation['error'] ?? 'erro desconhecido'));
-    }
-    $createdEvaluationId = (int)$createdEvaluation['id'];
-
-    $updatedEvaluation = AvaliacaoDesempenho::update($createdEvaluationId, [
-        'colaborador_id' => (int)$targetColaborador['id'],
-        'titulo' => 'Avaliação de Integração RH Ajustada',
-        'nota' => '9,1',
-        'periodo_referencia' => '2026 - ciclo final',
-        'resumo' => 'Avaliação atualizada pelo teste para validar o fluxo completo de manutenção.',
-    ]);
-    if (!($updatedEvaluation['ok'] ?? false)) {
-        throw new RuntimeException('Falha ao atualizar avaliação de desempenho: ' . ($updatedEvaluation['error'] ?? 'erro desconhecido'));
-    }
-
-    $evaluationRow = AvaliacaoDesempenho::find($createdEvaluationId);
-    if (!$evaluationRow || ($evaluationRow['titulo'] ?? '') !== 'Avaliação de Integração RH Ajustada') {
-        throw new RuntimeException('A avaliação criada não refletiu a atualização esperada.');
-    }
-
     $deps = MovimentacaoPessoal::formDependencies((int)$actor['id']);
     $dependencyColaborador = null;
     foreach ($deps['colaboradores'] as $colaborador) {
@@ -170,8 +162,137 @@ try {
         throw new RuntimeException('A movimentação de pessoal não está consumindo o salário parametrizado manualmente.');
     }
 
+    // Track A para no RASCUNHO (saveDraft) — NÃO tenta concluir via signManager()/signRh(). Achado
+    // real desta rodada: MovimentacaoPessoal::validateCompleteInput() (chamada por signManager())
+    // exige avaliacao_desempenho_id > 0 para QUALQUER tipo_movimentacao, e a avaliação nativa exige
+    // metadados_id — ou seja, HOJE nenhum colaborador sem metadados_id consegue concluir NENHUMA
+    // Movimentação de Pessoal (25/203 colaboradores ativos no ambiente de dev, ~12%). Decisão
+    // explícita do Fabio: registrar no relatório, sem alterar produção nesta rodada — o teste só
+    // cobre o que é de fato alcançável hoje para este tipo de colaborador.
+    $payloadA = [
+        'tipo_movimentacao' => 'promocao',
+        'data_solicitacao' => date('d/m/Y'),
+        'gestor_solicitante_usuario_id' => (int)$actor['id'],
+        'setor_id' => (int)($dependencyColaborador['setor_id'] ?: $deps['setores'][0]['id']),
+        'colaborador_id' => (int)$dependencyColaborador['id'],
+        'novo_cargo_id' => (int)$deps['cargos'][0]['id'],
+        'novo_salario' => 'R$ 4.950,00',
+        'data_prevista_mudanca' => date('d/m/Y', strtotime('+25 days')),
+        'justificativa' => 'Promoção recomendada com base em entregas consistentes, ampliação de responsabilidades e retenção do colaborador.',
+        'entregas_ultimos_6_meses' => 'Consolidou rotinas internas, aumentou previsibilidade operacional e apoiou iniciativas críticas da área.',
+        'resultados_atingidos' => 'Superou metas, reduziu retrabalho e melhorou indicadores de eficiência do processo.',
+        'avaliacao_desempenho_id' => null,
+        'pronto_proximo_nivel' => 'Sim, demonstra autonomia, qualidade técnica e capacidade de liderar entregas de maior complexidade.',
+        'competencias_tecnicas' => 'Indicadores, processos, organização e domínio da rotina.',
+        'competencias_comportamentais' => 'Comunicação, colaboração e adaptabilidade.',
+        'pontos_desenvolvimento' => 'Aprofundar visão estratégica e ampliar atuação transversal.',
+        'existe_orcamento_aprovado' => 'sim',
+        'posicao_atual_sera' => 'substituida',
+        'existe_candidato_interno' => '1',
+        'necessita_recrutamento_externo' => '0',
+        'existe_risco_perda' => '1',
+        'impacto_nao_aprovado' => 'Há risco de perda do colaborador e de desaceleração nas entregas críticas da área.',
+    ];
+
+    $draftA = MovimentacaoPessoal::saveDraft($payloadA, (int)$actor['id'], null, '127.0.0.1');
+    if (!($draftA['ok'] ?? false)) {
+        throw new RuntimeException('Falha ao salvar rascunho de movimentação com dados parametrizados: ' . ($draftA['error'] ?? 'erro desconhecido'));
+    }
+    $createdMovimentacaoId = (int)$draftA['id'];
+
+    $recordA = MovimentacaoPessoal::findAccessible(
+        $createdMovimentacaoId,
+        (int)$actor['id'],
+        (string)$actor['role'],
+        (int)($actor['is_supervisor'] ?? 0) === 1
+    );
+    if (!$recordA) {
+        throw new RuntimeException('O rascunho de movimentação criado não foi encontrado (Track A).');
+    }
+    if (($recordA['matricula_snapshot'] ?? '') !== $newMatricula) {
+        throw new RuntimeException('O rascunho não registrou a matrícula parametrizada do colaborador.');
+    }
+    if (($recordA['status_fluxo'] ?? '') !== 'rascunho') {
+        throw new RuntimeException('O rascunho da Track A deveria permanecer em status "rascunho" (conclusão requer avaliação, indisponível para colaborador sem metadados_id).');
+    }
+
+    $pdo->prepare('DELETE FROM movimentacoes_pessoal WHERE id = ?')->execute([$createdMovimentacaoId]);
+    $createdMovimentacaoId = null;
+
+    // ============================================================================================
+    // TRACK B — Avaliação de Desempenho NATIVA (avaliacoes_desempenho) vinculada à Movimentação
+    //
+    // Desde a migration 2026-09-30-movimentacoes-pessoal-fk-avaliacao-desempenho.sql,
+    // `movimentacoes_pessoal.avaliacao_desempenho_id` tem FK real para avaliacoes_desempenho(id)
+    // (aprovado explicitamente na própria migration, não mais o legado colaborador_avaliacoes), e
+    // MovimentacaoPessoal::formDependencies() só lista avaliações concluídas dessa tabela, ligadas
+    // via metadados_id. Por isso este track usa um colaborador DIFERENTE do Track A: a tabela exige
+    // metadados_id NOT NULL, e um colaborador com metadados_id tem RH somente leitura (Track A não
+    // se aplica a ele) — os dois cenários são mutuamente exclusivos no mesmo colaborador.
+    // ============================================================================================
+    $comMetadadosRow = $pdo->prepare(
+        "SELECT id, metadados_id FROM colaboradores
+         WHERE ativo = 1 AND id != ? AND id != ? AND metadados_id IS NOT NULL
+         ORDER BY id ASC LIMIT 1"
+    );
+    $comMetadadosRow->execute([(int)$gestorColaborador['id'], (int)$targetColaborador['id']]);
+    $comMetadadosRow = $comMetadadosRow->fetch(PDO::FETCH_ASSOC);
+    if (!$comMetadadosRow) {
+        throw new RuntimeException('Nenhum colaborador ativo com metadados_id vinculado disponível para o teste de avaliação de desempenho nativa.');
+    }
+    $avaliacaoMetadadosId = (int)$comMetadadosRow['metadados_id'];
+
+    $deps = MovimentacaoPessoal::formDependencies((int)$actor['id']);
+    $avaliacaoColaborador = null;
+    foreach ($deps['colaboradores'] as $colaborador) {
+        if ((int)$colaborador['id'] === (int)$comMetadadosRow['id']) {
+            $avaliacaoColaborador = $colaborador;
+            break;
+        }
+    }
+    if (!$avaliacaoColaborador) {
+        throw new RuntimeException('O colaborador com metadados_id selecionado não apareceu nas dependências do formulário de movimentação.');
+    }
+
+    $agoraSql = (new DateTimeImmutable('now'))->format('Y-m-d H:i:s');
+    $avaliacaoStmt = $pdo->prepare(
+        'INSERT INTO avaliacoes_desempenho (
+            metadados_id, snap_nome, snap_codigo_empresa, snap_codigo_unidade, snap_admissao,
+            gestor_usuario_id, gestor_nome_snapshot, ciclo, periodo_inicio, periodo_fim,
+            status, data_realizacao, resultado_final, criado_por_usuario_id, criado_em, atualizado_em
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \'concluido\', ?, ?, ?, ?, ?)'
+    );
+    $avaliacaoStmt->execute([
+        $avaliacaoMetadadosId, 'ZZ Parametrização RH', 'ZZRHP', 'ZZU', '2024-01-10',
+        (int)$actor['id'], (string)$actor['nome'], 'Ciclo Teste Parametrização', '2026-01-01', '2026-06-30',
+        date('Y-m-d'), 'atende_expectativas', (int)$actor['id'], $agoraSql, $agoraSql,
+    ]);
+    $createdEvaluationId = (int)$pdo->lastInsertId();
+
+    $pdo->prepare('UPDATE avaliacoes_desempenho SET ciclo = ? WHERE id = ?')
+        ->execute(['Ciclo Teste Parametrização Ajustado', $createdEvaluationId]);
+
+    $evaluationRow = $pdo->prepare('SELECT ciclo FROM avaliacoes_desempenho WHERE id = ?');
+    $evaluationRow->execute([$createdEvaluationId]);
+    $evaluationRow = $evaluationRow->fetch(PDO::FETCH_ASSOC);
+    if (!$evaluationRow || ($evaluationRow['ciclo'] ?? '') !== 'Ciclo Teste Parametrização Ajustado') {
+        throw new RuntimeException('A avaliação criada não refletiu a atualização esperada.');
+    }
+
+    $deps = MovimentacaoPessoal::formDependencies((int)$actor['id']);
+    $avaliacaoColaborador = null;
+    foreach ($deps['colaboradores'] as $colaborador) {
+        if ((int)$colaborador['id'] === (int)$comMetadadosRow['id']) {
+            $avaliacaoColaborador = $colaborador;
+            break;
+        }
+    }
+    if (!$avaliacaoColaborador) {
+        throw new RuntimeException('O colaborador com metadados_id não apareceu nas dependências do formulário de movimentação após criar a avaliação.');
+    }
+
     $evaluationFoundInDeps = false;
-    foreach (($dependencyColaborador['avaliacoes'] ?? []) as $avaliacao) {
+    foreach (($avaliacaoColaborador['avaliacoes'] ?? []) as $avaliacao) {
         if ((int)($avaliacao['id'] ?? 0) === $createdEvaluationId) {
             $evaluationFoundInDeps = true;
             break;
@@ -181,12 +302,12 @@ try {
         throw new RuntimeException('A avaliação recém-criada não apareceu nas dependências do formulário de movimentação.');
     }
 
-    $payload = [
+    $payloadB = [
         'tipo_movimentacao' => 'promocao',
         'data_solicitacao' => date('d/m/Y'),
         'gestor_solicitante_usuario_id' => (int)$actor['id'],
-        'setor_id' => (int)($dependencyColaborador['setor_id'] ?: $deps['setores'][0]['id']),
-        'colaborador_id' => (int)$dependencyColaborador['id'],
+        'setor_id' => (int)($avaliacaoColaborador['setor_id'] ?: $deps['setores'][0]['id']),
+        'colaborador_id' => (int)$avaliacaoColaborador['id'],
         'novo_cargo_id' => (int)$deps['cargos'][0]['id'],
         'novo_salario' => 'R$ 4.950,00',
         'data_prevista_mudanca' => date('d/m/Y', strtotime('+25 days')),
@@ -206,54 +327,51 @@ try {
         'impacto_nao_aprovado' => 'Há risco de perda do colaborador e de desaceleração nas entregas críticas da área.',
     ];
 
-    $draft = MovimentacaoPessoal::saveDraft($payload, (int)$actor['id'], null, '127.0.0.1');
-    if (!($draft['ok'] ?? false)) {
-        throw new RuntimeException('Falha ao salvar rascunho de movimentação com dados parametrizados: ' . ($draft['error'] ?? 'erro desconhecido'));
+    $draftB = MovimentacaoPessoal::saveDraft($payloadB, (int)$actor['id'], null, '127.0.0.1');
+    if (!($draftB['ok'] ?? false)) {
+        throw new RuntimeException('Falha ao salvar rascunho de movimentação com avaliação parametrizada: ' . ($draftB['error'] ?? 'erro desconhecido'));
     }
-    $createdMovimentacaoId = (int)$draft['id'];
+    $createdMovimentacaoId = (int)$draftB['id'];
 
-    $manager = MovimentacaoPessoal::signManager(
-        $payload,
+    $managerB = MovimentacaoPessoal::signManager(
+        $payloadB,
         (int)$actor['id'],
         (int)($actor['is_supervisor'] ?? 0) === 1,
         $createdMovimentacaoId,
         '127.0.0.1'
     );
-    if (!($manager['ok'] ?? false)) {
-        throw new RuntimeException('Falha na assinatura do gestor durante a integração: ' . ($manager['error'] ?? 'erro desconhecido'));
+    if (!($managerB['ok'] ?? false)) {
+        throw new RuntimeException('Falha na assinatura do gestor durante a integração (Track B): ' . ($managerB['error'] ?? 'erro desconhecido'));
     }
 
-    $rh = MovimentacaoPessoal::signRh($createdMovimentacaoId, (int)$actor['id'], true, '127.0.0.1');
-    if (!($rh['ok'] ?? false)) {
-        throw new RuntimeException('Falha na assinatura do RH durante a integração: ' . ($rh['error'] ?? 'erro desconhecido'));
+    $rhB = MovimentacaoPessoal::signRh($createdMovimentacaoId, (int)$actor['id'], true, '127.0.0.1');
+    if (!($rhB['ok'] ?? false)) {
+        throw new RuntimeException('Falha na assinatura do RH durante a integração (Track B): ' . ($rhB['error'] ?? 'erro desconhecido'));
     }
 
-    $record = MovimentacaoPessoal::findAccessible(
+    $recordB = MovimentacaoPessoal::findAccessible(
         $createdMovimentacaoId,
         (int)$actor['id'],
         (string)$actor['role'],
         (int)($actor['is_supervisor'] ?? 0) === 1
     );
-    if (!$record) {
-        throw new RuntimeException('A movimentação criada não foi encontrada após o fluxo de assinaturas.');
+    if (!$recordB) {
+        throw new RuntimeException('A movimentação criada não foi encontrada após o fluxo de assinaturas (Track B).');
     }
-    if (($record['matricula_snapshot'] ?? '') !== $newMatricula) {
-        throw new RuntimeException('A movimentação não registrou a matrícula parametrizada do colaborador.');
-    }
-    if ((int)($record['avaliacao_desempenho_id'] ?? 0) !== $createdEvaluationId) {
+    if ((int)($recordB['avaliacao_desempenho_id'] ?? 0) !== $createdEvaluationId) {
         throw new RuntimeException('A movimentação não registrou a avaliação parametrizada selecionada.');
     }
-    if (($record['status_fluxo'] ?? '') !== 'aprovada') {
-        throw new RuntimeException('A movimentação integrada não chegou ao status final esperado.');
+    if (($recordB['status_fluxo'] ?? '') !== 'aprovada') {
+        throw new RuntimeException('A movimentação integrada não chegou ao status final esperado (Track B).');
     }
 
     $pdo->prepare('DELETE FROM movimentacoes_pessoal WHERE id = ?')->execute([$createdMovimentacaoId]);
     $createdMovimentacaoId = null;
 
-    if (!AvaliacaoDesempenho::delete($createdEvaluationId)) {
-        throw new RuntimeException('Falha ao excluir a avaliação criada pelo teste.');
-    }
-    if (AvaliacaoDesempenho::find($createdEvaluationId)) {
+    $pdo->prepare('DELETE FROM avaliacoes_desempenho WHERE id = ?')->execute([$createdEvaluationId]);
+    $aindaExiste = $pdo->prepare('SELECT COUNT(*) FROM avaliacoes_desempenho WHERE id = ?');
+    $aindaExiste->execute([$createdEvaluationId]);
+    if ((int)$aindaExiste->fetchColumn() !== 0) {
         throw new RuntimeException('A avaliação deveria ter sido excluída ao final do teste.');
     }
     $createdEvaluationId = null;
@@ -265,7 +383,7 @@ try {
     }
 
     if ($createdEvaluationId) {
-        $pdo->prepare('DELETE FROM colaborador_avaliacoes WHERE id = ?')->execute([$createdEvaluationId]);
+        $pdo->prepare('DELETE FROM avaliacoes_desempenho WHERE id = ?')->execute([$createdEvaluationId]);
     }
 
     if ($originalColaborador && !empty($originalColaborador['id'])) {

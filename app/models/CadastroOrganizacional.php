@@ -157,8 +157,22 @@ class CadastroOrganizacional
             return false;
         }
 
-        $stmt = Database::conn()->prepare(sprintf('DELETE FROM %s WHERE id = ?', $table));
-        return $stmt->execute([$id]);
+        // usageCount() é um pré-check de UX por tabela (ex.: para 'empresas', só considera
+        // colaboradores ativos — setoresVinculadosCount() é uma métrica separada, de propósito,
+        // ver seu docblock). Ele não enumera toda FK possível, então o banco continua sendo a
+        // autoridade final: qualquer violação de integridade referencial aqui (ex.: Setores ainda
+        // vinculados a uma Empresa sem colaboradores) vira `false`, nunca uma exceção não tratada
+        // propagada ao chamador (AdminCatalogosController::handleDelete() já trata `false` com uma
+        // mensagem amigável — nunca precisa saber qual FK bloqueou).
+        try {
+            $stmt = Database::conn()->prepare(sprintf('DELETE FROM %s WHERE id = ?', $table));
+            return $stmt->execute([$id]);
+        } catch (PDOException $e) {
+            if ($e->getCode() === '23000') {
+                return false;
+            }
+            throw $e;
+        }
     }
 
     public static function usageCount(string $table, int $id): int

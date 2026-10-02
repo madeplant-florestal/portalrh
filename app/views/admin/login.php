@@ -3,30 +3,42 @@
  * Tela de login — ajuste puramente visual (não migrada para o AppShell V2; login/recuperação seguem em `layouts/main`
  * por decisão da revisão global). Nenhum campo, name, action, method ou CSRF foi tocado — só apresentação.
  *
- * Imagem de fundo do painel esquerdo: `assets/imgfundo.HEIC` (fornecido) não é utilizável diretamente — HEIC não tem
- * suporte confiável nos navegadores-alvo (Chrome/Firefox/Edge no Windows, a base real de usuários do Portal). Sem
- * Imagick/GD com HEIF disponíveis no ambiente PHP (não instalados; não é o caso de adicionar extensão nova por causa
- * desta tela), a conversão foi feita localmente, uma única vez, com o FFmpeg já presente na máquina de desenvolvimento
- * (ferramenta do sistema operacional, não uma dependência nova do projeto/build) — gerando `imgfundo-login.webp`
- * (formato preferencial, leitura universal nos navegadores-alvo) com `imgfundo-login.jpg` como fallback via <picture>
- * para qualquer navegador sem suporte a WebP. O .HEIC original permanece em assets/, intocado.
+ * Imagem de fundo do painel esquerdo (2026-10, pedido do RH): `assets/imgfundotelainicial.png` (fornecido, 1672×941,
+ * PAISAGEM — troféu/logo institucional sobre cavaco de madeira, ao entardecer). Convertida uma única vez, localmente,
+ * com o FFmpeg já presente na máquina de desenvolvimento (ferramenta do sistema operacional, não uma dependência nova
+ * do projeto/build), para `imgfundotelainicial.webp` (formato preferencial) com `imgfundotelainicial.jpg` como
+ * fallback via <picture> para navegador sem suporte a WebP — mesmo padrão já usado nesta tela. O .png original
+ * permanece em assets/, intocado.
  *
- * Ajuste (correção do RH): a foto é RETRATO (1600×2133, 4284×5712 no HEIC original — mesma proporção, nenhum corte foi
- * aplicado na geração do asset web) e o painel esquerdo é PAISAGEM (`lg:w-1/2 xl:w-2/3` × altura da viewport). Com
- * `object-fit: cover` isso forçava a imagem a crescer até cobrir a largura do painel, cortando ~35-40% da altura da
- * foto (céu e/ou cavaco de madeira nas bordas). Trocado para `object-fit: contain`: a fotografia aparece INTEIRA, sem
- * corte e sem distorção; sobra respiro nas laterais, preenchido com um tom neutro escuro tirado da própria paleta da
- * foto (cavaco/sombra — nunca azul) em vez de esticar ou cortar mais a imagem. O overlay azul institucional que havia
- * sobre a foto foi removido por completo — a fotografia aparece com as cores originais.
+ * `object-fit: cover` (diferente da imagem anterior, que era RETRATO): esta é paisagem e o elemento central
+ * (o troféu/logo) já fica centralizado no enquadramento original — cobrir o painel recorta só as bordas
+ * esquerda/direita da foto (floresta/céu), nunca o elemento central, sem o "respiro" lateral que a imagem anterior
+ * (portrait) precisava.
+ *
+ * Ajuste de responsividade (2026-10, correção do RH): o painel só aparece a partir de `lg` (1024px), mas sua
+ * largura muda por breakpoint — `lg:w-1/2` (1024-1279px) é estreito e ALTO (ex.: 512×768), enquanto `xl:w-2/3`
+ * (≥1280px) é bem mais largo (ex.: 960×900). Com `object-fit: cover` fixo, a faixa `lg` (notebook comum, ex.:
+ * 1024×768) força o troféu/texto "MADEPLANT" a cobrir uma proporção muito mais estreita que a da foto
+ * (1672×941), cortando ~60% da largura da imagem — o troféu saía deformado/irreconhecível. Resolvido com
+ * `object-contain` nessa faixa (`lg` a `xl-1`): a foto aparece INTEIRA, sem corte nem distorção. Para não deixar
+ * faixas vazias/feias nas laterais quando `contain` sobra espaço, uma segunda camada (mesma imagem, `cover` +
+ * blur + escurecida, só visível de `lg` a `xl-1`) preenche o fundo atrás da imagem principal — efeito usado em
+ * telas de login modernas, não é gambiarra. De `xl` (≥1280px) em diante o painel já é largo o suficiente para
+ * `cover` não cortar o troféu de forma perceptível (testado em 1366×768, 1440×900, 1920×1080) — a camada de
+ * blur é desligada (`xl:hidden`) e a imagem principal volta a `object-cover`, preenchendo o painel por completo.
  */
 ?>
 <div class="min-h-screen flex">
   <!-- Left Container - Branding Area -->
   <div class="hidden lg:flex lg:w-1/2 xl:w-2/3 relative overflow-hidden isolate" style="background-color: #13100d;">
-    <!-- Fotografia INTEIRA, sem corte e sem distorção (object-fit: contain) — cores originais, sem overlay de cor -->
+    <!-- Camada de fundo (só lg→xl-1): mesma foto, cover + blur + escurecida, evita faixas vazias quando a
+         camada principal usa object-contain nessa faixa estreita do painel -->
+    <img src="<?= $base ?>/assets/imgfundotelainicial.jpg" alt="" aria-hidden="true" class="absolute inset-0 h-full w-full object-cover object-center scale-110 blur-2xl brightness-50 xl:hidden">
+
+    <!-- Camada principal: contain (lg→xl-1, foto inteira sem corte) / cover (xl+, painel largo o bastante) -->
     <picture>
-      <source srcset="<?= $base ?>/assets/imgfundo-login.webp" type="image/webp">
-      <img src="<?= $base ?>/assets/imgfundo-login.jpg" alt="" class="absolute inset-0 h-full w-full object-contain object-center">
+      <source srcset="<?= $base ?>/assets/imgfundotelainicial.webp" type="image/webp">
+      <img src="<?= $base ?>/assets/imgfundotelainicial.jpg" alt="" class="absolute inset-0 h-full w-full object-contain xl:object-cover object-center">
     </picture>
 
     <!-- Main Logo - Centered -->

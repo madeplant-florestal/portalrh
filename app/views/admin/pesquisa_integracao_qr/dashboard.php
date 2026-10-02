@@ -183,12 +183,11 @@ $mesSelecionado = Security::sanitizeString($_GET['mes'] ?? '');
         <?php else: ?>
           <div class="mt-3 space-y-3">
             <?php foreach ($painel['comentarios'] as $c): ?>
+              <!-- Bloco 8 (2026-10, pedido do RH): anonimato é regra SÓ de apresentação — o
+                   comentário é a única informação exibida; cargo/empresa/data continuam vindo do
+                   painel (preservados em DashboardIntegracaoService), só não são renderizados. -->
               <div class="rounded-ds-md bg-background p-3">
-                <p class="text-xs font-semibold text-text-secondary">
-                  <?= Security::e(implode(' · ', array_filter([(string)($c['cargo'] ?? ''), (string)($c['empresa'] ?? '')], static fn(string $v): bool => $v !== '')) ?: 'Sem contexto adicional') ?>
-                  · <?= Security::e(date('d/m/Y H:i', strtotime($c['respondida_em']))) ?>
-                </p>
-                <p class="mt-1 text-sm text-text-primary"><?= nl2br(Security::e($c['comentario'])) ?></p>
+                <p class="text-sm text-text-primary"><?= nl2br(Security::e($c['comentario'])) ?></p>
               </div>
             <?php endforeach; ?>
           </div>

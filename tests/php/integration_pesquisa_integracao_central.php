@@ -222,7 +222,11 @@ try {
     $check(str_contains($htmlDetalhe, 'Resultados — Pesquisa de Integração') && str_contains($htmlDetalhe, 'Data da Integração:') && str_contains($htmlDetalhe, '05/03/2001'), '(14) Cabeçalho com "Resultados — Pesquisa de Integração" e a data');
     $check(str_contains($htmlDetalhe, 'Total de Respostas') && str_contains($htmlDetalhe, 'NPS') && str_contains($htmlDetalhe, 'Promotores') && str_contains($htmlDetalhe, 'Neutros') && str_contains($htmlDetalhe, 'Detratores'), '(14) Cards principais');
     $check(str_contains($htmlDetalhe, $rotulosReais[0]) && !str_contains($htmlDetalhe, 'história, propósito e valores'), '(14) Exibe as perguntas reais da Pesquisa de Integração e nenhuma da Pesquisa de Reação');
-    $check(str_contains($htmlDetalhe, 'Comentários dos colaboradores') && str_contains($htmlDetalhe, 'Ótima recepção, muito claro.') && str_contains($htmlDetalhe, 'ZZCE Operadora') && str_contains($htmlDetalhe, 'ZZCE Empresa Alfa') && !str_contains($htmlDetalhe, 'ZZCE Ana Souza'), '(14) Comentários com Cargo · Empresa oficiais, SEM o nome do respondente (Bloco 3, 2026-10)');
+    // Bloco 8 (2026-10, pedido do RH): anonimato na Pesquisa de Integração passou a ser regra de
+    // APRESENTAÇÃO completa — a tela deixou de mostrar Cargo/Empresa/data junto ao comentário (só
+    // o texto), mesmo esses dados continuando preservados em PesquisaIntegracaoResultadosService
+    // (ver (6) acima, que prova isso direto no array). Bloco 3 (nome nunca exposto) continua valendo.
+    $check(str_contains($htmlDetalhe, 'Comentários dos colaboradores') && str_contains($htmlDetalhe, 'Ótima recepção, muito claro.') && !str_contains($htmlDetalhe, 'ZZCE Operadora') && !str_contains($htmlDetalhe, 'ZZCE Empresa Alfa') && !str_contains($htmlDetalhe, 'ZZCE Ana Souza'), '(14) Comentários mostram SÓ o texto — nem Cargo, nem Empresa, nem Nome do respondente (Bloco 8, 2026-10: anonimato completo na apresentação)');
     $check(!str_contains($htmlDetalhe, 'COMENTARIO-INDIVIDUAL') && !str_contains($htmlDetalhe, 'ZZCE Legado') && !str_contains($htmlDetalhe, 'ZZCE Bruno Lima'), '(14) Não lista respondentes sem comentário nem a pesquisa individual — resultado agregado, não listagem nominal');
     $check(!str_contains($htmlDetalhe, $cpfFixture) && !str_contains($htmlDetalhe, '390.533.447-05') && !str_contains($htmlDetalhe, '1975') && !str_contains($htmlDetalhe, '09/04'), '(15) Nenhum CPF nem nascimento é exibido');
     $htmlVazio = $renderizar(static fn() => (new AdminPesquisaIntegracaoResultadosController())->resultados($D3));

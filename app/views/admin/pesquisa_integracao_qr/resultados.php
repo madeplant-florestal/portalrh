@@ -1,8 +1,9 @@
 <?php
 /**
  * Resultados — Pesquisa de Integração (via QR Code) de UMA integração. Agregados primeiro;
- * Cargo/Empresa (espelho oficial) aparecem só junto aos comentários, como contexto — nunca o Nome
- * do respondente (Bloco 3, 2026-10), nem CPF/nascimento.
+ * comentários mostram SÓ o texto — nunca Nome, Cargo, Empresa, data/hora exata nem qualquer
+ * identificador (Bloco 3, 2026-10: nome; Bloco 8, 2026-10: cargo/empresa/data — anonimato é regra
+ * de APRESENTAÇÃO, os dados continuam preservados em PesquisaIntegracaoResultadosService).
  * NPS = %Promotores - %Detratores (nunca a média das notas).
  */
 require_once APP_PATH . '/views/partials/modulo-topo.php';
@@ -76,12 +77,11 @@ $dataFormatada = date('d/m/Y', strtotime((string)$resultados['data_integracao'])
       <?php else: ?>
         <div class="mt-3 space-y-3">
           <?php foreach ($resultados['comentarios'] as $c): ?>
+            <!-- Bloco 8 (2026-10, pedido do RH): anonimato é regra SÓ de apresentação — o
+                 comentário é a única informação exibida; cargo/empresa/data continuam vindo do
+                 painel (preservados em PesquisaIntegracaoResultadosService), só não são renderizados. -->
             <div class="rounded-ds-md bg-background p-3">
-              <p class="text-xs font-semibold text-text-secondary">
-                <?= Security::e(implode(' · ', array_filter([(string)($c['cargo'] ?? ''), (string)($c['empresa'] ?? '')], static fn(string $v): bool => $v !== '')) ?: 'Sem contexto adicional') ?>
-                · <?= Security::e(date('d/m/Y H:i', strtotime($c['respondida_em']))) ?>
-              </p>
-              <p class="mt-1 text-sm text-text-primary"><?= nl2br(Security::e($c['comentario'])) ?></p>
+              <p class="text-sm text-text-primary"><?= nl2br(Security::e($c['comentario'])) ?></p>
             </div>
           <?php endforeach; ?>
         </div>

@@ -81,12 +81,19 @@ try {
 
     $contratoA = $criarContrato('ZZDI Colaborador A', 'EMPA', 'ST1');
     $contratoB = $criarContrato('ZZDI Colaborador B', 'EMPB', 'ST2');
+    // Bloco 8 (2026-10, pedido do RH): contrato dedicado à checagem de anonimato na APRESENTAÇÃO
+    // (render HTTP do dashboard, seção "Comentários recentes") — mesma data/filtro do render HTTP
+    // mais abaixo (ano=2026, mes=1), para o comentário aparecer nesse render específico.
+    $contratoAnonimato = $criarContrato('ZZDI Anonimato', 'EMPZ', 'STZ');
 
     // ---- 1) Período: Todo / Ano / Ano+Mês ------------------------------------------------------
     $qrResposta($contratoA, '2025-03-10', 2, 'ZZDI comentário 2025.');            // detrator, fora de 2026
     $qrResposta($contratoA, '2026-01-15', 9);                                    // promotor, janeiro/2026
     $qrResposta($contratoA, '2026-01-20', 10);                                   // promotor, janeiro/2026
     $qrResposta($contratoA, '2026-01-25', 3);                                    // detrator, janeiro/2026
+    // Mês isolado (julho/2026, não usado por nenhuma outra asserção deste arquivo) para não alterar
+    // nenhuma contagem/NPS/distribuição já fixada acima — ver bloco de render dedicado mais abaixo.
+    $qrResposta($contratoAnonimato, '2026-07-18', 8, 'ZZDI comentário de anonimato — só este texto deveria aparecer na tela.');
     $qrResposta($contratoA, '2026-06-05', 7);                                    // neutro, junho/2026
 
     $hoje = new DateTimeImmutable('2026-12-31');
@@ -191,6 +198,24 @@ try {
     $html = ob_get_clean();
     $check($erroRender === null && !preg_match('/Warning:|Notice:|Deprecated:|Fatal error/i', $html), '(20) dashboard() renderiza sem erro/Warning/Notice para quem TEM a permissão — ' . ($erroRender?->getMessage() ?? 'ok'));
     $check(str_contains($html, 'NPS') && str_contains($html, 'Taxa de resposta'), '(21) HTML contém os indicadores esperados (NPS, Taxa de resposta)');
+    // Bloco 8 (2026-10, pedido do RH): anonimato na apresentação — "Comentários recentes" mostra
+    // SÓ o texto do comentário, nunca Cargo/Empresa/data (mesmo esses dados continuando no painel,
+    // ver DashboardIntegracaoService/item (5) de integration_integracao_bloco3_rh.php). Render
+    // dedicado (mês isolado, julho/2026) para não interferir nas contagens/NPS já fixados acima.
+    $_GET = ['ano' => '2026', 'mes' => '7'];
+    ob_start();
+    (new AdminPesquisaIntegracaoResultadosController())->dashboard();
+    $htmlAnonimato = ob_get_clean();
+    // "ZZDI Empresa EMPZ" aparece legitimamente no <select> de filtro de Empresa, em outro ponto da
+    // página — isola só o TRECHO da seção de comentários para o teste não confundir os dois.
+    $posComentarios = strpos($htmlAnonimato, 'Comentários recentes');
+    $trechoComentarios = $posComentarios !== false ? substr($htmlAnonimato, $posComentarios) : '';
+    $check(
+        str_contains($trechoComentarios, 'ZZDI comentário de anonimato — só este texto deveria aparecer na tela.')
+        && !str_contains($trechoComentarios, 'ZZDI Cargo')
+        && !str_contains($trechoComentarios, 'ZZDI Empresa EMPZ'),
+        '(21b) "Comentários recentes" exibe só o texto do comentário — nunca Cargo/Empresa (Bloco 8)'
+    );
 
     $check(!Authorization::usuarioTemPermissao($semPerm, 'integracao_colaborador.visualizar'), '(22) Usuário ZZDI Sem Permissão de fato não tem integracao_colaborador.visualizar (pré-condição do redirect/403 real via HTTP)');
 

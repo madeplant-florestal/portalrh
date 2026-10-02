@@ -9,9 +9,9 @@
 --   Rollback: 2026-09-30-avaliacoes-desenvolvimento-ciencia-eventos-tipo-desempenho-rollback.sql.
 
 ALTER TABLE avaliacoes_desenvolvimento_ciencia
-  DROP CHECK chk_avdesenv_ciencia_tipo_doc,
+  DROP CONSTRAINT chk_avdesenv_ciencia_tipo_doc,
   ADD CONSTRAINT chk_avdesenv_ciencia_tipo_doc CHECK (documento_tipo IN ('avaliacao_experiencia','feedback','avaliacao_desempenho'));
 
 ALTER TABLE avaliacoes_desenvolvimento_eventos
-  DROP CHECK chk_avdesenv_eventos_tipo_doc,
+  DROP CONSTRAINT chk_avdesenv_eventos_tipo_doc,
   ADD CONSTRAINT chk_avdesenv_eventos_tipo_doc CHECK (documento_tipo IN ('avaliacao_experiencia','feedback','avaliacao_desempenho'));

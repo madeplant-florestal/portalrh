@@ -391,10 +391,13 @@ $opcoesFiltro = $opcoesFiltro ?? ['empresas' => [], 'setores' => []];
           ]) ?>
         </div>
         <div class="mt-1">
-          <?= dashboard_grouped_columns(array_column($porSetorCompExibir, 'label'), [
+          <?php /* Ajuste visual (2026-10, pedido do RH): barras horizontais agrupadas — nomes de
+                   Setor por extenso, sem rotação/truncamento; o card cresce verticalmente em vez
+                   de exigir scroll horizontal. Mesma fonte de dados/clique de antes. */ ?>
+          <?= dashboard_grouped_bar_rows(array_column($porSetorCompExibir, 'label'), [
               ['label' => 'Período selecionado', 'color' => $pa['brand500'], 'values' => array_column($porSetorCompExibir, 'atual')],
               ['label' => 'Comparativo', 'color' => $pa['brand200'], 'values' => array_column($porSetorCompExibir, 'comparativo')],
-          ], 'Colaboradores por setor, período selecionado comparado ao comparativo', ['rotacionar_eixo_x' => true, 'altura' => 230, 'clique_categoria' => $cliqueCategoriaSetor]) ?>
+          ], ['clique_categoria' => $cliqueCategoriaSetor]) ?>
         </div>
         <?php if (count($porSetorComp) > count($porSetorCompExibir)): ?>
           <p class="mt-1.5 text-[11px] text-text-muted">Exibindo os <?= count($porSetorCompExibir) ?> principais de <?= count($porSetorComp) ?> setores · "Setor não informado" sempre incluído.</p>

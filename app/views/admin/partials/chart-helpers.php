@@ -573,5 +573,73 @@ if (!function_exists('dashboard_grouped_columns')) {
         $larguraMinimaPx = $rotacionarEixoX ? max(560, $n * 70) : 560;
         return '<div class="overflow-x-auto"><div style="min-width: ' . dashboard_fmt((float)$larguraMinimaPx) . 'px">' . $svg . '</svg></div></div>';
     }
+
+    if (!function_exists('dashboard_grouped_bar_rows')) {
+        /**
+         * Ajuste visual (2026-10, pedido do RH): barras HORIZONTAIS agrupadas (2+ séries por
+         * categoria), com o nome da categoria por EXTENSO acima das barras — nunca rotacionado,
+         * nunca truncado. Substitui dashboard_grouped_columns() nos casos em que os rótulos são
+         * texto longo (ex.: nomes de Setor): em vez de inclinar o texto e crescer a largura
+         * mínima, o card cresce VERTICALMENTE (uma linha por categoria), sem scroll horizontal.
+         *
+         * Mesmo contrato de $series de dashboard_grouped_columns() (label/color/values) e mesmo
+         * mecanismo de clique-to-filter (dashboard_clique_attrs()) — mas só por CATEGORIA (o bloco
+         * inteiro do setor é o alvo do clique), já que aqui não há a noção de "barra individual
+         * clicável" separada da categoria. Tooltip nativo (atributo title, sem JS) em cada barra,
+         * mesmo texto que o gráfico anterior mostrava no <title> do SVG.
+         *
+         * Puro HTML/CSS (sem SVG) de propósito: quebra de texto em várias linhas é trivial em
+         * HTML e muito frágil em SVG (que não quebra linha sozinho). Não calcula nem reordena
+         * nada — os valores e a ordem chegam exatamente como o chamador passou.
+         *
+         * @param string[] $labels
+         * @param array<int,array{label:string,color:string,values:array<int,float|null>}> $series
+         * @param array{clique_categoria?:array<int,array|null>} $opcoes
+         */
+        function dashboard_grouped_bar_rows(array $labels, array $series, array $opcoes = []): string
+        {
+            if ($labels === []) {
+                return '';
+            }
+            $cliqueCategoria = $opcoes['clique_categoria'] ?? [];
+
+            $maximo = 0.0;
+            foreach ($series as $s) {
+                foreach ($s['values'] as $v) {
+                    if ($v !== null) {
+                        $maximo = max($maximo, (float)$v);
+                    }
+                }
+            }
+            $maximo = $maximo > 0 ? $maximo : 1.0;
+
+            $blocos = '';
+            foreach ($labels as $i => $rotulo) {
+                $barras = '';
+                foreach ($series as $s) {
+                    $v = $s['values'][$i] ?? null;
+                    if ($v === null) {
+                        continue;
+                    }
+                    $valor = (float)$v;
+                    $largura = min(100.0, ($valor / $maximo) * 100.0);
+                    $cor = Security::e((string)$s['color']);
+                    $displayValor = number_format($valor, 0, ',', '.');
+                    $barras .= '<div class="flex items-center gap-2" title="' . Security::e($s['label'] . ' — ' . $rotulo . ': ' . $displayValor) . '">'
+                        . '<div class="h-2.5 min-w-0 flex-1 rounded-full bg-slate-100">'
+                        . '<div class="dashboard-bar-grow-x h-2.5 rounded-full" style="width: ' . dashboard_fmt($largura) . '%; background-color: ' . $cor . '"></div>'
+                        . '</div>'
+                        . '<span class="w-9 flex-shrink-0 text-right text-[11px] font-semibold text-slate-700">' . Security::e($displayValor) . '</span>'
+                        . '</div>';
+                }
+                $clique = $cliqueCategoria[$i] ?? null;
+                $blocos .= '<div' . dashboard_clique_attrs($clique, (string)$rotulo) . ' class="rounded-ds-md p-1.5' . dashboard_clique_class($clique) . '">'
+                    . '<p class="mb-1 text-[12px] font-medium leading-snug text-slate-700">' . Security::e((string)$rotulo) . '</p>'
+                    . '<div class="space-y-1">' . $barras . '</div>'
+                    . '</div>';
+            }
+            return '<div class="space-y-2.5">' . $blocos . '</div>';
+        }
+    }
 }
 }

@@ -198,6 +198,8 @@ class AdminUsuariosController extends Controller
             'setoresOficiais' => (new CatalogoMetadadosRepository('setores'))->listarOficiais(),
             'isAdminAtor' => $this->isAdminAtor(),
             'podeAlterarPerfil' => $this->isAdminOuRhAtor() && (int)$user->id !== (int)($_SESSION['user_id'] ?? 0),
+            'podeAlterarSetoresGerenciados' => $this->isAdminOuRhAtor(),
+            'setoresGerenciados' => (new UsuarioSetoresGerenciadosService())->setoresDoUsuario((int)$user->id),
             'catalogoPermissoes' => Authorization::catalogoPorModulo(),
             'permissoesAtribuidas' => Authorization::idsAtribuidos((int)$user->id),
             'flashError' => Security::sanitizeString($_GET['erro'] ?? ''),
@@ -392,6 +394,48 @@ class AdminUsuariosController extends Controller
             redirect($back . '?erro=' . urlencode((string)($result['error'] ?? 'Falha ao salvar o contexto organizacional.')));
         }
         redirect($back . '?ok=' . urlencode('Contexto organizacional atualizado.'));
+    }
+
+    /**
+     * Salva os "Setores gerenciados" do usuário (Bloco 7, 2026-10, pedido do RH) — base do filtro
+     * por Gestor no Dashboard de Integração/People Analytics. Admin/RH, mesmo gate de
+     * updateContextoOrganizacional(); independente de `gestor_usuario_id` (Gestor Imediato) e de
+     * `usuario_setores` (Setor principal/adicionais) — nenhuma das duas é lida ou alterada aqui.
+     */
+    public function updateSetoresGerenciados(string $id): void
+    {
+        Auth::requireRole(['admin', 'rh']);
+        SchemaManager::ensure();
+        if (!Security::csrfCheck($_POST['csrf'] ?? '')) {
+            http_response_code(400);
+            echo 'Falha na verificação de segurança (CSRF).';
+            return;
+        }
+        $target = User::findById((int)$id);
+        if (!$target) {
+            http_response_code(404);
+            echo 'Usuário não encontrado';
+            return;
+        }
+        $actor = User::findById((int)($_SESSION['user_id'] ?? 0));
+        if (!User::canManageUser($actor, $target)) {
+            http_response_code(403);
+            echo 'Operação não permitida.';
+            return;
+        }
+
+        $setorIds = array_values(array_filter(array_map(
+            static fn ($v): int => (int)$v,
+            (array)($_POST['setores_gerenciados'] ?? [])
+        ), static fn (int $v): bool => $v > 0));
+
+        $result = (new UsuarioSetoresGerenciadosService())->definirSetoresGerenciados((int)$id, $setorIds);
+
+        $back = '/admin/usuarios/' . (int)$id;
+        if (!($result['ok'] ?? false)) {
+            redirect($back . '?erro=' . urlencode((string)($result['error'] ?? 'Falha ao salvar os setores gerenciados.')));
+        }
+        redirect($back . '?ok=' . urlencode('Setores gerenciados atualizados.'));
     }
 
     /**

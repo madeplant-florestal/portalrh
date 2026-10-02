@@ -324,6 +324,8 @@ try {
     $router->post('/admin/usuarios/{id}/gestor', [AdminUsuariosController::class, 'updateGestor']);
     $router->post('/admin/usuarios/{id}/metadados-vinculo', [AdminUsuariosController::class, 'vincularMetadados']);
     $router->post('/admin/usuarios/{id}/contexto-organizacional', [AdminUsuariosController::class, 'updateContextoOrganizacional']);
+    // Setores gerenciados (Bloco 7) — base do filtro por Gestor; independente de Contexto Organizacional/Gestor Imediato.
+    $router->post('/admin/usuarios/{id}/setores-gerenciados', [AdminUsuariosController::class, 'updateSetoresGerenciados']);
     $router->post('/admin/usuarios/{id}/permissoes', [AdminUsuariosController::class, 'updatePermissoes']);
     $router->post('/admin/usuarios/{id}/excluir', [AdminUsuariosController::class, 'delete']);
 

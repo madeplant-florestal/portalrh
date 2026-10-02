@@ -319,6 +319,42 @@ $podeAlterarPerfil = !empty($podeAlterarPerfil);
     </form>
   </section>
 
+  <?php
+    // Bloco 7 (2026-10, pedido do RH): "Setores gerenciados" — relação própria, independente de
+    // Setor principal/adicionais (acima) e de Gestor Imediato (gestor_usuario_id). Base do filtro
+    // por Gestor no Dashboard de Integração/People Analytics.
+    $podeAlterarSetoresGerenciados = !empty($podeAlterarSetoresGerenciados);
+    $setoresGerenciados = $setoresGerenciados ?? [];
+    $setoresGerenciadosIds = array_map(static fn(array $s): int => (int)$s['id'], $setoresGerenciados);
+  ?>
+  <?php if ($podeAlterarSetoresGerenciados): ?>
+  <section class="rounded-ds-md border border-border bg-surface-secondary p-5">
+    <h3 class="text-lg font-semibold text-text-primary">Setores gerenciados</h3>
+    <p class="mt-1 text-sm text-text-secondary">
+      Define os setores pelos quais este usuário possui responsabilidade gerencial. Essa
+      configuração também poderá ser utilizada nos filtros gerenciais do Portal.
+    </p>
+
+    <form action="<?= $base ?>/admin/usuarios/<?= (int)$user->id ?>/setores-gerenciados" method="post" class="mt-4 space-y-4">
+      <input type="hidden" name="csrf" value="<?= Security::e($csrf) ?>">
+      <div class="grid gap-2 sm:grid-cols-2">
+        <?php foreach ($setoresOficiais as $s): ?>
+          <label class="flex items-center gap-2 rounded-lg border border-border bg-white px-3 py-2 text-sm">
+            <input type="checkbox" name="setores_gerenciados[]" value="<?= (int)$s['id'] ?>"
+                   class="h-4 w-4 rounded border-border"
+                   <?= in_array((int)$s['id'], $setoresGerenciadosIds, true) ? 'checked' : '' ?>>
+            <span class="text-text-primary"><?= Security::e($rotuloCatalogo($s)) ?></span>
+          </label>
+        <?php endforeach; ?>
+        <?php if ($setoresOficiais === []): ?>
+          <p class="text-sm text-text-secondary">Nenhum setor oficial disponível no catálogo.</p>
+        <?php endif; ?>
+      </div>
+      <button class="<?= ui_btn('primario') ?>">Salvar setores gerenciados</button>
+    </form>
+  </section>
+  <?php endif; ?>
+
   <?php if ($isAdminAtor): ?>
   <?php
     $catalogoPermissoes = $catalogoPermissoes ?? [];

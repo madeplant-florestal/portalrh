@@ -79,12 +79,26 @@ $mesSelecionado = Security::sanitizeString($_GET['mes'] ?? '');
           <?php endforeach; ?>
         </select>
       </div>
+      <?php if ($opcoes['gestores'] !== []): ?>
+      <div>
+        <label for="filtro-gestor" class="block text-[11px] font-semibold uppercase tracking-wide text-text-secondary">Gestor</label>
+        <select id="filtro-gestor" name="gestor" class="<?= $inputClasses ?>">
+          <option value="">Todos os gestores</option>
+          <?php foreach ($opcoes['gestores'] as $g): ?>
+            <option value="<?= (int)$g['id'] ?>" <?= ($filtros['gestor_usuario_id'] ?? '') === (string)$g['id'] ? 'selected' : '' ?>><?= Security::e($g['nome']) ?></option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+      <?php endif; ?>
       <button type="submit" class="<?= ui_btn('primario') ?>">Aplicar</button>
       <a href="<?= $base ?>/admin/pesquisas-reacao-integracao/integracao/dashboard" class="<?= ui_btn('ghost') ?>">Limpar</a>
     </form>
+    <?php if ($opcoes['gestores'] !== []): ?>
+      <p class="mt-1.5 text-[11px] text-text-muted">Gestor filtra pelos Setores pelos quais ele tem responsabilidade gerencial (configurado no cadastro do usuário) — nunca um vínculo individual por colaborador.</p>
+    <?php endif; ?>
     <div class="mt-2 flex flex-wrap gap-1.5" aria-label="Atalhos de período">
       <?php foreach ($atalhos as $a): ?>
-        <a href="?<?= http_build_query(['ano' => $a['ano'], 'mes' => $a['mes']] + array_filter(['empresa' => $filtros['codigo_empresa'] ?? '', 'unidade' => $_GET['unidade'] ?? '', 'setor' => $filtros['codigo_setor'] ?? ''])) ?>" class="rounded-full border border-border px-3 py-1 text-xs font-medium text-text-secondary hover:border-primary-700 hover:text-primary-700"><?= Security::e($a['rotulo']) ?></a>
+        <a href="?<?= http_build_query(['ano' => $a['ano'], 'mes' => $a['mes']] + array_filter(['empresa' => $filtros['codigo_empresa'] ?? '', 'unidade' => $_GET['unidade'] ?? '', 'setor' => $filtros['codigo_setor'] ?? '', 'gestor' => $filtros['gestor_usuario_id'] ?? ''])) ?>" class="rounded-full border border-border px-3 py-1 text-xs font-medium text-text-secondary hover:border-primary-700 hover:text-primary-700"><?= Security::e($a['rotulo']) ?></a>
       <?php endforeach; ?>
     </div>
   </section>

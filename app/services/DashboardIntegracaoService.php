@@ -16,10 +16,12 @@
 class DashboardIntegracaoService
 {
     private DashboardIntegracaoRepository $repository;
+    private UsuarioSetoresGerenciadosService $setoresGerenciados;
 
-    public function __construct(?DashboardIntegracaoRepository $repository = null)
+    public function __construct(?DashboardIntegracaoRepository $repository = null, ?UsuarioSetoresGerenciadosService $setoresGerenciados = null)
     {
         $this->repository = $repository ?? new DashboardIntegracaoRepository();
+        $this->setoresGerenciados = $setoresGerenciados ?? new UsuarioSetoresGerenciadosService();
     }
 
     // ================================================================== filtros
@@ -49,7 +51,11 @@ class DashboardIntegracaoService
         usort($empresas, static fn(array $a, array $b): int => $a['nome'] <=> $b['nome']);
         usort($unidades, static fn(array $a, array $b): int => $a['nome'] <=> $b['nome']);
         usort($setores, static fn(array $a, array $b): int => $a['nome'] <=> $b['nome']);
-        return ['empresas' => array_values($empresas), 'unidades' => array_values($unidades), 'setores' => array_values($setores)];
+        // Gestor (Bloco 7, 2026-10, pedido do RH): só usuários ativos com >=1 Setor gerenciado —
+        // ver UsuarioSetoresGerenciadosService::gestoresElegiveis(). Fonte independente de
+        // Empresa/Unidade/Setor acima (não vem de pesquisas_integracao).
+        $gestores = $this->setoresGerenciados->gestoresElegiveis();
+        return ['empresas' => array_values($empresas), 'unidades' => array_values($unidades), 'setores' => array_values($setores), 'gestores' => $gestores];
     }
 
     /**
@@ -117,12 +123,46 @@ class DashboardIntegracaoService
             }
         }
 
+        // Gestor (Bloco 7, 2026-10, pedido do RH): só aceita um id presente em $opcoes['gestores']
+        // (já filtrado por ativo + >=1 setor gerenciado em gestoresElegiveis()) — nunca um id
+        // arbitrário da URL. A tradução para códigos de Setor acontece em montarPainel(), que tem
+        // acesso ao serviço de Setores gerenciados (normalizarFiltros() é estático/sem estado).
+        $gestorRaw = is_string($get['gestor'] ?? null) ? trim($get['gestor']) : '';
+        $gestorUsuarioId = '';
+        if ($gestorRaw !== '' && ctype_digit($gestorRaw)) {
+            foreach ($opcoes['gestores'] ?? [] as $g) {
+                if ((int)$g['id'] === (int)$gestorRaw) {
+                    $gestorUsuarioId = $gestorRaw;
+                    break;
+                }
+            }
+        }
+
         return [
             'inicio' => $inicio->format('Y-m-d'), 'fim' => $fim->format('Y-m-d'),
             'ano' => $ano !== null ? (string)$ano : '', 'mes' => $mes !== null ? (string)$mes : '',
             'codigo_empresa' => $codigoEmpresa, 'codigo_unidade' => $codigoUnidade, 'codigo_setor' => $codigoSetor,
+            'gestor_usuario_id' => $gestorUsuarioId,
             'avisos' => $avisos,
         ];
+    }
+
+    /**
+     * Traduz `gestor_usuario_id` (já validado em normalizarFiltros()) nos códigos de Setor que ele
+     * gerencia, e marca o filtro como ativo. Chamado uma única vez no início de montarPainel() —
+     * respostas()/pesquisasIndividuais()/integracoesRealizadas() recebem o mesmo $filtros
+     * enriquecido, cobrindo os 7 pontos afetados pelo filtro (Integrações realizadas, Pesquisas
+     * respondidas, NPS, Satisfação, Taxa de resposta, comentários, evolução mensal) de uma vez só.
+     */
+    private function resolverFiltroGestor(array $filtros): array
+    {
+        $gestorId = (string)($filtros['gestor_usuario_id'] ?? '');
+        if ($gestorId === '') {
+            return $filtros;
+        }
+        $filtros['gestor_filtro_ativo'] = true;
+        $filtros['codigos_setor_gestor'] = $this->setoresGerenciados->codigosSetorGerenciadosPor((int)$gestorId);
+        return $filtros;
     }
 
     public static function atalhos(DateTimeImmutable $hoje): array
@@ -147,6 +187,7 @@ class DashboardIntegracaoService
 
     public function montarPainel(array $filtros): array
     {
+        $filtros = $this->resolverFiltroGestor($filtros);
         $respostas = $this->repository->respostas($filtros);
 
         $notasNps = array_values(array_map(static fn(array $r): int => (int)$r['nota_nps'], array_filter($respostas, static fn(array $r): bool => $r['nota_nps'] !== null)));

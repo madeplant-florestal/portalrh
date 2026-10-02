@@ -44,7 +44,7 @@ class DashboardIntegracaoRepository
     }
 
     /**
-     * @param array{inicio:string,fim:string,codigo_empresa:string,codigo_unidade:string,codigo_setor:string} $filtros
+     * @param array{inicio:string,fim:string,codigo_empresa:string,codigo_unidade:string,codigo_setor:string,gestor_filtro_ativo?:bool,codigos_setor_gestor?:string[]} $filtros
      */
     private function montarWhere(array $filtros): array
     {
@@ -62,7 +62,32 @@ class DashboardIntegracaoRepository
             $where[] = 'cm.codigo_setor = ?';
             $params[] = $filtros['codigo_setor'];
         }
+        self::aplicarFiltroGestor($filtros, $where, $params);
         return [$where, $params];
+    }
+
+    /**
+     * Filtro por Gestor (Bloco 7, 2026-10, pedido do RH): `Gestor -> Setores gerenciados ->
+     * codigo_setor`. `gestor_filtro_ativo` distingue "nenhum Gestor selecionado" (chave ausente/
+     * false, filtro não aplicado) de "Gestor selecionado, mas sem nenhum Setor gerenciado válido"
+     * (codigos_setor_gestor === [] — nunca cai silenciosamente para "sem filtro"; força zero linhas
+     * com `1 = 0`, nunca mostra dado fora da responsabilidade do gestor selecionado).
+     */
+    private static function aplicarFiltroGestor(array $filtros, array &$where, array &$params): void
+    {
+        if (empty($filtros['gestor_filtro_ativo'])) {
+            return;
+        }
+        $codigos = $filtros['codigos_setor_gestor'] ?? [];
+        if ($codigos === []) {
+            $where[] = '1 = 0';
+            return;
+        }
+        $placeholders = implode(',', array_fill(0, count($codigos), '?'));
+        $where[] = "cm.codigo_setor IN ({$placeholders})";
+        foreach ($codigos as $codigo) {
+            $params[] = $codigo;
+        }
     }
 
     /** Todas as respostas (ambos os fluxos) dentro do período/filtros — RESPONDIDAS apenas. */
@@ -136,6 +161,7 @@ class DashboardIntegracaoRepository
             $where[] = 'cm.codigo_setor = ?';
             $params[] = $filtros['codigo_setor'];
         }
+        self::aplicarFiltroGestor($filtros, $where, $params);
         $sql = 'SELECT COUNT(*) FROM colaboradores c
                 LEFT JOIN colaboradores_metadados cm ON cm.id = c.metadados_id
                 WHERE ' . implode(' AND ', $where);

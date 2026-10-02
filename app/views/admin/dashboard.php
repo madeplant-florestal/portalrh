@@ -62,6 +62,14 @@ $fmtData = static fn(DateTimeImmutable $d): string => $d->format('d/m/Y');
                informado" precisa ser selecionável, nunca escondido (§17 da correção de 2026-09). -->
           <option value="__sem_setor__" <?= $filtrosSelecionados['setor'] === '__sem_setor__' ? 'selected' : '' ?>>Setor não informado</option>
         </select>
+        <?php if (!empty($opcoesFiltro['gestores'])): ?>
+        <select name="gestor" data-autosubmit="1" aria-label="Gestor" class="rounded-ds-md border border-border bg-surface px-2.5 py-1.5 text-sm font-medium text-text-primary shadow-sm outline-none focus:border-focus focus:ring-2 focus:ring-primary-100">
+          <option value="">Todos os gestores</option>
+          <?php foreach ($opcoesFiltro['gestores'] as $g): ?>
+            <option value="<?= (int)$g['id'] ?>" <?= $filtrosSelecionados['gestor'] === (string)$g['id'] ? 'selected' : '' ?>><?= Security::e($g['nome']) ?></option>
+          <?php endforeach; ?>
+        </select>
+        <?php endif; ?>
         <!-- Preserva mês/ano/intervalo personalizado ao trocar empresa/setor/comparativo pelo formulário acima. -->
         <input type="hidden" name="mes" value="<?= Security::e($periodoParams['mes']) ?>">
         <input type="hidden" name="ano" value="<?= Security::e($periodoParams['ano']) ?>">
@@ -78,6 +86,7 @@ $fmtData = static fn(DateTimeImmutable $d): string => $d->format('d/m/Y');
           <input type="hidden" name="periodo" value="mes">
           <input type="hidden" name="empresa" value="<?= Security::e($filtrosSelecionados['empresa']) ?>">
           <input type="hidden" name="setor" value="<?= Security::e($filtrosSelecionados['setor']) ?>">
+          <input type="hidden" name="gestor" value="<?= Security::e($filtrosSelecionados['gestor']) ?>">
           <input type="hidden" name="comparativo" value="<?= Security::e($comparativoSelecionado) ?>">
           <label class="text-[11px] text-text-secondary">Mês<br>
             <?php
@@ -100,6 +109,7 @@ $fmtData = static fn(DateTimeImmutable $d): string => $d->format('d/m/Y');
           <input type="hidden" name="periodo" value="ano_especifico">
           <input type="hidden" name="empresa" value="<?= Security::e($filtrosSelecionados['empresa']) ?>">
           <input type="hidden" name="setor" value="<?= Security::e($filtrosSelecionados['setor']) ?>">
+          <input type="hidden" name="gestor" value="<?= Security::e($filtrosSelecionados['gestor']) ?>">
           <input type="hidden" name="comparativo" value="<?= Security::e($comparativoSelecionado) ?>">
           <label class="text-[11px] text-text-secondary">Ano específico<br>
             <input type="number" name="ano" min="2015" max="2100" value="<?= Security::e($periodoParams['ano'] !== '' ? $periodoParams['ano'] : date('Y')) ?>" class="w-24 rounded-ds-md border border-border bg-surface px-2 py-1 text-sm">
@@ -111,6 +121,7 @@ $fmtData = static fn(DateTimeImmutable $d): string => $d->format('d/m/Y');
           <input type="hidden" name="periodo" value="personalizado">
           <input type="hidden" name="empresa" value="<?= Security::e($filtrosSelecionados['empresa']) ?>">
           <input type="hidden" name="setor" value="<?= Security::e($filtrosSelecionados['setor']) ?>">
+          <input type="hidden" name="gestor" value="<?= Security::e($filtrosSelecionados['gestor']) ?>">
           <input type="hidden" name="comparativo" value="<?= Security::e($comparativoSelecionado) ?>">
           <label class="text-[11px] text-text-secondary">De<br>
             <input type="date" name="data_inicio" value="<?= Security::e($periodoParams['data_inicio']) ?>" class="rounded-ds-md border border-border bg-surface px-2 py-1 text-sm">

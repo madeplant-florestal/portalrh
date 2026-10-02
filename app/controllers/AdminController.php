@@ -51,6 +51,9 @@ class AdminController extends Controller
             'codigo_setor' => Security::sanitizeString($_GET['setor'] ?? ''),
             'sexo' => $filtrosInterativos['sexo'],
             'motivo_categoria' => $filtrosInterativos['motivo_categoria'],
+            // Gestor (Bloco 7, 2026-10, pedido do RH): só aplicado ao bloco Integração/Onboarding —
+            // ver PeopleAnalyticsService::montarIntegracaoExecutivo().
+            'gestor_usuario_id' => Security::sanitizeString($_GET['gestor'] ?? ''),
         ];
         $filtros = array_filter($filtros, static fn(string $v): bool => $v !== '');
 
@@ -76,7 +79,7 @@ class AdminController extends Controller
         } catch (Throwable $e) {
             Logger::exception($e, 'ERROR', ['controller' => 'AdminController']);
             $erro = 'Não foi possível carregar o painel de People Analytics agora. Tente novamente em instantes.';
-            $opcoesFiltro = ['empresas' => [], 'setores' => []];
+            $opcoesFiltro = ['empresas' => [], 'setores' => [], 'gestores' => []];
         }
 
         // Mesma fonte/convenção de "Última atualização" do Indicadores de RH
@@ -105,6 +108,7 @@ class AdminController extends Controller
             'filtrosSelecionados' => [
                 'empresa' => $filtros['codigo_empresa'] ?? '',
                 'setor' => $filtros['codigo_setor'] ?? '',
+                'gestor' => $filtros['gestor_usuario_id'] ?? '',
             ],
             'filtrosInterativos' => $filtrosInterativos,
             'periodoInicio' => $inicio,
@@ -151,6 +155,9 @@ class AdminController extends Controller
             'codigo_setor' => Security::sanitizeString($_GET['setor'] ?? ''),
             'sexo' => $filtrosInterativos['sexo'],
             'motivo_categoria' => $filtrosInterativos['motivo_categoria'],
+            // Gestor (Bloco 7, 2026-10, pedido do RH): só aplicado ao bloco Integração/Onboarding —
+            // ver PeopleAnalyticsService::montarIntegracaoExecutivo().
+            'gestor_usuario_id' => Security::sanitizeString($_GET['gestor'] ?? ''),
         ];
         $filtros = array_filter($filtros, static fn(string $v): bool => $v !== '');
 
@@ -179,6 +186,7 @@ class AdminController extends Controller
                 'filtrosSelecionados' => [
                     'empresa' => $filtros['codigo_empresa'] ?? '',
                     'setor' => $filtros['codigo_setor'] ?? '',
+                    'gestor' => $filtros['gestor_usuario_id'] ?? '',
                 ],
                 'filtrosInterativos' => $filtrosInterativos,
                 'comparativos' => self::COMPARATIVOS,

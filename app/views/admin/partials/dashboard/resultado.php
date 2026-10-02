@@ -770,8 +770,16 @@ $opcoesFiltro = $opcoesFiltro ?? ['empresas' => [], 'setores' => []];
 
   <!-- Integração/Onboarding + NPS (Etapa 9, 2026-09): reaproveita INTEGRALMENTE
        DashboardIntegracaoService::montarPainel() — mesma fórmula de NPS do Dashboard de Integração
-       próprio, nenhum cálculo paralelo. Sem filtro de Unidade/Gestor nesta tela (fora do escopo). -->
+       próprio, nenhum cálculo paralelo. Sem filtro de Unidade nesta tela (fora do escopo).
+       Gestor (Bloco 7, 2026-10, pedido do RH): único bloco do People Analytics que recebe o filtro
+       — reaproveita o mesmo mecanismo seguro do Dashboard de Integração (Gestor -> Setores
+       gerenciados -> codigo_setor). Headcount/Turnover/Admissões/Desligamentos/Recrutamento/
+       Avaliações e os demais blocos desta tela NÃO são afetados — a correspondência deles com a
+       dimensão Setor não foi auditada para suportar esse filtro com segurança nesta rodada. -->
   <?= $secaoDivisor('Integração / Onboarding') ?>
+  <?php if (!empty($filtrosSelecionados['gestor'])): ?>
+    <p class="-mt-2 text-[11px] text-text-muted">Filtro de Gestor aplicado só a este bloco — os demais indicadores da página consideram todos os gestores.</p>
+  <?php endif; ?>
 
   <?php $io = $painel['integracao_onboarding']; ?>
   <?php if ($io['amostra'] === 0 && $io['integracoes_realizadas'] === 0): ?>

@@ -92,6 +92,7 @@ class PeopleAnalyticsService
     private DashboardEntrevistaDesligamentoService $entrevistaDesligamentoService;
     private PeopleAnalyticsAvaliacoesRepository $avaliacoesRepository;
     private DashboardIntegracaoService $integracaoService;
+    private UsuarioSetoresGerenciadosService $setoresGerenciados;
 
     public function __construct(
         ?PeopleAnalyticsRepository $repository = null,
@@ -100,7 +101,8 @@ class PeopleAnalyticsService
         ?RecrutamentoIndicadoresService $recrutamentoIndicadoresService = null,
         ?DashboardEntrevistaDesligamentoService $entrevistaDesligamentoService = null,
         ?PeopleAnalyticsAvaliacoesRepository $avaliacoesRepository = null,
-        ?DashboardIntegracaoService $integracaoService = null
+        ?DashboardIntegracaoService $integracaoService = null,
+        ?UsuarioSetoresGerenciadosService $setoresGerenciados = null
     ) {
         $this->repository = $repository ?? new PeopleAnalyticsRepository();
         $this->recrutamentoRepository = $recrutamentoRepository ?? new RecrutamentoIndicadoresRepository();
@@ -115,11 +117,18 @@ class PeopleAnalyticsService
         // DashboardIntegracaoService::montarPainel() — nenhuma fórmula de NPS paralela aqui.
         $this->avaliacoesRepository = $avaliacoesRepository ?? new PeopleAnalyticsAvaliacoesRepository();
         $this->integracaoService = $integracaoService ?? new DashboardIntegracaoService();
+        // Bloco 7 (2026-10, pedido do RH): filtro por Gestor — só aplicado onde a dimensão Setor
+        // já é respeitada com segurança (ver montarIntegracaoExecutivo() mais abaixo).
+        $this->setoresGerenciados = $setoresGerenciados ?? new UsuarioSetoresGerenciadosService();
     }
 
     public function opcoesFiltro(): array
     {
-        return $this->repository->opcoesFiltro();
+        $opcoes = $this->repository->opcoesFiltro();
+        // Gestor (Bloco 7, 2026-10, pedido do RH) — só usuários ativos com >=1 Setor gerenciado.
+        // Fonte independente de PeopleAnalyticsRepository (não vem do METADADOS).
+        $opcoes['gestores'] = $this->setoresGerenciados->gestoresElegiveis();
+        return $opcoes;
     }
 
     public function montarPainel(
@@ -131,6 +140,14 @@ class PeopleAnalyticsService
     ): array {
         $codigoEmpresa = $filtros['codigo_empresa'] ?? null;
         $codigoSetor = $filtros['codigo_setor'] ?? null;
+        // Bloco 7 (2026-10, pedido do RH): Gestor -> Setores gerenciados -> códigos de Setor.
+        // Resolvido aqui (ponto único) e usado SÓ por montarIntegracaoExecutivo() abaixo — nenhum
+        // outro bloco (Headcount/Turnover/Admissões/Desligamentos/Recrutamento/Avaliações/etc.)
+        // recebe este filtro: a correspondência deles com a dimensão Setor não foi auditada para
+        // suportar uma lista de códigos (IN) com segurança nesta rodada — ver relatório do Bloco 7.
+        $gestorUsuarioId = trim((string)($filtros['gestor_usuario_id'] ?? ''));
+        $gestorFiltroAtivo = $gestorUsuarioId !== '';
+        $codigosSetorGestor = $gestorFiltroAtivo ? $this->setoresGerenciados->codigosSetorGerenciadosPor((int)$gestorUsuarioId) : [];
         // Interatividade (Etapa 2, correção de 2026-09): sexo filtra a população INTEIRA (Headcount/
         // Turnover/Admissões/Desligamentos), igual Empresa/Setor — aplicado direto na query.
         // Motivo (categoria do Dashboard de Turnover: Voluntário/Involuntário/Justa Causa/Término
@@ -420,7 +437,7 @@ class PeopleAnalyticsService
             'recrutamento' => $this->montarRecrutamentoExecutivo($codigoEmpresa, $inicio, $fim),
             'entrevista_desligamento' => $this->montarEntrevistaDesligamentoExecutivo($inicio, $fim),
             'avaliacoes_desenvolvimento' => $this->montarAvaliacoesDesenvolvimentoExecutivo($inicio, $fim, $codigoEmpresa, $codigoSetor),
-            'integracao_onboarding' => $this->montarIntegracaoExecutivo($inicio, $fim, $compInicio, $compFim, $codigoEmpresa, $codigoSetor),
+            'integracao_onboarding' => $this->montarIntegracaoExecutivo($inicio, $fim, $compInicio, $compFim, $codigoEmpresa, $codigoSetor, $gestorFiltroAtivo, $codigosSetorGestor),
             'banco_horas' => ['disponivel' => false],
             'horas_extras' => ['disponivel' => false],
             'ferias_programadas' => ['disponivel' => false],
@@ -979,8 +996,10 @@ class PeopleAnalyticsService
      * `DashboardIntegracaoService::montarPainel()` (mesma fórmula de NPS de
      * `PesquisaIntegracaoResultadosService::calcularNps()`, nenhuma reimplementação) — chamado uma
      * vez para o período atual e uma vez para o comparativo, só para o NPS em PONTOS (nunca
-     * variação percentual — §27 da Etapa 9: "+12 pontos", não "+35%"). Sem filtro de Unidade/Gestor
-     * (fora do escopo desta tela — ver §22/§40).
+     * variação percentual — §27 da Etapa 9: "+12 pontos", não "+35%"). Sem filtro de Unidade (fora
+     * do escopo desta tela — ver §22/§40). Gestor (Bloco 7, 2026-10): aplicado aqui porque este
+     * bloco já passa `codigo_setor` para `DashboardIntegracaoService`, que já sabe tratar o filtro
+     * com segurança (mesmo mecanismo do Dashboard de Integração) — nenhuma lógica nova aqui.
      */
     private function montarIntegracaoExecutivo(
         DateTimeImmutable $inicio,
@@ -988,12 +1007,16 @@ class PeopleAnalyticsService
         DateTimeImmutable $compInicio,
         DateTimeImmutable $compFim,
         ?string $codigoEmpresa,
-        ?string $codigoSetor
+        ?string $codigoSetor,
+        bool $gestorFiltroAtivo = false,
+        array $codigosSetorGestor = []
     ): array {
         $filtrosBase = [
             'codigo_empresa' => $codigoEmpresa ?? '',
             'codigo_unidade' => '',
             'codigo_setor' => $codigoSetor ?? '',
+            'gestor_filtro_ativo' => $gestorFiltroAtivo,
+            'codigos_setor_gestor' => $codigosSetorGestor,
         ];
         $painelAtual = $this->integracaoService->montarPainel(array_merge($filtrosBase, [
             'inicio' => $inicio->format('Y-m-d'),

@@ -122,6 +122,20 @@ class SchemaManager
             CONSTRAINT fk_usuario_permissoes_usuario FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE,
             CONSTRAINT fk_usuario_permissoes_permissao FOREIGN KEY (permissao_id) REFERENCES permissoes(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+        // "Setores gerenciados" (Bloco 7, 2026-10, pedido do RH) — migration
+        // 2026-10-02-usuario-setores-gerenciados.sql. Separada de propósito de `usuario_setores`
+        // (Setor principal/adicionais = escopo do PRÓPRIO usuário, não hierarquia gerencial sobre
+        // outros) — ver docblock da migration para a decisão completa.
+        $pdo->exec("CREATE TABLE IF NOT EXISTS usuario_setores_gerenciados (
+            usuario_id INT NOT NULL,
+            setor_id INT NOT NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (usuario_id, setor_id),
+            KEY idx_usuario_setores_gerenciados_setor (setor_id),
+            CONSTRAINT fk_usuario_setores_gerenciados_usuario FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+            CONSTRAINT fk_usuario_setores_gerenciados_setor FOREIGN KEY (setor_id) REFERENCES setores(id) ON DELETE RESTRICT
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     }
 }
 

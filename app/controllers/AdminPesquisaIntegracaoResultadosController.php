@@ -39,7 +39,7 @@ class AdminPesquisaIntegracaoResultadosController extends Controller
         $service = new DashboardIntegracaoService();
         $erro = null;
         $painel = null;
-        $opcoes = ['empresas' => [], 'unidades' => [], 'setores' => []];
+        $opcoes = ['empresas' => [], 'unidades' => [], 'setores' => [], 'gestores' => []];
         $filtros = DashboardIntegracaoService::normalizarFiltros([], $hoje, $opcoes);
         try {
             $opcoes = $service->opcoesFiltro();

@@ -95,11 +95,20 @@ class RecrutamentoIndicadoresRepository
     /**
      * Quantidade de solicitações de vaga atualmente abertas (situação operacional diferente de
      * "fechada"/"cancelada") — é um retrato de AGORA, não filtrado por período, mesma convenção de
-     * "headcount atual" em RhIndicadoresRepository.
+     * "headcount atual" em RhIndicadoresRepository. Fonte oficial única, reaproveitada por
+     * PeopleAnalyticsService (card "Vagas Abertas") e RecrutamentoIndicadoresService (Dashboard de
+     * Recrutamento) — nenhum filtro paralelo em nenhum dos dois.
+     *
+     * Bloco 5 (2026-10, pedido do RH): `sv.cancelada_em IS NULL` somado ao filtro por estágio do
+     * Kanban (`st.slug`) — defesa em profundidade contra o estágio (`situacao_kanban_id`) ficar
+     * fora de sincronia com o cancelamento real (`cancelada_em`, setado só por
+     * SolicitacaoVagaPipelineService::moveToStage() ao mover para o estágio 'cancelada'); antes só
+     * o estágio era checado, então uma solicitação cancelada cujo estágio não refletisse mais
+     * 'cancelada' (drift de dado) entrava como "aberta".
      */
     public function contarSolicitacoesAbertas(?int $empresaId): array
     {
-        $where = ["st.slug NOT IN ('fechada', 'cancelada')"];
+        $where = ["st.slug NOT IN ('fechada', 'cancelada')", 'sv.cancelada_em IS NULL'];
         $params = [];
         if ($empresaId !== null) {
             $where[] = 'se.empresa_id = ?';

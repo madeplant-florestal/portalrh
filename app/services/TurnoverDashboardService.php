@@ -309,6 +309,17 @@ class TurnoverDashboardService
      * pelo menos 1 desligamento no período entram (o ranking é de quem teve desligamentos); base
      * pequena NUNCA é escondida. Top LIMITE_CARGOS; sem base fica no fim.
      *
+     * Bloco 5 (2026-10, pedido do RH): usa a MESMA fórmula oficial do Turnover Geral/People
+     * Analytics — RhIndicadoresService::turnoverPorDimensaoPeriodo() (desligamentos do período ÷
+     * ativos do período, nunca headcount médio) — ao invés de turnoverPorDimensao(). A versão
+     * antiga podia passar de 100% quando a média de headcount início/fim ficava menor que os
+     * desligamentos do período (ex.: 1 desligamento / média 0,5 = 200%); com ativos do período como
+     * base, desligamentos é sempre um subconjunto de ativos, então a taxa nunca ultrapassa 100%.
+     * Decisão explícita (RH, 2026-10): SEM exclusão de transferência interna aqui — esse mecanismo
+     * (MetadadosMovimentacaoService::classificarMovimentacoes()) nunca existiu neste dashboard, só
+     * no People Analytics; escopo desta correção é só a fórmula. Turnover por Empresa (abaixo)
+     * continua de propósito na fórmula antiga — fora do escopo pedido.
+     *
      * @return array{total_cargos:int,exibidos:int,itens:array}
      */
     public static function turnoverPorCargo(array $contratos, DateTimeImmutable $inicio, DateTimeImmutable $fim, array $nomesCargos = []): array
@@ -323,18 +334,19 @@ class TurnoverDashboardService
         }
 
         $itens = [];
-        foreach (RhIndicadoresService::turnoverPorDimensao($contratos, 'codigo_cargo', $inicio, $fim) as $linha) {
+        foreach (RhIndicadoresService::turnoverPorDimensaoPeriodo($contratos, 'codigo_cargo', $inicio, $fim) as $linha) {
             if ($linha['desligamentos'] <= 0) {
                 continue;
             }
             $codigo = (string)$linha['label'];
             $semCodigo = $codigo === RhIndicadoresService::NAO_INFORMADO;
+            $ativos = (int)$linha['ativos_periodo'];
             $itens[] = [
                 'codigo' => $semCodigo ? '' : $codigo,
                 'nome' => $semCodigo ? RhIndicadoresService::NAO_INFORMADO : ($nomesCargos[$codigo] ?? $textoPorCodigo[$codigo] ?? $codigo),
                 'desligamentos' => (int)$linha['desligamentos'],
-                'base' => (float)$linha['headcount_medio'],
-                'taxa' => (float)$linha['headcount_medio'] > 0 ? (float)$linha['taxa'] : null,
+                'ativos_periodo' => $ativos,
+                'taxa' => $ativos > 0 ? (float)$linha['taxa'] : null,
             ];
         }
 

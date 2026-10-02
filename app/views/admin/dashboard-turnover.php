@@ -44,7 +44,7 @@ $corAtual = '#3B4822';
     </form>
     <?php if ($painel !== null): ?>
       <p class="mt-1.5 text-[11px] leading-snug text-text-secondary">
-        Unidade: contrato · Turnover = desligamentos ÷ média do headcount (início e fim do período) × 100 ·
+        Unidade: contrato · Turnover = desligamentos ÷ média do headcount (início e fim do período) × 100, exceto Turnover por Cargo (desligamentos ÷ ativos do período — mesma fórmula do Turnover Geral) ·
         Gráficos 3 a 6: <?= Security::e($painel['periodo']['inicio']->format('d/m/Y')) ?> a <?= Security::e($painel['periodo']['fim']->format('d/m/Y')) ?><?= $painel['periodo']['parcial'] ? ' (acumulado no ano até hoje)' : '' ?> ·
         Empresa e Cargo filtram todos os gráficos, nos dois anos do comparativo
       </p>
@@ -177,7 +177,7 @@ $corAtual = '#3B4822';
   <section class="grid grid-cols-1 gap-4 xl:grid-cols-2">
     <article class="<?= $cardClasses ?>">
       <h2 class="text-sm font-bold text-text-primary">Turnover por Cargo</h2>
-      <p class="text-[11px] text-text-secondary">Cargos com desligamentos no período, por maior % de turnover. Base = headcount médio do cargo; bases pequenas geram percentuais altos.</p>
+      <p class="text-[11px] text-text-secondary">Cargos com desligamentos no período, por maior % de turnover. Turnover = desligamentos ÷ colaboradores ativos em algum momento do período (mesma fórmula do Turnover Geral) — nunca passa de 100%.</p>
       <?php $cargos = $painel['cargos']; ?>
       <?php if ($cargos['itens'] === []): ?>
         <p class="mt-3 text-sm text-text-secondary">Nenhum desligamento no período.</p>
@@ -185,13 +185,13 @@ $corAtual = '#3B4822';
         <?php $maxCargo = max(array_map(static fn(array $i): float => (float)($i['taxa'] ?? 0), $cargos['itens'])) ?: 1; ?>
         <div class="mt-3 space-y-2">
           <?php foreach ($cargos['itens'] as $i): ?>
-            <?= dashboard_bar_row($i['nome'], (float)($i['taxa'] ?? 0), $maxCargo, $fmtPct($i['taxa']) . ' · ' . $plural($i['desligamentos'], 'desligamento', 'desligamentos') . ' · base ' . $fmtBase($i['base']), 'bg-primary-400') ?>
+            <?= dashboard_bar_row($i['nome'], (float)($i['taxa'] ?? 0), $maxCargo, $fmtPct($i['taxa']) . ' · ' . $plural($i['desligamentos'], 'desligamento', 'desligamentos') . ' · ' . $plural((int)$i['ativos_periodo'], 'colaborador no período', 'colaboradores no período'), 'bg-primary-400') ?>
           <?php endforeach; ?>
         </div>
         <?php if ($cargos['total_cargos'] > $cargos['exibidos']): ?>
           <p class="mt-2 text-[11px] text-text-secondary">Exibindo os <?= (int)$cargos['exibidos'] ?> primeiros de <?= (int)$cargos['total_cargos'] ?> cargos com desligamentos.</p>
         <?php endif; ?>
-        <?= dashboard_data_table('Turnover por cargo', ['Cargo', '% Turnover', 'Desligamentos', 'Base (headcount médio)'], array_map(static fn(array $i): array => [$i['nome'], $fmtPct($i['taxa']), (string)$i['desligamentos'], $fmtBase($i['base'])], $cargos['itens'])) ?>
+        <?= dashboard_data_table('Turnover por cargo', ['Cargo', '% Turnover', 'Desligamentos', 'Colaboradores no período'], array_map(static fn(array $i): array => [$i['nome'], $fmtPct($i['taxa']), (string)$i['desligamentos'], (string)$i['ativos_periodo']], $cargos['itens'])) ?>
       <?php endif; ?>
     </article>
 

@@ -191,6 +191,27 @@ try {
     $fechadasEmpresaA = $repo->contarSolicitacoesFechadas($periodoInicio, $periodoFim, $empresaAId);
     $check((int)$fechadasEmpresaA['total'] === 1, '(6b) Vagas Fechadas filtradas por Empresa A conta só SV3, isolando corretamente a Empresa B (SV5)');
 
+    // ---- Bloco 5 (2026-10, pedido do RH): defesa em profundidade contra drift entre o estágio do
+    // Kanban (situacao_kanban_id) e o cancelamento real (cancelada_em) ----------------------------
+    // SV7: cancelada_em preenchido diretamente (fixture simula um dado legado/drift), mas o estágio
+    // do Kanban continua em 'em-aprovacao' (nunca movido para 'cancelada' por moveToStage()). Antes
+    // do Bloco 5, só o slug do estágio era checado, então esta vaga cancelada contava como aberta.
+    $stmtDrift = $pdo->prepare(
+        'INSERT INTO solicitacoes_vaga (
+            setor_id, quantidade_vagas, cargo_id, solicitante_usuario_id, tipo_vaga,
+            tipo_contratacao, salario_previsto, centro_custo_id, previsto_orcamento, jornada_trabalho,
+            escolaridade_minima, entregas_esperadas_encrypted, nivel_responsabilidade,
+            data_prevista_inicio, urgencia, status_fluxo, situacao_kanban_id, cancelada_em
+        ) VALUES (?, 1, ?, ?, \'nova_posicao\', \'clt\', 3000, NULL, 0, \'8h/dia\',
+            \'medio\', \'fixture zzdash drift\', \'operacional\', CURDATE(), \'media\', \'concluida\', ?, NOW())'
+    );
+    $stmtDrift->execute([$setorAId, $cargoId, $adminId, $stagesKanban['em-aprovacao']]);
+    $sv7Id = (int)$pdo->lastInsertId();
+    $criados['solicitacoes'][] = $sv7Id;
+
+    $abertasComDrift = $repo->contarSolicitacoesAbertas($empresaAId);
+    $check((int)$abertasComDrift['total'] === 2, '(5c) Bloco 5: SV7 (cancelada_em preenchido, mas estágio ainda "em-aprovacao" — drift) NÃO conta em Vagas Abertas; total da Empresa A continua 2 (SV1+SV2)');
+
     // ---- 3) Fixtures: candidaturas + pipeline_movements (Funil / Tempo por Etapa / Contratação) -
     $stagesBySlug = [];
     foreach (PipelineStage::all() as $stage) {

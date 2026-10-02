@@ -200,7 +200,11 @@ try {
     $svcTurn = $fonte('app/services/TurnoverDashboardService.php');
     $check(TurnoverDashboardService::MAPA_MOTIVOS === ['Voluntário' => ['003', '006'], 'Involuntário' => ['002', '007'], 'Justa Causa' => ['001'], 'Término de Contrato' => ['005', '008'], 'Acordo' => ['016']] && TurnoverDashboardService::ORDEM_CATEGORIAS[count(TurnoverDashboardService::ORDEM_CATEGORIAS) - 1] === TurnoverDashboardService::CATEGORIA_OUTROS, '(Turnover) O mapa de motivos (Voluntário 003/006; Involuntário 002/007; Justa Causa 001; Término 005/008; Acordo 016; o resto — 020, 046, desconhecido, vazio — em Outros) continua idêntico no service');
     $turnView = $fonte('app/views/admin/dashboard-turnover.php');
-    $check(str_contains($turnView, 'desligamentos ÷ média do headcount (início e fim do período) × 100') && !preg_match('/name="(setor|area)"/i', $turnView) && str_contains($turnView, 'bases pequenas geram percentuais altos'), '(Turnover) Fórmula oficial documentada na tela; filtros só Ano/Empresa/Cargo; bases pequenas continuam visíveis');
+    // Bloco 5 (2026-10, pedido do RH): Turnover por Cargo passou a usar a fórmula por ativos do
+    // período (nunca mais "bases pequenas geram percentuais altos" — essa frase descrevia
+    // justamente o bug de passar de 100% que foi corrigido); Empresa e os demais 4 gráficos
+    // continuam na fórmula antiga (headcount médio), intocados nesta rodada.
+    $check(str_contains($turnView, 'desligamentos ÷ média do headcount (início e fim do período) × 100') && !preg_match('/name="(setor|area)"/i', $turnView) && str_contains($turnView, 'ativos em algum momento do período') && str_contains($turnView, 'nunca passa de 100%'), '(Turnover) Fórmula oficial documentada na tela; filtros só Ano/Empresa/Cargo; Cargo documenta a fórmula por ativos do período (Bloco 5)');
     foreach (['DashboardEntrevistaDesligamentoService', 'TurnoverDashboardService', 'EntrevistaDesligamentoService', 'PesquisaReacaoIntegracaoService', 'PesquisaIntegracaoQrService'] as $svc) {
         $check(!str_contains($fonte("app/services/{$svc}.php"), 'app-shell') && !str_contains($fonte("app/services/{$svc}.php"), 'ui_'), "(services) {$svc} não recebeu nenhuma dependência de UI — cálculo intacto");
     }

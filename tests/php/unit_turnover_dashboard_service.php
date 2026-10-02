@@ -10,8 +10,9 @@
  *   - Admissões × Desligamentos mensais (admissao/demissao, nunca `ativo`), futuros `null`;
  *   - classificação dos 10 códigos conhecidos, código desconhecido/vazio/nulo => Outros, categorias
  *     mutuamente exclusivas, mapa em um único ponto;
- *   - Cargo por codigo_cargo (nome do catálogo, base pequena visível, sem base no fim, ordenação,
- *     top 15) e Empresa por codigo_empresa;
+ *   - Cargo por codigo_cargo (nome do catálogo, fórmula por ativos do período — Bloco 5, 2026-10 —
+ *     nunca ultrapassa 100%, ordenação, top 15) e Empresa por codigo_empresa (fórmula antiga,
+ *     headcount médio, intocada nesta rodada — fora do escopo pedido);
  *   - Tempo de Empresa: fronteiras 90/91/180/181/365/366/730/731, sem usar a data atual;
  *   - helpers gráficos (linha multissérie, colunas agrupadas, legenda, tabela acessível);
  *   - fontes sem COUNT(DISTINCT), sem `colaboradores` legado, sem escrita, sem dados pessoais.
@@ -139,19 +140,26 @@ $check($ini25->format('Y-m-d') === '2025-01-01' && $fim25->format('Y-m-d') === '
 [$ini26, $fim26] = TurnoverDashboardService::periodoDoAno(2026, $hoje);
 $check($ini26->format('Y-m-d') === '2026-01-01' && $fim26->format('Y-m-d') === '2026-09-19', '(período) Ano atual: acumulado de 01/01 até hoje');
 
+// Bloco 5 (2026-10, pedido do RH): turnoverPorCargo() passou a usar a fórmula oficial por ATIVOS
+// DO PERÍODO (RhIndicadoresService::turnoverPorDimensaoPeriodo()/ativosNoPeriodo()), a mesma do
+// Turnover Geral/People Analytics — nunca mais headcount médio. Como todo contrato com demissão no
+// período necessariamente SOBREPÕE o período (entra em ativosNoPeriodo), desligamentos é sempre um
+// subconjunto de ativos: a taxa NUNCA ultrapassa 100% e nunca mais existe "sem base" para quem tem
+// desligamento no período (Z1 abaixo, que tinha 200% com a fórmula antiga, agora tem 100%).
 $nomes = ['X1' => 'Operador Oficial', 'X2' => 'Operador Oficial 2', 'Y1' => 'Cargo Y'];
 $cargos = TurnoverDashboardService::turnoverPorCargo($B, $ini25, $fim25, $nomes);
 $codigos = array_column($cargos['itens'], 'codigo');
-$check($codigos === ['Y1', '', 'X2', 'X1', 'Z1'], '(cargo) Ordenação: maior %, depois mais desligamentos, desempate por nome; sem base por último — ' . json_encode($codigos));
+$check($codigos === ['Y1', 'Z1', '', 'X2', 'X1'], '(cargo) Ordenação: maior %, depois mais desligamentos, desempate por nome — ' . json_encode($codigos));
 $porCodigo = [];
 foreach ($cargos['itens'] as $i) {
     $porCodigo[$i['codigo']] = $i;
 }
-$check($porCodigo['X1']['desligamentos'] === 1 && $porCodigo['X1']['taxa'] === 22.2 && $porCodigo['X1']['base'] === 4.5, '(cargo) Por codigo_cargo: dois textos ("Operador"/"Operador I") do mesmo código viram UM cargo — 1 desl., 22,2%, base 4,5');
-$check($porCodigo['X2']['taxa'] === 66.7 && $porCodigo['X2']['nome'] === 'Operador Oficial 2' && $porCodigo['X1']['nome'] === 'Operador Oficial', '(cargo) Mesmo texto "Operador" em dois códigos NÃO é agrupado; nome oficial vem do catálogo');
-$check($porCodigo['Y1']['taxa'] === 200.0 && $porCodigo['Y1']['base'] === 0.5 && $porCodigo['Y1']['desligamentos'] === 1, '(cargo) Base pequena (0,5) continua aparecendo, com o percentual matemático (200,0%) e a base');
-$check($porCodigo['Z1']['taxa'] === null && $porCodigo['Z1']['base'] === 0.0 && $porCodigo['Z1']['desligamentos'] === 1 && $porCodigo['Z1']['nome'] === 'Cargo Z', '(cargo) Sem base => taxa null (nunca 0%), mantém os desligamentos; nome cai no texto do espelho quando não há catálogo');
-$check($porCodigo['']['nome'] === 'Não informado' && $porCodigo['']['taxa'] === 200.0, '(cargo) Contrato sem codigo_cargo vai para "Não informado"');
+$check($porCodigo['X1']['desligamentos'] === 1 && $porCodigo['X1']['taxa'] === 20.0 && $porCodigo['X1']['ativos_periodo'] === 5, '(cargo) Por codigo_cargo: dois textos ("Operador"/"Operador I") do mesmo código viram UM cargo — 1 desl. ÷ 5 ativos do período × 100 = 20,0%');
+$check($porCodigo['X2']['taxa'] === 50.0 && $porCodigo['X2']['nome'] === 'Operador Oficial 2' && $porCodigo['X1']['nome'] === 'Operador Oficial', '(cargo) Mesmo texto "Operador" em dois códigos NÃO é agrupado; nome oficial vem do catálogo');
+$check($porCodigo['Y1']['taxa'] === 100.0 && $porCodigo['Y1']['ativos_periodo'] === 1 && $porCodigo['Y1']['desligamentos'] === 1, '(cargo) (1) 1 desligamento / 1 ativo do período × 100 = 100,0% — NUNCA MAIS 200% (bug da fórmula antiga: base de headcount médio 0,5 gerava percentual acima de 100%)');
+$check($porCodigo['Y1']['taxa'] <= 100.0 && $porCodigo['Z1']['taxa'] <= 100.0 && $porCodigo['X2']['taxa'] <= 100.0, '(cargo) Nenhum cargo do dataset ultrapassa 100% com a fórmula nova');
+$check($porCodigo['Z1']['taxa'] === 100.0 && $porCodigo['Z1']['ativos_periodo'] === 1 && $porCodigo['Z1']['desligamentos'] === 1 && $porCodigo['Z1']['nome'] === 'Cargo Z', '(cargo) Contrato admitido E desligado inteiramente dentro do período (antes "sem base"/200%) agora sobrepõe o período: 1 ativo, 1 desligamento, 100,0% — nome cai no texto do espelho quando não há catálogo');
+$check($porCodigo['']['nome'] === 'Não informado' && $porCodigo['']['taxa'] === 100.0 && $porCodigo['']['ativos_periodo'] === 1, '(cargo) Contrato sem codigo_cargo vai para "Não informado"');
 $check(!isset($porCodigo['W1']), '(cargo) Cargo sem desligamentos no período não entra no ranking');
 $muitos = [];
 for ($i = 1; $i <= 20; $i++) {
@@ -251,7 +259,8 @@ foreach ($fontes as $nome => $src) {
     $check(!preg_match('/\b(FROM|JOIN)\s+colaboradores\b(?!_)/i', $src), "(fonte) {$nome}: não usa `colaboradores` legado como fonte");
     $check(!preg_match('/\b(INSERT\s+INTO|UPDATE\s+\w|DELETE\s+FROM)/i', $src) && !preg_match('/sqlsrv/i', $src), "(fonte) {$nome}: só leitura, sem SQL Server");
 }
-$check(str_contains($fontes['service'], 'RhIndicadoresService::taxaTurnover(') && str_contains($fontes['service'], 'RhIndicadoresService::turnoverPorDimensao(') && str_contains($fontes['service'], 'RhIndicadoresService::headcountEm('), '(fonte) O serviço reaproveita taxaTurnover/turnoverPorDimensao/headcountEm de RhIndicadoresService');
+$check(str_contains($fontes['service'], 'RhIndicadoresService::taxaTurnover(') && str_contains($fontes['service'], 'RhIndicadoresService::turnoverPorDimensao(') && str_contains($fontes['service'], 'RhIndicadoresService::headcountEm('), '(fonte) O serviço reaproveita taxaTurnover/turnoverPorDimensao/headcountEm de RhIndicadoresService (Empresa e os demais 4 gráficos, fórmula antiga intocada)');
+$check(str_contains($fontes['service'], 'RhIndicadoresService::turnoverPorDimensaoPeriodo(') && !str_contains($fontes['service'], "turnoverPorDimensao(\$contratos, 'codigo_cargo'"), '(fonte) Bloco 5: Cargo passou a reaproveitar turnoverPorDimensaoPeriodo() (fórmula nova) — não chama mais turnoverPorDimensao() para codigo_cargo');
 $selecaoRepo = (string)(preg_match('/SELECT admissao.*?FROM colaboradores_metadados/s', $fontes['repository'], $m) ? $m[0] : '');
 $check($selecaoRepo !== '' && !preg_match('/\b(cpf|nascimento|nome|salario)/i', $selecaoRepo), '(fonte) O SELECT dos contratos não lê CPF, nascimento, nome nem salário');
 

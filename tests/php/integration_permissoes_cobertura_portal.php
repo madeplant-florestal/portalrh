@@ -235,16 +235,11 @@ try {
     $check(!preg_match('/<div class="responsive-panel[^"]*max-w-/', $telaUsuarioFonte), 'confirmação negativa: o elemento raiz da tela não tem nenhum max-w-* aplicado');
     $check(!str_contains($telaUsuarioFonte, 'overflow-x-auto') || true, '(18) nenhuma classe de scroll horizontal foi adicionada à tela (grid responsivo padrão do Tailwind empilha em 1 coluna abaixo de lg automaticamente)');
 
-    // ---- 19. nenhuma alteração funcional no METADADOS --------------------------------------------
-    $arquivosMetadados = ['MetadadosDatabase', 'ColaboradorMetadadosLinkService', 'CatalogoMetadadosRepository'];
-    exec('git -C ' . escapeshellarg(dirname(__DIR__, 2)) . ' diff --name-only', $diffNomes2);
-    $tocouMetadados = false;
-    foreach ($diffNomes2 as $arq) {
-        foreach ($arquivosMetadados as $termo) {
-            if (str_contains($arq, $termo)) { $tocouMetadados = true; }
-        }
-    }
-    $check($tocouMetadados === false, 'nenhum arquivo de integração com METADADOS foi alterado nesta rodada');
+    // Item 19 (checagem de escopo "nenhuma alteração no METADADOS nesta rodada") removido: era um
+    // guard-rail pontual de uma rodada anterior (git diff --name-only contra arquivos de
+    // integração), não uma invariante permanente da Tela de Usuários — passou a falsear a partir
+    // do Bloco 6 (2026-10, pedido do RH), que altera ColaboradorMetadadosLinkService de propósito
+    // (vínculo automático ao importar colaboradores) sem nenhuma relação com esta tela.
 
     // ---- 20. nenhum módulo recebeu bypass novo por role=rh/is_supervisor -------------------------
     $fonteNavegacao = (string)file_get_contents(__DIR__ . '/../../app/services/PortalNavegacaoService.php');

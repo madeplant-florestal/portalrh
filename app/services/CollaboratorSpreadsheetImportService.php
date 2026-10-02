@@ -139,6 +139,8 @@ class CollaboratorSpreadsheetImportService
                 'updated' => 0,
                 'catalog_companies_created' => 0,
                 'catalog_roles_created' => 0,
+                'metadados_vinculados_automaticamente' => 0,
+                'metadados_pendentes' => 0,
             ],
             'errors' => [],
             'warnings' => [],
@@ -180,12 +182,14 @@ class CollaboratorSpreadsheetImportService
 
         $createdCompanies = [];
         $createdRoles = [];
+        $touchedCollaboratorIds = [];
         try {
             $this->pdo()->beginTransaction();
             foreach ($analysis['valid_records'] as $record) {
                 $companyId = $this->findOrCreateCatalog('empresas', $record['empresa_nome'], $createdCompanies);
                 $roleId = $this->findOrCreateCatalog('cargos', $record['cargo_nome'], $createdRoles);
                 $result = $this->upsertCollaborator($record, $companyId, $roleId);
+                $touchedCollaboratorIds[] = (int)$result['id'];
 
                 if ($result['action'] === 'inserted') {
                     $report['summary']['inserted']++;
@@ -198,6 +202,13 @@ class CollaboratorSpreadsheetImportService
             $report['summary']['catalog_roles_created'] = count($createdRoles);
             $report['created_companies'] = array_values($createdCompanies);
             $report['created_roles'] = array_values($createdRoles);
+
+            $linkSummary = $this->autoLinkMetadados($touchedCollaboratorIds);
+            $report['summary']['metadados_vinculados_automaticamente'] = $linkSummary['vinculados'];
+            $report['summary']['metadados_pendentes'] = $linkSummary['pendentes'];
+            if ($linkSummary['warnings'] !== []) {
+                $report['warnings'] = array_merge($report['warnings'], $linkSummary['warnings']);
+            }
 
             if ($dryRun) {
                 $this->pdo()->rollBack();
@@ -478,6 +489,80 @@ class CollaboratorSpreadsheetImportService
         ]);
 
         return ['action' => 'inserted', 'id' => (int)$this->pdo()->lastInsertId()];
+    }
+
+    /**
+     * Bloco 6 (2026-10, pedido do RH): causa raiz de colaboradores ativos sem `metadados_id` — este
+     * INSERT nunca preenchia a coluna, ao contrário de ColaboradorExtensaoLocalService (criação a
+     * partir de um contrato oficial já vinculado). Sem `metadados_id`, a Movimentação de Pessoal
+     * nunca encontra avaliação de desempenho elegível (o vínculo é feito via
+     * `colaboradores.metadados_id = avaliacoes_desempenho.metadados_id`) e fica bloqueada para
+     * sempre nesse colaborador — ver MovimentacaoPessoal::validateCompleteInput().
+     *
+     * Correção: ao final de CADA importação (dentro da MESMA transação — some junto num dry-run),
+     * tenta vincular automaticamente os colaboradores recém-inseridos/atualizados que ainda estão
+     * sem `metadados_id`, reaproveitando INTEGRALMENTE a reconciliação e aplicação já existentes
+     * (ColaboradorMetadadosReconciliationService/ColaboradorMetadadosLinkService) — nenhuma lógica
+     * de correspondência nova ou paralela. Só aplica CORRESPONDENCIA_SEGURA (CPF + data de admissão
+     * batendo com exatamente um contrato oficial); PROVAVEL/AMBIGUA/SEM_CORRESPONDENCIA/CONFLITO
+     * ficam pendentes, reportados em `metadados_pendentes`, nunca vinculados por aproximação.
+     *
+     * Uma falha aqui vira warning no relatório, nunca aborta a importação dos colaboradores em si
+     * — o vínculo com o METADADOS é um reforço automático, não uma condição para o registro existir.
+     *
+     * @param int[] $colaboradorIds
+     * @return array{vinculados:int, pendentes:int, warnings:string[]}
+     */
+    private function autoLinkMetadados(array $colaboradorIds): array
+    {
+        $colaboradorIds = array_values(array_unique(array_filter($colaboradorIds, static fn($id): bool => (int)$id > 0)));
+        $resultado = ['vinculados' => 0, 'pendentes' => 0, 'warnings' => []];
+        if ($colaboradorIds === []) {
+            return $resultado;
+        }
+
+        $reconciliationService = new ColaboradorMetadadosReconciliationService($this->pdo());
+        $results = $reconciliationService->run();
+
+        $resultadosDoLote = array_values(array_filter(
+            $results,
+            static fn(array $r): bool => in_array((int)$r['colaborador_id'], $colaboradorIds, true)
+        ));
+        $pendentesNoLote = array_values(array_filter(
+            $resultadosDoLote,
+            static fn(array $r): bool => $r['classificacao'] !== ColaboradorMetadadosReconciliationService::JA_VINCULADO
+        ));
+        $resultado['pendentes'] = count($pendentesNoLote);
+
+        $linkService = new ColaboradorMetadadosLinkService($this->pdo());
+        $plano = $linkService->buildPlanFromReconciliation($resultadosDoLote);
+        if ($plano === []) {
+            return $resultado;
+        }
+
+        $validacaoPlano = $linkService->validatePlan($plano, $results);
+        $validacaoBanco = $linkService->validateAgainstDatabase($plano);
+        if (!($validacaoPlano['ok'] ?? false) || !($validacaoBanco['ok'] ?? false)) {
+            $resultado['warnings'][] = 'Vinculo automatico ao METADADOS nao aplicado (plano invalido): '
+                . implode(' | ', array_merge($validacaoPlano['errors'] ?? [], $validacaoBanco['errors'] ?? []));
+            return $resultado;
+        }
+
+        try {
+            $aplicacao = $linkService->apply($plano);
+        } catch (Throwable $e) {
+            $resultado['warnings'][] = 'Vinculo automatico ao METADADOS falhou: ' . $e->getMessage();
+            return $resultado;
+        }
+
+        if ($aplicacao['ok'] ?? false) {
+            $resultado['vinculados'] = (int)($aplicacao['aplicados'] ?? 0);
+            $resultado['pendentes'] -= $resultado['vinculados'];
+        } else {
+            $resultado['warnings'][] = 'Vinculo automatico ao METADADOS nao aplicado: ' . (string)($aplicacao['error'] ?? 'falha desconhecida.');
+        }
+
+        return $resultado;
     }
 
     private function findOrCreateCatalog(string $table, string $name, array &$createdItems): int

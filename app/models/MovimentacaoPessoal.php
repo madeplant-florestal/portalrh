@@ -346,7 +346,17 @@ class MovimentacaoPessoal
             return ['ok' => false, 'error' => 'Rascunho de movimentação não encontrado após o salvamento.'];
         }
 
-        $normalized = self::validateCompleteInput(self::hydrateRecord($record), $actorUserId);
+        // Bloco 6 (2026-10, pedido do RH): validateCompleteInput() lança InvalidArgumentException
+        // para QUALQUER campo obrigatório ausente (inclusive quando o colaborador não tem
+        // metadados_id e por isso nunca tem avaliação de desempenho elegível) — sem este catch, a
+        // exceção não tratada chegava inalterada ao controller/bootstrap como um Erro 500 genérico,
+        // em vez do retorno ['ok' => false, 'error' => ...] que o resto do método e o controller já
+        // esperam (AdminMovimentacoesPessoalController::renderFormError()).
+        try {
+            $normalized = self::validateCompleteInput(self::hydrateRecord($record), $actorUserId);
+        } catch (InvalidArgumentException $e) {
+            return ['ok' => false, 'error' => $e->getMessage()];
+        }
         if (!$isSupervisor && (int)$record['gestor_solicitante_usuario_id'] !== $actorUserId) {
             return ['ok' => false, 'error' => 'A assinatura do gestor imediato é restrita ao gestor solicitante vinculado ao formulário.'];
         }

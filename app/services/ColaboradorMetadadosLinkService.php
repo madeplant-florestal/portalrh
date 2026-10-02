@@ -187,7 +187,19 @@ class ColaboradorMetadadosLinkService
         }
 
         $pdo = $this->connection();
-        $pdo->beginTransaction();
+        // Bloco 6 (2026-10, pedido do RH): tolera ser chamado DENTRO de uma transação já aberta
+        // pelo chamador (ex.: CollaboratorSpreadsheetImportService, que aplica vínculos automáticos
+        // na mesma transação do import) — PDO não suporta transação aninhada (BEGIN duplo lança
+        // "There is already an active transaction"). Quando já existe uma transação externa, usa um
+        // SAVEPOINT em vez de uma transação própria: isola este plano (rollback só desfaz ESTES
+        // UPDATEs, nunca o restante da transação do chamador) sem impedir o chamador de decidir o
+        // commit/rollback final de tudo o mais.
+        $ownsTransaction = !$pdo->inTransaction();
+        if ($ownsTransaction) {
+            $pdo->beginTransaction();
+        } else {
+            $pdo->exec('SAVEPOINT colaborador_metadados_link_apply');
+        }
         try {
             $aplicados = 0;
             foreach ($plano as $item) {
@@ -244,11 +256,19 @@ class ColaboradorMetadadosLinkService
             // Contagem global — só telemetria/diagnóstico no relatório, nunca critério de sucesso.
             $totalVinculadoGlobal = (int)$pdo->query('SELECT COUNT(*) FROM colaboradores WHERE metadados_id IS NOT NULL')->fetchColumn();
 
-            $pdo->commit();
+            if ($ownsTransaction) {
+                $pdo->commit();
+            } else {
+                $pdo->exec('RELEASE SAVEPOINT colaborador_metadados_link_apply');
+            }
             return ['ok' => true, 'aplicados' => $aplicados, 'total_vinculado_global' => $totalVinculadoGlobal];
         } catch (Throwable $e) {
-            if ($pdo->inTransaction()) {
-                $pdo->rollBack();
+            if ($ownsTransaction) {
+                if ($pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
+            } else {
+                $pdo->exec('ROLLBACK TO SAVEPOINT colaborador_metadados_link_apply');
             }
             Logger::error('Falha ao aplicar plano de vínculos colaboradores_metadados', ['erro' => $e->getMessage()]);
             return ['ok' => false, 'aplicados' => 0, 'error' => $e->getMessage()];

@@ -13,7 +13,7 @@ abstract class AdminCatalogosController extends Controller
         $this->view->render('admin/catalogos/index', [
             'meta' => $meta,
             'table' => $table,
-            'routeBase' => '/admin/' . $table,
+            'routeBase' => '/admin/' . CadastroOrganizacional::routeSegment($table),
             'items' => CadastroOrganizacional::all($table, $filters),
             'summary' => CadastroOrganizacional::summary($table),
             'filters' => $filters,
@@ -26,12 +26,13 @@ abstract class AdminCatalogosController extends Controller
     {
         Auth::requireRole(['admin', 'rh']);
         $meta = CadastroOrganizacional::meta($table);
+        $routeSegment = CadastroOrganizacional::routeSegment($table);
 
         $this->view->render('admin/catalogos/form', [
             'meta' => $meta,
             'table' => $table,
-            'routeBase' => '/admin/' . $table,
-            'formAction' => '/admin/' . $table . '/novo',
+            'routeBase' => '/admin/' . $routeSegment,
+            'formAction' => '/admin/' . $routeSegment . '/novo',
             'item' => $item,
             'error' => $error,
             'csrf' => Security::csrfToken(),
@@ -55,7 +56,7 @@ abstract class AdminCatalogosController extends Controller
 
         try {
             CadastroOrganizacional::create($table, $data);
-            redirect('/admin/' . $table . '?ok=' . urlencode(CadastroOrganizacional::meta($table)['singular'] . ' cadastrado com sucesso.'));
+            redirect('/admin/' . CadastroOrganizacional::routeSegment($table) . '?ok=' . urlencode(CadastroOrganizacional::meta($table)['singular'] . ' cadastrado com sucesso.'));
         } catch (Throwable $e) {
             $this->renderCreate($table, $data, $this->normalizeError($e, $table));
         }
@@ -73,11 +74,12 @@ abstract class AdminCatalogosController extends Controller
             return;
         }
 
+        $routeSegment = CadastroOrganizacional::routeSegment($table);
         $this->view->render('admin/catalogos/form', [
             'meta' => $meta,
             'table' => $table,
-            'routeBase' => '/admin/' . $table,
-            'formAction' => '/admin/' . $table . '/editar/' . $id,
+            'routeBase' => '/admin/' . $routeSegment,
+            'formAction' => '/admin/' . $routeSegment . '/editar/' . $id,
             'item' => $item,
             'error' => $error,
             'csrf' => Security::csrfToken(),
@@ -107,7 +109,7 @@ abstract class AdminCatalogosController extends Controller
 
         try {
             CadastroOrganizacional::update($table, $id, $data);
-            redirect('/admin/' . $table . '?ok=' . urlencode(CadastroOrganizacional::meta($table)['singular'] . ' atualizado com sucesso.'));
+            redirect('/admin/' . CadastroOrganizacional::routeSegment($table) . '?ok=' . urlencode(CadastroOrganizacional::meta($table)['singular'] . ' atualizado com sucesso.'));
         } catch (Throwable $e) {
             $data['id'] = $id;
             $this->renderEdit($table, $id, $this->normalizeError($e, $table), $data);
@@ -132,11 +134,12 @@ abstract class AdminCatalogosController extends Controller
             return;
         }
 
+        $routeSegment = CadastroOrganizacional::routeSegment($table);
         if (!CadastroOrganizacional::delete($table, $id)) {
-            redirect('/admin/' . $table . '?erro=' . urlencode($meta['singular'] . ' possui colaboradores vinculados e não pode ser excluído.'));
+            redirect('/admin/' . $routeSegment . '?erro=' . urlencode($meta['singular'] . ' possui colaboradores vinculados e não pode ser excluído.'));
         }
 
-        redirect('/admin/' . $table . '?ok=' . urlencode($meta['singular'] . ' excluído com sucesso.'));
+        redirect('/admin/' . $routeSegment . '?ok=' . urlencode($meta['singular'] . ' excluído com sucesso.'));
     }
 
     protected function normalizeError(Throwable $e, string $table): string

@@ -21,6 +21,9 @@ class CadastroOrganizacional
             'singular' => 'Jornada de Trabalho',
             'plural' => 'Jornadas de Trabalho',
             'reference_column' => 'jornada_trabalho_id',
+            // Nome da tabela usa underscore; a convenção de URL do Portal para este cadastro usa
+            // hífen (ver index.php e PortalNavegacaoService) — único catalogo onde os dois divergem.
+            'route' => 'jornadas-trabalho',
         ],
     ];
 
@@ -28,6 +31,14 @@ class CadastroOrganizacional
     {
         self::assertSupportedTable($table);
         return self::TABLES[$table];
+    }
+
+    /** Segmento de URL (/admin/{segmento}) deste cadastro — igual ao nome da tabela, exceto quando
+     * a entrada define 'route' explicitamente (ver jornadas_trabalho acima). */
+    public static function routeSegment(string $table): string
+    {
+        self::assertSupportedTable($table);
+        return self::TABLES[$table]['route'] ?? $table;
     }
 
     public static function all(string $table, array $filters = []): array

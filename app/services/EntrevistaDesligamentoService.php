@@ -135,24 +135,35 @@ class EntrevistaDesligamentoService
     // ================================================================== regras puras (estáticas)
 
     /**
-     * Elegibilidade a partir do contrato oficial: demissão efetivada e motivo diferente de Falecimento.
-     * Mesma regra aplicada em SQL por EntrevistaDesligamentoRepository::listarElegiveis().
+     * Elegibilidade: contrato RESCINDIDO oficialmente no METADADOS (demissão efetivada, motivo
+     * diferente de Falecimento) OU liberação manual ATIVA registrada no Portal (2026-10 — ver
+     * EntrevistaDesligamentoRepository::liberar()). A liberação manual NUNCA representa desligamento
+     * oficial — é só uma segunda porta de entrada para a MESMA regra de elegibilidade, nunca uma
+     * substituição dela. Falecimento (020) exclui nos dois caminhos, inclusive quando liberado
+     * manualmente. Mesma regra aplicada em SQL por EntrevistaDesligamentoRepository::
+     * condicoesElegiveis() — os campos `liberada_em`/`liberacao_cancelada_em` chegam aqui via
+     * EntrevistaDesligamentoRepository::buscarContrato() (LEFT JOIN), ausentes/null quando não há
+     * liberação nenhuma.
      *
      * @return array{elegivel:bool,motivo:?string,mensagem:?string} motivo: sem_demissao | demissao_futura | falecimento
      */
     public static function elegibilidade(array $contrato, DateTimeImmutable $hoje): array
     {
-        $demissao = self::data($contrato['demissao'] ?? null);
-        if ($demissao === null) {
-            return ['elegivel' => false, 'motivo' => 'sem_demissao', 'mensagem' => 'Este contrato não possui desligamento registrado no METADADOS.'];
-        }
-        if ($demissao > $hoje->setTime(0, 0)) {
-            return ['elegivel' => false, 'motivo' => 'demissao_futura', 'mensagem' => 'O desligamento deste contrato ainda não foi efetivado (data futura).'];
-        }
         if (trim((string)($contrato['motivo_rescisao_codigo'] ?? '')) === self::MOTIVO_OFICIAL_INELEGIVEL) {
             return ['elegivel' => false, 'motivo' => 'falecimento', 'mensagem' => 'Contratos encerrados por Falecimento não recebem Entrevista de Desligamento.'];
         }
-        return ['elegivel' => true, 'motivo' => null, 'mensagem' => null];
+
+        $liberacaoAtiva = !empty($contrato['liberada_em']) && empty($contrato['liberacao_cancelada_em']);
+        $demissao = self::data($contrato['demissao'] ?? null);
+        $rescindidoOficialmente = $demissao !== null && $demissao <= $hoje->setTime(0, 0);
+
+        if ($rescindidoOficialmente || $liberacaoAtiva) {
+            return ['elegivel' => true, 'motivo' => null, 'mensagem' => null];
+        }
+        if ($demissao === null) {
+            return ['elegivel' => false, 'motivo' => 'sem_demissao', 'mensagem' => 'Este contrato não possui desligamento registrado no METADADOS. Um RH/Admin pode liberar manualmente a Entrevista de Desligamento, se necessário.'];
+        }
+        return ['elegivel' => false, 'motivo' => 'demissao_futura', 'mensagem' => 'O desligamento deste contrato ainda não foi efetivado (data futura).'];
     }
 
     /** respondida > cancelada > expirada > pendente (derivada de timestamps). */
@@ -528,7 +539,74 @@ class EntrevistaDesligamentoService
         return ['ok' => true];
     }
 
-    /** Snapshot oficial mínimo — sem CPF, nascimento ou salário. */
+
+    // ------------------------------------------------------------------ liberação manual (2026-10)
+
+    /**
+     * Libera manualmente a Entrevista de Desligamento para um contrato AINDA ATIVO no METADADOS.
+     * NÃO altera `colaboradores_metadados` nem gera a entrevista em si — só remove o bloqueio de
+     * elegibilidade (ver elegibilidade()); a geração continua sendo uma ação separada (gerar()),
+     * pelo mesmo fluxo já usado para contratos oficialmente rescindidos.
+     *
+     * @return array{ok:bool,error?:string}
+     */
+    public function liberarManualmente(int $metadadosId, int $usuarioId, DateTimeImmutable $agora): array
+    {
+        $contrato = $this->repository->buscarContrato($metadadosId);
+        if ($contrato === null) {
+            return ['ok' => false, 'error' => 'Contrato não encontrado no METADADOS.'];
+        }
+        if (trim((string)($contrato['motivo_rescisao_codigo'] ?? '')) === self::MOTIVO_OFICIAL_INELEGIVEL) {
+            return ['ok' => false, 'error' => 'Contratos encerrados por Falecimento não recebem Entrevista de Desligamento.'];
+        }
+        $demissao = self::data($contrato['demissao'] ?? null);
+        if ($demissao !== null && $demissao <= $agora->setTime(0, 0)) {
+            return ['ok' => false, 'error' => 'Este contrato já está rescindido no METADADOS — a Entrevista já pode ser gerada normalmente, sem liberação manual.'];
+        }
+        if ($this->repository->buscarPorMetadadosId($metadadosId) !== null) {
+            return ['ok' => false, 'error' => 'Já existe uma Entrevista de Desligamento para este contrato.'];
+        }
+        $this->repository->liberar($metadadosId, $usuarioId, self::formatoBanco($agora));
+        return ['ok' => true];
+    }
+
+    /**
+     * Cancela a liberação manual (nunca a entrevista em si — se já houve geração, use cancelar()).
+     * Recusa em dois casos, nos dois preservando o registro histórico intacto (nunca apagado nem
+     * alterado):
+     *   - o contrato já está oficialmente RESCINDIDO no METADADOS (2026-10, ajuste de UX): a
+     *     liberação virou só histórico — a elegibilidade já vem naturalmente da rescisão oficial,
+     *     cancelar não mudaria nada funcionalmente e só apagaria o rastro de que foi liberada antes;
+     *   - a entrevista já foi RESPONDIDA: cancelamento deixaria de ser seguro (haveria uma resposta
+     *     real sem nenhum registro de por que a Entrevista foi liberada).
+     *
+     * @return array{ok:bool,error?:string}
+     */
+    public function cancelarLiberacaoManual(int $metadadosId, int $usuarioId, DateTimeImmutable $agora): array
+    {
+        $liberacao = $this->repository->buscarLiberacao($metadadosId);
+        if ($liberacao === null || $liberacao['cancelada_em'] !== null) {
+            return ['ok' => false, 'error' => 'Não há liberação manual ativa para este contrato.'];
+        }
+        $contrato = $this->repository->buscarContrato($metadadosId);
+        $demissao = $contrato !== null ? self::data($contrato['demissao'] ?? null) : null;
+        if ($demissao !== null && $demissao <= $agora->setTime(0, 0)) {
+            return ['ok' => false, 'error' => 'Este contrato já está rescindido oficialmente no METADADOS — a liberação manual virou só histórico e não pode mais ser cancelada.'];
+        }
+        $entrevista = $this->repository->buscarPorMetadadosId($metadadosId);
+        if ($entrevista !== null && !empty($entrevista['respondida_em'])) {
+            return ['ok' => false, 'error' => 'A Entrevista já foi respondida — a liberação não pode mais ser cancelada.'];
+        }
+        $this->repository->cancelarLiberacao($metadadosId, $usuarioId, self::formatoBanco($agora));
+        return ['ok' => true];
+    }
+
+    /**
+     * Snapshot oficial mínimo — sem CPF, nascimento ou salário. `snap_demissao` é NULL quando o
+     * contrato ainda está ativo no METADADOS (entrevista gerada via liberação manual, 2026-10) —
+     * nunca inventa uma data nem grava string vazia (antes desta correção, `(string)null` virava
+     * `''`, que quebraria a coluna DATE).
+     */
     private static function snapshotDoContrato(array $contrato): array
     {
         $vazioParaNull = static fn(mixed $v): ?string => ($v === null || trim((string)$v) === '') ? null : trim((string)$v);
@@ -541,7 +619,7 @@ class EntrevistaDesligamentoService
             'snap_codigo_cargo' => $vazioParaNull($contrato['codigo_cargo'] ?? null),
             'snap_cargo' => $vazioParaNull($contrato['cargo'] ?? null),
             'snap_admissao' => $vazioParaNull($contrato['admissao'] ?? null),
-            'snap_demissao' => (string)$contrato['demissao'],
+            'snap_demissao' => $vazioParaNull($contrato['demissao'] ?? null),
             'snap_motivo_codigo' => $vazioParaNull($contrato['motivo_rescisao_codigo'] ?? null),
             'snap_motivo_descricao' => $vazioParaNull($contrato['motivo_rescisao_descricao'] ?? null),
         ];

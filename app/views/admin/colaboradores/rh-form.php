@@ -234,5 +234,43 @@ $readonlyClass = 'mt-1 w-full rounded border bg-surface-secondary px-3 py-2 text
     <?php endif; ?>
   </div>
   <?php endif; ?>
+
+  <?php if (!empty($entrevistaDesligamento) && $entrevistaDesligamento['elegibilidade'] !== null): ?>
+    <?php
+      // Entrevista de Desligamento — liberação manual (2026-10). "Contrato ativo no METADADOS" e
+      // "Entrevista liberada manualmente no Portal" são mostrados como conceitos SEPARADOS (nunca
+      // um substituindo o outro) — ver EntrevistaDesligamentoService::elegibilidade()/liberarManualmente().
+      $edAtivoMetadados = empty($colaborador['data_demissao']);
+      $edLiberacao = $entrevistaDesligamento['liberacao'];
+      $edExistente = $entrevistaDesligamento['entrevista_existente'];
+    ?>
+    <div class="mt-8 rounded-ds-md border border-border bg-surface-secondary p-5">
+      <h3 class="text-lg font-semibold text-text-primary">Entrevista de Desligamento</h3>
+      <p class="mt-1 text-sm text-text-secondary">
+        Contrato ativo no METADADOS: <strong><?= $edAtivoMetadados ? 'Sim' : ('Não — rescindido em ' . Security::e($dataDemissao)) ?></strong>
+        <?php if ($edLiberacao !== null): ?>
+          · Entrevista liberada manualmente no Portal em <strong><?= Security::e(date('d/m/Y H:i', strtotime((string)$edLiberacao['liberada_em']))) ?></strong>
+        <?php endif; ?>
+      </p>
+
+      <?php if (!empty($edExistente)): ?>
+        <p class="mt-3 text-sm text-text-secondary">Já existe uma Entrevista de Desligamento para este contrato. Gerencie em <a href="<?= $base ?>/admin/entrevistas-desligamento" class="text-primary-700 underline">Entrevistas de Desligamento</a>.</p>
+      <?php elseif (!$edAtivoMetadados): ?>
+        <p class="mt-3 text-sm text-text-secondary">Contrato já rescindido no METADADOS — a Entrevista pode ser gerada normalmente em <a href="<?= $base ?>/admin/entrevistas-desligamento" class="text-primary-700 underline">Entrevistas de Desligamento</a>, sem necessidade de liberação manual.</p>
+      <?php elseif ($edLiberacao !== null): ?>
+        <form action="<?= $base ?>/admin/colaboradores/<?= (int)$colaborador['id'] ?>/entrevista-desligamento/cancelar-liberacao" method="post" class="mt-3" data-confirm-message="Cancelar a liberação manual da Entrevista de Desligamento?">
+          <input type="hidden" name="csrf" value="<?= Security::e($csrf) ?>">
+          <button type="submit" class="rounded-lg border border-danger/30 px-4 py-2 text-sm font-medium text-danger hover:bg-danger/10">Cancelar liberação</button>
+        </form>
+        <p class="mt-3 text-sm text-text-secondary">O colaborador continua ativo no METADADOS — nenhum desligamento foi registrado. Gere a Entrevista em <a href="<?= $base ?>/admin/entrevistas-desligamento" class="text-primary-700 underline">Entrevistas de Desligamento</a>.</p>
+      <?php else: ?>
+        <p class="mt-3 text-sm text-text-secondary">O colaborador ainda está ativo no METADADOS e não há liberação manual registrada.</p>
+        <form action="<?= $base ?>/admin/colaboradores/<?= (int)$colaborador['id'] ?>/entrevista-desligamento/liberar" method="post" class="mt-3" data-confirm-message="Esta ação apenas libera a Entrevista de Desligamento no Portal RH. Nenhum desligamento será registrado e nenhum dado será alterado no METADADOS.">
+          <input type="hidden" name="csrf" value="<?= Security::e($csrf) ?>">
+          <button type="submit" class="rounded-lg bg-primary-700 px-4 py-2 text-sm font-medium text-white hover:bg-primary-800">Liberar entrevista de desligamento</button>
+        </form>
+      <?php endif; ?>
+    </div>
+  <?php endif; ?>
   </div>
 </div>

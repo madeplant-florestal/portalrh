@@ -177,6 +177,81 @@ class AdminColaboradoresController extends Controller
         $this->view->render('admin/colaboradores/rh-form', $dados, 'layouts/app-shell');
     }
 
+
+    /**
+     * Libera manualmente a Entrevista de Desligamento (2026-10) — só Admin/RH (mesmo gate de
+     * editRh/updateRh desta tela, nunca uma permissão nova). NÃO altera nenhum dado do colaborador
+     * nem do METADADOS; só remove o bloqueio de elegibilidade (ver EntrevistaDesligamentoService::
+     * elegibilidade()). Renderiza a mesma tela (mesmo padrão de gerarPesquisaIntegracao()) — sem
+     * redirect, para a mensagem de sucesso/erro aparecer direto, sem depender de query string.
+     */
+    public function liberarEntrevistaDesligamento(string $id): void
+    {
+        Auth::requireRole(['admin', 'rh']);
+        if (!Security::csrfCheck($_POST['csrf'] ?? '')) {
+            http_response_code(400);
+            echo 'CSRF inválido';
+            return;
+        }
+
+        $colaborador = Colaborador::find((int)$id);
+        $metadadosId = $colaborador['metadados_id'] ?? null;
+        if ($colaborador === null || $metadadosId === null) {
+            http_response_code(404);
+            echo 'Colaborador não encontrado ou sem vínculo com o METADADOS.';
+            return;
+        }
+
+        $resultado = (new EntrevistaDesligamentoService())->liberarManualmente((int)$metadadosId, (int)($_SESSION['user_id'] ?? 0), new DateTimeImmutable('now'));
+
+        $dados = $this->buildEditRhViewData((int)$id);
+        if ($dados === null) {
+            http_response_code(404);
+            echo 'Colaborador não encontrado.';
+            return;
+        }
+        if (!($resultado['ok'] ?? false)) {
+            $dados['error'] = (string)($resultado['error'] ?? 'Não foi possível liberar a Entrevista de Desligamento.');
+        } else {
+            $dados['flashSuccess'] = 'Entrevista de Desligamento liberada manualmente. Nenhum dado do METADADOS foi alterado.';
+        }
+        $this->view->render('admin/colaboradores/rh-form', $dados, 'layouts/app-shell');
+    }
+
+    /** Cancela a liberação manual (nunca a entrevista em si, se já tiver sido gerada — ver cancelar() do módulo). */
+    public function cancelarLiberacaoEntrevistaDesligamento(string $id): void
+    {
+        Auth::requireRole(['admin', 'rh']);
+        if (!Security::csrfCheck($_POST['csrf'] ?? '')) {
+            http_response_code(400);
+            echo 'CSRF inválido';
+            return;
+        }
+
+        $colaborador = Colaborador::find((int)$id);
+        $metadadosId = $colaborador['metadados_id'] ?? null;
+        if ($colaborador === null || $metadadosId === null) {
+            http_response_code(404);
+            echo 'Colaborador não encontrado ou sem vínculo com o METADADOS.';
+            return;
+        }
+
+        $resultado = (new EntrevistaDesligamentoService())->cancelarLiberacaoManual((int)$metadadosId, (int)($_SESSION['user_id'] ?? 0), new DateTimeImmutable('now'));
+
+        $dados = $this->buildEditRhViewData((int)$id);
+        if ($dados === null) {
+            http_response_code(404);
+            echo 'Colaborador não encontrado.';
+            return;
+        }
+        if (!($resultado['ok'] ?? false)) {
+            $dados['error'] = (string)($resultado['error'] ?? 'Não foi possível cancelar a liberação.');
+        } else {
+            $dados['flashSuccess'] = 'Liberação manual da Entrevista de Desligamento cancelada.';
+        }
+        $this->view->render('admin/colaboradores/rh-form', $dados, 'layouts/app-shell');
+    }
+
     /**
      * Dados da tela "Editar dados RH"/Integração — extraído para ser reaproveitado por editRh()
      * (GET) e gerarPesquisaIntegracao() (POST, precisa re-renderizar a mesma tela).
@@ -200,6 +275,23 @@ class AdminColaboradoresController extends Controller
             $pesquisaIntegracao = PesquisaIntegracao::findByColaboradorEData($id, (string)$colaborador['integracao_data']);
         }
 
+        // Entrevista de Desligamento — liberação manual (2026-10). Só faz sentido quando há vínculo
+        // oficial com o METADADOS (metadados_id); sem isso, a Entrevista não se aplica a este
+        // colaborador (mesma regra de gerar()/elegibilidade()).
+        $entrevistaDesligamento = null;
+        $metadadosId = $colaborador['metadados_id'] ?? null;
+        if ($metadadosId !== null) {
+            $edRepo = new EntrevistaDesligamentoRepository();
+            $contratoEd = $edRepo->buscarContrato((int)$metadadosId);
+            $entrevistaDesligamento = [
+                'elegibilidade' => $contratoEd !== null ? EntrevistaDesligamentoService::elegibilidade($contratoEd, new DateTimeImmutable('now')) : null,
+                'liberacao' => $contratoEd !== null && !empty($contratoEd['liberacao_ativa']) ? [
+                    'liberada_em' => $contratoEd['liberada_em'],
+                ] : null,
+                'entrevista_existente' => $edRepo->buscarPorMetadadosId((int)$metadadosId),
+            ];
+        }
+
         return [
             'csrf' => Security::csrfToken(),
             'colaborador' => $colaborador,
@@ -209,6 +301,7 @@ class AdminColaboradoresController extends Controller
             'usuariosOptions' => User::candidatosAprovador(0),
             'pesquisaIntegracao' => $pesquisaIntegracao,
             'linkPesquisaIntegracaoGerado' => '',
+            'entrevistaDesligamento' => $entrevistaDesligamento,
             'flashError' => Security::sanitizeString($_GET['erro'] ?? ''),
             'flashSuccess' => Security::sanitizeString($_GET['ok'] ?? ''),
         ];

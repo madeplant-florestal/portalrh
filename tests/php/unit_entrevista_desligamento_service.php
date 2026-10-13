@@ -51,6 +51,17 @@ foreach (['001', '002', '003', '005', '006', '007', '008', '016', '046', '', nul
 $check($todosElegiveis, '(elegibilidade) Justa causa, acordo, término, pedido, demissão e demais motivos (inclusive vazio/desconhecido) são elegíveis — só 020 é excluído');
 $check(str_contains((string)$el('2026-09-01', '020')['mensagem'], 'Falecimento') && $S::criteriosElegibilidade($hoje) === ['hoje' => '2026-09-19', 'motivo_excluido' => '020'], '(elegibilidade) Mensagem clara e critérios repassados ao repository (mesma regra em SQL)');
 
+// ---- elegibilidade: liberação manual (2026-10) -------------------------------------------------------------------------
+$elLib = static fn(?string $dem, ?string $motivo, ?string $liberadaEm, ?string $liberacaoCanceladaEm) => $S::elegibilidade([
+    'demissao' => $dem, 'motivo_rescisao_codigo' => $motivo, 'liberada_em' => $liberadaEm, 'liberacao_cancelada_em' => $liberacaoCanceladaEm,
+], $hoje);
+$check($elLib(null, null, '2026-09-15 10:00:00', null)['elegivel'] === true, '(liberação) Contrato ativo (sem demissão) com liberação manual ATIVA é elegível');
+$check($elLib(null, null, '2026-09-15 10:00:00', '2026-09-16 10:00:00')['elegivel'] === false && $elLib(null, null, '2026-09-15 10:00:00', '2026-09-16 10:00:00')['motivo'] === 'sem_demissao', '(liberação) Liberação CANCELADA não conta — volta a ser inelegível por falta de demissão');
+$check($elLib(null, null, null, null)['elegivel'] === false, '(liberação) Sem liberação nenhuma, comportamento igual ao de antes (inelegível por falta de demissão)');
+$check($elLib('2099-01-01', '003', '2026-09-15 10:00:00', null)['elegivel'] === true, '(liberação) Liberação manual TAMBÉM libera um contrato com demissão futura já registrada (ainda não efetivada)');
+$check($elLib(null, '020', '2026-09-15 10:00:00', null)['elegivel'] === false && $elLib(null, '020', '2026-09-15 10:00:00', null)['motivo'] === 'falecimento', '(liberação) Falecimento (020) exclui MESMO com liberação manual ativa — liberação nunca sobrepõe essa exclusão');
+$check($el('2026-09-01', '003')['elegivel'] === $elLib('2026-09-01', '003', null, null)['elegivel'], '(liberação) Contrato já rescindido oficialmente continua elegível independente de liberação (caminho oficial inalterado)');
+
 // ---- situação ----------------------------------------------------------------------------------------------------------
 $base = ['respondida_em' => null, 'cancelada_em' => null, 'expira_em' => '2026-10-19 10:00:00'];
 $check($S::situacao($base, $hoje) === 'pendente', '(situação) Sem resposta/cancelamento e no prazo = pendente');

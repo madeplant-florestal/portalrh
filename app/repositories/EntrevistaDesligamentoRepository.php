@@ -41,7 +41,12 @@ class EntrevistaDesligamentoRepository
         INNER JOIN colaboradores_metadados cm ON cm.id = e.metadados_id
         LEFT JOIN usuarios u ON u.id = e.gerada_por_usuario_id';
 
-    /** Contrato + Cargo pelo catálogo oficial `cargos` (fallback: texto do espelho). */
+    /**
+     * Contrato + Cargo pelo catálogo oficial `cargos` (fallback: texto do espelho) + liberação
+     * manual (2026-10, LEFT JOIN — a maioria dos contratos nunca tem liberação; `edl.*` vem NULL
+     * nesse caso). `liberacao_ativa` já resolve "existe liberação E não foi cancelada" em SQL,
+     * mesma regra que EntrevistaDesligamentoService::elegibilidade() aplica em PHP.
+     */
     private const SELECT_CONTRATO = "SELECT cm.id AS metadados_id, cm.nome, cm.codigo_empresa, cm.empresa, cm.codigo_unidade, cm.unidade,
             cm.codigo_cargo,
             COALESCE(
@@ -50,8 +55,11 @@ class EntrevistaDesligamentoRepository
                 LIMIT 1),
               NULLIF(cm.cargo, '')
             ) AS cargo,
-            cm.admissao, cm.demissao, cm.motivo_rescisao_codigo, cm.motivo_rescisao_descricao
-        FROM colaboradores_metadados cm";
+            cm.admissao, cm.demissao, cm.motivo_rescisao_codigo, cm.motivo_rescisao_descricao,
+            edl.liberada_em, edl.liberada_por_usuario_id, edl.cancelada_em AS liberacao_cancelada_em,
+            (edl.id IS NOT NULL AND edl.cancelada_em IS NULL) AS liberacao_ativa
+        FROM colaboradores_metadados cm
+        LEFT JOIN entrevista_desligamento_liberacoes edl ON edl.metadados_id = cm.id";
 
     private ?PDO $pdo;
 
@@ -76,6 +84,43 @@ class EntrevistaDesligamentoRepository
         $stmt->execute([$metadadosId]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
         return $row ?: null;
+    }
+
+
+    // ------------------------------------------------------------------ liberação manual (2026-10)
+
+    /** Liberação (ativa ou não) deste contrato, se existir. */
+    public function buscarLiberacao(int $metadadosId): ?array
+    {
+        $stmt = $this->connection()->prepare(
+            'SELECT id, metadados_id, liberada_em, liberada_por_usuario_id, cancelada_em, cancelada_por_usuario_id
+             FROM entrevista_desligamento_liberacoes WHERE metadados_id = ? LIMIT 1'
+        );
+        $stmt->execute([$metadadosId]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $row ?: null;
+    }
+
+    /**
+     * Liberar (ou reliberar, se havia uma liberação cancelada antes) — UPSERT na MESMA linha
+     * (UNIQUE em metadados_id, ver migration): nunca acumula histórico de ciclos liberar/cancelar,
+     * só o estado atual + quem/quando liberou pela última vez.
+     */
+    public function liberar(int $metadadosId, int $usuarioId, string $agora): void
+    {
+        $this->connection()->prepare(
+            'INSERT INTO entrevista_desligamento_liberacoes (metadados_id, liberada_em, liberada_por_usuario_id, cancelada_em, cancelada_por_usuario_id)
+             VALUES (?, ?, ?, NULL, NULL)
+             ON DUPLICATE KEY UPDATE liberada_em = VALUES(liberada_em), liberada_por_usuario_id = VALUES(liberada_por_usuario_id),
+               cancelada_em = NULL, cancelada_por_usuario_id = NULL'
+        )->execute([$metadadosId, $agora, $usuarioId]);
+    }
+
+    public function cancelarLiberacao(int $metadadosId, int $usuarioId, string $agora): void
+    {
+        $this->connection()->prepare(
+            'UPDATE entrevista_desligamento_liberacoes SET cancelada_em = ?, cancelada_por_usuario_id = ? WHERE metadados_id = ? AND cancelada_em IS NULL'
+        )->execute([$agora, $usuarioId, $metadadosId]);
     }
 
     /**
@@ -103,13 +148,16 @@ class EntrevistaDesligamentoRepository
 
     private function condicoesElegiveis(array $criterios, array $filtros): array
     {
+        // Elegível = rescindido oficialmente no METADADOS OU liberação manual ativa (2026-10) —
+        // mesma regra de EntrevistaDesligamentoService::elegibilidade(), espelhada em SQL para a
+        // listagem em massa (ver docblock da classe). Falecimento exclui nos dois caminhos: não
+        // faz sentido liberar manualmente uma entrevista para um contrato encerrado por óbito.
         $where = [
-            'cm.demissao IS NOT NULL',
-            'cm.demissao <= ?',
             "COALESCE(TRIM(cm.motivo_rescisao_codigo), '') <> ?",
+            '((cm.demissao IS NOT NULL AND cm.demissao <= ?) OR (edl.id IS NOT NULL AND edl.cancelada_em IS NULL))',
             'NOT EXISTS (SELECT 1 FROM entrevistas_desligamento ed WHERE ed.metadados_id = cm.id)',
         ];
-        $params = [(string)$criterios['hoje'], (string)$criterios['motivo_excluido']];
+        $params = [(string)$criterios['motivo_excluido'], (string)$criterios['hoje']];
 
         if (!empty($filtros['codigo_empresa'])) {
             $where[] = 'cm.codigo_empresa = ?';
@@ -117,7 +165,7 @@ class EntrevistaDesligamentoRepository
         }
         if (!empty($filtros['dias']) && (int)$filtros['dias'] > 0) {
             $limite = (new DateTimeImmutable((string)$criterios['hoje']))->modify('-' . (int)$filtros['dias'] . ' days');
-            $where[] = 'cm.demissao >= ?';
+            $where[] = '(cm.demissao IS NULL OR cm.demissao >= ?)';
             $params[] = $limite->format('Y-m-d');
         }
         if (!empty($filtros['busca'])) {

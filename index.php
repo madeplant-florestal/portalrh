@@ -117,6 +117,10 @@ try {
     // Geração da Pesquisa de Integração (onboarding) — Sprint "Fundação do Dashboard de
     // Integração". Só permitida quando a integração já está 'realizada'.
     $router->post('/admin/colaboradores/{id}/pesquisa-integracao/gerar', [AdminColaboradoresController::class, 'gerarPesquisaIntegracao']);
+    // Liberação manual da Entrevista de Desligamento (2026-10) — permite liberar a Entrevista antes
+    // de o contrato aparecer rescindido no METADADOS, sem alterar nenhum dado oficial.
+    $router->post('/admin/colaboradores/{id}/entrevista-desligamento/liberar', [AdminColaboradoresController::class, 'liberarEntrevistaDesligamento']);
+    $router->post('/admin/colaboradores/{id}/entrevista-desligamento/cancelar-liberacao', [AdminColaboradoresController::class, 'cancelarLiberacaoEntrevistaDesligamento']);
 
     $router->get('/admin/avaliacoes', [AdminAvaliacoesController::class, 'index']);
     $router->get('/admin/avaliacoes/novo', [AdminAvaliacoesController::class, 'create']);

@@ -102,13 +102,27 @@ class RecrutamentoIndicadoresRepository
      * Bloco 5 (2026-10, pedido do RH): `sv.cancelada_em IS NULL` somado ao filtro por estágio do
      * Kanban (`st.slug`) — defesa em profundidade contra o estágio (`situacao_kanban_id`) ficar
      * fora de sincronia com o cancelamento real (`cancelada_em`, setado só por
-     * SolicitacaoVagaPipelineService::moveToStage() ao mover para o estágio 'cancelada'); antes só
-     * o estágio era checado, então uma solicitação cancelada cujo estágio não refletisse mais
-     * 'cancelada' (drift de dado) entrava como "aberta".
+     * SolicitacaoVagaPipelineService::moveToStage() ao mover para o estágio 'cancelada').
+     *
+     * Bloco 6 (2026-10, pedido do RH — regra definitiva): `status_fluxo` e `situacao_kanban_id` são
+     * DUAS máquinas de estado DESACOPLADAS de propósito (ver migration 2026-08-25, comentário de
+     * cabeçalho) — `situacao_kanban_id` só muda por drag-and-drop manual no Kanban, enquanto
+     * `SolicitacaoVaga::approve()`/`saveRhControl()` sempre atualizam `status_fluxo` de forma
+     * síncrona e confiável. Por isso o filtro é por INCLUSÃO do único status que representa
+     * aprovação efetiva (`SolicitacaoVaga::STATUS_APROVADA` = 'aprovada') — não por exclusão de
+     * status negativos: `pendente_lider`/`pendente_rh` (ainda não é uma vaga aprovada, é só uma
+     * solicitação em avaliação), `reprovada_lider`/`reprovada_rh` e `concluida` NUNCA contam,
+     * mesmo que o card do Kanban nunca tenha sido movido. O filtro por estágio/cancelamento
+     * continua como defesa em profundidade adicional (ex.: aprovada mas com o card já movido para
+     * "Fechada"/"Cancelada" manualmente).
      */
     public function contarSolicitacoesAbertas(?int $empresaId): array
     {
-        $where = ["st.slug NOT IN ('fechada', 'cancelada')", 'sv.cancelada_em IS NULL'];
+        $where = [
+            "sv.status_fluxo = '" . SolicitacaoVaga::STATUS_APROVADA . "'",
+            "st.slug NOT IN ('fechada', 'cancelada')",
+            'sv.cancelada_em IS NULL',
+        ];
         $params = [];
         if ($empresaId !== null) {
             $where[] = 'se.empresa_id = ?';

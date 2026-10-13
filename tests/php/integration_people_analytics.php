@@ -427,6 +427,9 @@ try {
     $stageAprovada = $stagesKanban['aprovada'] ?? 0;
     $check($stageAprovada > 0, 'Fixture: etapa "aprovada" existe em solicitacao_vaga_stages');
 
+    // Bloco 6 (2026-10): status_fluxo='aprovada' (não 'concluida') para bater com a etapa real do
+    // Kanban usada aqui ('aprovada') — RecrutamentoIndicadoresRepository::contarSolicitacoesAbertas()
+    // passou a filtrar também por status_fluxo (ver correção do contador de Vagas Abertas).
     $mkSolicitacaoAvaliacao = static function (?DateTimeImmutable $dataAdmissao, ?string $avaliacao) use ($pdo, $cargoId, $adminId, $setorLocalId, $stageAprovada, &$criados): int {
         $stmt = $pdo->prepare(
             'INSERT INTO solicitacoes_vaga (
@@ -435,7 +438,7 @@ try {
                 escolaridade_minima, entregas_esperadas_encrypted, nivel_responsabilidade,
                 data_prevista_inicio, urgencia, status_fluxo, situacao_kanban_id, data_admissao, avaliacao_90_dias
             ) VALUES (?, 1, ?, ?, \'nova_posicao\', \'clt\', 3000, NULL, 0, \'8h/dia\',
-                \'medio\', \'fixture zzpa\', \'operacional\', CURDATE(), \'media\', \'concluida\', ?, ?, ?)'
+                \'medio\', \'fixture zzpa\', \'operacional\', CURDATE(), \'media\', \'aprovada\', ?, ?, ?)'
         );
         $stmt->execute([$setorLocalId, $cargoId, $adminId, $stageAprovada, $dataAdmissao?->format('Y-m-d'), $avaliacao]);
         $id = (int)$pdo->lastInsertId();

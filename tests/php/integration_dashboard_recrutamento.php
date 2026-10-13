@@ -150,7 +150,11 @@ try {
     }
 
     $hoje = new DateTimeImmutable('today');
-    $mkSolicitacao = static function (int $setorId, string $slugKanban, ?DateTimeImmutable $fechadaEm) use ($pdo, $cargoId, $adminId, &$criados, $stagesKanban): int {
+    // Bloco 6 (2026-10): status_fluxo REALISTA por etapa — antes do Bloco 6 toda fixture usava
+    // 'concluida' hardcoded (o filtro antigo nunca olhava status_fluxo, então não importava). Como
+    // a correção do Bloco 6 passou a filtrar por status_fluxo, manter 'concluida' em TODAS as
+    // linhas esconderia o próprio bug que estamos provando que foi corrigido.
+    $mkSolicitacao = static function (int $setorId, string $slugKanban, ?DateTimeImmutable $fechadaEm, string $statusFluxo = 'concluida') use ($pdo, $cargoId, $adminId, &$criados, $stagesKanban): int {
         $stmt = $pdo->prepare(
             'INSERT INTO solicitacoes_vaga (
                 setor_id, quantidade_vagas, cargo_id, solicitante_usuario_id, tipo_vaga,
@@ -158,10 +162,10 @@ try {
                 escolaridade_minima, entregas_esperadas_encrypted, nivel_responsabilidade,
                 data_prevista_inicio, urgencia, status_fluxo, situacao_kanban_id, fechada_em
             ) VALUES (?, 1, ?, ?, \'nova_posicao\', \'clt\', 3000, NULL, 0, \'8h/dia\',
-                \'medio\', \'fixture zzdash\', \'operacional\', CURDATE(), \'media\', \'concluida\', ?, ?)'
+                \'medio\', \'fixture zzdash\', \'operacional\', CURDATE(), \'media\', ?, ?, ?)'
         );
         $stmt->execute([
-            $setorId, $cargoId, $adminId, $stagesKanban[$slugKanban],
+            $setorId, $cargoId, $adminId, $statusFluxo, $stagesKanban[$slugKanban],
             $fechadaEm !== null ? $fechadaEm->format('Y-m-d H:i:s') : null,
         ]);
         $id = (int)$pdo->lastInsertId();
@@ -169,48 +173,53 @@ try {
         return $id;
     };
 
-    $mkSolicitacao($setorAId, 'em-aprovacao', null);         // SV1: aberta, empresa A
-    $mkSolicitacao($setorAId, 'aprovada', null);              // SV2: aberta, empresa A
-    $mkSolicitacao($setorAId, 'fechada', $hoje->modify('-5 days'));   // SV3: fechada dentro do período, empresa A
-    $mkSolicitacao($setorAId, 'cancelada', null);              // SV4: cancelada — não é aberta nem fechada
-    $mkSolicitacao($setorBId, 'fechada', $hoje->modify('-3 days'));   // SV5: fechada dentro do período, empresa B
-    $mkSolicitacao($setorAId, 'fechada', $hoje->modify('-500 days')); // SV6: fechada MUITO antes do período — deve ficar de fora
+    $repo = new RecrutamentoIndicadoresRepository();
+
+    // ---- Vagas Fechadas: fixtures independentes da regra de Vagas Abertas ---------------------
+    $mkSolicitacao($setorAId, 'fechada', $hoje->modify('-5 days'), 'concluida');   // SV3: fechada dentro do período, empresa A
+    $mkSolicitacao($setorBId, 'fechada', $hoje->modify('-3 days'), 'concluida');   // SV5: fechada dentro do período, empresa B
+    $mkSolicitacao($setorAId, 'fechada', $hoje->modify('-500 days'), 'concluida'); // SV6: fechada MUITO antes do período — deve ficar de fora
 
     $periodoInicio = $hoje->modify('-400 days');
     $periodoFim = $hoje;
-
-    $repo = new RecrutamentoIndicadoresRepository();
-
-    $abertasSemFiltro = $repo->contarSolicitacoesAbertas(null);
-    $check((int)$abertasSemFiltro['total'] >= 2, '(5) Vagas Abertas conta situações fora de fechada/cancelada (>= 2 fixtures abertas)');
-    $abertasEmpresaA = $repo->contarSolicitacoesAbertas($empresaAId);
-    $check((int)$abertasEmpresaA['total'] === 2, '(5b) Vagas Abertas filtradas por Empresa A conta exatamente as 2 fixtures (SV1 em-aprovação + SV2 aprovada), excluindo SV4 cancelada');
-
     $fechadasNoPeriodo = $repo->contarSolicitacoesFechadas($periodoInicio, $periodoFim, null);
-    $check((int)$fechadasNoPeriodo['total'] === 2, '(6) Vagas Fechadas no período conta SV3+SV5 (dentro da janela), exclui SV6 (fechada há 500 dias) e SV4 (cancelada)');
+    $check((int)$fechadasNoPeriodo['total'] === 2, '(6) Vagas Fechadas no período conta SV3+SV5 (dentro da janela), exclui SV6 (fechada há 500 dias)');
     $fechadasEmpresaA = $repo->contarSolicitacoesFechadas($periodoInicio, $periodoFim, $empresaAId);
     $check((int)$fechadasEmpresaA['total'] === 1, '(6b) Vagas Fechadas filtradas por Empresa A conta só SV3, isolando corretamente a Empresa B (SV5)');
 
-    // ---- Bloco 5 (2026-10, pedido do RH): defesa em profundidade contra drift entre o estágio do
-    // Kanban (situacao_kanban_id) e o cancelamento real (cancelada_em) ----------------------------
-    // SV7: cancelada_em preenchido diretamente (fixture simula um dado legado/drift), mas o estágio
-    // do Kanban continua em 'em-aprovacao' (nunca movido para 'cancelada' por moveToStage()). Antes
-    // do Bloco 5, só o slug do estágio era checado, então esta vaga cancelada contava como aberta.
-    $stmtDrift = $pdo->prepare(
-        'INSERT INTO solicitacoes_vaga (
-            setor_id, quantidade_vagas, cargo_id, solicitante_usuario_id, tipo_vaga,
-            tipo_contratacao, salario_previsto, centro_custo_id, previsto_orcamento, jornada_trabalho,
-            escolaridade_minima, entregas_esperadas_encrypted, nivel_responsabilidade,
-            data_prevista_inicio, urgencia, status_fluxo, situacao_kanban_id, cancelada_em
-        ) VALUES (?, 1, ?, ?, \'nova_posicao\', \'clt\', 3000, NULL, 0, \'8h/dia\',
-            \'medio\', \'fixture zzdash drift\', \'operacional\', CURDATE(), \'media\', \'concluida\', ?, NOW())'
-    );
-    $stmtDrift->execute([$setorAId, $cargoId, $adminId, $stagesKanban['em-aprovacao']]);
-    $sv7Id = (int)$pdo->lastInsertId();
-    $criados['solicitacoes'][] = $sv7Id;
+    // ---- Bloco 6 (2026-10, pedido do RH — regra DEFINITIVA) -----------------------------------
+    // Vagas Abertas conta SOMENTE status_fluxo = 'aprovada' (o único status que representa
+    // aprovação efetiva — ver SolicitacaoVaga::STATUS_APROVADA), combinado com estágio Kanban
+    // ativo (fora de fechada/cancelada) e cancelada_em IS NULL. Os 9 cenários abaixo cobrem
+    // exatamente o pedido, testados por DELTA (mesmo padrão já usado na seção de Efetivação mais
+    // abaixo): cada fixture é inserida isoladamente e o total é reconferido logo em seguida —
+    // sempre contra $abertasBase (o total ANTES de qualquer fixture deste bloco), nunca contra um
+    // número fixo presumido, já que o ambiente de DEV pode ter outras solicitações da Empresa A.
+    $abertasBase = (int)$repo->contarSolicitacoesAbertas($empresaAId)['total'];
 
-    $abertasComDrift = $repo->contarSolicitacoesAbertas($empresaAId);
-    $check((int)$abertasComDrift['total'] === 2, '(5c) Bloco 5: SV7 (cancelada_em preenchido, mas estágio ainda "em-aprovacao" — drift) NÃO conta em Vagas Abertas; total da Empresa A continua 2 (SV1+SV2)');
+    $mkSolicitacao($setorAId, 'em-aprovacao', null, 'pendente_lider'); // (1)
+    $check((int)$repo->contarSolicitacoesAbertas($empresaAId)['total'] === $abertasBase, '(1) pendente do líder => não conta em Vagas Abertas');
+
+    $mkSolicitacao($setorAId, 'em-aprovacao', null, 'pendente_rh'); // (2)
+    $check((int)$repo->contarSolicitacoesAbertas($empresaAId)['total'] === $abertasBase, '(2) pendente do RH => não conta em Vagas Abertas');
+
+    $mkSolicitacao($setorAId, 'em-aprovacao', null, 'reprovada_lider'); // (3) == Solicitação #8, o caso real relatado
+    $check((int)$repo->contarSolicitacoesAbertas($empresaAId)['total'] === $abertasBase, '(3) reprovada pelo líder => não conta em Vagas Abertas (== Solicitação #8, o caso real relatado)');
+
+    $mkSolicitacao($setorAId, 'em-aprovacao', null, 'reprovada_rh'); // (4)
+    $check((int)$repo->contarSolicitacoesAbertas($empresaAId)['total'] === $abertasBase, '(4) reprovada pelo RH => não conta em Vagas Abertas');
+
+    $mkSolicitacao($setorAId, 'aprovada', null, 'concluida'); // (5) card nunca movido para "Fechada" — mesmo drift do caso #8
+    $check((int)$repo->contarSolicitacoesAbertas($empresaAId)['total'] === $abertasBase, '(5) concluída => não conta em Vagas Abertas, mesmo com o card ainda em "Aprovada"');
+
+    $mkSolicitacao($setorAId, 'cancelada', null, 'aprovada'); // (6) aprovada e depois cancelada operacionalmente via Kanban
+    $check((int)$repo->contarSolicitacoesAbertas($empresaAId)['total'] === $abertasBase, '(6) cancelada => não conta em Vagas Abertas, mesmo tendo sido aprovada antes');
+
+    $mkSolicitacao($setorAId, 'aprovada', null, 'aprovada'); // (7) a ÚNICA fixture deste bloco que deve contar
+    $check((int)$repo->contarSolicitacoesAbertas($empresaAId)['total'] === $abertasBase + 1, '(7) aprovada + estágio ativo ("Aprovada") => CONTA em Vagas Abertas');
+
+    $mkSolicitacao($setorAId, 'fechada', $hoje->modify('-1 days'), 'aprovada'); // (8) defesa em profundidade: aprovada, mas card já em "Fechada"
+    $check((int)$repo->contarSolicitacoesAbertas($empresaAId)['total'] === $abertasBase + 1, '(8) aprovada + estágio "Fechada" => não conta (total continua +1, não vira +2) — defesa em profundidade pelo estágio do Kanban');
 
     // ---- 3) Fixtures: candidaturas + pipeline_movements (Funil / Tempo por Etapa / Contratação) -
     $stagesBySlug = [];
@@ -398,6 +407,21 @@ try {
     $check(
         !preg_match('/ALTER TABLE\s+pesquisas_experiencia|ADD COLUMN.*nota_geral/i', (string)file_get_contents(APP_PATH . '/services/RecrutamentoIndicadoresService.php')),
         'Nenhuma coluna nova de "nota geral" foi criada — a consolidada é sempre calculada, nunca persistida'
+    );
+
+    // ---- (9) People Analytics e Dashboard de Recrutamento devem SEMPRE devolver o mesmo total de
+    // Vagas Abertas — não há como divergir, porque os dois chamam literalmente o mesmo método da
+    // mesma instância de repositório, sem nenhum filtro paralelo.
+    $conteudoPeopleAnalytics = (string)file_get_contents(APP_PATH . '/services/PeopleAnalyticsService.php');
+    $check(
+        substr_count($conteudoPeopleAnalytics, '->recrutamentoRepository->contarSolicitacoesAbertas(') === 2,
+        '(9a) PeopleAnalyticsService chama recrutamentoRepository->contarSolicitacoesAbertas() (mesma fonte do Dashboard de Recrutamento) — sem filtro paralelo/duplicado'
+    );
+    $totalAbertasEmpresaAAgora = (int)$repo->contarSolicitacoesAbertas($empresaAId)['total'];
+    $painelDashboard = $service->montarPainel(['empresa_id' => $empresaAId, 'vaga_id' => null], $periodoInicio, $periodoFim);
+    $check(
+        (int)$painelDashboard['vagas']['abertas'] === $totalAbertasEmpresaAAgora,
+        '(9b) RecrutamentoIndicadoresService::montarPainel()[\'vagas\'][\'abertas\'] bate exatamente com RecrutamentoIndicadoresRepository::contarSolicitacoesAbertas() para a mesma Empresa A — mesma fonte única, mesmo total'
     );
 
     // ---- 7) Nenhuma escrita no METADADOS ---------------------------------------------------------

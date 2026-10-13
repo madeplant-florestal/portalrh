@@ -275,22 +275,23 @@ class AdminColaboradoresController extends Controller
             $pesquisaIntegracao = PesquisaIntegracao::findByColaboradorEData($id, (string)$colaborador['integracao_data']);
         }
 
-        // Entrevista de Desligamento — liberação manual (2026-10). Só faz sentido quando há vínculo
-        // oficial com o METADADOS (metadados_id); sem isso, a Entrevista não se aplica a este
-        // colaborador (mesma regra de gerar()/elegibilidade()).
-        $entrevistaDesligamento = null;
+        // Entrevista de Desligamento — liberação manual (2026-10; ajuste 2026-10). A seção NUNCA
+        // desaparece silenciosamente: `entrevistaDesligamento` é SEMPRE um array (nunca null) nesta
+        // tela — `disponivel` distingue "tem vínculo oficial válido com o METADADOS" (fluxo normal:
+        // liberar/gerar) de "sem vínculo ou contrato não localizado" (estado informativo, sem botão
+        // de liberar, nunca inventa vínculo por nome). A elegibilidade (gerar() já exige demissão
+        // efetivada) só governa as AÇÕES internas, nunca se a seção aparece.
+        $edRepo = new EntrevistaDesligamentoRepository();
         $metadadosId = $colaborador['metadados_id'] ?? null;
-        if ($metadadosId !== null) {
-            $edRepo = new EntrevistaDesligamentoRepository();
-            $contratoEd = $edRepo->buscarContrato((int)$metadadosId);
-            $entrevistaDesligamento = [
-                'elegibilidade' => $contratoEd !== null ? EntrevistaDesligamentoService::elegibilidade($contratoEd, new DateTimeImmutable('now')) : null,
-                'liberacao' => $contratoEd !== null && !empty($contratoEd['liberacao_ativa']) ? [
-                    'liberada_em' => $contratoEd['liberada_em'],
-                ] : null,
-                'entrevista_existente' => $edRepo->buscarPorMetadadosId((int)$metadadosId),
-            ];
-        }
+        $contratoEd = $metadadosId !== null ? $edRepo->buscarContrato((int)$metadadosId) : null;
+        $entrevistaDesligamento = [
+            'disponivel' => $contratoEd !== null,
+            'elegibilidade' => $contratoEd !== null ? EntrevistaDesligamentoService::elegibilidade($contratoEd, new DateTimeImmutable('now')) : null,
+            'liberacao' => $contratoEd !== null && !empty($contratoEd['liberacao_ativa']) ? [
+                'liberada_em' => $contratoEd['liberada_em'],
+            ] : null,
+            'entrevista_existente' => $contratoEd !== null ? $edRepo->buscarPorMetadadosId((int)$metadadosId) : null,
+        ];
 
         return [
             'csrf' => Security::csrfToken(),

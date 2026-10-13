@@ -266,6 +266,74 @@ try {
     $entrevistaUx = $repo->buscarPorId((int)($resultadoGerarUx['id'] ?? 0));
     $check($entrevistaUx !== null, '(UX-4b) Entrevista recém-gerada é acessível via buscarPorId()');
 
+    // ---- Ajuste de UX (2026-10): a seção NUNCA desaparece silenciosamente -------------------------
+    // Renderiza editRh() de verdade (GET da tela "Dados RH") para os cenários pedidos — antes desta
+    // correção, a seção só aparecia quando `elegibilidade !== null`, o que escondia o bloco inteiro
+    // sempre que faltasse vínculo METADADOS válido, em vez de mostrar um estado informativo.
+    $renderEditRh = static function (int $colaboradorId): string {
+        ob_start();
+        try {
+            (new AdminColaboradoresController())->editRh((string)$colaboradorId);
+        } finally {
+            $html = (string)ob_get_clean();
+        }
+        return $html;
+    };
+
+    // (UX2-1)/(UX2-2) RH e Admin, ativo, sem liberação, vínculo válido => bloco + botão aparecem.
+    $paraRenderAtivo = $mk(null, null);
+    $colabRenderAtivo = $mkColaboradorLocal($paraRenderAtivo);
+    foreach ([['role' => 'rh', 'id' => $rhId], ['role' => 'admin', 'id' => $adminId]] as $perfil) {
+        $comoUsuario($perfil['id'], $perfil['role']);
+        $htmlRender = $renderEditRh($colabRenderAtivo);
+        $check(str_contains($htmlRender, 'Entrevista de Desligamento'), "(UX2-1/2) {$perfil['role']}: seção Entrevista de Desligamento aparece para ativo sem liberação");
+        $check(str_contains($htmlRender, 'Liberar entrevista de desligamento'), "(UX2-1/2) {$perfil['role']}: botão Liberar aparece");
+        $check(str_contains($htmlRender, 'Contrato ativo no METADADOS'), "(UX2-1/2) {$perfil['role']}: mostra que o contrato está ativo");
+    }
+
+    // (UX2-3) Ativo + liberação => bloco aparece, SEM o botão de liberar (já liberado).
+    $service->liberarManualmente($paraRenderAtivo, $rhId, $agora);
+    $htmlComLiberacao = $renderEditRh($colabRenderAtivo);
+    $check(str_contains($htmlComLiberacao, 'Entrevista de Desligamento'), '(UX2-3) Ativo + liberação: seção aparece');
+    $check(str_contains($htmlComLiberacao, 'liberada manualmente no Portal'), '(UX2-3) Status passa a "liberada manualmente"');
+    $check(!str_contains($htmlComLiberacao, 'Liberar entrevista de desligamento'), '(UX2-3) Botão de liberar desaparece (já foi liberado)');
+
+    // (UX2-4) Rescindido no METADADOS => bloco aparece (fluxo normal, sem liberação manual).
+    $paraRenderRescindido = $mk((new DateTimeImmutable('-10 days'))->format('Y-m-d'), '003');
+    $colabRenderRescindido = $mkColaboradorLocal($paraRenderRescindido);
+    $comoUsuario($rhId, 'rh');
+    $htmlRescindido = $renderEditRh($colabRenderRescindido);
+    $check(str_contains($htmlRescindido, 'Entrevista de Desligamento'), '(UX2-4) Rescindido: seção aparece');
+    $check(str_contains($htmlRescindido, 'pode ser gerada normalmente'), '(UX2-4) Rescindido: informa que já pode gerar, sem liberação manual');
+
+    // (UX2-5) metadados_id NULL => bloco aparece em estado informativo, SEM botão de liberar.
+    $pdo->prepare('INSERT INTO colaboradores (nome, slug, cargo_id, ativo) VALUES (?, ?, ?, 1)')
+        ->execute(['ZZEDL Sem Metadados', 'zzedl-semmeta-' . $suffix, $cargoIdQualquer]);
+    $colabSemMetadados = (int)$pdo->lastInsertId();
+    $criados['colaboradores'][] = $colabSemMetadados;
+    $htmlSemMetadados = $renderEditRh($colabSemMetadados);
+    $check(str_contains($htmlSemMetadados, 'Entrevista de Desligamento'), '(UX2-5) Sem metadados_id: seção APARECE (nunca mais some silenciosamente)');
+    $check(str_contains($htmlSemMetadados, 'Não foi possível disponibilizar'), '(UX2-5) Sem metadados_id: estado informativo explica o motivo');
+    $check(!str_contains($htmlSemMetadados, 'Liberar entrevista de desligamento'), '(UX2-5) Sem metadados_id: nenhum botão de liberar é oferecido');
+
+    // (UX2-6) metadados_id apontando para contrato inexistente: NÃO reproduzível via fixture — a FK
+    // `colaboradores.metadados_id -> colaboradores_metadados.id` (ON DELETE RESTRICT) impede
+    // ponteiro órfão por construção. O branch `!$edDisponivel` da view já cobre esse caso de
+    // qualquer forma (mesmo código do cenário UX2-5, só muda a origem do `null`).
+
+    // (UX2-7) Falecimento (020) => bloco aparece E informa inelegibilidade (nunca "pode gerar normalmente").
+    $paraRenderFalecimento = $mk((new DateTimeImmutable('-10 days'))->format('Y-m-d'), '020');
+    $colabRenderFalecimento = $mkColaboradorLocal($paraRenderFalecimento);
+    $htmlFalecimento = $renderEditRh($colabRenderFalecimento);
+    $check(str_contains($htmlFalecimento, 'Entrevista de Desligamento'), '(UX2-7) Falecimento: seção aparece');
+    $check(str_contains($htmlFalecimento, 'Falecimento não recebem'), '(UX2-7) Falecimento: informa a inelegibilidade permanente, com o motivo');
+    $check(!str_contains($htmlFalecimento, 'pode ser gerada normalmente'), '(UX2-7) Falecimento: NUNCA afirma que a Entrevista pode ser gerada normalmente');
+
+    // (UX2-8) Perfil não autorizado não ganha nenhuma ação nova — editRh() continua exigindo admin/rh
+    // para a tela INTEIRA (não é uma checagem nova desta correção, mas confirma que a seção nova
+    // não abriu nenhum acesso por fora desse gate já existente).
+    $check(str_contains($corpoDe('AdminColaboradoresController', 'editRh'), "Auth::requireRole(['admin', 'rh'])"), '(UX2-8) editRh() continua exigindo admin/rh — a seção nova não introduziu acesso paralelo');
+
     echo "\nENTREVISTA_DESLIGAMENTO_LIBERACAO_MANUAL_OK\n";
 } finally {
     $pdo->prepare("DELETE FROM entrevistas_desligamento_fatores WHERE entrevista_id IN (SELECT id FROM entrevistas_desligamento WHERE metadados_id IN (SELECT id FROM colaboradores_metadados WHERE identificador LIKE 'ZZEDL\\_%' ESCAPE '\\\\'))")->execute();

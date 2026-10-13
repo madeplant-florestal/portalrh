@@ -353,6 +353,74 @@ class PeopleAnalyticsService
             $fim
         );
 
+        // ---- Card "Turnover Geral" (2026-10, regra definitiva do RH): turnover NUNCA é uma média
+        // temporal do período filtrado. Com um único mês-calendário no filtro, o card mostra esse
+        // mês (idêntico ao comportamento anterior, já que $turnoverGeral/$ativosPeriodo já são
+        // calculados sobre esse único mês). Com MAIS de um mês no filtro, o card passa a mostrar o
+        // turnover do MÊS MAIS RECENTE da série já calculada por RhIndicadoresService::
+        // serieMensalPeriodo() (mês a mês, nunca agregado) — mesma fonte de dado da "Evolução
+        // Mensal do Turnover", nenhum cálculo novo/paralelo. O comparativo também passa a ser
+        // mês-a-mês (mês mais recente vs. mês anterior na mesma série), nunca mês vs. um período
+        // comparativo de duração diferente — os dois lados do "vs." continuam na mesma unidade.
+        $mesesSerieAtual = $serieMensal['atual'];
+        if (count($mesesSerieAtual) > 1) {
+            $ultimoMes = $mesesSerieAtual[count($mesesSerieAtual) - 1];
+            $mesAnterior = $mesesSerieAtual[count($mesesSerieAtual) - 2];
+
+            // Composição dos Desligamentos (2026-10, correção pós-auditoria): precisa falar sobre a
+            // MESMA competência do card ("Turnover — Out/26"), nunca o período inteiro filtrado —
+            // senão o card mostraria "Out/26" ao lado de uma composição somando Jan-Out. A janela do
+            // mês mais recente é SEMPRE o mês-calendário de $fim (é também o último mês que
+            // serieMensalPeriodo() gera, por construção: itera de $inicio até o mês de $fim).
+            // Mesmos filtros/exclusões (Empresa/Setor via $contratos já filtrado, Cenário B via
+            // $excluirDemissaoIdsComFiltros) do resto do painel — nenhuma regra paralela.
+            $mesCardInicio = $fim->modify('first day of this month');
+            $mesCardFim = $mesCardInicio->modify('last day of this month');
+            $desligamentosCard = $this->desligamentosNoPeriodo(
+                $this->filtrarPorIdentificadoresExcluidos($contratos, $excluirDemissaoIdsComFiltros),
+                $mesCardInicio,
+                $mesCardFim
+            );
+            $voluntariosCard = $this->contarPorCodigosMotivo($desligamentosCard, self::CODIGOS_VOLUNTARIO);
+            $involuntariosCard = $this->contarPorCodigosMotivo($desligamentosCard, self::CODIGOS_INVOLUNTARIO);
+            $outrosCard = count($desligamentosCard) - $voluntariosCard - $involuntariosCard;
+
+            $turnoverCard = [
+                'modo' => 'mes_mais_recente',
+                'rotulo' => 'Turnover — ' . $ultimoMes['label'],
+                'percentual' => $ultimoMes['taxa'],
+                'ativos_periodo' => $ultimoMes['ativos_periodo'],
+                'desligamentos' => $ultimoMes['desligamentos'],
+                'comparativo_percentual' => $mesAnterior['taxa'],
+                'comparativo_rotulo' => $mesAnterior['label'],
+                'variacao_pontos_percentuais' => round($ultimoMes['taxa'] - $mesAnterior['taxa'], 1),
+                'composicao' => [
+                    'voluntario' => ['eventos' => $voluntariosCard, 'participacao_desligamentos' => $this->participacaoDesligamentos($voluntariosCard, count($desligamentosCard))],
+                    'involuntario' => ['eventos' => $involuntariosCard, 'participacao_desligamentos' => $this->participacaoDesligamentos($involuntariosCard, count($desligamentosCard))],
+                    'outros' => ['eventos' => $outrosCard, 'participacao_desligamentos' => $this->participacaoDesligamentos($outrosCard, count($desligamentosCard))],
+                ],
+            ];
+        } else {
+            // Com um único mês no filtro, o período JÁ É aquele mês — $voluntarios/$involuntarios/
+            // $outros (calculados acima para o período inteiro) já representam exatamente essa
+            // competência, sem necessidade de recalcular.
+            $turnoverCard = [
+                'modo' => 'periodo',
+                'rotulo' => 'Turnover Geral',
+                'percentual' => $turnoverGeral,
+                'ativos_periodo' => $ativosPeriodo,
+                'desligamentos' => count($desligamentos),
+                'comparativo_percentual' => $turnoverGeralComp,
+                'comparativo_rotulo' => null,
+                'variacao_pontos_percentuais' => round($turnoverGeral - $turnoverGeralComp, 1),
+                'composicao' => [
+                    'voluntario' => ['eventos' => $voluntarios, 'participacao_desligamentos' => $this->participacaoDesligamentos($voluntarios, count($desligamentos))],
+                    'involuntario' => ['eventos' => $involuntarios, 'participacao_desligamentos' => $this->participacaoDesligamentos($involuntarios, count($desligamentos))],
+                    'outros' => ['eventos' => $outros, 'participacao_desligamentos' => $this->participacaoDesligamentos($outros, count($desligamentos))],
+                ],
+            ];
+        }
+
         $colaboradoresPorSetorComparativo = $this->montarColaboradoresPorSetorComparativo(
             $contratosVigenciaAnalitica,
             $inicio,
@@ -387,6 +455,7 @@ class PeopleAnalyticsService
             'desligamentos_por_empresa' => $desligamentosPorEmpresa,
             'desligamentos_por_motivo' => $desligamentosPorMotivo,
             'turnover' => [
+                'card' => $turnoverCard,
                 'geral_percentual' => $turnoverGeral,
                 'ativos_periodo' => $ativosPeriodo,
                 'headcount_inicio' => $headcountInicio,

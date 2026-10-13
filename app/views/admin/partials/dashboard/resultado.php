@@ -134,8 +134,8 @@ $opcoesFiltro = $opcoesFiltro ?? ['empresas' => [], 'setores' => []];
             'variacao' => $fmtVariacao($painel['headcount']['variacao_absoluta'], $painel['headcount']['variacao_percentual']), 'comparativo' => true,
         ],
         [
-            'icone' => 'refresh', 'label' => 'Turnover Geral', 'valor' => $fmtPct1($painel['turnover']['geral_percentual']),
-            'variacao' => $fmtVariacaoPP($painel['turnover']['comparativo']['variacao_pontos_percentuais']), 'comparativo' => true,
+            'icone' => 'refresh', 'label' => 'Turnover Geral', 'valor' => $fmtPct1($painel['turnover']['card']['percentual']),
+            'variacao' => $fmtVariacaoPP($painel['turnover']['card']['variacao_pontos_percentuais']), 'comparativo' => true,
         ],
         [
             'icone' => 'calendar', 'label' => 'Admissões', 'valor' => $fmtN($painel['admissoes']['periodo']),
@@ -167,23 +167,39 @@ $opcoesFiltro = $opcoesFiltro ?? ['empresas' => [], 'setores' => []];
   </section>
 
   <!-- C — Turnover Geral executivo: número + comparação + composição (bloco protagonista) -->
+  <?php $turnoverCard = $painel['turnover']['card']; ?>
   <section class="rounded-ds-lg border border-primary-100 bg-surface p-5 shadow-elevated">
     <div class="flex flex-wrap items-baseline justify-between gap-2">
-      <h2 class="text-ds-h3 text-text-primary">Turnover Geral</h2>
-      <p class="text-[11px] text-text-secondary">Desligados ÷ colaboradores no período · <?= $fmtN($painel['turnover']['ativos_periodo']) ?> colaboradores no período</p>
+      <h2 class="text-ds-h3 text-text-primary"><?= Security::e($turnoverCard['rotulo']) ?></h2>
+      <p class="text-[11px] text-text-secondary">
+        <?php if ($turnoverCard['modo'] === 'mes_mais_recente'): ?>
+          Desligados ÷ colaboradores do mês · <?= $fmtN($turnoverCard['ativos_periodo']) ?> colaboradores no mês — período filtrado abrange mais de um mês, turnover nunca é uma média
+        <?php else: ?>
+          Desligados ÷ colaboradores no período · <?= $fmtN($turnoverCard['ativos_periodo']) ?> colaboradores no período
+        <?php endif; ?>
+      </p>
     </div>
     <div class="mt-3 flex flex-col gap-5 lg:flex-row lg:items-center">
       <div class="flex-shrink-0 rounded-ds-md bg-primary-50 px-6 py-4 text-center lg:w-[240px]">
-        <p class="text-[56px] font-extrabold leading-none text-primary-700"><?= Security::e($fmtPct1($painel['turnover']['geral_percentual'])) ?></p>
-        <p class="mt-2 text-[12px] font-medium text-text-secondary"><?= Security::e($fmtVariacaoPP($painel['turnover']['comparativo']['variacao_pontos_percentuais'])) ?> vs. <?= Security::e($fmtPct1($painel['turnover']['comparativo']['percentual'])) ?></p>
-        <p class="mt-1 text-[11px] text-text-muted"><?= $fmtN($painel['desligamentos']['periodo']) ?> desligamento(s)</p>
+        <p class="text-[56px] font-extrabold leading-none text-primary-700"><?= Security::e($fmtPct1($turnoverCard['percentual'])) ?></p>
+        <p class="mt-2 text-[12px] font-medium text-text-secondary">
+          <?= Security::e($fmtVariacaoPP($turnoverCard['variacao_pontos_percentuais'])) ?> vs.
+          <?php if ($turnoverCard['modo'] === 'mes_mais_recente'): ?>
+            <?= Security::e($turnoverCard['comparativo_rotulo']) ?> (<?= Security::e($fmtPct1($turnoverCard['comparativo_percentual'])) ?>)
+          <?php else: ?>
+            <?= Security::e($fmtPct1($turnoverCard['comparativo_percentual'])) ?>
+          <?php endif; ?>
+        </p>
+        <p class="mt-1 text-[11px] text-text-muted"><?= $fmtN($turnoverCard['desligamentos']) ?> desligamento(s)</p>
       </div>
       <div class="hidden h-24 w-px bg-border lg:block"></div>
       <?php
-        $totalDeslPeriodo = $painel['desligamentos']['periodo'];
-        $tv = $painel['turnover']['voluntario'];
-        $ti = $painel['turnover']['involuntario'];
-        $to = $painel['turnover']['outros'];
+        // Composição sempre da MESMA competência do card acima (nunca o período inteiro filtrado)
+        // — ver PeopleAnalyticsService::montarPainel(), turnover.card.composicao.
+        $totalDeslPeriodo = $turnoverCard['desligamentos'];
+        $tv = $turnoverCard['composicao']['voluntario'];
+        $ti = $turnoverCard['composicao']['involuntario'];
+        $to = $turnoverCard['composicao']['outros'];
       ?>
       <div class="flex-1">
         <p class="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">Composição dos Desligamentos</p>

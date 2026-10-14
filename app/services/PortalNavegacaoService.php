@@ -17,7 +17,13 @@
  *   - `aberto`            sempre visível a qualquer usuário autenticado (a sidebar não gateia por permissão);
  *   - `perm:<codigo>`     `Authorization::temPermissao(<codigo>)` (Admin pelo bypass central desse resolver);
  *   - `staff_ou:<codigo>` admin/supervisor/rh OU a permissão (`$veAdminRh` da sidebar);
- *   - `pedidos_vaga`      staff OU solicitacao_vaga.visualizar/criar OU kanban_vagas.visualizar (`$vePedidosDeVaga`);
+ *   - `pedidos_vaga`      staff OU usuarios.pode_solicitar_vaga (2026-10, correção — o mesmo
+ *                         flag que já é o caminho de autorização de canCreate() precisa também
+ *                         abrir o menu, senão o backend libera mas o link nunca aparece) OU
+ *                         solicitacao_vaga.visualizar/criar OU kanban_vagas.visualizar
+ *                         (`$vePedidosDeVaga`) — NUNCA `vagas.criar` (permissão de um módulo
+ *                         diferente: cadastro direto de Vaga publicada via AdminVagasController,
+ *                         sempre admin/rh — não dá acesso a Solicitação de Vaga);
  *   - `admin_supervisor`  só admin ou supervisor (`$isAdminOuSupervisor`);
  *   - `perm_qualquer:<a>,<b>` qualquer uma das permissões individuais (a Central de Pesquisas de Integração abre com a de Reação OU
  *                         a da Integração — ver AdminPesquisaReacaoIntegracaoController::index);
@@ -37,17 +43,34 @@ class PortalNavegacaoService
     private $temPermissao;
     private ?string $role;
     private bool $supervisor;
+    private bool $podeSolicitarVaga;
 
     /**
      * Sem argumentos usa a SESSÃO atual (o normal). Os parâmetros existem para testar sem depender de `$_SESSION`.
      *
      * @param (callable(string):bool)|null $temPermissao
      */
-    public function __construct(?callable $temPermissao = null, ?string $role = null, ?bool $supervisor = null)
+    public function __construct(?callable $temPermissao = null, ?string $role = null, ?bool $supervisor = null, ?bool $podeSolicitarVaga = null)
     {
         $this->temPermissao = $temPermissao ?? static fn(string $codigo): bool => Authorization::temPermissao($codigo);
         $this->role = $role ?? Auth::role();
         $this->supervisor = $supervisor ?? !empty($_SESSION['user_is_supervisor']);
+        $this->podeSolicitarVaga = $podeSolicitarVaga ?? self::resolverPodeSolicitarVagaDaSessao();
+    }
+
+    /**
+     * Mesma fonte/regra de AdminSolicitacoesVagaController::canCreate() (usuarios.ativo via
+     * email_verified_at + usuarios.pode_solicitar_vaga) — nunca uma segunda interpretação. Usuário
+     * não autenticado (sem user_id na sessão) nunca libera por aqui.
+     */
+    private static function resolverPodeSolicitarVagaDaSessao(): bool
+    {
+        $userId = (int)($_SESSION['user_id'] ?? 0);
+        if ($userId <= 0) {
+            return false;
+        }
+        $acesso = SolicitacaoVaga::userAccessProfilePublic($userId);
+        return is_array($acesso) && (int)($acesso['ativo'] ?? 0) === 1 && (int)($acesso['pode_solicitar_vaga'] ?? 0) === 1;
     }
 
     /**
@@ -272,7 +295,10 @@ class PortalNavegacaoService
             return $staff;
         }
         if ($regra === 'pedidos_vaga') {
-            return $staff || $perm('solicitacao_vaga.visualizar') || $perm('solicitacao_vaga.criar') || $perm('kanban_vagas.visualizar');
+            // 2026-10: usuarios.pode_solicitar_vaga precisa abrir o menu — é o mesmo flag que já
+            // libera o backend (canCreate()). `vagas.criar` (outro módulo) deliberadamente NÃO
+            // entra aqui.
+            return $staff || $this->podeSolicitarVaga || $perm('solicitacao_vaga.visualizar') || $perm('solicitacao_vaga.criar') || $perm('kanban_vagas.visualizar');
         }
         if (str_starts_with($regra, 'perm:')) {
             return $perm(substr($regra, 5));

@@ -47,6 +47,28 @@ $editing = !empty($vaga);
       </select>
       <p class="mt-1 text-xs text-text-secondary">Quando a vaga estiver vinculada a uma empresa, o webhook utiliza esse tenant; caso contrário, utiliza a configuração padrão.</p>
     </div>
+    <div>
+      <label class="block text-ds-label text-text-primary">Benefícios oferecidos nesta vaga</label>
+      <p class="mt-1 text-xs text-text-secondary">Selecione somente os benefícios aplicáveis a esta vaga. Apenas os itens marcados serão exibidos para os candidatos na página pública.</p>
+      <?php $beneficiosCatalogo = $beneficiosCatalogo ?? []; $beneficioIdsSelecionados = $beneficioIdsSelecionados ?? []; ?>
+      <?php if ($beneficiosCatalogo === []): ?>
+        <p class="mt-2 text-sm text-text-secondary">Nenhum benefício ativo cadastrado no catálogo.</p>
+      <?php else: ?>
+        <div class="mt-2 grid gap-3 md:grid-cols-2">
+          <?php foreach ($beneficiosCatalogo as $beneficio): ?>
+            <label class="flex items-start gap-2 rounded border px-3 py-2 text-sm">
+              <input type="checkbox" name="beneficio_ids[]" value="<?= (int)$beneficio['id'] ?>" <?= in_array((int)$beneficio['id'], $beneficioIdsSelecionados, true) ? 'checked' : '' ?> class="mt-0.5" />
+              <span>
+                <span class="font-medium text-text-primary"><?= Security::e($beneficio['nome']) ?></span>
+                <?php if (!empty($beneficio['parceiro'])): ?>
+                  <span class="text-text-muted"> • <?= Security::e($beneficio['parceiro']) ?></span>
+                <?php endif; ?>
+              </span>
+            </label>
+          <?php endforeach; ?>
+        </div>
+      <?php endif; ?>
+    </div>
     <label class="inline-flex items-center space-x-2">
       <input type="checkbox" name="ativo" <?= !empty($vaga['ativo']) ? 'checked' : '' ?> />
       <span class="text-sm">Ativo</span>

@@ -23,7 +23,10 @@ class HomeController extends Controller
         $csrf = Security::csrfToken();
         $beneficios = [];
         try {
-            $beneficios = Beneficio::allActive();
+            // Correção 2026-10: só os benefícios explicitamente associados A ESTA vaga pelo RH/Admin
+            // (vaga_beneficios) — nunca mais o catálogo inteiro (Beneficio::allActive()), que exibia
+            // benefícios de outras vagas/empresas sem relação com a oportunidade sendo vista.
+            $beneficios = Vaga::beneficiosPublicos((int)$vaga['id']);
         } catch (\Throwable $e) {
             $beneficios = [];
         }

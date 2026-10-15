@@ -25,7 +25,13 @@ class AdminVagasController extends Controller
     {
         Auth::requireRole(['admin', 'rh']);
         $csrf = Security::csrfToken();
-        $this->view->render('admin/vagas/form', ['csrf' => $csrf, 'vaga' => null, 'empresas' => $this->empresaRepository->allOptions()], 'layouts/app-shell');
+        $this->view->render('admin/vagas/form', [
+            'csrf' => $csrf,
+            'vaga' => null,
+            'empresas' => $this->empresaRepository->allOptions(),
+            'beneficiosCatalogo' => Beneficio::allActive(),
+            'beneficioIdsSelecionados' => [],
+        ], 'layouts/app-shell');
     }
 
     public function store(): void
@@ -41,16 +47,32 @@ class AdminVagasController extends Controller
             'empresa_id' => $_POST['empresa_id'] ?? null,
             'ativo' => isset($_POST['ativo']) ? 1 : 0,
         ];
+        $beneficioIds = array_map('intval', $_POST['beneficio_ids'] ?? []);
         if (!$data['titulo'] || !$data['descricao'] || !$data['requisitos']) {
-            $this->view->render('admin/vagas/form', ['csrf' => Security::csrfToken(), 'vaga' => $data, 'error' => 'Preencha os campos obrigatórios', 'empresas' => $this->empresaRepository->allOptions()]);
+            $this->view->render('admin/vagas/form', [
+                'csrf' => Security::csrfToken(),
+                'vaga' => $data,
+                'error' => 'Preencha os campos obrigatórios',
+                'empresas' => $this->empresaRepository->allOptions(),
+                'beneficiosCatalogo' => Beneficio::allActive(),
+                'beneficioIdsSelecionados' => $beneficioIds,
+            ]);
             return;
         }
         try {
             $this->assertEmpresaValida($data['empresa_id']);
-            Vaga::create($data);
+            $vagaId = Vaga::create($data);
+            Vaga::syncBeneficios($vagaId, $beneficioIds);
             redirect('/admin/vagas');
         } catch (Throwable $e) {
-            $this->view->render('admin/vagas/form', ['csrf' => Security::csrfToken(), 'vaga' => $data, 'error' => $e->getMessage(), 'empresas' => $this->empresaRepository->allOptions()], 'layouts/app-shell');
+            $this->view->render('admin/vagas/form', [
+                'csrf' => Security::csrfToken(),
+                'vaga' => $data,
+                'error' => $e->getMessage(),
+                'empresas' => $this->empresaRepository->allOptions(),
+                'beneficiosCatalogo' => Beneficio::allActive(),
+                'beneficioIdsSelecionados' => $beneficioIds,
+            ], 'layouts/app-shell');
         }
     }
 
@@ -60,7 +82,13 @@ class AdminVagasController extends Controller
         $vaga = Vaga::find((int)$id);
         if (!$vaga) { http_response_code(404); echo 'Vaga não encontrada'; return; }
         $csrf = Security::csrfToken();
-        $this->view->render('admin/vagas/form', ['csrf' => $csrf, 'vaga' => $vaga, 'empresas' => $this->empresaRepository->allOptions()], 'layouts/app-shell');
+        $this->view->render('admin/vagas/form', [
+            'csrf' => $csrf,
+            'vaga' => $vaga,
+            'empresas' => $this->empresaRepository->allOptions(),
+            'beneficiosCatalogo' => Beneficio::allActive(),
+            'beneficioIdsSelecionados' => Vaga::beneficioIdsSelecionados((int)$vaga['id']),
+        ], 'layouts/app-shell');
     }
 
     public function update(string $id): void
@@ -76,13 +104,22 @@ class AdminVagasController extends Controller
             'empresa_id' => $_POST['empresa_id'] ?? null,
             'ativo' => isset($_POST['ativo']) ? 1 : 0,
         ];
+        $beneficioIds = array_map('intval', $_POST['beneficio_ids'] ?? []);
         try {
             $this->assertEmpresaValida($data['empresa_id']);
             if (!Vaga::update((int)$id, $data)) { echo 'Falha ao atualizar'; return; }
+            Vaga::syncBeneficios((int)$id, $beneficioIds);
             redirect('/admin/vagas');
         } catch (Throwable $e) {
             $data['id'] = (int)$id;
-            $this->view->render('admin/vagas/form', ['csrf' => Security::csrfToken(), 'vaga' => $data, 'error' => $e->getMessage(), 'empresas' => $this->empresaRepository->allOptions()], 'layouts/app-shell');
+            $this->view->render('admin/vagas/form', [
+                'csrf' => Security::csrfToken(),
+                'vaga' => $data,
+                'error' => $e->getMessage(),
+                'empresas' => $this->empresaRepository->allOptions(),
+                'beneficiosCatalogo' => Beneficio::allActive(),
+                'beneficioIdsSelecionados' => $beneficioIds,
+            ], 'layouts/app-shell');
         }
     }
 

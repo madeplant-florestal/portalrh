@@ -38,6 +38,21 @@ class RecruitmentWebhookSchemaService
                 if (self::tableExists($pdo, 'solicitacoes_vaga') && !self::constraintExists($pdo, 'vagas', 'fk_vagas_solicitacao_vaga')) {
                     $pdo->exec('ALTER TABLE vagas ADD CONSTRAINT fk_vagas_solicitacao_vaga FOREIGN KEY (solicitacao_vaga_id) REFERENCES solicitacoes_vaga(id) ON DELETE SET NULL');
                 }
+
+                // Correção 2026-10: benefícios da página pública deixam de ser "todo o catálogo
+                // ativo" e passam a ser a seleção explícita do RH/Admin por vaga (ver migration
+                // 2026-10-15-vaga-beneficios.sql — mesmo padrão de solicitacao_vaga_beneficios).
+                if (self::tableExists($pdo, 'beneficios')) {
+                    $pdo->exec("CREATE TABLE IF NOT EXISTS vaga_beneficios (
+                        vaga_id INT NOT NULL,
+                        beneficio_id INT NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        PRIMARY KEY (vaga_id, beneficio_id),
+                        KEY idx_vaga_beneficios_beneficio (beneficio_id),
+                        CONSTRAINT fk_vaga_beneficios_vaga FOREIGN KEY (vaga_id) REFERENCES vagas(id) ON DELETE CASCADE,
+                        CONSTRAINT fk_vaga_beneficios_beneficio FOREIGN KEY (beneficio_id) REFERENCES beneficios(id) ON DELETE RESTRICT
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+                }
             }
 
             if (self::tableExists($pdo, 'candidaturas')) {

@@ -49,33 +49,31 @@
       </div>
     </div>
 
+    <?php if (!empty($beneficios)): ?>
     <div class="space-y-6">
       <div class="rounded-ds-lg border border-border bg-surface-secondary p-6">
         <h2 class="text-ds-h3 font-bold text-text-primary">Benefícios</h2>
-        <?php if (!empty($beneficios)): ?>
-          <div class="mt-4 space-y-3">
-            <?php foreach ($beneficios as $b): ?>
-              <div class="rounded-ds-md border border-border bg-surface p-3 text-sm">
-                <?php if (!empty($b['logo_path'])): ?>
-                  <img src="<?= $base ?>/uploads/logos/<?= Security::e($b['logo_path']) ?>" alt="Logo <?= Security::e($b['parceiro'] ?? $b['nome']) ?>" data-img-fallback-hide="1" class="mb-2 h-8 w-auto object-contain" />
-                <?php endif; ?>
-                <div class="flex items-center font-semibold text-text-primary">
-                  <span><?= Security::e($b['nome']) ?></span>
-                  <?php if (!empty($b['parceiro'])): ?>
-                    <span class="ml-1 font-normal text-text-muted">• <?= Security::e($b['parceiro']) ?></span>
-                  <?php endif; ?>
-                </div>
-                <?php if (!empty($b['descricao'])): ?>
-                  <div class="mt-1 text-text-secondary"><?= Security::e($b['descricao']) ?></div>
+        <div class="mt-4 space-y-3">
+          <?php foreach ($beneficios as $b): ?>
+            <div class="rounded-ds-md border border-border bg-surface p-3 text-sm">
+              <?php if (!empty($b['logo_path'])): ?>
+                <img src="<?= $base ?>/uploads/logos/<?= Security::e($b['logo_path']) ?>" alt="Logo <?= Security::e($b['parceiro'] ?? $b['nome']) ?>" data-img-fallback-hide="1" class="mb-2 h-8 w-auto object-contain" />
+              <?php endif; ?>
+              <div class="flex items-center font-semibold text-text-primary">
+                <span><?= Security::e($b['nome']) ?></span>
+                <?php if (!empty($b['parceiro'])): ?>
+                  <span class="ml-1 font-normal text-text-muted">• <?= Security::e($b['parceiro']) ?></span>
                 <?php endif; ?>
               </div>
-            <?php endforeach; ?>
-          </div>
-        <?php else: ?>
-          <p class="mt-2 text-ds-body text-text-secondary">Nenhum benefício ativo no momento.</p>
-        <?php endif; ?>
+              <?php if (!empty($b['descricao'])): ?>
+                <div class="mt-1 text-text-secondary"><?= Security::e($b['descricao']) ?></div>
+              <?php endif; ?>
+            </div>
+          <?php endforeach; ?>
+        </div>
       </div>
     </div>
+    <?php endif; ?>
   </div>
 
   <div id="candidatura" class="mt-10 scroll-mt-6 rounded-ds-lg border border-border bg-surface p-6 shadow-resting sm:p-8">

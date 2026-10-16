@@ -37,40 +37,40 @@
 </section>
 
 <div class="mx-auto max-w-6xl px-4 py-10 sm:py-14">
-  <div class="grid gap-6 lg:grid-cols-3">
-    <div class="lg:col-span-2 space-y-6">
-      <div class="rounded-ds-lg border border-border bg-surface p-6 shadow-resting">
-        <h2 class="text-ds-h3 font-bold text-text-primary">Sobre a oportunidade</h2>
-        <p class="mt-3 whitespace-pre-line text-ds-body leading-relaxed text-text-secondary"><?= Security::e($vaga['descricao']) ?></p>
-      </div>
-      <div class="rounded-ds-lg border border-border bg-surface p-6 shadow-resting">
-        <h2 class="text-ds-h3 font-bold text-text-primary">Requisitos</h2>
-        <p class="mt-3 whitespace-pre-line text-ds-body leading-relaxed text-text-secondary"><?= Security::e($vaga['requisitos']) ?></p>
-      </div>
+  <div class="space-y-6">
+    <div class="rounded-ds-lg border border-border bg-surface p-6 shadow-resting">
+      <h2 class="text-ds-h3 font-bold text-text-primary">Sobre a oportunidade</h2>
+      <p class="mt-3 whitespace-pre-line text-ds-body leading-relaxed text-text-secondary"><?= Security::e($vaga['descricao']) ?></p>
+    </div>
+    <div class="rounded-ds-lg border border-border bg-surface p-6 shadow-resting">
+      <h2 class="text-ds-h3 font-bold text-text-primary">Requisitos</h2>
+      <p class="mt-3 whitespace-pre-line text-ds-body leading-relaxed text-text-secondary"><?= Security::e($vaga['requisitos']) ?></p>
     </div>
 
     <?php if (!empty($beneficios)): ?>
-    <div class="space-y-6">
-      <div class="rounded-ds-lg border border-border bg-surface-secondary p-6">
-        <h2 class="text-ds-h3 font-bold text-text-primary">Benefícios</h2>
-        <div class="mt-4 space-y-3">
-          <?php foreach ($beneficios as $b): ?>
-            <div class="rounded-ds-md border border-border bg-surface p-3 text-sm">
-              <?php if (!empty($b['logo_path'])): ?>
-                <img src="<?= $base ?>/uploads/logos/<?= Security::e($b['logo_path']) ?>" alt="Logo <?= Security::e($b['parceiro'] ?? $b['nome']) ?>" data-img-fallback-hide="1" class="mb-2 h-8 w-auto object-contain" />
-              <?php endif; ?>
-              <div class="flex items-center font-semibold text-text-primary">
-                <span><?= Security::e($b['nome']) ?></span>
+    <div class="rounded-ds-lg border border-border bg-surface-secondary p-6">
+      <h2 class="text-ds-h3 font-bold text-text-primary">Benefícios</h2>
+      <div class="mt-4 grid gap-4 sm:grid-cols-2">
+        <?php foreach ($beneficios as $b): ?>
+          <div class="flex items-start gap-3 rounded-ds-md border border-border bg-surface p-4">
+            <?php if (!empty($b['logo_path'])): ?>
+              <img src="<?= $base ?>/uploads/logos/<?= Security::e($b['logo_path']) ?>" alt="Logo <?= Security::e($b['parceiro'] ?? $b['nome']) ?>" data-img-fallback-hide="1" class="h-12 w-12 shrink-0 rounded-ds-md object-contain" />
+            <?php else: ?>
+              <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-ds-md bg-border text-text-secondary">—</div>
+            <?php endif; ?>
+            <div class="min-w-0">
+              <div class="font-semibold text-text-primary">
+                <?= Security::e($b['nome']) ?>
                 <?php if (!empty($b['parceiro'])): ?>
-                  <span class="ml-1 font-normal text-text-muted">• <?= Security::e($b['parceiro']) ?></span>
+                  <span class="font-normal text-text-muted">• <?= Security::e($b['parceiro']) ?></span>
                 <?php endif; ?>
               </div>
               <?php if (!empty($b['descricao'])): ?>
-                <div class="mt-1 text-text-secondary"><?= Security::e($b['descricao']) ?></div>
+                <div class="mt-1 line-clamp-2 text-sm text-text-secondary"><?= Security::e($b['descricao']) ?></div>
               <?php endif; ?>
             </div>
-          <?php endforeach; ?>
-        </div>
+          </div>
+        <?php endforeach; ?>
       </div>
     </div>
     <?php endif; ?>

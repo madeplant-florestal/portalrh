@@ -50,23 +50,21 @@
     <?php if (!empty($beneficios)): ?>
     <div class="rounded-ds-lg border border-border bg-surface-secondary p-6">
       <h2 class="text-ds-h3 font-bold text-text-primary">Benefícios</h2>
-      <div class="mt-4 grid gap-4 sm:grid-cols-2">
+      <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <?php foreach ($beneficios as $b): ?>
-          <div class="flex items-start gap-3 rounded-ds-md border border-border bg-surface p-4">
+          <div class="flex items-start gap-2.5 rounded-ds-md border border-border bg-surface p-3">
             <?php if (!empty($b['logo_path'])): ?>
-              <img src="<?= $base ?>/uploads/logos/<?= Security::e($b['logo_path']) ?>" alt="Logo <?= Security::e($b['parceiro'] ?? $b['nome']) ?>" data-img-fallback-hide="1" class="h-12 w-12 shrink-0 rounded-ds-md object-contain" />
+              <img src="<?= $base ?>/uploads/logos/<?= Security::e($b['logo_path']) ?>" alt="Logo <?= Security::e($b['parceiro'] ?? $b['nome']) ?>" data-img-fallback-hide="1" class="h-10 w-10 shrink-0 rounded-ds-md object-contain" />
             <?php else: ?>
-              <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-ds-md bg-border text-text-secondary">—</div>
+              <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-ds-md bg-border text-text-secondary">—</div>
             <?php endif; ?>
             <div class="min-w-0">
-              <div class="font-semibold text-text-primary">
-                <?= Security::e($b['nome']) ?>
-                <?php if (!empty($b['parceiro'])): ?>
-                  <span class="font-normal text-text-muted">• <?= Security::e($b['parceiro']) ?></span>
-                <?php endif; ?>
-              </div>
+              <div class="break-words text-sm font-semibold leading-snug text-text-primary"><?= Security::e($b['nome']) ?></div>
+              <?php if (!empty($b['parceiro'])): ?>
+                <div class="truncate text-xs text-text-muted"><?= Security::e($b['parceiro']) ?></div>
+              <?php endif; ?>
               <?php if (!empty($b['descricao'])): ?>
-                <div class="mt-1 line-clamp-2 text-sm text-text-secondary"><?= Security::e($b['descricao']) ?></div>
+                <div class="mt-1 line-clamp-2 text-xs text-text-secondary"><?= Security::e($b['descricao']) ?></div>
               <?php endif; ?>
             </div>
           </div>

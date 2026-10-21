@@ -150,7 +150,7 @@ try {
     try {
         SolicitacaoVaga::create(array_merge($payloadBase, ['setor_id' => $setorSemMatriz, 'cargo_id' => $cargoOficialA]), $comum, '127.0.0.1');
     } catch (InvalidArgumentException $e) {
-        $bloqueouComum = $e->getMessage() === 'Nenhum Cargo oficial está associado a este Setor no METADADOS.';
+        $bloqueouComum = $e->getMessage() === 'Não encontramos cargos vinculados oficialmente a este setor. O RH foi orientado a revisar a matriz Cargo × Setor.';
     }
     $check($bloqueouComum, '8 usuário comum continua bloqueado em Setor sem matriz (sem fallback)');
 

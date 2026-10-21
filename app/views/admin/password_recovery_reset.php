@@ -11,7 +11,8 @@
         <input type="hidden" name="csrf" value="<?= Security::e($csrf ?? '') ?>">
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">Nova senha</label>
-          <input type="password" name="password" required class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+          <input type="password" name="password" required minlength="12" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+          <p class="mt-1 text-xs text-gray-500">Mínimo de 12 caracteres com maiúscula, minúscula, número e símbolo.</p>
         </div>
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">Confirmar nova senha</label>

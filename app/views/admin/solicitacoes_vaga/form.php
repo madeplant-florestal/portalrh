@@ -223,7 +223,7 @@ $payload = [
           <div>
             <label class="block text-sm font-medium text-text-primary">Cargo *</label>
             <div class="<?= $cargosInicial === [] ? '' : 'hidden' ?> mt-1 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger" data-solicitacao-cargo-bloqueio="1">
-              Nenhum Cargo oficial está associado a este Setor no METADADOS.
+              Não encontramos cargos vinculados oficialmente a este setor. O RH foi orientado a revisar a matriz Cargo × Setor.
             </div>
             <div class="<?= $usaFallbackCargoInicial ? '' : 'hidden' ?> mt-1 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning" data-solicitacao-cargo-fallback-aviso="1">
               O METADADOS ainda não possui vínculos Cargo × Setor cadastrados para este Setor. Como usuário RH/Administrativo, você pode selecionar um Cargo oficial para a solicitação.

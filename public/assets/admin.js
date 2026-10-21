@@ -1230,7 +1230,7 @@ if (typeof module !== 'undefined' && module.exports) {
       if (cargosAtuais.length === 0) {
         event.preventDefault();
         event.stopPropagation();
-        window.alert('Nenhum Cargo oficial está associado a este Setor no METADADOS.');
+        window.alert('Não encontramos cargos vinculados oficialmente a este setor. O RH foi orientado a revisar a matriz Cargo × Setor.');
       }
     });
 

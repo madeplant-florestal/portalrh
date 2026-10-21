@@ -12,6 +12,7 @@ storage/resumes/
 storage/audit/
 storage/logs/
 storage/imports/*.json
+storage/imports/*.txt
 storage/reconciliation/
 public/uploads/
 uploads/

@@ -1371,12 +1371,17 @@ class SolicitacaoVaga
      * SOMENTE os Cargos oficialmente vinculados àquele Setor."
      *
      * Fallback administrativo (correção 2026-09-14, §3): ausência de relação na matriz não
-     * significa incompatibilidade — só que o METADADOS ainda não tem a informação (ex.:
-     * MANUTENÇÃO, RHQUADROLOTCARGO vazia). Quando o Setor não tem NENHUMA relação, Admin/RH/
-     * supervisor master ATOR (nunca o solicitante representado) pode escolher qualquer Cargo
-     * oficial do catálogo (`codigo_cargo IS NOT NULL`, ativo); usuário comum continua bloqueado
-     * com a mensagem de matriz incompleta. Nunca cria vínculo em `cargo_setores_metadados` —
-     * a seleção vale só para esta solicitação.
+     * significa incompatibilidade — só que o METADADOS/a sincronização do Portal ainda não tem a
+     * informação. Correção 2026-10 (caso recorrente: MANUTENÇÃO/código 12 — RHQUADROLOTCARGO não é
+     * fonte utilizável; `CargoSetorMetadadosRepository::materializarPorCodigos()` passa a poder
+     * carregar a matriz a partir do histórico real de RHCONTRATOS — ver
+     * scripts/extrair_cargo_setor_rhcontratos.php/materializar_cargo_setor_metadados.php — o que
+     * resolve o Setor para QUALQUER usuário autorizado, não só Admin/RH, porque passa a cair no
+     * ramo normal abaixo). Quando o Setor continuar sem NENHUMA relação após isso, Admin/RH/
+     * supervisor master ATOR (nunca o solicitante representado) ainda pode escolher qualquer Cargo
+     * oficial do catálogo (`codigo_cargo IS NOT NULL`, ativo) só para aquela solicitação; usuário
+     * comum continua bloqueado com a mensagem de matriz incompleta. Nunca cria vínculo em
+     * `cargo_setores_metadados` a partir da seleção manual do fallback.
      */
     private static function resolverCargoDaVaga(int $setorId, $cargoIdInformado, bool $atorPodeFallbackAdministrativo): int
     {
@@ -1391,7 +1396,7 @@ class SolicitacaoVaga
         }
 
         if (!$atorPodeFallbackAdministrativo) {
-            throw new InvalidArgumentException('Nenhum Cargo oficial está associado a este Setor no METADADOS.');
+            throw new InvalidArgumentException('Não encontramos cargos vinculados oficialmente a este setor. O RH foi orientado a revisar a matriz Cargo × Setor.');
         }
 
         $idsOficiais = array_column((new CatalogoMetadadosRepository('cargos'))->listarOficiais(), 'id');

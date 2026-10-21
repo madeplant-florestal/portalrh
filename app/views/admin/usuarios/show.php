@@ -434,6 +434,7 @@ $podeAlterarPerfil = !empty($podeAlterarPerfil);
       <div>
         <label class="block text-sm font-medium text-text-primary">Nova senha</label>
         <input type="password" name="new_password" required minlength="12" class="mt-1 w-full border rounded px-3 py-2 text-sm" placeholder="Digite a nova senha">
+        <p class="mt-1 text-xs text-text-secondary">Mínimo de 12 caracteres com maiúscula, minúscula, número e símbolo.</p>
       </div>
       <div class="text-sm text-text-secondary">Tem certeza que deseja alterar a senha deste usuário?</div>
       <div class="responsive-form-actions justify-end pt-2">

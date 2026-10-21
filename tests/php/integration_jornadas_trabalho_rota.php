@@ -43,6 +43,7 @@ $corpoDe = static function (string $classe, string $metodo): string {
 $sufixo = substr((string)time(), -5) . (string)random_int(10, 99);
 $nomeJornada = 'ZZJT Teste ' . $sufixo;
 $idCriado = null;
+$snapshotAtivos = null;
 
 try {
     // --- Caso 1: routeSegment() — a correção em si, isolada ---------------------------------
@@ -112,6 +113,32 @@ try {
     $check((bool)preg_match('#requireRole\(\[\'admin\',\s*\'rh\',\s*\'viewer\'\]\)#', $corpoRenderIndex), "Caso 10: listagem deveria liberar admin/rh/viewer (RH e Admin autorizados).");
     $check((bool)preg_match('#requireRole\(\[\'admin\',\s*\'rh\'\]\)#', $corpoCreate), 'Caso 10: cadastro (create) deveria exigir admin/rh — viewer fica de fora (bloqueado).');
 
+    // --- Caso 11: o CAMINHO REAL — Nova Solicitação de Vaga, zero Jornada ativa, link
+    // "Cadastrar agora" renderizado pelo AdminSolicitacoesVagaController real (não o controller
+    // genérico de catálogo). Fiel reprodução do bug relatado em produção. Desativa TEMPORARIAMENTE
+    // qualquer Jornada já cadastrada no banco (snapshot para restaurar depois), já que a produção
+    // não está vazia.
+    $snapshotAtivos = $pdo->query('SELECT id, ativo FROM jornadas_trabalho')->fetchAll(PDO::FETCH_ASSOC);
+    $pdo->exec('UPDATE jornadas_trabalho SET ativo = 0');
+
+    $_SESSION = ['user' => true, 'user_id' => 999002, 'user_role' => 'rh', 'user_name' => 'ZZJT RH2', 'user_is_supervisor' => 0];
+    $_GET = [];
+    $htmlNovaSolicitacao = $renderizar(static function (): void {
+        (new AdminSolicitacoesVagaController())->create();
+    });
+    $check(
+        strpos($htmlNovaSolicitacao, 'Nenhuma Jornada de Trabalho cadastrada') !== false,
+        'Caso 11: com zero Jornada ativa, a tela de Nova Solicitação de Vaga deveria mostrar o aviso.'
+    );
+    $check(
+        (bool)preg_match('#<a href="[^"]*/admin/jornadas-trabalho/novo"[^>]*>Cadastrar agora</a>#', $htmlNovaSolicitacao),
+        'Caso 11: o link "Cadastrar agora" renderizado de verdade (não só a fonte do arquivo) deveria apontar para /admin/jornadas-trabalho/novo.'
+    );
+    $check(
+        strpos($htmlNovaSolicitacao, 'jornadas_trabalho/novo') === false,
+        'Caso 11: a tela de Nova Solicitação de Vaga renderizada NUNCA deveria conter a URL com underscore — esta é a prova direta do bug relatado em produção.'
+    );
+
     echo "OK integration_jornadas_trabalho_rota\n";
 } catch (Throwable $e) {
     fwrite(STDERR, $e->getMessage() . PHP_EOL);
@@ -119,6 +146,12 @@ try {
 } finally {
     if ($idCriado !== null) {
         $pdo->prepare('DELETE FROM jornadas_trabalho WHERE id = ?')->execute([$idCriado]);
+    }
+    if ($snapshotAtivos !== null) {
+        $restaurar = $pdo->prepare('UPDATE jornadas_trabalho SET ativo = ? WHERE id = ?');
+        foreach ($snapshotAtivos as $linha) {
+            $restaurar->execute([(int)$linha['ativo'], (int)$linha['id']]);
+        }
     }
     $_SESSION = $sessaoOriginal;
 }

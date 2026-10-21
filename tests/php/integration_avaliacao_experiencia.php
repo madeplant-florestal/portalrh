@@ -12,8 +12,9 @@
  *   - notas 1–5 dos 24 critérios persistem e são lidas de volta corretamente;
  *   - parecer final exige justificativa para todos os pareceres, exceto "Apto para efetivação";
  *   - salvar rascunho / concluir / ciência / reabrir seguem a máquina de estados esperada;
- *   - escopo por linha (gestor responsável) — Admin/RH veem tudo, gestor sem vínculo é bloqueado
- *     (IDOR), mesmo padrão de PdiService.
+ *   - escopo por SETOR GERENCIADO (correção 2026-10, caso Diego de Moura) — Admin/RH veem tudo;
+ *     gestor sem o Setor do colaborador entre seus Setores Gerenciados é bloqueado (IDOR), mesmo em
+ *     acesso direto por id; colaborador nunca precisa ter conta própria em `usuarios` para aparecer.
  */
 
 require __DIR__ . '/../../app/core/bootstrap.php';
@@ -31,13 +32,21 @@ $check = static function (bool $cond, string $msg) use (&$falhas): void {
 };
 
 $suffix = (string)time() . (string)random_int(100, 999);
-$criados = ['usuarios' => [], 'metadados' => []];
+$criados = ['usuarios' => [], 'metadados' => [], 'setores' => []];
 $senha = password_hash('irrelevante', PASSWORD_BCRYPT);
 $hoje = new DateTimeImmutable('2026-06-15');
 
 $dia = static fn(int $offset): string => $hoje->modify($offset . ' days')->format('Y-m-d');
 
-$criarContrato = static function (string $nome, ?string $admissao, ?string $demissao, string $empresa = 'EMPA', bool $ausenteNaOrigem = false) use ($pdo, &$criados, $suffix): int {
+// ---- setor oficial do catálogo (base do novo escopo por Setor Gerenciado) ---------------------------
+// codigo_setor é VARCHAR(8) — usa só os últimos dígitos do sufixo para caber e ainda ter entropia.
+$codigoSetorA = 'Z' . substr($suffix, -7);
+$pdo->prepare('INSERT INTO setores (codigo_setor, nome, slug, ativo, origem_metadados) VALUES (?, ?, ?, 1, ?)')
+    ->execute([$codigoSetorA, 'ZZAE SETOR A ' . $suffix, 'zzae-setor-a-' . strtolower($suffix), 'RHMADEPLANT']);
+$setorAId = (int)$pdo->lastInsertId();
+$criados['setores'][] = $setorAId;
+
+$criarContrato = static function (string $nome, ?string $admissao, ?string $demissao, string $codigoSetor, string $empresa = 'EMPA', bool $ausenteNaOrigem = false) use ($pdo, &$criados, $suffix): int {
     static $seq = 0;
     $seq++;
     $identificador = 'ZZAE' . $suffix . $seq;
@@ -48,19 +57,16 @@ $criarContrato = static function (string $nome, ?string $admissao, ?string $demi
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     )->execute([
         $identificador, $empresa, 'UNI', 'ZC' . $suffix . $seq, 'ZP' . $suffix . $seq, null, $nome, 'ZZAE Empresa', 'ZZAE Unidade',
-        'ST1', 'ZZAE Setor', 'ZZAE Cargo', 'CG1', $admissao, $admissao, $demissao, $demissao !== null ? '003' : null,
+        $codigoSetor, 'ZZAE Setor', 'ZZAE Cargo', 'CG1', $admissao, $admissao, $demissao, $demissao !== null ? '003' : null,
         $demissao === null ? 1 : 0, 'zzae-teste', $ausenteNaOrigem ? 1 : 0,
     ]);
     $criados['metadados'][] = $identificador;
     return (int)$pdo->lastInsertId();
 };
 
-$criarUsuario = static function (string $rotulo, string $role, ?int $metadadosId = null, ?int $gestorId = null) use ($pdo, &$criados, $suffix, $senha): int {
+$criarUsuario = static function (string $rotulo, string $role) use ($pdo, &$criados, $suffix, $senha): int {
     $id = User::create('ZZAE ' . $rotulo, strtolower(str_replace(' ', '.', $rotulo)) . '.zzae.' . $suffix . '@teste.local', $senha, $role);
     User::setActiveStatus($id, true);
-    if ($metadadosId !== null || $gestorId !== null) {
-        $pdo->prepare('UPDATE usuarios SET colaborador_metadados_id = ?, gestor_usuario_id = ? WHERE id = ?')->execute([$metadadosId, $gestorId, $id]);
-    }
     $criados['usuarios'][] = $id;
     return $id;
 };
@@ -81,17 +87,19 @@ try {
     $atorGestorB = ['id' => $gestorBId, 'role' => 'viewer'];
     $atorRh = ['id' => $rhId, 'role' => 'rh'];
 
-    // ---- 1) Contratos cobrindo cada status derivado ---------------------------------------------------
-    $cFutura = $criarContrato('ZZAE Futura', $dia(-10), null);
-    $cPendente = $criarContrato('ZZAE Pendente', $dia(-42), null);
-    $cVencida = $criarContrato('ZZAE Vencida', $dia(-75), null);
-    $cDesligadoAntes = $criarContrato('ZZAE Desligado Antes', $dia(-75), $dia(-45));
-    $cOrigemContinua = $criarContrato('ZZAE Origem Continua', $dia(-75), null, 'EMPA', true);
-    $cRealizada = $criarContrato('ZZAE Realizada', $dia(-75), null);
+    // Gestor A gerencia o Setor A — Gestor B não gerencia nenhum setor (correção 2026-10). Nenhum dos
+    // colaboradores abaixo precisa de conta própria em `usuarios` para aparecer para o Gestor A.
+    $setoresGerenciadosSvc = new UsuarioSetoresGerenciadosService($pdo);
+    $rDefinir = $setoresGerenciadosSvc->definirSetoresGerenciados($gestorAId, [$setorAId]);
+    $check($rDefinir['ok'] ?? false, '(0b) Setor Gerenciado do Gestor A definido com sucesso (usuario_setores_gerenciados)');
 
-    foreach ([$cFutura, $cPendente, $cVencida, $cDesligadoAntes, $cOrigemContinua, $cRealizada] as $m) {
-        $criarUsuario('Vinculo ' . $m, 'viewer', $m, $gestorAId);
-    }
+    // ---- 1) Contratos cobrindo cada status derivado — todos no Setor A ---------------------------------
+    $cFutura = $criarContrato('ZZAE Futura', $dia(-10), null, $codigoSetorA);
+    $cPendente = $criarContrato('ZZAE Pendente', $dia(-42), null, $codigoSetorA);
+    $cVencida = $criarContrato('ZZAE Vencida', $dia(-75), null, $codigoSetorA);
+    $cDesligadoAntes = $criarContrato('ZZAE Desligado Antes', $dia(-75), $dia(-45), $codigoSetorA);
+    $cOrigemContinua = $criarContrato('ZZAE Origem Continua', $dia(-75), null, $codigoSetorA, 'EMPA', true);
+    $cRealizada = $criarContrato('ZZAE Realizada', $dia(-75), null, $codigoSetorA);
 
     $svc = new AvaliacaoExperienciaService(new AvaliacaoExperienciaRepository($pdo), new AvaliacoesDesenvolvimentoAuditoriaService($pdo));
 
@@ -109,16 +117,16 @@ try {
     $check(($porMetadados[$cDesligadoAntes]['status'] ?? null) === 'nao_aplicavel_desligado', '(4) Desligado ANTES do prazo de 45 dias, nunca avaliado: "Não aplicável — desligado antes do prazo", nunca "vencida" indefinidamente');
     $check(!isset($porMetadados[$cOrigemContinua]), '(5) Contrato ÓRFÃO de transferência contínua (ausente_na_origem=1) NUNCA aparece na lista — evita duplicar a pessoa');
 
-    // ---- 3) Escopo por linha (gestor responsável) — IDOR ------------------------------------------------
+    // ---- 3) Escopo por Setor Gerenciado — IDOR -----------------------------------------------------------
     $listaGestorB = $svc->listarPendencias([], $atorGestorB, $hoje);
-    $check($listaGestorB['itens'] === [], '(6) Gestor B (sem nenhum colaborador vinculado) não vê os colaboradores do Gestor A — escopo por linha');
+    $check($listaGestorB['itens'] === [], '(6) Gestor B (sem nenhum Setor Gerenciado) não vê os colaboradores do Setor A — escopo por Setor Gerenciado, nunca gestor_usuario_id');
     $listaRh = $svc->listarPendencias([], $atorRh, $hoje);
     $check(count($listaRh['itens']) >= count($lista['itens']), '(7) RH (escopo total) vê pelo menos os mesmos itens que o Gestor A');
 
     $ctxSemAcesso = $svc->contratoParaAvaliar($cFutura, '45', $atorGestorB);
-    $check(($ctxSemAcesso['ok'] ?? true) === false, '(8) Gestor B não consegue abrir a avaliação de um colaborador do Gestor A (IDOR bloqueado)');
+    $check(($ctxSemAcesso['ok'] ?? true) === false, '(8) Gestor B não consegue abrir a avaliação de um colaborador do Setor A (IDOR bloqueado)');
     $ctxComAcesso = $svc->contratoParaAvaliar($cFutura, '45', $atorGestorA);
-    $check(($ctxComAcesso['ok'] ?? false) === true, '(8b) Gestor A (dono do vínculo) consegue abrir normalmente');
+    $check(($ctxComAcesso['ok'] ?? false) === true, '(8b) Gestor A (gerencia o Setor A) consegue abrir normalmente');
 
     // ---- 4) Salvar rascunho: notas 1–5 dos 24 critérios persistem ----------------------------------------
     $dadosRascunho = ['gestor_usuario_id' => (string)$gestorAId, 'tecnica_capacidade' => 'sim', 'adaptacao_nivel' => 'boa', 'feedback_geral' => 'ZZAE feedback geral.'];
@@ -245,8 +253,13 @@ try {
     }
     foreach ($criados['usuarios'] as $id) {
         $pdo->prepare('DELETE FROM usuario_permissoes WHERE usuario_id = ?')->execute([$id]);
+        $pdo->prepare('DELETE FROM usuario_setores_gerenciados WHERE usuario_id = ?')->execute([$id]);
         $pdo->prepare('UPDATE usuarios SET gestor_usuario_id = NULL WHERE gestor_usuario_id = ?')->execute([$id]);
         $pdo->prepare('DELETE FROM usuarios WHERE id = ?')->execute([$id]);
+    }
+    foreach ($criados['setores'] as $setorId) {
+        $pdo->prepare('DELETE FROM usuario_setores_gerenciados WHERE setor_id = ?')->execute([$setorId]);
+        $pdo->prepare('DELETE FROM setores WHERE id = ?')->execute([$setorId]);
     }
 }
 

@@ -4,8 +4,16 @@
  * Acesso a dados da Avaliação do Período de Experiência (45/90 dias — Etapa 4, 2026-09). Sem regra de
  * negócio: derivação de pendências, permissão e validação vivem em AvaliacaoExperienciaService.
  * Contratos vêm EXCLUSIVAMENTE de `colaboradores_metadados` (nunca CPF/codigo_pessoa/`colaboradores`
- * legado); gestor pela relação oficial `usuarios.gestor_usuario_id` (mesmo JOIN de
- * UsuarioGestorRepository::gestorDoUsuarioDoContrato(), aqui em lote — nunca 1 query por linha, §28).
+ * legado).
+ *
+ * Correção 2026-10 (caso Diego de Moura): a AUTORIZAÇÃO por escopo deixou de usar
+ * `usuarios.gestor_usuario_id` — não existe vínculo individual colaborador→gestor confiável no
+ * METADADOS, e exigiria cadastrar colaboradores operacionais como usuários do Portal só para criar
+ * essa relação. Agora é por Setor Gerenciado (`UsuarioSetoresGerenciadosService`, Bloco 7): o colaborador
+ * aparece para quem gerencia o Setor ATUAL dele em `colaboradores_metadados.codigo_setor`. O JOIN com
+ * `usuarios.gestor_usuario_id` (`g`/`gestor_nome`) permanece SÓ para exibição na listagem — nunca mais
+ * para autorização.
+ *
  * `cm.ausente_na_origem = 0` exclui o contrato ÓRFÃO de uma transferência contínua interempresa: o
  * contrato de DESTINO já preserva a `admissao` ORIGINAL (é a própria assinatura de detecção da
  * transferência em MetadadosMovimentacaoService) — nenhum ajuste de data é necessário, só não contar a
@@ -74,14 +82,19 @@ class AvaliacaoExperienciaRepository
 
     /**
      * Candidatos a pendência 45/90 (um tipo por chamada) — contratos que ainda não foram excluídos por
-     * transferência contínua, com o gestor resolvido em LOTE (sem N+1) e a avaliação já existente (se
-     * houver) já trazida junto.
+     * transferência contínua, com o gestor resolvido em LOTE (sem N+1, só para EXIBIÇÃO — `gestor_nome`
+     * na listagem) e a avaliação já existente (se houver) já trazida junto.
      *
      * @param string $tipo '45' ou '90'
      * @param string $cutoffAdmissao contratos com admissao ANTES disso só entram se já tiverem avaliação
      *                                (histórico real preservado; implantação não gera backlog histórico — §54)
+     * @param ?string[] $escopoSetores correção 2026-10 (caso Diego de Moura): códigos oficiais de Setor
+     *        (`UsuarioSetoresGerenciadosService::codigosSetorGerenciadosPor()`) — null = escopo total
+     *        (Admin/RH); [] = usuário sem nenhum Setor Gerenciado, nenhum colaborador deve aparecer;
+     *        array não vazio = só colaboradores cujo `codigo_setor` ATUAL esteja nessa lista. Substitui
+     *        o antigo filtro por `usuarios.gestor_usuario_id` (nunca mais usado para autorização aqui).
      */
-    public function candidatosPendencia(string $tipo, string $cutoffAdmissao, array $filtros, ?int $escopoGestor): array
+    public function candidatosPendencia(string $tipo, string $cutoffAdmissao, array $filtros, ?array $escopoSetores): array
     {
         $where = ['cm.ausente_na_origem = 0', 'cm.admissao IS NOT NULL', '(cm.admissao >= ? OR ae.id IS NOT NULL)'];
         $params = [$tipo, $cutoffAdmissao];
@@ -94,9 +107,13 @@ class AvaliacaoExperienciaRepository
             $where[] = 'cm.codigo_setor = ?';
             $params[] = (string)$filtros['codigo_setor'];
         }
-        if ($escopoGestor !== null) {
-            $where[] = 'g.id = ?';
-            $params[] = $escopoGestor;
+        if ($escopoSetores !== null) {
+            if ($escopoSetores === []) {
+                $where[] = '1 = 0';
+            } else {
+                $where[] = 'cm.codigo_setor IN (' . implode(',', array_fill(0, count($escopoSetores), '?')) . ')';
+                array_push($params, ...$escopoSetores);
+            }
         } elseif (!empty($filtros['gestor_usuario_id'])) {
             $where[] = 'g.id = ?';
             $params[] = (int)$filtros['gestor_usuario_id'];
@@ -174,6 +191,23 @@ class AvaliacaoExperienciaRepository
     public function usuarioAtivo(int $id): ?array
     {
         return $this->uma('SELECT id, nome, role FROM usuarios WHERE id = ? AND email_verified_at IS NOT NULL LIMIT 1', [$id]);
+    }
+
+    /**
+     * Setor ATUAL do colaborador (nunca um snapshot antigo salvo em `avaliacoes_experiencia.
+     * snap_codigo_setor`) — base da checagem de acesso por Setor Gerenciado. Se o colaborador mudar de
+     * Setor no METADADOS, a próxima leitura já reflete o Setor novo (§7 da correção 2026-10).
+     */
+    public function codigoSetorAtual(int $metadadosId): ?string
+    {
+        $stmt = $this->connection()->prepare('SELECT codigo_setor FROM colaboradores_metadados WHERE id = ? LIMIT 1');
+        $stmt->execute([$metadadosId]);
+        $valor = $stmt->fetchColumn();
+        if ($valor === false || $valor === null) {
+            return null;
+        }
+        $codigo = trim((string)$valor);
+        return $codigo !== '' ? $codigo : null;
     }
 
     public function opcoesFiltro(): array

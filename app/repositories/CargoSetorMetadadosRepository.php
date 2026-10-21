@@ -84,4 +84,65 @@ class CargoSetorMetadadosRepository
         $stmt->execute([$cargoId, $setorId]);
         return (bool)$stmt->fetchColumn();
     }
+
+    /**
+     * Materializa pares Cargo x Setor (por CÓDIGO oficial, extraídos do RHCONTRATOS FORA desta
+     * classe — nunca acessa SQL Server aqui) na matriz oficial `cargo_setores_metadados`.
+     * Correção 2026-10 (caso recorrente: MANUTENÇÃO/código 12, RHQUADROLOTCARGO não é fonte
+     * utilizável na Madeplant) — generaliza para script re-executável a mesma lógica da carga
+     * inicial de 2026-09-14 (ver database/migrations/2026-09-14-cargo-setores-metadados-seed.sql).
+     *
+     * `INSERT IGNORE` sobre a PK composta: idempotente, nunca duplica, NUNCA apaga uma relação já
+     * existente (de qualquer origem). Só grava quando AMBOS os códigos já existem no catálogo
+     * local ativo (`cargos.codigo_cargo`, `setores.codigo_setor`) — nunca cria Cargo/Setor por
+     * nome, nunca aceita código desconhecido.
+     *
+     * @param array<int, array{codigo_cargo:string, codigo_setor:string}> $pares
+     * @return array{inseridos:int, ja_existentes:int, sem_correspondencia_local:int}
+     */
+    public function materializarPorCodigos(array $pares, string $origemMetadados): array
+    {
+        $inseridos = 0;
+        $jaExistentes = 0;
+        $semCorrespondencia = 0;
+
+        $buscarCargo = $this->pdo->prepare('SELECT id FROM cargos WHERE codigo_cargo = ? AND ativo = 1 LIMIT 1');
+        $buscarSetor = $this->pdo->prepare('SELECT id FROM setores WHERE codigo_setor = ? AND ativo = 1 LIMIT 1');
+        $upsert = $this->pdo->prepare(
+            'INSERT IGNORE INTO cargo_setores_metadados (cargo_id, setor_id, origem_metadados, sincronizado_em) VALUES (?, ?, ?, NOW())'
+        );
+
+        $vistos = [];
+        foreach ($pares as $par) {
+            $codigoCargo = trim((string)($par['codigo_cargo'] ?? ''));
+            $codigoSetor = trim((string)($par['codigo_setor'] ?? ''));
+            if ($codigoCargo === '' || $codigoSetor === '') {
+                continue;
+            }
+            $chave = $codigoCargo . '|' . $codigoSetor;
+            if (isset($vistos[$chave])) {
+                continue; // dedup dentro do próprio lote — nunca conta/insere o mesmo par 2x
+            }
+            $vistos[$chave] = true;
+
+            $buscarCargo->execute([$codigoCargo]);
+            $cargoId = $buscarCargo->fetchColumn();
+            $buscarSetor->execute([$codigoSetor]);
+            $setorId = $buscarSetor->fetchColumn();
+            if ($cargoId === false || $setorId === false) {
+                $semCorrespondencia++;
+                continue;
+            }
+
+            if ($this->existeVinculo((int)$cargoId, (int)$setorId)) {
+                $jaExistentes++;
+                continue;
+            }
+
+            $upsert->execute([(int)$cargoId, (int)$setorId, $origemMetadados]);
+            $inseridos++;
+        }
+
+        return ['inseridos' => $inseridos, 'ja_existentes' => $jaExistentes, 'sem_correspondencia_local' => $semCorrespondencia];
+    }
 }

@@ -259,7 +259,7 @@ try {
     try {
         SolicitacaoVaga::create($payloadBase, $uSetorC, '127.0.0.1');
     } catch (InvalidArgumentException $e) {
-        $setorSemCargo = $e->getMessage() === 'Nenhum Cargo oficial está associado a este Setor no METADADOS.';
+        $setorSemCargo = $e->getMessage() === 'Não encontramos cargos vinculados oficialmente a este setor. O RH foi orientado a revisar a matriz Cargo × Setor.';
     }
     $check($setorSemCargo, 'M4 Setor sem nenhum Cargo oficial na matriz (Setor C) bloqueia com a mensagem oficial exata');
 

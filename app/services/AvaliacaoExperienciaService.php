@@ -10,9 +10,17 @@
  * já existe em `avaliacoes_experiencia`. Só existe LINHA na tabela quando a avaliação é efetivamente
  * salva (rascunho) ou concluída.
  *
- * Permissão/escopo por linha: MESMO padrão de PdiService (Admin/RH = escopo total; qualquer outro
- * usuário só acessa avaliações/pendências em que é o gestor responsável, via
- * `usuarios.gestor_usuario_id` — nunca aprovador, nunca a sinalização de supervisor).
+ * Permissão + escopo por Setor Gerenciado (correção 2026-10, caso real: Diego de Moura, Supervisor de
+ * Operação, com permissão `avaliacao_experiencia.visualizar` mas sem nenhum colaborador vinculado por
+ * `usuarios.gestor_usuario_id` — a hierarquia 1:1 por usuário não é o modelo operacional deste Portal
+ * para este módulo, porque colaboradores operacionais nunca são cadastrados como usuário do Portal).
+ * Admin/RH = escopo total. Qualquer outro perfil: só colaboradores cujo Setor ATUAL
+ * (`colaboradores_metadados.codigo_setor`) esteja entre os Setores Gerenciados do ator
+ * (`UsuarioSetoresGerenciadosService`, Bloco 7 — relação N:N usuário×setor, deliberadamente separada
+ * de `usuario_setores`/Setor de atuação do próprio usuário e de `usuarios.gestor_usuario_id`). Setor
+ * define ESCOPO DE DADOS; permissão define AÇÃO — os dois são checados, nunca um no lugar do outro.
+ * `usuarios.gestor_usuario_id` continua existindo e é usado aqui SÓ para exibição (`gestor_nome` na
+ * listagem, "Gestor responsável" sugerido no formulário) — nunca mais para autorização neste módulo.
  */
 class AvaliacaoExperienciaService
 {
@@ -83,9 +91,25 @@ class AvaliacaoExperienciaService
         return in_array((string)($ator['role'] ?? ''), ['admin', 'rh'], true);
     }
 
-    public static function escopoGestor(array $ator): ?int
+    /**
+     * Códigos oficiais de Setor (`setores.codigo_setor`, a chave que casa com
+     * `colaboradores_metadados.codigo_setor`) que o ator pode acessar em Avaliação de Experiência.
+     * Admin/RH: `null` (escopo total, nunca restringido por setor). Qualquer outro perfil: os Setores
+     * Gerenciados dele (`UsuarioSetoresGerenciadosService::codigosSetorGerenciadosPor()`) — usuário sem
+     * nenhum Setor Gerenciado devolve `[]` (nenhum colaborador visível, nunca "sem restrição").
+     *
+     * @return string[]|null
+     */
+    public static function escopoSetores(array $ator): ?array
     {
-        return self::escopoTotal($ator) ? null : (int)$ator['id'];
+        if (self::escopoTotal($ator)) {
+            return null;
+        }
+        $usuarioId = (int)($ator['id'] ?? 0);
+        if ($usuarioId <= 0) {
+            return [];
+        }
+        return (new UsuarioSetoresGerenciadosService())->codigosSetorGerenciadosPor($usuarioId);
     }
 
     public static function papelDoAtor(array $ator): string
@@ -96,9 +120,24 @@ class AvaliacaoExperienciaService
         return ($ator['role'] ?? '') === 'rh' ? 'rh' : 'gestor';
     }
 
-    public static function podeAcessarGestorId(?int $gestorId, array $ator): bool
+    /**
+     * Acesso ao COLABORADOR (`colaboradores_metadados.id`) para fins de Avaliação de Experiência:
+     * Admin/RH sempre; qualquer outro perfil só se o Setor ATUAL do colaborador (lido agora, nunca um
+     * snapshot antigo) estiver entre os Setores Gerenciados do ator. Centraliza a checagem usada por
+     * `contratoParaAvaliar()`, `concluir()`, `registrarCienciaColaborador()` e `detalhe()` — nenhum
+     * desses métodos lê `gestor_usuario_id` para decidir acesso.
+     */
+    private function temAcessoAoColaborador(int $metadadosId, array $ator): bool
     {
-        return (int)($ator['id'] ?? 0) > 0 && (self::escopoTotal($ator) || $gestorId === (int)$ator['id']);
+        if (self::escopoTotal($ator)) {
+            return true;
+        }
+        $setoresGeridos = self::escopoSetores($ator);
+        if ($setoresGeridos === []) {
+            return false;
+        }
+        $codigoSetor = $this->repository->codigoSetorAtual($metadadosId);
+        return $codigoSetor !== null && in_array($codigoSetor, $setoresGeridos, true);
     }
 
     private static function temPermissao(array $ator, string $permissao): bool
@@ -184,13 +223,13 @@ class AvaliacaoExperienciaService
      */
     public function listarPendencias(array $filtros, array $ator, DateTimeImmutable $hoje): array
     {
-        $escopoGestor = self::escopoGestor($ator);
+        $escopoSetores = self::escopoSetores($ator);
         $cutoff = $hoje->modify('-' . self::JANELA_RELEVANTE_DIAS . ' days')->format('Y-m-d');
 
         $itens = [];
         foreach (array_keys(self::TIPOS) as $tipoChave) {
             $tipo = (string)$tipoChave;
-            foreach ($this->repository->candidatosPendencia($tipo, $cutoff, $filtros, $escopoGestor) as $row) {
+            foreach ($this->repository->candidatosPendencia($tipo, $cutoff, $filtros, $escopoSetores) as $row) {
                 $derivado = self::derivarStatus($row, $tipo, $hoje, $this->auditoria);
                 $itens[] = array_merge($row, $derivado, ['tipo' => $tipo]);
             }
@@ -226,9 +265,10 @@ class AvaliacaoExperienciaService
         if ($contrato === null) {
             return self::falha('Contrato não encontrado.');
         }
+        // Gestor sugerido para o formulário (exibição/valor-padrão) — NUNCA usado para autorização
+        // aqui (ver §C do diagnóstico 2026-10 / docblock da classe).
         $gestor = (new UsuarioGestorRepository())->gestorDoUsuarioDoContrato($metadadosId);
-        $gestorId = $gestor !== null ? (int)$gestor['id'] : null;
-        if (!self::podeAcessarGestorId($gestorId, $ator) && !self::escopoTotal($ator)) {
+        if (!$this->temAcessoAoColaborador($metadadosId, $ator)) {
             return self::falha('Você não tem acesso a este colaborador.');
         }
 
@@ -315,7 +355,7 @@ class AvaliacaoExperienciaService
             return $erro;
         }
         $avaliacao = $this->repository->buscarPorId($id);
-        if ($avaliacao === null || !self::podeAcessarGestorId((int)$avaliacao['gestor_usuario_id'], $ator)) {
+        if ($avaliacao === null || !$this->temAcessoAoColaborador((int)$avaliacao['metadados_id'], $ator)) {
             return self::falha('Avaliação não encontrada.');
         }
         if ((string)$avaliacao['status'] === 'concluido') {
@@ -355,7 +395,7 @@ class AvaliacaoExperienciaService
             return $erro;
         }
         $avaliacao = $this->repository->buscarPorId($id);
-        if ($avaliacao === null || !self::podeAcessarGestorId((int)$avaliacao['gestor_usuario_id'], $ator)) {
+        if ($avaliacao === null || !$this->temAcessoAoColaborador((int)$avaliacao['metadados_id'], $ator)) {
             return self::falha('Avaliação não encontrada.');
         }
         if ((string)$avaliacao['status'] !== 'concluido') {
@@ -394,7 +434,7 @@ class AvaliacaoExperienciaService
     public function detalhe(int $id, array $ator): ?array
     {
         $avaliacao = $this->repository->buscarPorId($id);
-        if ($avaliacao === null || !self::podeAcessarGestorId((int)$avaliacao['gestor_usuario_id'], $ator)) {
+        if ($avaliacao === null || !$this->temAcessoAoColaborador((int)$avaliacao['metadados_id'], $ator)) {
             return null;
         }
         return [

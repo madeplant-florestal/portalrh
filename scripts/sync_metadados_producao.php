@@ -6,9 +6,12 @@ require __DIR__ . '/../app/core/bootstrap.php';
  * scripts/sync_metadados_colaboradores.php contra o SQL Server). Lê o METADADOS oficial via
  * {Empresa|Unidade|Catalogo}MetadadosSyncService / MetadadosSyncService::fetchSourceRows()
  * (SELECT — nunca escreve no SQL Server, reaproveita a mesma query/normalização já validada),
- * monta um lote assinado com HMAC e envia por HTTPS para os endpoints receptores em produção
+ * monta um lote assinado com HMAC e envia para os endpoints receptores
  * (POST /internal/metadados/{empresas|unidades|setores|cargos|colaboradores}/sync — ver
- * InternalMetadadosSyncController).
+ * InternalMetadadosSyncController). HTTPS é obrigatório para qualquer host normal; HTTP só é
+ * aceito quando o destino é explicitamente local de desenvolvimento (`localhost`, `127.0.0.1` ou
+ * host terminado em `.test`) — ver MetadadosSyncEndpointValidator::permitido(), nunca um bypass
+ * geral nem desabilitação de verificação TLS.
  *
  * Fases 5.1A/5.2: cobre CINCO dimensões. Uma execução padrão sincroniza, nesta ordem:
  *   1) empresas  2) unidades  3) setores  4) cargos  5) colaboradores
@@ -67,7 +70,12 @@ function enviarLote(string $url, string $corpoBruto, array $headers): array
         CURLOPT_TIMEOUT => 30,
         CURLOPT_SSL_VERIFYPEER => true,
         CURLOPT_SSL_VERIFYHOST => 2,
-        CURLOPT_PROTOCOLS => CURLPROTO_HTTPS,
+        // enviarLote() só é chamada com uma URL já aprovada por MetadadosSyncEndpointValidator::
+        // permitido() (HTTPS para qualquer host, ou HTTP só para localhost/127.0.0.1/*.test) —
+        // por isso HTTP também é permitido AQUI, sem enfraquecer a regra: quem decide é o
+        // validador, nunca o cURL. CURLOPT_SSL_VERIFYPEER/VERIFYHOST continuam sempre exigidos
+        // (irrelevantes para HTTP, mas nunca desabilitados para uma chamada HTTPS real).
+        CURLOPT_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS,
     ]);
     $body = curl_exec($ch);
     if ($body === false) {
@@ -207,8 +215,8 @@ function sincronizarDimensao(string $dimensao, array $config, bool $enviar, ?str
     }
 
     $endpointUrl = endpointDaDimensao($config, $dimensao);
-    if (!preg_match('#^https://#i', $endpointUrl)) {
-        throw new RuntimeException("Endpoint de {$dimensao} não é uma URL HTTPS válida (verifique metadados_sync.endpoint_url / endpoints).");
+    if (!MetadadosSyncEndpointValidator::permitido($endpointUrl)) {
+        throw new RuntimeException("Endpoint de {$dimensao} não é uma URL HTTPS válida (ou um destino local de desenvolvimento permitido: http://localhost, http://127.0.0.1, http://*.test) — verifique metadados_sync.endpoint_url / endpoints.");
     }
 
     $timestamp = (string)time();

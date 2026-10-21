@@ -141,7 +141,17 @@ class EntrevistaDesligamentoRepository
     public function contarElegiveis(array $criterios, array $filtros): int
     {
         [$where, $params] = $this->condicoesElegiveis($criterios, $filtros);
-        $stmt = $this->connection()->prepare('SELECT COUNT(*) FROM colaboradores_metadados cm WHERE ' . implode(' AND ', $where));
+        // Correção 2026-10: condicoesElegiveis() referencia edl.id/edl.cancelada_em (liberação
+        // manual) desde que essa regra passou a ser OR, não AND — esta query (usada por
+        // montarPainel() para 'elegiveis_total'/'total_visao') nunca tinha o LEFT JOIN
+        // correspondente, então toda chamada lançava "Unknown column 'edl.id'" e quebrava a tela
+        // inteira (mensagem genérica de erro, todas as abas zeradas). listarElegiveis() nunca teve
+        // esse problema porque usa SELECT_CONTRATO, que já inclui esse LEFT JOIN.
+        $stmt = $this->connection()->prepare(
+            'SELECT COUNT(*) FROM colaboradores_metadados cm
+             LEFT JOIN entrevista_desligamento_liberacoes edl ON edl.metadados_id = cm.id
+             WHERE ' . implode(' AND ', $where)
+        );
         $stmt->execute($params);
         return (int)$stmt->fetchColumn();
     }

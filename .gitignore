@@ -14,6 +14,8 @@ storage/logs/
 storage/imports/*.json
 storage/imports/*.txt
 storage/reconciliation/
+scripts/diagnostico_colaboradores_mysql.php
+scripts/diagnostico_colaboradores_rhmadeplant.php
 public/uploads/
 uploads/
 test-results/

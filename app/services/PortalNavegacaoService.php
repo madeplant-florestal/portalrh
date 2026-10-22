@@ -129,11 +129,6 @@ class PortalNavegacaoService
                     ['href' => '/admin/dashboard-entrevista-desligamento', 'regra' => 'perm:dashboard_entrevista_desligamento.visualizar'],
                     ['href' => '/admin/entrevistas-desligamento', 'regra' => 'perm:entrevista_desligamento.visualizar'],
                 ]],
-            ['chave' => 'mensagens', 'titulo' => 'Mensagens', 'icone' => 'mensagens',
-                'descricao' => 'Modelos de mensagem do processo seletivo.',
-                'itens' => [
-                    ['href' => '/admin/mensagens', 'regra' => 'perm:mensagens.visualizar'],
-                ]],
             ['chave' => 'cadastros', 'titulo' => 'Cadastros', 'icone' => 'cadastros',
                 'descricao' => 'Empresas, setores, cargos, jornadas de trabalho, benefícios e avaliações.',
                 'itens' => [
@@ -149,15 +144,16 @@ class PortalNavegacaoService
                 'itens' => [
                     ['href' => '/admin/usuarios', 'regra' => 'admin_supervisor'],
                 ]],
-            // Configurações → Integrações (2026-10): área administrativa genérica, pensada para
-            // futuras integrações do Portal — não exclusiva de Webhooks. Primeiro ocupante: a
-            // administração da integração de Webhooks do Recrutamento com o n8n, realocada de
-            // dentro do módulo de Recrutamento (ver auditoria técnica da Etapa 1). Mesma regra de
-            // antes (`recruitment_webhooks.visualizar`) — preservada de propósito para não quebrar
-            // acessos já concedidos (débito técnico de nomenclatura documentado).
+            // Configurações (2026-10): área administrativa genérica — "Mensagens" (Etapa 3.1) saiu
+            // de módulo principal próprio para viver aqui, ao lado de "Integrações" (Etapa 2), que
+            // passou a ser pensada para futuras integrações do Portal, não exclusiva de Webhooks.
+            // Mesmas regras de antes (`mensagens.visualizar`/`recruitment_webhooks.visualizar`) —
+            // preservadas de propósito para não quebrar acessos já concedidos (débito técnico de
+            // nomenclatura/permissão documentado).
             ['chave' => 'configuracoes', 'titulo' => 'Configurações', 'icone' => 'configuracoes',
-                'descricao' => 'Integrações do Portal com sistemas externos.',
+                'descricao' => 'Mensagens, integrações e configurações gerais do Portal.',
                 'itens' => [
+                    ['href' => '/admin/configuracoes/mensagens', 'regra' => 'perm:mensagens.visualizar'],
                     ['href' => '/admin/configuracoes/integracoes', 'regra' => 'staff_ou:recruitment_webhooks.visualizar'],
                 ]],
         ];
@@ -231,6 +227,7 @@ class PortalNavegacaoService
             ]],
             // Configurações → Integrações (2026-10): ver o comentário equivalente em definicao().
             'configuracoes' => ['titulo' => 'Configurações', 'abas' => [
+                ['chave' => 'mensagens', 'label' => 'Mensagens', 'href' => '/admin/configuracoes/mensagens', 'regra' => 'perm:mensagens.visualizar'],
                 ['chave' => 'integracoes', 'label' => 'Integrações', 'href' => '/admin/configuracoes/integracoes', 'regra' => 'staff_ou:recruitment_webhooks.visualizar'],
             ]],
         ];

@@ -4,6 +4,10 @@
  * textos; n8n deixa de guardar cópia própria). Autorização por permissão individual
  * (`mensagens.visualizar/criar/editar` — ver app/core/Authorization.php), nunca por
  * `role`/`is_supervisor` isoladamente.
+ *
+ * Administração realocada para dentro de Configurações (Etapa 3.1, 2026-10 — mesmo padrão já
+ * aplicado aos Webhooks na Etapa 2): URL, views e breadcrumb mudaram; controller, model, service e
+ * permissões continuam EXATAMENTE os mesmos (não renomeado por não haver benefício arquitetural).
  */
 class AdminMensagensController extends Controller
 {
@@ -12,7 +16,7 @@ class AdminMensagensController extends Controller
         Auth::requireRole(['admin', 'rh', 'viewer']);
         Authorization::requirePermissao('mensagens.visualizar');
 
-        $this->view->render('admin/mensagens/index', [
+        $this->view->render('admin/configuracoes/mensagens/index', [
             'mensagens' => Mensagem::all(),
             'podeCriar' => Authorization::temPermissao('mensagens.criar'),
             'podeEditar' => Authorization::temPermissao('mensagens.editar'),
@@ -26,7 +30,7 @@ class AdminMensagensController extends Controller
         Auth::requireRole(['admin', 'rh', 'viewer']);
         Authorization::requirePermissao('mensagens.criar');
 
-        $this->view->render('admin/mensagens/form', $this->dadosDoFormulario('create', null, ''), 'layouts/app-shell');
+        $this->view->render('admin/configuracoes/mensagens/form', $this->dadosDoFormulario('create', null, ''), 'layouts/app-shell');
     }
 
     public function store(): void
@@ -45,14 +49,14 @@ class AdminMensagensController extends Controller
         $result = Mensagem::create($data);
         if (!($result['ok'] ?? false)) {
             $this->view->render(
-                'admin/mensagens/form',
+                'admin/configuracoes/mensagens/form',
                 $this->dadosDoFormulario('create', $data, (string)($result['error'] ?? 'Falha ao cadastrar a mensagem.')),
                 'layouts/app-shell'
             );
             return;
         }
 
-        redirect('/admin/mensagens?ok=' . urlencode('Mensagem cadastrada com sucesso.'));
+        redirect('/admin/configuracoes/mensagens?ok=' . urlencode('Mensagem cadastrada com sucesso.'));
     }
 
     public function edit(string $id): void
@@ -67,7 +71,7 @@ class AdminMensagensController extends Controller
             return;
         }
 
-        $this->view->render('admin/mensagens/form', $this->dadosDoFormulario('edit', $mensagem, ''), 'layouts/app-shell');
+        $this->view->render('admin/configuracoes/mensagens/form', $this->dadosDoFormulario('edit', $mensagem, ''), 'layouts/app-shell');
     }
 
     public function update(string $id): void
@@ -96,14 +100,14 @@ class AdminMensagensController extends Controller
             $data['id'] = (int)$id;
             $data['codigo'] = $existing['codigo'];
             $this->view->render(
-                'admin/mensagens/form',
+                'admin/configuracoes/mensagens/form',
                 $this->dadosDoFormulario('edit', $data, (string)($result['error'] ?? 'Falha ao atualizar a mensagem.')),
                 'layouts/app-shell'
             );
             return;
         }
 
-        redirect('/admin/mensagens?ok=' . urlencode('Mensagem atualizada com sucesso.'));
+        redirect('/admin/configuracoes/mensagens?ok=' . urlencode('Mensagem atualizada com sucesso.'));
     }
 
     /**

@@ -2,8 +2,11 @@
 require_once APP_PATH . '/views/partials/modulo-topo.php';
 ?>
 <div class="space-y-4">
-  <?= ui_breadcrumb([['label' => 'Portal RH', 'href' => $base . '/admin'], ['label' => 'Mensagens']]) ?>
-  <?= ui_page_header(['titulo' => 'Mensagens', 'descricao' => 'Modelos de mensagem usados no processo seletivo. O Portal é a fonte oficial destes textos.', 'acao' => !empty($podeCriar) ? ['label' => 'Nova mensagem', 'href' => $base . '/admin/mensagens/novo'] : null]) ?>
+  <?= ui_modulo_topo($base, 'configuracoes', 'mensagens', [
+      'titulo' => 'Mensagens',
+      'descricao' => 'Modelos de mensagem usados no processo seletivo. O Portal é a fonte oficial destes textos.',
+      'acao' => !empty($podeCriar) ? ['label' => 'Nova mensagem', 'href' => $base . '/admin/configuracoes/mensagens/novo'] : null,
+  ]) ?>
   <div class="responsive-panel">
   <?php if (!empty($flashError)): ?>
     <div class="mt-4 rounded-ds-md border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger"><?= Security::e($flashError) ?></div>
@@ -36,7 +39,7 @@ require_once APP_PATH . '/views/partials/modulo-topo.php';
             <td class="p-3 text-text-secondary"><?= !empty($m['updated_at']) ? date('d/m/Y H:i', strtotime((string)$m['updated_at'])) : '-' ?></td>
             <td class="p-3">
               <?php if (!empty($podeEditar)): ?>
-                <a href="<?= $base ?>/admin/mensagens/editar/<?= (int)$m['id'] ?>" class="text-primary-700 hover:text-primary-700">Editar</a>
+                <a href="<?= $base ?>/admin/configuracoes/mensagens/editar/<?= (int)$m['id'] ?>" class="text-primary-700 hover:text-primary-700">Editar</a>
               <?php else: ?>
                 <span class="text-text-muted">—</span>
               <?php endif; ?>
@@ -63,7 +66,7 @@ require_once APP_PATH . '/views/partials/modulo-topo.php';
         </div>
         <?php if (!empty($podeEditar)): ?>
         <div class="responsive-card-actions mt-4">
-          <a href="<?= $base ?>/admin/mensagens/editar/<?= (int)$m['id'] ?>" class="text-primary-700 hover:text-primary-700">Editar</a>
+          <a href="<?= $base ?>/admin/configuracoes/mensagens/editar/<?= (int)$m['id'] ?>" class="text-primary-700 hover:text-primary-700">Editar</a>
         </div>
         <?php endif; ?>
       </div>

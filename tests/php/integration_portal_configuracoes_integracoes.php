@@ -108,9 +108,13 @@ try {
     $soWeb = $novoUsuario('So Integracoes', 'viewer', ['recruitment_webhooks.visualizar']);
 
     // ---- (1)/(3) a aba Integrações existe dentro do módulo Configurações ------------------------
+    // Etapa 3.1 (2026-10) adicionou a aba "Mensagens" ao lado de "Integrações" neste mesmo módulo
+    // (ver integration_portal_configuracoes_mensagens.php) — aqui só se prova que Integrações
+    // continua existindo e intacta, nunca a lista completa/posição das abas de Configurações.
     $definicao = PortalNavegacaoService::definicaoAbas()['configuracoes'] ?? null;
-    $check($definicao !== null && array_column($definicao['abas'], 'chave') === ['integracoes'], '(abas) O módulo Configurações existe e tem a aba Integrações');
-    $check(($definicao['abas'][0]['href'] ?? null) === '/admin/configuracoes/integracoes', '(abas) Integrações aponta para a nova rota /admin/configuracoes/integracoes');
+    $hrefPorChave = $definicao !== null ? array_column($definicao['abas'], 'href', 'chave') : [];
+    $check($definicao !== null && in_array('integracoes', array_column($definicao['abas'], 'chave'), true), '(abas) O módulo Configurações existe e tem a aba Integrações');
+    $check(($hrefPorChave['integracoes'] ?? null) === '/admin/configuracoes/integracoes', '(abas) Integrações aponta para a nova rota /admin/configuracoes/integracoes');
     $check(str_contains($rotas, "\$router->get('/admin/configuracoes/integracoes', [AdminIntegracoesController::class, 'index']);"), '(rota) GET /admin/configuracoes/integracoes está registrada para o novo controller');
 
     // ---- (2) card Configurações aparece para usuário autorizado; não aparece para quem não tem a permissão
@@ -121,7 +125,10 @@ try {
     $check(array_values(array_filter((new PortalNavegacaoService())->modulos(), static fn(array $m): bool => $m['chave'] === 'configuracoes')) === [], '(Central) viewer sem a permissão NÃO vê o card Configurações');
     $comoUsuario($rh);
     $cardRh = array_values(array_filter((new PortalNavegacaoService())->modulos(), static fn(array $m): bool => $m['chave'] === 'configuracoes'))[0] ?? null;
-    $check($cardRh !== null && $cardRh['href'] === '/admin/configuracoes/integracoes', '(Central) RH vê Configurações pelo bypass central de staff_ou (igual já valia para Webhooks dentro de Recrutamento)');
+    // RH vê Configurações pelo bypass central (staff_ou cobre Integrações; Bloco 4 cobre
+    // mensagens.visualizar) — a entrada cai no primeiro item visível (Mensagens, Etapa 3.1), não
+    // mais Integrações; o que esta verificação prova é que RH continua vendo o card de qualquer forma.
+    $check($cardRh !== null && in_array($cardRh['href'], ['/admin/configuracoes/integracoes', '/admin/configuracoes/mensagens'], true), '(Central) RH vê Configurações pelo bypass central (staff_ou/Bloco 4) — igual já valia para Webhooks dentro de Recrutamento');
 
     // ---- (4) a nova rota carrega a página -----------------------------------------------------------
     $check($backendPermite('/admin/configuracoes/integracoes', $rh), '(rota) GET /admin/configuracoes/integracoes abre para RH');

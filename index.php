@@ -162,6 +162,19 @@ try {
     $router->post('/admin/configuracoes/integracoes/regras/nova', [AdminIntegracoesController::class, 'criarRegraComunicacao']);
     $router->get('/admin/configuracoes/integracoes/regras/{id}/editar', [AdminIntegracoesController::class, 'editarRegraComunicacao']);
     $router->post('/admin/configuracoes/integracoes/regras/{id}/editar', [AdminIntegracoesController::class, 'atualizarRegraComunicacao']);
+    // Configurações → Mensagens (Etapa 3.1, 2026-10): realoca a administração dos modelos de
+    // mensagem de /admin/mensagens para dentro de Configurações (mesmo padrão já aplicado aos
+    // Webhooks na Etapa 2). Rotas GET antigas redirecionam; as rotas POST antigas não têm uso
+    // externo conhecido (só os próprios formulários da tela, já atualizados para a nova URL) e por
+    // isso não foram replicadas como alias.
+    $router->get('/admin/mensagens', static fn() => redirect('/admin/configuracoes/mensagens'));
+    $router->get('/admin/mensagens/novo', static fn() => redirect('/admin/configuracoes/mensagens/novo'));
+    $router->get('/admin/mensagens/editar/{id}', static fn(string $id) => redirect('/admin/configuracoes/mensagens/editar/' . $id));
+    $router->get('/admin/configuracoes/mensagens', [AdminMensagensController::class, 'index']);
+    $router->get('/admin/configuracoes/mensagens/novo', [AdminMensagensController::class, 'create']);
+    $router->post('/admin/configuracoes/mensagens/novo', [AdminMensagensController::class, 'store']);
+    $router->get('/admin/configuracoes/mensagens/editar/{id}', [AdminMensagensController::class, 'edit']);
+    $router->post('/admin/configuracoes/mensagens/editar/{id}', [AdminMensagensController::class, 'update']);
     $router->get('/admin/empresas', [AdminEmpresasController::class, 'index']);
     $router->get('/admin/empresas/novo', [AdminEmpresasController::class, 'create']);
     $router->post('/admin/empresas/novo', [AdminEmpresasController::class, 'store']);
@@ -241,12 +254,6 @@ try {
     $router->get('/admin/beneficios/editar/{id}', [AdminBeneficiosController::class, 'edit']);
     $router->post('/admin/beneficios/editar/{id}', [AdminBeneficiosController::class, 'update']);
     $router->post('/admin/beneficios/excluir/{id}', [AdminBeneficiosController::class, 'delete']);
-
-    $router->get('/admin/mensagens', [AdminMensagensController::class, 'index']);
-    $router->get('/admin/mensagens/novo', [AdminMensagensController::class, 'create']);
-    $router->post('/admin/mensagens/novo', [AdminMensagensController::class, 'store']);
-    $router->get('/admin/mensagens/editar/{id}', [AdminMensagensController::class, 'edit']);
-    $router->post('/admin/mensagens/editar/{id}', [AdminMensagensController::class, 'update']);
 
     $router->get('/admin/pesquisas-reacao-integracao', [AdminPesquisaReacaoIntegracaoController::class, 'index']);
     $router->post('/admin/pesquisas-reacao-integracao', [AdminPesquisaReacaoIntegracaoController::class, 'store']);

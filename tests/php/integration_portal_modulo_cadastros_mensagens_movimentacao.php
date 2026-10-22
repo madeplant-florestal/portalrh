@@ -5,7 +5,8 @@
  * no AppShell V2. Fixtures ZZPGT-* com limpeza. Prova, contra o banco e as fontes:
  *   - módulo de abas `cadastros`: as seis abas são destinos reais, abertos às roles admin/rh/viewer no backend (gate lido do controller) e iguais
  *     ao card da Central; nenhum perfil vê aba que leve a 403; nenhuma permissão nova;
- *   - Mensagens mantém as permissões individuais (visualizar/criar/editar) e Movimentação/Manual mantêm seu gate de role; sem ModuleTabs artificiais;
+ *   - Mensagens mantém as permissões individuais (visualizar/criar/editar) e Movimentação/Manual mantêm seu gate de role, sem ModuleTabs artificiais
+ *     (Mensagens passou a ter ModuleTabs de Configurações na Etapa 3.1, 2026-10 — ver `integration_portal_configuracoes_integracoes.php`);
  *   - as telas renderizam no AppShell V2 (sem sidebar), com breadcrumb, PageHeader e <title>; sem <script> executável, <style> nem handlers inline;
  *   - todos os campos (`name=`), ações (`action=`), `data-*` e links de escrita das views são IDÊNTICOS aos do HEAD (formulários/filtros preservados);
  *   - nenhuma tela administrativa esconde a tabela no mobile sem alternativa; nenhum controller usa mais `layouts/admin`;
@@ -164,7 +165,7 @@ try {
     $check(str_contains($htmlMovNova, 'data-app-shell-v2') && str_contains($htmlMovNova, 'data-movimentacao-pessoal-form="1"') && str_contains($htmlMovNova, 'data-movimentacao-payload="1"') && str_contains($htmlMovNova, 'name="csrf"') && str_contains($htmlMovNova, 'name="tipo_movimentacao"'), '(Movimentação) Formulário no AppShell V2 com a raiz do JS, o payload JSON e o CSRF preservados');
 
     // ---- formulários/filtros/ações idênticos ao HEAD -----------------------------------------------------------------------------------------
-    $views = ['catalogos/index', 'catalogos/form', 'setores/index', 'setores/form', 'cargos/form', 'beneficios/index', 'beneficios/form', 'avaliacoes/index', 'avaliacoes/form', 'mensagens/index', 'mensagens/form', 'movimentacoes_pessoal/index', 'movimentacoes_pessoal/form'];
+    $views = ['catalogos/index', 'catalogos/form', 'setores/index', 'setores/form', 'cargos/form', 'beneficios/index', 'beneficios/form', 'avaliacoes/index', 'avaliacoes/form', 'configuracoes/mensagens/index', 'configuracoes/mensagens/form', 'movimentacoes_pessoal/index', 'movimentacoes_pessoal/form'];
     $diferentes = [];
     $comparadas = 0;
     foreach ($views as $v) {
@@ -213,7 +214,7 @@ try {
         $c = $fonte("app/views/admin/{$v}.php");
         $check(str_contains($c, 'class="hidden min-w-full text-sm md:table"') && str_contains($c, 'responsive-card-list'), "(mobile 768px) admin/{$v}: `hidden md:table` + lista de cards complementares");
     }
-    foreach (['catalogos/index', 'setores/index', 'beneficios/index', 'mensagens/index'] as $v) {
+    foreach (['catalogos/index', 'setores/index', 'beneficios/index', 'configuracoes/mensagens/index'] as $v) {
         $c = $fonte("app/views/admin/{$v}.php");
         $check(str_contains($c, 'class="hidden min-w-full text-sm md:table"') && str_contains($c, 'responsive-card-list mt-4 md:hidden'), "(mobile) admin/{$v}: tabela (`hidden md:table`) e lista de cards (`md:hidden`) são complementares em QUALQUER largura, inclusive 768px");
     }

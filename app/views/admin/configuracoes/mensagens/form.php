@@ -12,15 +12,17 @@ foreach ($catalogo as $item) {
 }
 ?>
 <div class="space-y-4 max-w-3xl">
-  <?= ui_breadcrumb([['label' => 'Portal RH', 'href' => $base . '/admin'], ['label' => 'Mensagens', 'href' => $base . '/admin/mensagens'], ['label' => $isEdit ? 'Editar mensagem' : 'Nova mensagem']]) ?>
-  <?= ui_page_header(['titulo' => $isEdit ? 'Editar mensagem' : 'Nova mensagem', 'descricao' => 'Modelo de mensagem do processo seletivo.']) ?>
+  <?= ui_modulo_topo($base, 'configuracoes', 'mensagens', [
+      'titulo' => $isEdit ? 'Editar mensagem' : 'Nova mensagem',
+      'descricao' => 'Modelo de mensagem do processo seletivo.',
+  ], [['label' => $isEdit ? 'Editar mensagem' : 'Nova mensagem']]) ?>
   <div class="responsive-panel">
 
   <?php if (!empty($error)): ?>
     <div class="mb-4 p-3 bg-danger/10 text-danger border border-danger/30 rounded"><?= Security::e($error) ?></div>
   <?php endif; ?>
 
-  <form action="<?= $base ?><?= $isEdit ? '/admin/mensagens/editar/' . (int)$mensagem['id'] : '/admin/mensagens/novo' ?>" method="post" class="space-y-4">
+  <form action="<?= $base ?><?= $isEdit ? '/admin/configuracoes/mensagens/editar/' . (int)$mensagem['id'] : '/admin/configuracoes/mensagens/novo' ?>" method="post" class="space-y-4">
     <input type="hidden" name="csrf" value="<?= Security::e($csrf) ?>" />
 
     <div>
@@ -108,7 +110,7 @@ foreach ($catalogo as $item) {
 
     <div class="responsive-form-actions pt-2">
       <button type="submit" class="<?= ui_btn('primario') ?>">Salvar</button>
-      <a href="<?= $base ?>/admin/mensagens" class="text-primary-700 hover:text-primary-700">Cancelar</a>
+      <a href="<?= $base ?>/admin/configuracoes/mensagens" class="text-primary-700 hover:text-primary-700">Cancelar</a>
     </div>
   </form>
 </div>

@@ -120,22 +120,37 @@ try {
         }
     }
     $check($entrevistaRh !== null, '(2) Etapa "entrevista-rh" existe no banco (PipelineStage::all())');
-    $entrevistaRhId = (int)$entrevistaRh['id'];
 
     $eventoComEtapa = RecruitmentEventDispatcher::EVENT_CANDIDATE_STAGE_CHANGED;
     $eventoSemEtapa = RecruitmentEventDispatcher::EVENT_CANDIDATURA_CRIADA;
     $check(isset($eventos[$eventoComEtapa]) && $eventos[$eventoComEtapa]['exige_etapa'] === true, '(3) Catálogo: evento de movimentação de etapa exige etapa');
     $check(isset($eventos[$eventoSemEtapa]) && $eventos[$eventoSemEtapa]['exige_etapa'] === false, '(11) Catálogo: candidatura criada nunca exige etapa');
 
+    // Este ambiente é compartilhado com uso manual real da tela (Fabio testando Configurações →
+    // Integrações) — a tabela já pode ter regras reais para qualquer etapa canônica. O teste NUNCA
+    // hardcoda uma etapa específica para criar suas próprias fixtures: escolhe, entre as etapas
+    // reais, duas que ainda estejam livres para (evento de etapa + whatsapp), e usa só essas. Nunca
+    // lê, apaga nem depende do conteúdo de regras que não tenha criado.
+    $etapaLivre1 = null;
+    foreach ($etapas as $etapa) {
+        $sid = (int)$etapa['id'];
+        if (!$regraRepository->existeConflito($eventoComEtapa, $sid, 'whatsapp')) {
+            $etapaLivre1 = $sid;
+            break;
+        }
+    }
+    $check($etapaLivre1 !== null, '(ambiente) Há ao menos 1 etapa canônica livre (sem regra cadastrada para etapa_alterada+whatsapp) para rodar o teste sem tocar em regras reais já criadas pelo usuário');
+    $check(!$regraRepository->existeConflito($eventoSemEtapa, null, 'whatsapp'), '(ambiente) O combo "candidatura criada + whatsapp" está livre para o teste usar, sem colidir com regra real');
+
     // ---- (3) criação de regra (via service — mesma camada do controller) ---------------------------
     $resultadoCriar = $regraService->salvar([
         'event_type' => $eventoComEtapa,
-        'pipeline_stage_id' => (string)$entrevistaRhId,
+        'pipeline_stage_id' => (string)$etapaLivre1,
         'mensagem_id' => (string)$mensagemAtivaId,
         'canal' => 'whatsapp',
         'ativo' => '1',
     ]);
-    $check($resultadoCriar['ok'] ?? false, '(3) Criação de regra válida (etapa_alterada + entrevista-rh + mensagem ativa) é aceita');
+    $check($resultadoCriar['ok'] ?? false, '(3) Criação de regra válida (etapa_alterada + etapa livre + mensagem ativa) é aceita' . (($resultadoCriar['ok'] ?? false) ? '' : ' — erro: ' . ($resultadoCriar['error'] ?? '')));
     $regraId = (int)($resultadoCriar['id'] ?? 0);
     if ($regraId > 0) {
         $criados['regras'][] = $regraId;
@@ -145,7 +160,7 @@ try {
     $check(
         $linha !== null
         && $linha['event_type'] === $eventoComEtapa
-        && (int)$linha['pipeline_stage_id'] === $entrevistaRhId
+        && (int)$linha['pipeline_stage_id'] === $etapaLivre1
         && (int)$linha['mensagem_id'] === $mensagemAtivaId
         && $linha['canal'] === 'whatsapp'
         && (int)$linha['ativo'] === 1,
@@ -188,18 +203,18 @@ try {
     // ---- (8) duplicidade: mesma combinação evento+etapa+canal ---------------------------------------
     $resDuplicada = $regraService->salvar([
         'event_type' => $eventoComEtapa,
-        'pipeline_stage_id' => (string)$entrevistaRhId,
+        'pipeline_stage_id' => (string)$etapaLivre1,
         'mensagem_id' => (string)$mensagemAtivaId,
         'canal' => 'whatsapp',
         'ativo' => '1',
     ]);
     $check(!($resDuplicada['ok'] ?? true), '(8) Segunda regra para a MESMA combinação evento+etapa+canal é rejeitada (duplicidade)');
-    $check(!$regraRepository->existeConflito($eventoComEtapa, $entrevistaRhId, 'whatsapp', $regraId), '(8) Sem conflito quando o próprio id é excluído da checagem (permite editar a si mesma)');
+    $check(!$regraRepository->existeConflito($eventoComEtapa, $etapaLivre1, 'whatsapp', $regraId), '(8) Sem conflito quando o próprio id é excluído da checagem (permite editar a si mesma)');
 
     // ---- (4) edição: altera para o evento sem etapa, outra mensagem ---------------------------------
     $resultadoEditar = $regraService->salvar([
         'event_type' => $eventoSemEtapa,
-        'pipeline_stage_id' => (string)$entrevistaRhId, // deve ser ignorado: evento sem etapa nunca persiste etapa
+        'pipeline_stage_id' => (string)$etapaLivre1, // deve ser ignorado: evento sem etapa nunca persiste etapa
         'mensagem_id' => (string)$mensagemAtivaId,
         'canal' => 'whatsapp',
         'ativo' => '1',
@@ -211,7 +226,7 @@ try {
     // ---- (8) duplicidade também na edição: criar uma 2ª regra e tentar colidir com a 1ª -------------
     $resSegunda = $regraService->salvar([
         'event_type' => $eventoComEtapa,
-        'pipeline_stage_id' => (string)$entrevistaRhId,
+        'pipeline_stage_id' => (string)$etapaLivre1,
         'mensagem_id' => (string)$mensagemAtivaId,
         'canal' => 'whatsapp',
         'ativo' => '1',
@@ -232,7 +247,7 @@ try {
     // ---- (5) ativação/inativação -------------------------------------------------------------------
     $regraService->salvar([
         'event_type' => $eventoComEtapa,
-        'pipeline_stage_id' => (string)$entrevistaRhId,
+        'pipeline_stage_id' => (string)$etapaLivre1,
         'mensagem_id' => (string)$mensagemAtivaId,
         'canal' => 'whatsapp',
         // 'ativo' ausente = desmarcado no formulário
@@ -240,7 +255,7 @@ try {
     $check((int)$regraRepository->find($regraId2)['ativo'] === 0, '(5) Edição sem marcar "ativo" inativa a regra (mesma linha, sem duplicar)');
     $regraService->salvar([
         'event_type' => $eventoComEtapa,
-        'pipeline_stage_id' => (string)$entrevistaRhId,
+        'pipeline_stage_id' => (string)$etapaLivre1,
         'mensagem_id' => (string)$mensagemAtivaId,
         'canal' => 'whatsapp',
         'ativo' => '1',
@@ -264,6 +279,7 @@ try {
     }
 
     // ---- (1) acesso à nova seção + (2) listagem + modo leitura vs. operação ------------------------
+    $nomeEtapaLivre1 = (string)(PipelineStage::find($etapaLivre1)['nome'] ?? '');
     $comoUsuario($rh);
     $_GET = [];
     ui_titulo_pagina(null, true);
@@ -273,7 +289,7 @@ try {
         && str_contains($htmlRh, 'Regras de comunicação')
         && str_contains($htmlRh, 'regras/nova')
         && str_contains($htmlRh, 'ZZREG Convocação de teste')
-        && str_contains($htmlRh, 'Entrevista RH')
+        && str_contains($htmlRh, $nomeEtapaLivre1)
         && str_contains($htmlRh, 'regras/' . $regraId2 . '/editar'),
         '(1)/(2) RH: seção "Regras de comunicação" aparece, com botão "Nova regra", listando a regra criada (mensagem + etapa) e link de editar'
     );
@@ -324,11 +340,11 @@ try {
 
     $bloqueouEtapa = false;
     try {
-        $pdo->prepare('DELETE FROM pipeline_stages WHERE id = ?')->execute([$entrevistaRhId]);
+        $pdo->prepare('DELETE FROM pipeline_stages WHERE id = ?')->execute([$etapaLivre1]);
     } catch (PDOException $e) {
         $bloqueouEtapa = true;
     }
-    $check($bloqueouEtapa && PipelineStage::find($entrevistaRhId) !== null, '(13) FK RESTRICT impede excluir uma etapa referenciada por uma regra');
+    $check($bloqueouEtapa && PipelineStage::find($etapaLivre1) !== null, '(13) FK RESTRICT impede excluir uma etapa referenciada por uma regra');
 
     echo "\nINTEGRATION_INTEGRACAO_REGRAS_COMUNICACAO_OK\n";
 } finally {

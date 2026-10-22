@@ -55,7 +55,7 @@ $canalSelecionado = (string)($regra['canal'] ?? 'whatsapp');
           </option>
         <?php endforeach; ?>
       </select>
-      <p class="mt-1 text-xs text-text-secondary">Só modelos ativos de <a href="<?= $base ?>/admin/mensagens" class="text-primary-700 underline hover:text-primary-800">Mensagens</a> aparecem aqui. O texto do modelo continua sendo editado só lá.</p>
+      <p class="mt-1 text-xs text-text-secondary">Só modelos ativos de <a href="<?= $base ?>/admin/configuracoes/mensagens" class="text-primary-700 underline hover:text-primary-800">Mensagens</a> aparecem aqui. O texto do modelo continua sendo editado só lá.</p>
     </div>
 
     <div>

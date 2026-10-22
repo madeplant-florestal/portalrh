@@ -138,8 +138,10 @@ try {
     $check(in_array('empresas', array_column((new PortalNavegacaoService())->abas('cadastros'), 'chave'), true), 'mesmo sem a permissão, continua vendo a aba Empresas (acesso por role, aditivo — nada foi removido)');
     $abasRecrutamentoSemPermissao = array_column((new PortalNavegacaoService())->abas('recrutamento'), 'chave');
     $check(!in_array('pipeline', $abasRecrutamentoSemPermissao, true), '(12) Gestor sem pipeline.visualizar não vê a aba "Pipeline Kanban" (backend hoje é admin/rh só — aba não ficaria morta)');
-    $check(!in_array('webhooks', $abasRecrutamentoSemPermissao, true), 'Gestor sem recruitment_webhooks.visualizar não vê a aba "Webhooks"');
     $check(!in_array('indicacoes', $abasRecrutamentoSemPermissao, true), 'Gestor sem indicacoes.visualizar não vê a aba "Indicações"');
+    // Webhooks saiu de Recrutamento (Configurações → Integrações, Etapa 2, 2026-10) — mesma
+    // permissão recruitment_webhooks.visualizar, agora gateando a aba "Integrações".
+    $check(!in_array('configuracoes', $modulosGestorSemPermissao, true), 'Gestor sem recruitment_webhooks.visualizar não vê o módulo "Configurações"');
     $check(!in_array('usuarios', $modulosGestorSemPermissao, true), 'Gestor (não admin/supervisor) continua sem ver o módulo "Usuários" — regra antiga preservada');
 
     // ---- variante aditiva real (item 6 provado de ponta a ponta): pipeline.visualizar NÃO é role admin/rh, então concedê-la
@@ -154,7 +156,7 @@ try {
     $comoUsuario($adminId, 'admin', false);
     $abasRecrutamentoAdmin = array_column((new PortalNavegacaoService())->abas('recrutamento'), 'chave');
     $modulosAdmin = array_column((new PortalNavegacaoService())->modulos(), 'chave');
-    $check(in_array('pipeline', $abasRecrutamentoAdmin, true) && in_array('webhooks', $abasRecrutamentoAdmin, true) && in_array('indicacoes', $abasRecrutamentoAdmin, true) && in_array('colaboradores', $modulosAdmin, true) && in_array('usuarios', $modulosAdmin, true), 'Admin continua vendo TODOS os módulos/abas pelo bypass central — nenhuma regressão');
+    $check(in_array('pipeline', $abasRecrutamentoAdmin, true) && in_array('indicacoes', $abasRecrutamentoAdmin, true) && in_array('colaboradores', $modulosAdmin, true) && in_array('usuarios', $modulosAdmin, true) && in_array('configuracoes', $modulosAdmin, true), 'Admin continua vendo TODOS os módulos/abas pelo bypass central — nenhuma regressão (Webhooks hoje é o módulo "configuracoes", não mais uma aba de recrutamento)');
 
     $comoUsuario($rhId, 'rh', false);
     $abasRecrutamentoRh = array_column((new PortalNavegacaoService())->abas('recrutamento'), 'chave');

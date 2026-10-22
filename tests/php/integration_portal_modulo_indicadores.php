@@ -178,7 +178,7 @@ try {
     $check(str_contains($pa, 'não são') && str_contains($pa, 'deduplicados por codigo_pessoa') && !str_contains($pa, 'app-shell') && !preg_match('/\bui_[a-z_]+\(/', $pa) && !preg_match('/\bui_[a-z_]+\(/', $fonte('app/services/RhIndicadoresService.php')), '(semântica) People Analytics segue por CONTRATO (sem deduplicar por pessoa); services sem dependência de UI — cálculo intacto');
 
     // ---- tabelas no mobile -------------------------------------------------------------------------------------------------------------
-    foreach (['pdis/index.php', 'pdis/selecionar-contrato.php', 'recruitment_webhooks/index.php'] as $v) {
+    foreach (['pdis/index.php', 'pdis/selecionar-contrato.php', 'configuracoes/integracoes/index.php'] as $v) {
         $c = $fonte('app/views/admin/' . $v);
         $check(!str_contains($c, 'mobile-table-desktop') && str_contains($c, 'responsive-table-wrap') && substr_count($c, '<table') >= 1, "(mobile) admin/{$v}: a tabela não é escondida abaixo de 769px e rola dentro do próprio container (responsive-table-wrap)");
     }

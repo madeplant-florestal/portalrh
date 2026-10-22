@@ -143,12 +143,18 @@ try {
     $router->post('/internal/metadados/setores/sync', [InternalMetadadosSyncController::class, 'setores']);
     $router->post('/internal/metadados/cargos/sync', [InternalMetadadosSyncController::class, 'cargos']);
 
-    $router->get('/admin/recruitment-webhooks', [AdminRecruitmentWebhooksController::class, 'index']);
-    $router->post('/admin/recruitment-webhooks/settings/save', [AdminRecruitmentWebhooksController::class, 'saveSetting']);
-    $router->post('/admin/recruitment-webhooks/settings/regenerate-secret', [AdminRecruitmentWebhooksController::class, 'regenerateSecret']);
-    $router->post('/admin/recruitment-webhooks/test', [AdminRecruitmentWebhooksController::class, 'testWebhook']);
-    $router->post('/admin/recruitment-webhooks/process-pending', [AdminRecruitmentWebhooksController::class, 'processPending']);
-    $router->post('/admin/recruitment-webhooks/events/{id}/retry', [AdminRecruitmentWebhooksController::class, 'retryEvent']);
+    // Configurações → Integrações (2026-10): realoca a administração da integração de Webhooks do
+    // Recrutamento com o n8n, antes hospedada em /admin/recruitment-webhooks (ver auditoria técnica
+    // da Etapa 1). A rota antiga GET só redireciona — as rotas POST antigas não têm uso externo
+    // conhecido (só os próprios formulários da tela, já atualizados para a nova URL) e por isso não
+    // foram replicadas como alias.
+    $router->get('/admin/recruitment-webhooks', static fn() => redirect('/admin/configuracoes/integracoes'));
+    $router->get('/admin/configuracoes/integracoes', [AdminIntegracoesController::class, 'index']);
+    $router->post('/admin/configuracoes/integracoes/webhook/salvar', [AdminIntegracoesController::class, 'saveSetting']);
+    $router->post('/admin/configuracoes/integracoes/webhook/regenerar-segredo', [AdminIntegracoesController::class, 'regenerateSecret']);
+    $router->post('/admin/configuracoes/integracoes/webhook/testar', [AdminIntegracoesController::class, 'testWebhook']);
+    $router->post('/admin/configuracoes/integracoes/webhook/processar-pendentes', [AdminIntegracoesController::class, 'processPending']);
+    $router->post('/admin/configuracoes/integracoes/webhook/reenviar/{id}', [AdminIntegracoesController::class, 'retryEvent']);
     $router->get('/admin/empresas', [AdminEmpresasController::class, 'index']);
     $router->get('/admin/empresas/novo', [AdminEmpresasController::class, 'create']);
     $router->post('/admin/empresas/novo', [AdminEmpresasController::class, 'store']);

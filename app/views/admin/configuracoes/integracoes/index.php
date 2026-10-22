@@ -4,7 +4,7 @@ require_once APP_PATH . '/views/partials/modulo-topo.php';
 $historyItems = $history['items'] ?? [];
 $page = (int)($history['page'] ?? 1);
 $pages = (int)($history['pages'] ?? 1);
-$queryBase = $base . '/admin/recruitment-webhooks';
+$queryBase = $base . '/admin/configuracoes/integracoes';
 $prevParams = ['page' => max(1, $page - 1)];
 $nextParams = ['page' => min($pages, $page + 1)];
 $queue = $queue ?? [];
@@ -13,9 +13,9 @@ $entregues = (int)($queue['processed'] ?? 0);
 $falhas = (int)($queue['failed'] ?? 0);
 ?>
 <div class="space-y-4">
-  <?= ui_modulo_topo($base, 'recrutamento', 'webhooks', [
-      'titulo' => 'Webhooks do Recrutamento',
-      'descricao' => 'Integração única e global com o n8n para automações do Kanban de recrutamento.',
+  <?= ui_modulo_topo($base, 'configuracoes', 'integracoes', [
+      'titulo' => 'Integrações',
+      'descricao' => 'Conexões do Portal RH com sistemas externos.',
   ]) ?>
   <div class="responsive-panel space-y-6">
   <?php if (!empty($flashError)): ?>
@@ -27,7 +27,7 @@ $falhas = (int)($queue['failed'] ?? 0);
 
   <section class="space-y-4">
     <div>
-      <h2 class="text-lg font-semibold text-text-primary">Configuração da integração</h2>
+      <h2 class="text-lg font-semibold text-text-primary">n8n / Webhooks</h2>
       <p class="text-sm text-text-secondary">Uma única URL e um único segredo para todas as empresas do grupo. A empresa da vaga é enviada apenas como informação de contexto no payload.</p>
     </div>
 
@@ -63,7 +63,7 @@ $falhas = (int)($queue['failed'] ?? 0);
         <p class="text-xs text-text-secondary">Somente visualização — apenas Admin/RH executam ações nesta tela.</p>
       </dl>
       <?php else: ?>
-      <form action="<?= $base ?>/admin/recruitment-webhooks/settings/save" method="post" class="mt-4 space-y-4">
+      <form action="<?= $base ?>/admin/configuracoes/integracoes/webhook/salvar" method="post" class="mt-4 space-y-4">
         <input type="hidden" name="csrf" value="<?= Security::e($csrf ?? '') ?>">
         <label class="inline-flex items-center gap-2 text-sm text-text-primary">
           <input type="checkbox" name="enabled" value="1" <?= (int)($setting['enabled'] ?? 0) === 1 ? 'checked' : '' ?> class="rounded border-border text-primary-700 focus:ring-primary-100">
@@ -88,13 +88,13 @@ $falhas = (int)($queue['failed'] ?? 0);
         </div>
         <?php if ($podeOperar): ?>
         <div class="flex gap-2">
-          <form action="<?= $base ?>/admin/recruitment-webhooks/settings/regenerate-secret" method="post" data-confirm-message="Gerar um novo segredo invalida o anterior. Continuar?">
+          <form action="<?= $base ?>/admin/configuracoes/integracoes/webhook/regenerar-segredo" method="post" data-confirm-message="Gerar um novo segredo invalida o anterior. Continuar?">
             <input type="hidden" name="csrf" value="<?= Security::e($csrf ?? '') ?>">
             <button type="submit" class="rounded-lg border border-border px-3 py-2 text-xs font-semibold text-text-primary hover:bg-surface-secondary">
               <?= !empty($setting['has_secret']) ? 'Regenerar segredo' : 'Gerar segredo' ?>
             </button>
           </form>
-          <form action="<?= $base ?>/admin/recruitment-webhooks/test" method="post">
+          <form action="<?= $base ?>/admin/configuracoes/integracoes/webhook/testar" method="post">
             <input type="hidden" name="csrf" value="<?= Security::e($csrf ?? '') ?>">
             <button type="submit" class="rounded-lg border border-border px-3 py-2 text-xs font-semibold text-text-primary hover:bg-surface-secondary">
               Testar webhook
@@ -113,7 +113,7 @@ $falhas = (int)($queue['failed'] ?? 0);
         <p class="text-sm text-text-secondary">O envio nunca bloqueia a movimentação do candidato no Kanban.</p>
       </div>
       <?php if ($podeOperar): ?>
-      <form action="<?= $base ?>/admin/recruitment-webhooks/process-pending" method="post">
+      <form action="<?= $base ?>/admin/configuracoes/integracoes/webhook/processar-pendentes" method="post">
         <input type="hidden" name="csrf" value="<?= Security::e($csrf ?? '') ?>">
         <button type="submit" class="inline-flex items-center justify-center rounded-lg bg-primary-700 px-4 py-3 text-sm font-medium text-white hover:bg-primary-800">
           Processar fila pendente
@@ -192,7 +192,7 @@ $falhas = (int)($queue['failed'] ?? 0);
               </td>
               <td class="p-3">
                 <?php if ($podeOperar): ?>
-                <form action="<?= $base ?>/admin/recruitment-webhooks/events/<?= (int)$item['id'] ?>/retry" method="post">
+                <form action="<?= $base ?>/admin/configuracoes/integracoes/webhook/reenviar/<?= (int)$item['id'] ?>" method="post">
                   <input type="hidden" name="csrf" value="<?= Security::e($csrf ?? '') ?>">
                   <button type="submit" class="rounded-lg border border-border px-3 py-2 text-xs font-semibold text-text-primary hover:bg-surface-secondary">
                     Reenviar

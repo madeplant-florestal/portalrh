@@ -5,12 +5,14 @@
  * Fixtures ZZREC-* com limpeza em `finally`. Prova, contra o banco:
  *   - REGRA DE OURO das abas: para vários perfis, TODA aba visível aponta para um destino que o backend realmente aceita
  *     (o gate `Auth::requireRole([...])`/`Authorization::requirePermissao(...)` é lido do controller de cada rota) — nunca uma aba que leva a 403;
- *   - a antiga divergência sidebar × controller (Pipeline/Indicações/Webhooks para `viewer` com permissão) foi CORRIGIDA no backend
+ *   - a antiga divergência sidebar × controller (Pipeline/Indicações para `viewer` com permissão) foi CORRIGIDA no backend
  *     (`Authorization::requireRoleOuPermissao`): viewer com a permissão vê a aba e abre a tela (200); sem ela, não vê e é bloqueado;
- *     ações sensíveis (mover, pagar, exportar, configurar, testar, reenviar) seguem restritas às suas roles;
+ *     ações sensíveis (mover, pagar, exportar) seguem restritas às suas roles;
  *   - a aba da página atual sempre aparece; `entradaDoModulo` = primeira aba visível; nenhuma autorização foi criada/alterada;
  *   - as telas migradas renderizam no AppShell V2 (sem sidebar), com breadcrumb, PageHeader, ModuleTabs, `aria-current` e <title>;
- *   - o card "Recrutamento e Seleção" da Central segue apontando para a primeira entrada válida.
+ *   - o card "Recrutamento e Seleção" da Central segue apontando para a primeira entrada válida;
+ *   - a aba "Webhooks" NÃO existe mais aqui — foi realocada para Configurações → Integrações
+ *     (ver `integration_portal_configuracoes_integracoes.php`, Etapa 2 da sprint de Webhooks).
  */
 
 require __DIR__ . '/../../app/core/bootstrap.php';
@@ -48,7 +50,7 @@ $corpoDe = static function (string $classe, string $metodo): string {
 
 $permId = [];
 $stmt = $pdo->prepare('SELECT id FROM permissoes WHERE codigo = ?');
-foreach (['dashboard_recrutamento.visualizar', 'pipeline.visualizar', 'recruitment_webhooks.visualizar', 'indicacoes.visualizar', 'solicitacao_vaga.criar', 'kanban_vagas.visualizar'] as $c) {
+foreach (['dashboard_recrutamento.visualizar', 'pipeline.visualizar', 'indicacoes.visualizar', 'solicitacao_vaga.criar', 'kanban_vagas.visualizar'] as $c) {
     $stmt->execute([$c]);
     $permId[$c] = (int)$stmt->fetchColumn();
 }
@@ -105,13 +107,13 @@ try {
     $rh = $novoUsuario('RH', 'rh');
     $viewer = $novoUsuario('Viewer', 'viewer');
     $supervisor = $novoUsuario('Supervisor', 'viewer', [], true);
-    $viewerPipe = $novoUsuario('Viewer Pipeline', 'viewer', ['pipeline.visualizar', 'recruitment_webhooks.visualizar', 'indicacoes.visualizar']);
+    $viewerPipe = $novoUsuario('Viewer Pipeline', 'viewer', ['pipeline.visualizar', 'indicacoes.visualizar']);
     $viewerDash = $novoUsuario('Viewer Dashboard', 'viewer', ['dashboard_recrutamento.visualizar']);
     $gestor = $novoUsuario('Gestor', 'viewer', ['solicitacao_vaga.criar', 'kanban_vagas.visualizar']);
-    $perfis = ['Admin' => $admin, 'RH' => $rh, 'viewer' => $viewer, 'supervisor' => $supervisor, 'viewer+pipeline/webhooks/indicações' => $viewerPipe, 'viewer+dashboard' => $viewerDash, 'gestor de vaga' => $gestor];
+    $perfis = ['Admin' => $admin, 'RH' => $rh, 'viewer' => $viewer, 'supervisor' => $supervisor, 'viewer+pipeline/indicações' => $viewerPipe, 'viewer+dashboard' => $viewerDash, 'gestor de vaga' => $gestor];
 
     $definicao = PortalNavegacaoService::definicaoAbas()['recrutamento'];
-    $check(array_column($definicao['abas'], 'chave') === ['dashboard', 'solicitacoes', 'vagas', 'candidaturas', 'pipeline', 'indicacoes', 'webhooks'], '(abas) Dashboard, Solicitações de Vaga, Vagas, Candidaturas, Pipeline Kanban, Indicações, Webhooks — só funcionalidades reais');
+    $check(array_column($definicao['abas'], 'chave') === ['dashboard', 'solicitacoes', 'vagas', 'candidaturas', 'pipeline', 'indicacoes'], '(abas) Dashboard, Solicitações de Vaga, Vagas, Candidaturas, Pipeline Kanban, Indicações — só funcionalidades reais (Webhooks saiu para Configurações → Integrações)');
     $semRota = array_values(array_filter(array_column($definicao['abas'], 'href'), static fn(string $h): bool => !str_contains($rotas, "\$router->get('{$h}'")));
     $check($semRota === [], '(abas) Todo destino de aba é rota GET registrada' . ($semRota === [] ? '' : ': faltam ' . implode(', ', $semRota)));
 
@@ -129,20 +131,19 @@ try {
         }
     }
     $check($problemas === [], '(regra de ouro) Para ' . count($perfis) . ' perfis, toda aba visível leva a um destino que o controller realmente aceita — nunca a um 403' . ($problemas === [] ? '' : ': ' . implode(' | ', $problemas)));
-    $check($visiveis['Admin'] === ['dashboard', 'solicitacoes', 'vagas', 'candidaturas', 'pipeline', 'indicacoes', 'webhooks'], '(Admin) Vê as 7 abas (bypass central para o dashboard)');
+    $check($visiveis['Admin'] === ['dashboard', 'solicitacoes', 'vagas', 'candidaturas', 'pipeline', 'indicacoes'], '(Admin) Vê as 6 abas (bypass central para o dashboard)');
     // Bloco 4 (2026-10, pedido do RH): role='rh' tem bypass central de todas as permissões
     // individuais, incluindo dashboard_recrutamento.visualizar.
-    $check($visiveis['RH'] === ['dashboard', 'solicitacoes', 'vagas', 'candidaturas', 'pipeline', 'indicacoes', 'webhooks'], '(RH) Vê as 7 abas, incluindo o Dashboard — bypass central de Authorization (Bloco 4)');
+    $check($visiveis['RH'] === ['dashboard', 'solicitacoes', 'vagas', 'candidaturas', 'pipeline', 'indicacoes'], '(RH) Vê as 6 abas, incluindo o Dashboard — bypass central de Authorization (Bloco 4)');
     $check($visiveis['viewer'] === ['vagas', 'candidaturas'], '(viewer sem permissão) Só Vagas e Candidaturas, abertas por role');
     $check($visiveis['gestor de vaga'] === ['solicitacoes', 'vagas', 'candidaturas'], '(gestor) Solicitações + as abertas');
     $check($visiveis['viewer+dashboard'] === ['dashboard', 'vagas', 'candidaturas'], '(viewer+dashboard) O Dashboard aparece com a permissão individual');
-    $check($visiveis['viewer+pipeline/webhooks/indicações'] === ['vagas', 'candidaturas', 'pipeline', 'indicacoes', 'webhooks'] && $visiveis['supervisor'] === ['solicitacoes', 'vagas', 'candidaturas', 'pipeline', 'indicacoes', 'webhooks'], '(correção) viewer com as permissões pipeline/indicações/webhooks agora RECEBE as 3 abas (a permissão individual libera a entrada); supervisor também');
+    $check($visiveis['viewer+pipeline/indicações'] === ['vagas', 'candidaturas', 'pipeline', 'indicacoes'] && $visiveis['supervisor'] === ['solicitacoes', 'vagas', 'candidaturas', 'pipeline', 'indicacoes'], '(correção) viewer com as permissões pipeline/indicações agora RECEBE as 2 abas (a permissão individual libera a entrada); supervisor também');
 
     // ---- gates de entrada: viewer com permissão abre; sem permissão é bloqueado; Admin pelo bypass -----------------------------
     $soPipe = $novoUsuario('So Pipeline', 'viewer', ['pipeline.visualizar']);
     $soInd = $novoUsuario('So Indicacoes', 'viewer', ['indicacoes.visualizar']);
-    $soWeb = $novoUsuario('So Webhooks', 'viewer', ['recruitment_webhooks.visualizar']);
-    $entradas = ['/admin/pipeline' => [$soPipe, 'pipeline'], '/admin/indicacoes' => [$soInd, 'indicacoes'], '/admin/recruitment-webhooks' => [$soWeb, 'webhooks']];
+    $entradas = ['/admin/pipeline' => [$soPipe, 'pipeline'], '/admin/indicacoes' => [$soInd, 'indicacoes']];
     foreach ($entradas as $rota => [$comPerm, $chaveAba]) {
         $comoUsuario($comPerm);
         $check($backendPermite($rota, $comPerm) && in_array($chaveAba, array_column((new PortalNavegacaoService())->abas('recrutamento'), 'chave'), true), "(entrada) viewer com a permissão de {$chaveAba}: vê a aba e o backend abre {$rota} (200)");
@@ -160,7 +161,7 @@ try {
     $comoUsuario($soPipe);
     $check(Authorization::temAcessoPorRoleOuPermissao(['admin', 'rh'], 'pipeline.visualizar') && !Authorization::temAcessoPorRoleOuPermissao(['admin', 'rh'], 'indicacoes.visualizar'), '(gate) Authorization::temAcessoPorRoleOuPermissao: a permissão certa libera, a errada não');
     $comoUsuario($rh);
-    $check(Authorization::temAcessoPorRoleOuPermissao(['admin', 'rh'], 'pipeline.visualizar') && $backendPermite('/admin/pipeline', $rh) && $backendPermite('/admin/indicacoes', $rh) && $backendPermite('/admin/recruitment-webhooks', $rh), '(compatibilidade) RH continua entrando pela role, SEM precisar da permissão (o modelo é aditivo: nenhum acesso existente foi removido)');
+    $check(Authorization::temAcessoPorRoleOuPermissao(['admin', 'rh'], 'pipeline.visualizar') && $backendPermite('/admin/pipeline', $rh) && $backendPermite('/admin/indicacoes', $rh), '(compatibilidade) RH continua entrando pela role, SEM precisar da permissão (o modelo é aditivo: nenhum acesso existente foi removido)');
 
     // ---- ações sensíveis continuam com os gates de antes -------------------------------------------------------------------------
     $sensiveis = [
@@ -168,11 +169,6 @@ try {
         ['get', '/admin/indicacoes/export', false, true, true],
         ['post', '/admin/indicacoes/{id}/pagar', false, true, true],
         ['post', '/admin/indicacoes/{id}/pagar/editar-data', false, true, true],
-        ['post', '/admin/recruitment-webhooks/settings/save', false, false, true],
-        ['post', '/admin/recruitment-webhooks/settings/regenerate-secret', false, false, true],
-        ['post', '/admin/recruitment-webhooks/test', false, true, true],
-        ['post', '/admin/recruitment-webhooks/process-pending', false, true, true],
-        ['post', '/admin/recruitment-webhooks/events/{id}/retry', false, true, true],
     ];
     $sensivelOk = true;
     $detalhe = [];
@@ -183,7 +179,7 @@ try {
             $detalhe[] = "{$rotaSensivel}=" . json_encode($resultado);
         }
     }
-    $check($sensivelOk, '(ações sensíveis) mover card, exportar, pagar/editar pagamento, testar/reprocessar/reenviar continuam admin/rh; salvar configuração e regenerar segredo só admin; viewer com a permissão de VISUALIZAR NÃO as executa' . ($detalhe === [] ? '' : ' — divergências: ' . implode(' | ', $detalhe)));
+    $check($sensivelOk, '(ações sensíveis) mover card, exportar e pagar/editar pagamento continuam admin/rh; viewer com a permissão de VISUALIZAR NÃO as executa' . ($detalhe === [] ? '' : ' — divergências: ' . implode(' | ', $detalhe)));
 
     // ---- telas em modo leitura para quem entrou só pela permissão -----------------------------------------------------------------
     $_GET = [];
@@ -192,19 +188,14 @@ try {
     $htmlPipe = $renderizar(static fn() => (new AdminPipelineController())->index());
     ui_titulo_pagina(null, true);
     $htmlInd = $renderizar(static fn() => (new AdminIndicacoesController())->index());
-    ui_titulo_pagina(null, true);
-    $htmlWeb = $renderizar(static fn() => (new AdminRecruitmentWebhooksController())->index());
     $check(str_contains($htmlPipe, 'data-kanban-readonly="1"') && str_contains($htmlPipe, 'Somente visualização') && !str_contains($htmlPipe, 'draggable="true"') && str_contains($htmlPipe, 'draggable="false"'), '(leitura) Pipeline para viewer com permissão: quadro em somente visualização (o JS não habilita arrastar)');
     $check(!str_contains($htmlInd, 'Exportar Excel') && !str_contains($htmlInd, 'data-pagamento-open') && !str_contains($htmlInd, 'data-pagamento-edit-open') && str_contains($htmlInd, 'Programa de Indicações'), '(leitura) Indicações para viewer com permissão: lista e filtros, sem exportar nem registrar/editar pagamento');
-    $check(!str_contains($htmlWeb, 'settings/save') && !str_contains($htmlWeb, 'regenerate-secret') && !str_contains($htmlWeb, '/test"') && !str_contains($htmlWeb, 'process-pending') && !str_contains($htmlWeb, '/retry') && str_contains($htmlWeb, 'Somente visualização'), '(leitura) Webhooks para viewer com permissão: configuração, fila e histórico em leitura, sem nenhum formulário de ação');
     $comoUsuario($rh);
     ui_titulo_pagina(null, true);
     $htmlPipeRh = $renderizar(static fn() => (new AdminPipelineController())->index());
     ui_titulo_pagina(null, true);
     $htmlIndRh = $renderizar(static fn() => (new AdminIndicacoesController())->index());
-    ui_titulo_pagina(null, true);
-    $htmlWebRh = $renderizar(static fn() => (new AdminRecruitmentWebhooksController())->index());
-    $check(!str_contains($htmlPipeRh, 'data-kanban-readonly') && str_contains($htmlIndRh, 'Exportar Excel') && str_contains($htmlWebRh, 'settings/save') && str_contains($htmlWebRh, 'process-pending') && str_contains($htmlWebRh, 'data-confirm-message="Gerar um novo segredo'), '(RH) A visão de quem opera não mudou: arrasta cards, exporta, vê os formulários de ação (confirmação de segredo via data-confirm-message)');
+    $check(!str_contains($htmlPipeRh, 'data-kanban-readonly') && str_contains($htmlIndRh, 'Exportar Excel'), '(RH) A visão de quem opera não mudou: arrasta cards, exporta');
 
     // ---- aba atual sempre aparece; entrada do módulo ---------------------------------------------------------------------------
     $comoUsuario($viewer);
@@ -237,7 +228,6 @@ try {
         'Pipeline' => [$rh, AdminPipelineController::class, 'index', 'Pipeline Kanban'],
         'Solicitações' => [$rh, AdminSolicitacoesVagaController::class, 'index', 'Solicitações de Vaga'],
         'Indicações' => [$rh, AdminIndicacoesController::class, 'index', 'Indicações'],
-        'Webhooks' => [$rh, AdminRecruitmentWebhooksController::class, 'index', 'Webhooks'],
         'Dashboard' => [$viewerDash, AdminDashboardRecrutamentoController::class, 'index', 'Dashboard'],
     ];
     foreach ($paginas as $nome => [$u, $classe, $metodo, $rotuloAba]) {
@@ -257,16 +247,16 @@ try {
 
     // ---- nenhuma autorização nova / código ----------------------------------------------------------------------------------------
     $check((int)$pdo->query('SELECT COUNT(*) FROM permissoes')->fetchColumn() === $permissoesAntes, '(permissões) Nenhuma permissão foi criada');
-    $migrados = ['AdminCandidaturasController', 'AdminVagasController', 'AdminPipelineController', 'AdminSolicitacoesVagaController', 'AdminSolicitacoesVagaKanbanController', 'AdminIndicacoesController', 'AdminRecruitmentWebhooksController', 'AdminDashboardRecrutamentoController'];
+    $migrados = ['AdminCandidaturasController', 'AdminVagasController', 'AdminPipelineController', 'AdminSolicitacoesVagaController', 'AdminSolicitacoesVagaKanbanController', 'AdminIndicacoesController', 'AdminDashboardRecrutamentoController'];
     $todosOk = true;
     foreach ($migrados as $ctrl) {
         $fonte = (string)file_get_contents(APP_PATH . "/controllers/{$ctrl}.php");
         $todosOk = $todosOk && !str_contains($fonte, "'layouts/admin'") && str_contains($fonte, "'layouts/app-shell'") && str_contains($fonte, 'Auth::requireRole');
     }
-    $check($todosOk, '(controllers) Os 8 controllers do módulo só trocaram o layout para app-shell e mantêm todos os seus gates requireRole/requirePermissao');
-    $check(str_contains($corpoDe(AdminPipelineController::class, 'index'), "Authorization::requireRoleOuPermissao(['admin', 'rh'], 'pipeline.visualizar')") && str_contains($corpoDe(AdminIndicacoesController::class, 'index'), "Authorization::requireRoleOuPermissao(['admin', 'rh'], 'indicacoes.visualizar')") && str_contains($corpoDe(AdminRecruitmentWebhooksController::class, 'index'), "Authorization::requireRoleOuPermissao(['admin', 'rh'], 'recruitment_webhooks.visualizar')") && str_contains($corpoDe(AdminDashboardRecrutamentoController::class, 'index'), "Authorization::requirePermissao('dashboard_recrutamento.visualizar')"), '(controllers) Entradas de Pipeline, Indicações e Webhooks: role admin/rh OU a permissão individual <módulo>.visualizar (permissões já existentes); Dashboard segue exigindo a sua permissão');
-    $check(str_contains($corpoDe(AdminPipelineController::class, 'move'), "Auth::requireRole(['admin', 'rh'])") && str_contains($corpoDe(AdminIndicacoesController::class, 'markPago'), "Auth::requireRole(['admin', 'rh'])") && str_contains($corpoDe(AdminIndicacoesController::class, 'export'), "Auth::requireRole(['admin', 'rh'])") && str_contains($corpoDe(AdminRecruitmentWebhooksController::class, 'saveSetting'), "Auth::requireRole(['admin'])"), '(controllers) Mover, pagar, exportar e configurar webhooks mantêm os gates de escrita/operação de antes');
-    $check((int)$pdo->query("SELECT COUNT(*) FROM permissoes")->fetchColumn() === $permissoesAntes, '(permissões) Nenhuma permissão nova: só as já existentes (pipeline/indicacoes/recruitment_webhooks .visualizar) passaram a valer no backend');
+    $check($todosOk, '(controllers) Os 7 controllers do módulo só trocaram o layout para app-shell e mantêm todos os seus gates requireRole/requirePermissao');
+    $check(str_contains($corpoDe(AdminPipelineController::class, 'index'), "Authorization::requireRoleOuPermissao(['admin', 'rh'], 'pipeline.visualizar')") && str_contains($corpoDe(AdminIndicacoesController::class, 'index'), "Authorization::requireRoleOuPermissao(['admin', 'rh'], 'indicacoes.visualizar')") && str_contains($corpoDe(AdminDashboardRecrutamentoController::class, 'index'), "Authorization::requirePermissao('dashboard_recrutamento.visualizar')"), '(controllers) Entradas de Pipeline e Indicações: role admin/rh OU a permissão individual <módulo>.visualizar (permissões já existentes); Dashboard segue exigindo a sua permissão');
+    $check(str_contains($corpoDe(AdminPipelineController::class, 'move'), "Auth::requireRole(['admin', 'rh'])") && str_contains($corpoDe(AdminIndicacoesController::class, 'markPago'), "Auth::requireRole(['admin', 'rh'])") && str_contains($corpoDe(AdminIndicacoesController::class, 'export'), "Auth::requireRole(['admin', 'rh'])"), '(controllers) Mover, pagar e exportar mantêm os gates de escrita/operação de antes');
+    $check((int)$pdo->query("SELECT COUNT(*) FROM permissoes")->fetchColumn() === $permissoesAntes, '(permissões) Nenhuma permissão nova: só as já existentes (pipeline/indicacoes.visualizar) passaram a valer no backend');
 } finally {
     $_SESSION = $sessaoOriginal;
     if ($criados !== []) {

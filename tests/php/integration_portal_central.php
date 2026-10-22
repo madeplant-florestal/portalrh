@@ -119,13 +119,13 @@ try {
     $supervisor = $novoUsuario('Supervisor', 'viewer', [], true);
 
     $todasChaves = array_column(PortalNavegacaoService::definicao(), 'chave');
-    $check(count($todasChaves) === 10 && count(array_unique($todasChaves)) === 10, '(definição) 10 módulos, chaves únicas — áreas funcionais, não os ~25 itens da sidebar');
+    $check(count($todasChaves) === 11 && count(array_unique($todasChaves)) === 11, '(definição) 11 módulos, chaves únicas — áreas funcionais, não os ~25 itens da sidebar (Configurações entrou na Etapa 2 da sprint de Webhooks)');
 
     // ---- Admin: bypass central ---------------------------------------------------------------------------------------------
     $comoUsuario($admin);
     $cAdmin = $cards();
     $check(array_keys($cAdmin) === $todasChaves, '(Admin) Vê todos os módulos pelo bypass central de Authorization — sem lógica paralela na Central');
-    $check($cAdmin['indicadores'] === '/admin/dashboard' && $cAdmin['recrutamento'] === '/admin/dashboard-recrutamento' && $cAdmin['colaboradores'] === '/admin/colaboradores' && $cAdmin['desligamento'] === '/admin/dashboard-turnover' && $cAdmin['integracao'] === '/admin/pesquisas-reacao-integracao' && $cAdmin['usuarios'] === '/admin/usuarios', '(Admin) Cada card aponta para a primeira entrada visível da área');
+    $check($cAdmin['indicadores'] === '/admin/dashboard' && $cAdmin['recrutamento'] === '/admin/dashboard-recrutamento' && $cAdmin['colaboradores'] === '/admin/colaboradores' && $cAdmin['desligamento'] === '/admin/dashboard-turnover' && $cAdmin['integracao'] === '/admin/pesquisas-reacao-integracao' && $cAdmin['usuarios'] === '/admin/usuarios' && $cAdmin['configuracoes'] === '/admin/configuracoes/integracoes', '(Admin) Cada card aponta para a primeira entrada visível da área, incluindo o novo card Configurações');
 
     // ---- viewer sem permissão ----------------------------------------------------------------------------------------------
     $comoUsuario($viewer);
@@ -133,7 +133,7 @@ try {
     $check(array_keys($cV) === ['indicadores', 'recrutamento', 'colaboradores', 'avaliacoes-desenvolvimento', 'cadastros'], '(viewer sem permissão) Só os módulos abertos a qualquer autenticado: ' . implode(', ', array_keys($cV)));
     $check($cV['recrutamento'] === '/admin/candidaturas' && $cV['colaboradores'] === '/admin/movimentacoes-pessoal' && $cV['indicadores'] === '/admin/indicadores-rh' && $cV['cadastros'] === '/admin/empresas', '(viewer sem permissão) Entradas caem no primeiro destino aberto de cada área');
     $check($cV['avaliacoes-desenvolvimento'] === '/admin/avaliacoes-desenvolvimento', '(viewer sem permissão) "Avaliações e Desenvolvimento" é \'aberto\' (Avaliação de Desempenho legada já é aberta hoje em Cadastros) — o card aparece mesmo sem pdi/avaliacao_experiencia/feedback.visualizar; a landing é quem filtra o que mostrar por permissão');
-    foreach (['usuarios', 'mensagens', 'solicitacoes-vaga', 'integracao', 'desligamento'] as $ausente) {
+    foreach (['usuarios', 'mensagens', 'solicitacoes-vaga', 'integracao', 'desligamento', 'configuracoes'] as $ausente) {
         $check(!isset($cV[$ausente]), "(viewer sem permissão) Sem permissão, o card \"{$ausente}\" não é renderizado");
     }
 
@@ -152,6 +152,9 @@ try {
         ['pipeline.visualizar', 'recrutamento', '/admin/pipeline'],
         ['colaboradores.visualizar', 'colaboradores', '/admin/colaboradores'],
         ['dashboard.visualizar', 'indicadores', '/admin/dashboard'],
+        // Configurações → Integrações (2026-10): mesma permissão que antes abria a aba Webhooks
+        // dentro de Recrutamento agora abre o card Configurações (ver Etapa 2 da sprint de Webhooks).
+        ['recruitment_webhooks.visualizar', 'configuracoes', '/admin/configuracoes/integracoes'],
     ];
     $usuariosPorPerm = [];
     foreach ($casos as [$perm, $chave, $entrada]) {
@@ -207,7 +210,7 @@ try {
         '/admin/candidaturas' => [AdminCandidaturasController::class, 'index'],
         '/admin/pipeline' => [AdminPipelineController::class, 'index'],
         '/admin/vagas' => [AdminVagasController::class, 'index'],
-        '/admin/recruitment-webhooks' => [AdminRecruitmentWebhooksController::class, 'index'],
+        '/admin/configuracoes/integracoes' => [AdminIntegracoesController::class, 'index'],
         '/admin/indicacoes' => [AdminIndicacoesController::class, 'index'],
         '/admin/solicitacoes-vaga' => [AdminSolicitacoesVagaController::class, 'index'],
         '/admin/colaboradores' => [AdminColaboradoresController::class, 'index'],
@@ -318,7 +321,7 @@ try {
     $check(str_contains($html, 'grid-cols-[repeat(auto-fill,minmax(230px,1fr))]') && str_contains($html, 'gap-[18px]') && !str_contains($html, '<script>'), '(página) ModuleGrid elástico (auto-fill/230px/18px), sem JavaScript próprio');
     $comoUsuario($admin);
     $htmlAdmin = $renderizar(static fn() => (new AdminCentralController())->index());
-    $check(substr_count($htmlAdmin, '<li class="min-w-0"><a href=') === 10 && str_contains($htmlAdmin, 'href="' . $baseUrl . '/admin/usuarios"'), '(página) O Admin recebe os 10 cards');
+    $check(substr_count($htmlAdmin, '<li class="min-w-0"><a href=') === 11 && str_contains($htmlAdmin, 'href="' . $baseUrl . '/admin/usuarios"') && str_contains($htmlAdmin, 'href="' . $baseUrl . '/admin/configuracoes/integracoes"'), '(página) O Admin recebe os 11 cards, incluindo o novo Configurações');
     $vazio = (new View())->renderPartial('admin/central', ['base' => '', 'modulos' => []]);
     $check(str_contains($vazio, 'Nenhum módulo disponível') && str_contains($vazio, 'ainda não possui acessos liberados') && !str_contains($vazio, '<ul') && !str_contains($vazio, '<a '), '(vazio) Estado vazio compacto e informativo, sem grade quebrada nem botão de solicitação');
 

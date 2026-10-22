@@ -41,7 +41,7 @@ if (count($distinctUrls) > 1) {
     fwrite(STDERR, "AMBIGUIDADE: existem " . count($distinctUrls) . " URLs diferentes configuradas. Não é seguro escolher uma automaticamente.\n\n");
     printComparisonTable($withUrl);
     fwrite(STDERR, "\nNada foi gravado. Decida manualmente qual URL deve ser a configuração global, depois\n");
-    fwrite(STDERR, "salve-a diretamente na tela /admin/recruitment-webhooks (ela grava em recruitment_webhook_global_settings)\n");
+    fwrite(STDERR, "salve-a diretamente na tela /admin/configuracoes/integracoes (ela grava em recruitment_webhook_global_settings)\n");
     fwrite(STDERR, "e gere um novo segredo por lá.\n");
     exit(1);
 }

@@ -33,9 +33,10 @@
  *
  * ABAS DE MÓDULO (`definicaoAbas`/`abas`): navegação interna de um módulo migrado. Regra de ouro: uma aba só aparece se o
  * usuário REALMENTE consegue abrir o destino (nunca uma aba que leva a 403). As regras das abas são as MESMAS da sidebar e da
- * Central porque os controllers de entrada (Pipeline, Indicações, Webhooks) passaram a usar
+ * Central porque os controllers de entrada (Pipeline, Indicações, Integrações) passaram a usar
  * `Authorization::requireRoleOuPermissao()` — role admin/rh OU a permissão individual `<módulo>.visualizar` —, exatamente o que
- * `staff_ou:<código>` expressa. `integration_portal_modulo_recrutamento.php` lê o gate de cada destino e falha se divergirem.
+ * `staff_ou:<código>` expressa. `integration_portal_modulo_recrutamento.php` e
+ * `integration_portal_configuracoes_integracoes.php` leem o gate de cada destino e falham se divergirem.
  */
 class PortalNavegacaoService
 {
@@ -88,13 +89,12 @@ class PortalNavegacaoService
                     ['href' => '/admin/indicadores-rh', 'regra' => 'aberto'],
                 ]],
             ['chave' => 'recrutamento', 'titulo' => 'Recrutamento e Seleção', 'icone' => 'recrutamento',
-                'descricao' => 'Dashboard, candidaturas, pipeline, vagas, webhooks e indicações.',
+                'descricao' => 'Dashboard, candidaturas, pipeline, vagas e indicações.',
                 'itens' => [
                     ['href' => '/admin/dashboard-recrutamento', 'regra' => 'perm:dashboard_recrutamento.visualizar'],
                     ['href' => '/admin/candidaturas', 'regra' => 'aberto'],
                     ['href' => '/admin/pipeline', 'regra' => 'staff_ou:pipeline.visualizar'],
                     ['href' => '/admin/vagas', 'regra' => 'aberto'],
-                    ['href' => '/admin/recruitment-webhooks', 'regra' => 'staff_ou:recruitment_webhooks.visualizar'],
                     ['href' => '/admin/indicacoes', 'regra' => 'staff_ou:indicacoes.visualizar'],
                 ]],
             ['chave' => 'solicitacoes-vaga', 'titulo' => 'Solicitações de Vaga', 'icone' => 'vagas',
@@ -148,6 +148,17 @@ class PortalNavegacaoService
                 'descricao' => 'Usuários do Portal, perfis e permissões.',
                 'itens' => [
                     ['href' => '/admin/usuarios', 'regra' => 'admin_supervisor'],
+                ]],
+            // Configurações → Integrações (2026-10): área administrativa genérica, pensada para
+            // futuras integrações do Portal — não exclusiva de Webhooks. Primeiro ocupante: a
+            // administração da integração de Webhooks do Recrutamento com o n8n, realocada de
+            // dentro do módulo de Recrutamento (ver auditoria técnica da Etapa 1). Mesma regra de
+            // antes (`recruitment_webhooks.visualizar`) — preservada de propósito para não quebrar
+            // acessos já concedidos (débito técnico de nomenclatura documentado).
+            ['chave' => 'configuracoes', 'titulo' => 'Configurações', 'icone' => 'configuracoes',
+                'descricao' => 'Integrações do Portal com sistemas externos.',
+                'itens' => [
+                    ['href' => '/admin/configuracoes/integracoes', 'regra' => 'staff_ou:recruitment_webhooks.visualizar'],
                 ]],
         ];
     }
@@ -217,7 +228,10 @@ class PortalNavegacaoService
                 ['chave' => 'candidaturas', 'label' => 'Candidaturas', 'href' => '/admin/candidaturas', 'regra' => 'aberto'],
                 ['chave' => 'pipeline', 'label' => 'Pipeline Kanban', 'href' => '/admin/pipeline', 'regra' => 'staff_ou:pipeline.visualizar'],
                 ['chave' => 'indicacoes', 'label' => 'Indicações', 'href' => '/admin/indicacoes', 'regra' => 'staff_ou:indicacoes.visualizar'],
-                ['chave' => 'webhooks', 'label' => 'Webhooks', 'href' => '/admin/recruitment-webhooks', 'regra' => 'staff_ou:recruitment_webhooks.visualizar'],
+            ]],
+            // Configurações → Integrações (2026-10): ver o comentário equivalente em definicao().
+            'configuracoes' => ['titulo' => 'Configurações', 'abas' => [
+                ['chave' => 'integracoes', 'label' => 'Integrações', 'href' => '/admin/configuracoes/integracoes', 'regra' => 'staff_ou:recruitment_webhooks.visualizar'],
             ]],
         ];
     }

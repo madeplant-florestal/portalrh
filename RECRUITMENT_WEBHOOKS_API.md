@@ -188,7 +188,11 @@ reais de candidatos:
   mesmo `event_id`, permitindo que o n8n identifique e descarte duplicatas.
 - Reenvio manual pela interface (`Reenviar`), ou em lote (`Processar fila pendente`).
 
-## Interface administrativa (`/admin/recruitment-webhooks`)
+## Interface administrativa (`/admin/configuracoes/integracoes`)
+
+Realocada em 2026-10 (Etapa 2, Configurações → Integrações) do antigo
+`/admin/recruitment-webhooks` — mesma tela, mesmo comportamento, mesma permissão
+(`recruitment_webhooks.visualizar`). A URL antiga redireciona (GET) para a nova.
 
 - **Configuração da integração**: ativar/desativar, URL, segredo (gerar/regenerar,
   nunca exibido depois de salvo), botão "Testar webhook".

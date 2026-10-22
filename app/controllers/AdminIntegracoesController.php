@@ -1,5 +1,16 @@
 <?php
-class AdminRecruitmentWebhooksController extends Controller
+
+/**
+ * Configurações → Integrações (2026-10) — nova área administrativa genérica para integrações do
+ * Portal. Primeiro ocupante: a administração da integração de Webhooks do Recrutamento com o n8n,
+ * realocada de `/admin/recruitment-webhooks` (ver auditoria técnica da Etapa 1 e a Etapa 2 desta
+ * sprint). Reaproveita integralmente `RecruitmentWebhookAdminService` e as classes de
+ * infraestrutura de webhook (fila, HMAC, HTTP client, URL guard) — nenhuma delas foi alterada
+ * nesta etapa; a limpeza de nomenclatura (`Recruitment*`) e a permissão
+ * `recruitment_webhooks.visualizar` ficam para uma etapa futura dedicada a isso (débito técnico
+ * documentado, não um esquecimento).
+ */
+class AdminIntegracoesController extends Controller
 {
     private RecruitmentWebhookAdminService $service;
 
@@ -29,7 +40,7 @@ class AdminRecruitmentWebhooksController extends Controller
             unset($_SESSION['flash_webhook_test_result']);
         }
 
-        $this->view->render('admin/recruitment_webhooks/index', [
+        $this->view->render('admin/configuracoes/integracoes/index', [
             'setting' => $data['setting'],
             'queue' => $data['queue'],
             'lastProcessedAt' => $data['last_processed_at'],
@@ -48,14 +59,7 @@ class AdminRecruitmentWebhooksController extends Controller
     public function saveSetting(): void
     {
         Auth::requireRole(['admin']);
-        // TEMPORARIO (investigacao): log do POST bruto recebido. Remover apos concluir o diagnostico.
-        Logger::info('[INVESTIGACAO SSRF] saveSetting POST recebido', [
-            'tem_csrf' => isset($_POST['csrf']),
-            'enabled_presente' => isset($_POST['enabled']),
-            'webhook_url_bruto' => $_POST['webhook_url'] ?? null,
-        ]);
         if (!Security::csrfCheck($_POST['csrf'] ?? '')) {
-            Logger::info('[INVESTIGACAO SSRF] saveSetting rejeitado por CSRF invalido');
             http_response_code(400);
             echo 'CSRF inválido';
             return;
@@ -66,14 +70,9 @@ class AdminRecruitmentWebhooksController extends Controller
                 'enabled' => isset($_POST['enabled']) ? '1' : '0',
                 'webhook_url' => trim((string)($_POST['webhook_url'] ?? '')),
             ]);
-            Logger::info('[INVESTIGACAO SSRF] saveSetting concluido com sucesso');
-            redirect('/admin/recruitment-webhooks?ok=' . urlencode('Configuração de webhook salva com sucesso.'));
+            redirect('/admin/configuracoes/integracoes?ok=' . urlencode('Configuração de webhook salva com sucesso.'));
         } catch (Throwable $e) {
-            Logger::info('[INVESTIGACAO SSRF] saveSetting lancou excecao', [
-                'classe' => get_class($e),
-                'mensagem' => $e->getMessage(),
-            ]);
-            redirect('/admin/recruitment-webhooks?erro=' . urlencode($e->getMessage()));
+            redirect('/admin/configuracoes/integracoes?erro=' . urlencode($e->getMessage()));
         }
     }
 
@@ -90,9 +89,9 @@ class AdminRecruitmentWebhooksController extends Controller
             $secret = $this->service->regenerateSecret();
             // Segredo exibido apenas uma vez, via sessão (nunca via querystring/log) — ver index().
             $_SESSION['flash_webhook_secret'] = ['secret' => $secret];
-            redirect('/admin/recruitment-webhooks?ok=' . urlencode('Segredo gerado com sucesso. Copie agora: ele não será exibido novamente.'));
+            redirect('/admin/configuracoes/integracoes?ok=' . urlencode('Segredo gerado com sucesso. Copie agora: ele não será exibido novamente.'));
         } catch (Throwable $e) {
-            redirect('/admin/recruitment-webhooks?erro=' . urlencode($e->getMessage()));
+            redirect('/admin/configuracoes/integracoes?erro=' . urlencode($e->getMessage()));
         }
     }
 
@@ -106,10 +105,7 @@ class AdminRecruitmentWebhooksController extends Controller
         }
 
         try {
-            // TEMPORARIO (investigacao): log do estado lido no momento do teste. Remover apos concluir o diagnostico.
-            Logger::info('[INVESTIGACAO SSRF] testWebhook iniciado');
             $result = $this->service->sendTestWebhook();
-            Logger::info('[INVESTIGACAO SSRF] testWebhook resultado', ['result' => $result]);
             $_SESSION['flash_webhook_test_result'] = [
                 'ok' => (bool)($result['ok'] ?? false),
                 'status_code' => $result['status_code'] ?? null,
@@ -119,13 +115,9 @@ class AdminRecruitmentWebhooksController extends Controller
             $message = ($result['ok'] ?? false)
                 ? 'Teste enviado com sucesso.'
                 : 'Teste enviado, porém o destino respondeu com falha.';
-            redirect('/admin/recruitment-webhooks?ok=' . urlencode($message));
+            redirect('/admin/configuracoes/integracoes?ok=' . urlencode($message));
         } catch (Throwable $e) {
-            Logger::info('[INVESTIGACAO SSRF] testWebhook lancou excecao', [
-                'classe' => get_class($e),
-                'mensagem' => $e->getMessage(),
-            ]);
-            redirect('/admin/recruitment-webhooks?erro=' . urlencode($e->getMessage()));
+            redirect('/admin/configuracoes/integracoes?erro=' . urlencode($e->getMessage()));
         }
     }
 
@@ -143,9 +135,9 @@ class AdminRecruitmentWebhooksController extends Controller
             $message = ($result['ok'] ?? false)
                 ? 'Evento reenviado com sucesso.'
                 : 'Reenvio executado, porém o evento permaneceu com falha.';
-            redirect('/admin/recruitment-webhooks?ok=' . urlencode($message));
+            redirect('/admin/configuracoes/integracoes?ok=' . urlencode($message));
         } catch (Throwable $e) {
-            redirect('/admin/recruitment-webhooks?erro=' . urlencode($e->getMessage()));
+            redirect('/admin/configuracoes/integracoes?erro=' . urlencode($e->getMessage()));
         }
     }
 
@@ -165,9 +157,9 @@ class AdminRecruitmentWebhooksController extends Controller
                 (int)($result['processed'] ?? 0),
                 (int)($result['failed'] ?? 0)
             );
-            redirect('/admin/recruitment-webhooks?ok=' . urlencode($message));
+            redirect('/admin/configuracoes/integracoes?ok=' . urlencode($message));
         } catch (Throwable $e) {
-            redirect('/admin/recruitment-webhooks?erro=' . urlencode($e->getMessage()));
+            redirect('/admin/configuracoes/integracoes?erro=' . urlencode($e->getMessage()));
         }
     }
 }

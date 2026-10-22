@@ -109,6 +109,70 @@ $falhas = (int)($queue['failed'] ?? 0);
   <section class="space-y-4">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
+        <h2 class="text-lg font-semibold text-text-primary">Regras de comunicação</h2>
+        <p class="text-sm text-text-secondary">Associa um evento (e etapa, quando aplicável) a um modelo já cadastrado em Mensagens. O texto do modelo continua sendo editado só em Mensagens.</p>
+      </div>
+      <?php if ($podeOperar): ?>
+      <a href="<?= $base ?>/admin/configuracoes/integracoes/regras/nova" class="inline-flex items-center justify-center rounded-lg bg-primary-700 px-4 py-3 text-sm font-medium text-white hover:bg-primary-800">
+        Nova regra
+      </a>
+      <?php endif; ?>
+    </div>
+    <?php $regras = $regras ?? []; $eventosRegra = $eventosRegra ?? []; ?>
+    <?php if ($regras === []): ?>
+      <p class="rounded-xl border border-border bg-white px-4 py-3 text-sm text-text-secondary">Nenhuma regra cadastrada ainda.</p>
+    <?php else: ?>
+    <div class="responsive-table-wrap">
+      <table class="min-w-full text-sm">
+        <thead>
+          <tr class="border-b">
+            <th class="p-3 text-left">Evento / Etapa</th>
+            <th class="p-3 text-left">Modelo de mensagem</th>
+            <th class="p-3 text-left">Canal</th>
+            <th class="p-3 text-left">Status</th>
+            <th class="p-3 text-left">Ações</th>
+          </tr>
+        </thead>
+        <tbody>
+          <?php foreach ($regras as $regraItem): ?>
+            <tr class="border-b align-top hover:bg-surface-secondary">
+              <td class="p-3">
+                <div class="font-medium text-text-primary"><?= Security::e($eventosRegra[$regraItem['event_type']]['label'] ?? $regraItem['event_type']) ?></div>
+                <?php if (!empty($regraItem['etapa_nome'])): ?>
+                  <div class="mt-1 text-xs text-text-secondary">Etapa: <?= Security::e((string)$regraItem['etapa_nome']) ?></div>
+                <?php endif; ?>
+              </td>
+              <td class="p-3">
+                <div class="font-medium text-text-primary"><?= Security::e((string)$regraItem['mensagem_titulo']) ?></div>
+                <div class="mt-1 text-xs text-text-secondary"><?= Security::e((string)$regraItem['mensagem_codigo']) ?></div>
+                <?php if ((int)($regraItem['mensagem_ativo'] ?? 1) !== 1): ?>
+                  <div class="mt-1 text-xs text-warning">Modelo hoje inativo em Mensagens</div>
+                <?php endif; ?>
+              </td>
+              <td class="p-3 capitalize"><?= Security::e((string)$regraItem['canal']) ?></td>
+              <td class="p-3">
+                <span class="rounded-full px-3 py-1 text-xs font-semibold <?= (int)$regraItem['ativo'] === 1 ? 'bg-success/10 text-success' : 'bg-surface-secondary text-text-secondary' ?>">
+                  <?= (int)$regraItem['ativo'] === 1 ? 'Ativa' : 'Inativa' ?>
+                </span>
+              </td>
+              <td class="p-3">
+                <?php if ($podeOperar): ?>
+                <a href="<?= $base ?>/admin/configuracoes/integracoes/regras/<?= (int)$regraItem['id'] ?>/editar" class="rounded-lg border border-border px-3 py-2 text-xs font-semibold text-text-primary hover:bg-surface-secondary">
+                  Editar
+                </a>
+                <?php endif; ?>
+              </td>
+            </tr>
+          <?php endforeach; ?>
+        </tbody>
+      </table>
+    </div>
+    <?php endif; ?>
+  </section>
+
+  <section class="space-y-4">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div>
         <h2 class="text-lg font-semibold text-text-primary">Situação da fila</h2>
         <p class="text-sm text-text-secondary">O envio nunca bloqueia a movimentação do candidato no Kanban.</p>
       </div>

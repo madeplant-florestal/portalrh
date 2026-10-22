@@ -13,11 +13,15 @@
 class AdminIntegracoesController extends Controller
 {
     private RecruitmentWebhookAdminService $service;
+    private IntegracaoRegraComunicacaoRepository $regraRepository;
+    private IntegracaoRegraComunicacaoService $regraService;
 
     public function __construct()
     {
         parent::__construct();
         $this->service = new RecruitmentWebhookAdminService();
+        $this->regraRepository = new IntegracaoRegraComunicacaoRepository();
+        $this->regraService = new IntegracaoRegraComunicacaoService($this->regraRepository);
     }
 
     public function index(): void
@@ -53,6 +57,86 @@ class AdminIntegracoesController extends Controller
             // Só exibição: testar/reprocessar/reenviar = admin/rh; salvar configuração e regenerar segredo = admin. Quem entrou só pela
             // permissão recruitment_webhooks.visualizar vê a tela em modo leitura (sem formulários de ação).
             'podeOperar' => !empty($_SESSION['user_is_supervisor']) || in_array(Auth::role(), ['admin', 'rh'], true),
+            // Regras de comunicação (Etapa 3) — mesma tela, nova seção; mesmo gate de leitura/operação do restante da página.
+            'regras' => $this->regraRepository->all(),
+            'eventosRegra' => IntegracaoRegraComunicacaoService::eventosDisponiveis(),
+        ], 'layouts/app-shell');
+    }
+
+    public function novaRegraComunicacao(): void
+    {
+        Auth::requireRole(['admin', 'rh']);
+        $this->renderFormularioRegra('create', null, '');
+    }
+
+    public function criarRegraComunicacao(): void
+    {
+        Auth::requireRole(['admin', 'rh']);
+        if (!Security::csrfCheck($_POST['csrf'] ?? '')) {
+            http_response_code(400);
+            echo 'CSRF inválido';
+            return;
+        }
+
+        $resultado = $this->regraService->salvar($_POST);
+        if (!($resultado['ok'] ?? false)) {
+            $this->renderFormularioRegra('create', $_POST, (string)($resultado['error'] ?? 'Falha ao salvar a regra.'));
+            return;
+        }
+        redirect('/admin/configuracoes/integracoes?ok=' . urlencode('Regra de comunicação cadastrada com sucesso.'));
+    }
+
+    public function editarRegraComunicacao(string $id): void
+    {
+        Auth::requireRole(['admin', 'rh']);
+        $regra = $this->regraRepository->find((int)$id);
+        if (!$regra) {
+            http_response_code(404);
+            echo 'Regra não encontrada';
+            return;
+        }
+        $this->renderFormularioRegra('edit', $regra, '');
+    }
+
+    public function atualizarRegraComunicacao(string $id): void
+    {
+        Auth::requireRole(['admin', 'rh']);
+        if (!Security::csrfCheck($_POST['csrf'] ?? '')) {
+            http_response_code(400);
+            echo 'CSRF inválido';
+            return;
+        }
+
+        $existing = $this->regraRepository->find((int)$id);
+        if (!$existing) {
+            http_response_code(404);
+            echo 'Regra não encontrada';
+            return;
+        }
+
+        $resultado = $this->regraService->salvar($_POST, (int)$id);
+        if (!($resultado['ok'] ?? false)) {
+            $dadosForm = $_POST;
+            $dadosForm['id'] = (int)$id;
+            $this->renderFormularioRegra('edit', $dadosForm, (string)($resultado['error'] ?? 'Falha ao atualizar a regra.'));
+            return;
+        }
+        redirect('/admin/configuracoes/integracoes?ok=' . urlencode('Regra de comunicação atualizada com sucesso.'));
+    }
+
+    private function renderFormularioRegra(string $mode, ?array $regra, string $error): void
+    {
+        $this->view->render('admin/configuracoes/integracoes/regra-form', [
+            'mode' => $mode,
+            'regra' => $regra,
+            'csrf' => Security::csrfToken(),
+            'error' => $error,
+            'eventos' => IntegracaoRegraComunicacaoService::eventosDisponiveis(),
+            'etapas' => PipelineStage::all(),
+            'mensagensAtivas' => array_values(array_filter(
+                Mensagem::all(),
+                static fn(array $m): bool => (int)($m['ativo'] ?? 0) === 1
+            )),
         ], 'layouts/app-shell');
     }
 

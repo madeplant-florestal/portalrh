@@ -155,6 +155,13 @@ try {
     $router->post('/admin/configuracoes/integracoes/webhook/testar', [AdminIntegracoesController::class, 'testWebhook']);
     $router->post('/admin/configuracoes/integracoes/webhook/processar-pendentes', [AdminIntegracoesController::class, 'processPending']);
     $router->post('/admin/configuracoes/integracoes/webhook/reenviar/{id}', [AdminIntegracoesController::class, 'retryEvent']);
+    // Regras de comunicação (Etapa 3, 2026-10): associação evento/etapa -> modelo de mensagem já
+    // cadastrado em Mensagens. Mesma área (Configurações -> Integrações), rotas próprias de
+    // criação/edição seguindo o mesmo padrão de Empresas/Setores/Cargos (/novo, /editar/{id}).
+    $router->get('/admin/configuracoes/integracoes/regras/nova', [AdminIntegracoesController::class, 'novaRegraComunicacao']);
+    $router->post('/admin/configuracoes/integracoes/regras/nova', [AdminIntegracoesController::class, 'criarRegraComunicacao']);
+    $router->get('/admin/configuracoes/integracoes/regras/{id}/editar', [AdminIntegracoesController::class, 'editarRegraComunicacao']);
+    $router->post('/admin/configuracoes/integracoes/regras/{id}/editar', [AdminIntegracoesController::class, 'atualizarRegraComunicacao']);
     $router->get('/admin/empresas', [AdminEmpresasController::class, 'index']);
     $router->get('/admin/empresas/novo', [AdminEmpresasController::class, 'create']);
     $router->post('/admin/empresas/novo', [AdminEmpresasController::class, 'store']);

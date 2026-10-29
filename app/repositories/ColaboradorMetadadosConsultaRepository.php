@@ -53,7 +53,8 @@ class ColaboradorMetadadosConsultaRepository
                     COUNT(DISTINCT codigo_empresa) AS empresas,
                     COUNT(DISTINCT COALESCE(NULLIF(codigo_cargo, \'\'), cargo)) AS cargos_distintos,
                     COUNT(DISTINCT codigo_pessoa) AS pessoas_distintas
-                FROM colaboradores_metadados';
+                FROM colaboradores_metadados
+                WHERE ' . ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusao('id');
         $row = $this->connection()->query($sql)->fetch(PDO::FETCH_ASSOC) ?: [];
 
         return [
@@ -350,6 +351,11 @@ class ColaboradorMetadadosConsultaRepository
                 $params[] = (string)$identificador;
             }
         }
+
+        // Exclusão analítica (2026-10) — incondicional, nunca um filtro opcional: um contrato
+        // marcado em colaboradores_metadados_exclusoes_analiticas nunca aparece em nenhuma
+        // listagem analítica, independente dos filtros que o usuário escolher na tela.
+        $where[] = ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusao('m.id');
 
         return [$where, $params];
     }

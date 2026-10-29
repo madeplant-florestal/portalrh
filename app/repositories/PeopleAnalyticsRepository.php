@@ -90,6 +90,11 @@ class PeopleAnalyticsRepository
             $where[] = "(sexo IS NULL OR TRIM(sexo) = '')";
         }
 
+        // Exclusão analítica (2026-10) — incondicional: um contrato marcado em
+        // colaboradores_metadados_exclusoes_analiticas nunca entra no Headcount, Admissões,
+        // Desligamentos nem Turnover alimentados por esta consulta.
+        $where[] = ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusao('id');
+
         $sql = 'SELECT identificador, codigo_pessoa, admissao, demissao, motivo_rescisao_codigo,
                        motivo_rescisao_descricao, nascimento, sexo, codigo_setor, ativo,
                        codigo_empresa, empresa, ausente_na_origem
@@ -175,7 +180,7 @@ class PeopleAnalyticsRepository
      */
     public function distribuicaoAtivosPorSetor(array $filtros = []): array
     {
-        $where = ["cm.ativo = 1", "cm.ausente_na_origem = 0"];
+        $where = ["cm.ativo = 1", "cm.ausente_na_origem = 0", ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusao('cm.id')];
         $params = [];
         if (!empty($filtros['codigo_empresa'])) {
             $where[] = 'cm.codigo_empresa = ?';

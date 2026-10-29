@@ -48,6 +48,9 @@ class TurnoverDashboardRepository
             $params[] = $filtros['codigo_cargo'];
         }
 
+        // Exclusão analítica (2026-10) — incondicional: ver ColaboradorMetadadosElegibilidadeService.
+        $where[] = ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusao('id');
+
         $sql = 'SELECT admissao, demissao, motivo_rescisao_codigo, codigo_empresa, empresa, codigo_cargo, cargo
                 FROM colaboradores_metadados';
         if ($where !== []) {

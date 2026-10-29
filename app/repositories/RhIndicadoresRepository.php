@@ -68,6 +68,9 @@ class RhIndicadoresRepository
             }
         }
 
+        // Exclusão analítica (2026-10) — incondicional: ver ColaboradorMetadadosElegibilidadeService.
+        $where[] = ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusao('id');
+
         $sql = 'SELECT id, codigo_empresa, empresa, codigo_unidade, unidade, cargo, setor,
                        centro_custo, admissao, demissao, motivo_rescisao_descricao, ativo, sexo,
                        ausente_na_origem

@@ -124,6 +124,20 @@ class EntrevistaDesligamentoService
         'aberta_melhorar' => 'O que poderia ser melhorado?',
         'aberta_mensagem' => 'Existe alguma mensagem ou sugestão que gostaria de deixar para a empresa?',
     ];
+    /**
+     * Comentário próprio de cada dimensão (correção de 2026-11, pedido do RH): texto livre
+     * opcional ao final de cada seção — as notas de escala nem sempre registram adequadamente a
+     * percepção do ex-colaborador. Chave = chave de SECOES_ESCALA; 'experiencia_geral' não é uma
+     * seção de escala (está em $escalas0a10 na view pública), por isso fica fora deste mapa e é
+     * tratado como um campo avulso (ver validarResposta()).
+     */
+    public const COMENTARIOS_SECAO = [
+        'experiencia' => 'exp_comentario',
+        'lideranca' => 'lid_comentario',
+        'cultura' => 'cul_comentario',
+        'integracao' => 'int_comentario',
+    ];
+    public const COMENTARIO_EXPERIENCIA_GERAL = 'experiencia_geral_comentario';
 
     private EntrevistaDesligamentoRepository $repository;
 
@@ -314,6 +328,10 @@ class EntrevistaDesligamentoService
         foreach (self::PERGUNTAS_ABERTAS as $campo => $pergunta) {
             $textos[$campo] = $pergunta;
         }
+        foreach (self::COMENTARIOS_SECAO as $chaveSecao => $campo) {
+            $textos[$campo] = 'Comentários sobre ' . self::SECOES_ESCALA[$chaveSecao]['titulo'];
+        }
+        $textos[self::COMENTARIO_EXPERIENCIA_GERAL] = 'Comentários sobre Experiência geral';
         foreach ($textos as $campo => $rotulo) {
             $texto = self::textoSeguro($post[$campo] ?? '');
             $valores[$campo] = $texto;

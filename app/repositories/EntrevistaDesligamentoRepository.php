@@ -16,11 +16,11 @@ class EntrevistaDesligamentoRepository
     public const COLUNAS_RESPOSTA = [
         'motivo_principal', 'motivo_descricao',
         'exp_remuneracao', 'exp_beneficios', 'exp_condicoes_trabalho', 'exp_comunicacao',
-        'exp_desenvolvimento', 'exp_reconhecimento', 'exp_clima',
-        'lid_respeito', 'lid_comunicacao', 'lid_abertura', 'lid_desenvolvimento', 'lid_justica',
-        'cul_respeito', 'cul_honestidade', 'cul_lealdade', 'cul_etica', 'cul_coragem', 'cul_ousadia',
-        'int_compreender', 'int_treinamento', 'int_expectativa',
-        'experiencia_geral', 'enps',
+        'exp_desenvolvimento', 'exp_reconhecimento', 'exp_clima', 'exp_comentario',
+        'lid_respeito', 'lid_comunicacao', 'lid_abertura', 'lid_desenvolvimento', 'lid_justica', 'lid_comentario',
+        'cul_respeito', 'cul_honestidade', 'cul_lealdade', 'cul_etica', 'cul_coragem', 'cul_ousadia', 'cul_comentario',
+        'int_compreender', 'int_treinamento', 'int_expectativa', 'int_comentario',
+        'experiencia_geral', 'experiencia_geral_comentario', 'enps',
         'aberta_continuar', 'aberta_melhorar', 'aberta_mensagem',
     ];
 

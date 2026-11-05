@@ -239,6 +239,8 @@ try {
     $router->get('/admin/candidaturas/{id}/download', [AdminCandidaturasController::class, 'download']);
     $router->post('/admin/candidaturas/{id}/atualizar', [AdminCandidaturasController::class, 'update']);
     $router->post('/admin/candidaturas/{id}/indicacao', [AdminCandidaturasController::class, 'updateIndicacao']);
+    $router->post('/admin/candidaturas/{id}/documentos', [AdminCandidaturasController::class, 'uploadDocumento']);
+    $router->get('/admin/candidaturas/{id}/documentos/{docId}', [AdminCandidaturasController::class, 'downloadDocumento']);
     $router->get('/admin/indicacoes', [AdminIndicacoesController::class, 'index']);
     $router->get('/admin/indicacoes/export', [AdminIndicacoesController::class, 'export']);
     $router->post('/admin/indicacoes/{id}/pagar', [AdminIndicacoesController::class, 'markPago']);

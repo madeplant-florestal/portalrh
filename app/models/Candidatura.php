@@ -1,6 +1,17 @@
 <?php
 class Candidatura
 {
+    // Sentinela do filtro "Setor não informado" no Kanban (correção de 2026-11) — mesmo padrão de
+    // ColaboradorMetadadosConsultaRepository::SETOR_NAO_INFORMADO. Vagas criadas direto pelo
+    // admin (sem Solicitação de Vaga) não têm setor; nunca é tratado como "sem setor = excluir".
+    public const SETOR_NAO_INFORMADO = '__sem_setor__';
+
+    /** Setores ativos para o filtro do Kanban (mesmo padrão de SolicitacaoVaga::formOptions()). */
+    public static function setoresDisponiveis(): array
+    {
+        return Database::conn()->query('SELECT id, nome FROM setores WHERE ativo = 1 ORDER BY nome ASC')->fetchAll(PDO::FETCH_ASSOC);
+    }
+
     public static function create(array $data): int
     {
         $telefone = Phone::normalize((string)($data['telefone'] ?? ''));
@@ -72,15 +83,27 @@ class Candidatura
         $sql = 'SELECT c.*, v.titulo AS vaga_titulo, v.empresa_id AS vaga_empresa_id, e.nome AS vaga_empresa_nome,
                        s.nome as stage_nome, s.slug as stage_slug, s.cor as stage_cor,
                        m.interview_date, m.interview_time, m.interview_location, m.interview_link,
-                       m.admission_date, m.admission_notes, m.test_name, m.deadline
+                       m.admission_date, m.admission_notes, m.test_name, m.deadline,
+                       sv.setor_id AS vaga_setor_id, st.nome AS vaga_setor_nome
                 FROM candidaturas c
                 LEFT JOIN vagas v ON v.id = c.vaga_id
                 LEFT JOIN empresas e ON e.id = v.empresa_id
                 LEFT JOIN pipeline_stages s ON s.id = c.stage_id
                 LEFT JOIN candidatura_stage_metadata m ON m.candidatura_id = c.id
+                LEFT JOIN solicitacoes_vaga sv ON sv.id = v.solicitacao_vaga_id
+                LEFT JOIN setores st ON st.id = sv.setor_id
                 WHERE 1=1';
         $params = [];
         if (!empty($filters['vaga_id'])) { $sql .= ' AND c.vaga_id = ?'; $params[] = (int)$filters['vaga_id']; }
+        // Setor da vaga (via Solicitação de Vaga) — SETOR_NAO_INFORMADO nunca é escondido do RH,
+        // mesma disciplina de ColaboradorMetadadosConsultaRepository::montarFiltros(): vagas sem
+        // Solicitação (logo sem setor) só aparecem quando o filtro de setor está vazio ou nesta
+        // opção explícita, nunca misturadas dentro de um setor específico.
+        if (($filters['setor_id'] ?? '') === self::SETOR_NAO_INFORMADO) {
+            $sql .= ' AND sv.setor_id IS NULL';
+        } elseif (!empty($filters['setor_id'])) {
+            $sql .= ' AND sv.setor_id = ?'; $params[] = (int)$filters['setor_id'];
+        }
         if (!empty($filters['status'])) { $sql .= ' AND c.status = ?'; $params[] = $filters['status']; }
         if (!empty($filters['stage_id'])) { $sql .= ' AND c.stage_id = ?'; $params[] = (int)$filters['stage_id']; }
         if (!empty($filters['data_de'])) { $sql .= ' AND c.created_at >= ?'; $params[] = $filters['data_de']; }

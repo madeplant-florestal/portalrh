@@ -40,6 +40,8 @@ class AdminCandidaturasController extends Controller
         $podeVerPesquisa = Authorization::temPermissao('pesquisa_experiencia.visualizar');
         $pesquisa = $podeVerPesquisa ? PesquisaExperiencia::findByCandidatura((int)$id) : null;
 
+        $documentos = CandidaturaDocumento::allByCandidatura((int)$id);
+
         $this->view->render('admin/candidaturas/show', [
             'c' => $c,
             'historico' => $historico,
@@ -49,6 +51,8 @@ class AdminCandidaturasController extends Controller
             'comunicacoes' => $comunicacoes,
             'podeVerPesquisa' => $podeVerPesquisa,
             'pesquisa' => $pesquisa,
+            'documentos' => $documentos,
+            'podeGerenciarDocumentos' => in_array(Auth::role(), ['admin', 'rh'], true),
         ], 'layouts/app-shell');
     }
     
@@ -118,6 +122,89 @@ class AdminCandidaturasController extends Controller
         $normalized = trim($normalized, '_');
         $normalized = preg_replace('/_+/', '_', $normalized) ?? '';
         return $normalized;
+    }
+
+    /**
+     * Documentos de contratação (correção de 2026-11): upload de múltiplos arquivos, disponível
+     * na tela de detalhamento a qualquer momento (não um gatilho de etapa — pipeline_stages é
+     * dirigido por dados, sem constante "Aprovado" no código). Mesmo controle de acesso do resto
+     * do módulo (admin/rh), sem regra de setor nova — ver decisão registrada na correção.
+     */
+    public function uploadDocumento(string $id): void
+    {
+        Auth::requireRole(['admin', 'rh']);
+        if (!Security::csrfCheck($_POST['csrf'] ?? '')) {
+            http_response_code(400);
+            echo 'Falha na verificação de segurança (CSRF).';
+            return;
+        }
+        $candidaturaId = (int)$id;
+        $c = Candidatura::find($candidaturaId);
+        if (!$c) { http_response_code(404); echo 'Candidatura não encontrada'; return; }
+
+        $arquivos = $_FILES['documentos'] ?? null;
+        if (!is_array($arquivos) || !is_array($arquivos['name'] ?? null) || count(array_filter($arquivos['name'])) === 0) {
+            http_response_code(422);
+            echo 'Selecione ao menos um arquivo.';
+            return;
+        }
+        $usuarioId = (int)($_SESSION['user_id'] ?? 0);
+        $erros = [];
+        foreach ($arquivos['name'] as $i => $nomeOriginal) {
+            if ($nomeOriginal === '' || ($arquivos['error'][$i] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+                continue;
+            }
+            $arquivo = [
+                'name' => $arquivos['name'][$i],
+                'type' => $arquivos['type'][$i],
+                'tmp_name' => $arquivos['tmp_name'][$i],
+                'error' => $arquivos['error'][$i],
+                'size' => $arquivos['size'][$i],
+            ];
+            try {
+                $salvo = Upload::saveDocumento($arquivo);
+                CandidaturaDocumento::create([
+                    'candidatura_id' => $candidaturaId,
+                    'nome_original' => Security::sanitizeString((string)$nomeOriginal),
+                    'nome_armazenado' => $salvo['nome_armazenado'],
+                    'mime' => $salvo['mime'],
+                    'tamanho_bytes' => $salvo['tamanho'],
+                    'enviado_por_usuario_id' => $usuarioId,
+                ]);
+            } catch (\Throwable $e) {
+                $erros[] = Security::sanitizeString((string)$nomeOriginal) . ': ' . $e->getMessage();
+            }
+        }
+
+        if ($erros !== []) {
+            Logger::error('Falha ao anexar documento(s) de candidatura', ['candidatura_id' => $candidaturaId, 'erros' => $erros]);
+            http_response_code(422);
+            echo implode(' | ', $erros);
+            return;
+        }
+        redirect('/admin/candidaturas/' . $candidaturaId);
+    }
+
+    public function downloadDocumento(string $id, string $docId): void
+    {
+        Auth::requireRole(['admin', 'rh']);
+        $documento = CandidaturaDocumento::find((int)$docId);
+        // Nunca confiar só no id do documento: precisa pertencer à candidatura da URL.
+        if (!$documento || (int)$documento['candidatura_id'] !== (int)$id) {
+            http_response_code(404); echo 'Documento não encontrado'; return;
+        }
+        $dir = STORAGE_PATH . DIRECTORY_SEPARATOR . 'candidatura_documentos';
+        $file = $dir . DIRECTORY_SEPARATOR . basename((string)$documento['nome_armazenado']);
+        $real = realpath($file);
+        $realDir = realpath($dir);
+        if ($real === false || $realDir === false || strpos($real, $realDir) !== 0 || !is_file($real)) {
+            http_response_code(404); echo 'Arquivo não encontrado'; return;
+        }
+        header('Content-Type: ' . $documento['mime']);
+        header('Content-Disposition: attachment; filename="' . Security::sanitizeString((string)$documento['nome_original']) . '"');
+        header('Content-Length: ' . filesize($real));
+        readfile($real);
+        exit;
     }
 
     public function update(string $id): void

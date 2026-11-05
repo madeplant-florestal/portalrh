@@ -7,12 +7,17 @@ class AdminPipelineController extends Controller
         Authorization::requireRoleOuPermissao(['admin', 'rh'], 'pipeline.visualizar');
 
         $vagaId = isset($_GET['vaga_id']) ? (int)$_GET['vaga_id'] : null;
+        $setorIdRaw = trim((string)($_GET['setor_id'] ?? ''));
+        $setorId = $setorIdRaw === Candidatura::SETOR_NAO_INFORMADO ? Candidatura::SETOR_NAO_INFORMADO : ($setorIdRaw !== '' ? (int)$setorIdRaw : null);
 
         $stages = PipelineStage::all();
 
         $filters = [];
         if ($vagaId) {
             $filters['vaga_id'] = $vagaId;
+        }
+        if ($setorId !== null) {
+            $filters['setor_id'] = $setorId;
         }
         $candidaturas = Candidatura::all($filters);
 
@@ -35,11 +40,14 @@ class AdminPipelineController extends Controller
         }
 
         $vagas = Vaga::all();
+        $setores = Candidatura::setoresDisponiveis();
 
         $this->view->render('admin/pipeline/index', [
             'kanban' => $kanban,
             'vagas' => $vagas,
             'selectedVaga' => $vagaId,
+            'setores' => $setores,
+            'selectedSetor' => $setorId,
             'csrf' => Security::csrfToken(),
             'stageCount' => count($stages),
             // Só exibição: mover cards segue exigindo admin/rh (move()); quem entrou pela permissão pipeline.visualizar vê o quadro sem arrastar.

@@ -153,6 +153,42 @@ require_once APP_PATH . '/views/partials/modulo-topo.php';
   </div>
   <?php ui_script_pagina('candidaturas.js'); // JS movido para assets/candidaturas.js (CSP: sem <script> inline) ?>
 
+  <!-- Documentos de contratação (correção de 2026-11) -->
+  <div class="mt-8 rounded bg-surface-secondary p-6">
+    <h3 class="text-lg font-semibold text-text-primary mb-1">Documentos</h3>
+    <p class="text-sm text-text-secondary mb-4">Documentos de contratação anexados a esta candidatura (RG, CPF, comprovantes etc.). Ficam vinculados mesmo que o candidato avance para outras etapas.</p>
+
+    <?php if (empty($documentos)): ?>
+      <p class="text-sm text-text-secondary">Nenhum documento anexado ainda.</p>
+    <?php else: ?>
+      <ul class="divide-y divide-border rounded border border-border bg-white">
+        <?php foreach ($documentos as $doc): ?>
+          <li class="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
+            <div>
+              <a href="<?= $base ?>/admin/candidaturas/<?= (int)$c['id'] ?>/documentos/<?= (int)$doc['id'] ?>" class="font-medium text-primary-700 hover:underline"><?= Security::e($doc['nome_original']) ?></a>
+              <div class="text-xs text-text-secondary">
+                Enviado em <?= Security::e(date('d/m/Y H:i', strtotime($doc['criado_em']))) ?> por <?= Security::e($doc['enviado_por_nome'] ?? 'Sistema') ?>
+                · <?= Security::e(number_format(((int)$doc['tamanho_bytes']) / 1024, 0, ',', '.')) ?> KB
+              </div>
+            </div>
+          </li>
+        <?php endforeach; ?>
+      </ul>
+    <?php endif; ?>
+
+    <?php if (!empty($podeGerenciarDocumentos)): ?>
+      <form class="mt-4 flex flex-wrap items-end gap-3" action="<?= $base ?>/admin/candidaturas/<?= (int)$c['id'] ?>/documentos" method="post" enctype="multipart/form-data">
+        <input type="hidden" name="csrf" value="<?= Security::e($csrf ?? '') ?>">
+        <div>
+          <label class="block text-sm font-medium text-text-primary">Anexar documento(s)</label>
+          <input type="file" name="documentos[]" multiple accept="application/pdf,image/png,image/jpeg" required class="mt-1 block w-full text-sm">
+          <p class="mt-1 text-xs text-text-secondary">PDF, JPG ou PNG. Vários arquivos podem ser selecionados de uma vez.</p>
+        </div>
+        <button type="submit" class="bg-primary-700 text-white px-4 py-2 rounded hover:bg-primary-800 shadow-sm">Enviar</button>
+      </form>
+    <?php endif; ?>
+  </div>
+
   <!-- Histórico -->
   <?php if (!empty($historico)): ?>
   <div class="mt-8 rounded bg-surface-secondary p-6">

@@ -6,16 +6,32 @@ require_once APP_PATH . '/views/partials/modulo-topo.php';
       'titulo' => 'Kanban de Recrutamento e Seleção',
       'descricao' => 'Fluxo completo do candidato, da nova inscrição até admissão, banco de talentos ou reprovação.',
   ]) ?>
-  <form method="GET" action="<?= $base ?>/admin/pipeline" class="w-full max-w-full md:w-auto">
-    <label for="vaga_id" class="mb-1 block text-ds-label text-text-primary">Filtrar por vaga</label>
-    <select name="vaga_id" id="vaga_id" data-autosubmit="1" class="w-full md:min-w-[18rem] md:w-auto">
-      <option value="">Todas as Vagas</option>
-      <?php foreach ($vagas as $v): ?>
-        <option value="<?= $v['id'] ?>" <?= ($selectedVaga == $v['id']) ? 'selected' : '' ?>>
-          <?= htmlspecialchars($v['titulo']) ?>
+  <form method="GET" action="<?= $base ?>/admin/pipeline" class="flex flex-wrap items-end gap-3">
+    <div class="w-full max-w-full md:w-auto">
+      <label for="vaga_id" class="mb-1 block text-ds-label text-text-primary">Filtrar por vaga</label>
+      <select name="vaga_id" id="vaga_id" data-autosubmit="1" class="w-full md:min-w-[18rem] md:w-auto">
+        <option value="">Todas as Vagas</option>
+        <?php foreach ($vagas as $v): ?>
+          <option value="<?= $v['id'] ?>" <?= ($selectedVaga == $v['id']) ? 'selected' : '' ?>>
+            <?= htmlspecialchars($v['titulo']) ?>
+          </option>
+        <?php endforeach; ?>
+      </select>
+    </div>
+    <div class="w-full max-w-full md:w-auto">
+      <label for="setor_id" class="mb-1 block text-ds-label text-text-primary">Filtrar por setor</label>
+      <select name="setor_id" id="setor_id" data-autosubmit="1" class="w-full md:min-w-[18rem] md:w-auto">
+        <option value="">Todos os setores</option>
+        <?php foreach ($setores as $s): ?>
+          <option value="<?= $s['id'] ?>" <?= ((string)($selectedSetor ?? '') === (string)$s['id']) ? 'selected' : '' ?>>
+            <?= htmlspecialchars($s['nome']) ?>
+          </option>
+        <?php endforeach; ?>
+        <option value="<?= Candidatura::SETOR_NAO_INFORMADO ?>" <?= ($selectedSetor === Candidatura::SETOR_NAO_INFORMADO) ? 'selected' : '' ?>>
+          Setor não informado
         </option>
-      <?php endforeach; ?>
-    </select>
+      </select>
+    </div>
   </form>
   <div class="mb-4 flex flex-wrap items-center gap-3 text-xs text-text-secondary">
     <span class="inline-flex items-center rounded-full bg-white px-3 py-1 shadow-sm ring-1 ring-border">

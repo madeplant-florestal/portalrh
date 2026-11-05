@@ -47,6 +47,45 @@ class Upload
         return $name; // armazenamos apenas o nome para posterior recuperação
     }
 
+    /**
+     * Documento de contratação anexado a uma candidatura (correção de 2026-11) — múltiplos
+     * arquivos por candidatura, nome gerado (nunca o nome original no disco, path traversal).
+     *
+     * @return array{nome_armazenado:string,mime:string,tamanho:int}
+     */
+    public static function saveDocumento(array $file): array
+    {
+        $config = Config::app();
+        $max = (int)($config['security']['max_document_bytes'] ?? (5 * 1024 * 1024));
+        $allowed = $config['security']['allowed_document_mime'] ?? ['application/pdf', 'image/png', 'image/jpeg'];
+
+        if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+            throw new \RuntimeException('Falha no upload do documento.');
+        }
+        $size = (int)($file['size'] ?? 0);
+        if ($size <= 0 || $size > $max) {
+            throw new \RuntimeException('Documento excede o tamanho máximo permitido.');
+        }
+        $finfo = new \finfo(FILEINFO_MIME_TYPE);
+        $mime = $finfo->file($file['tmp_name']);
+        if (!in_array($mime, $allowed, true)) {
+            throw new \RuntimeException('Tipo de arquivo não permitido. Envie PDF, JPG ou PNG.');
+        }
+        $extPorMime = ['application/pdf' => 'pdf', 'image/png' => 'png', 'image/jpeg' => 'jpg'];
+        $ext = $extPorMime[$mime] ?? strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+
+        $destDir = STORAGE_PATH . DIRECTORY_SEPARATOR . 'candidatura_documentos';
+        if (!is_dir($destDir)) {
+            @mkdir($destDir, 0775, true);
+        }
+        $nomeArmazenado = bin2hex(random_bytes(16)) . '.' . $ext;
+        $destPath = $destDir . DIRECTORY_SEPARATOR . $nomeArmazenado;
+        if (!move_uploaded_file($file['tmp_name'], $destPath)) {
+            throw new \RuntimeException('Não foi possível salvar o documento.');
+        }
+        return ['nome_armazenado' => $nomeArmazenado, 'mime' => $mime, 'tamanho' => $size];
+    }
+
     public static function saveImage(array $file, string $subdir = 'logos'): string
     {
         $config = Config::app();

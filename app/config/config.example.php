@@ -47,6 +47,11 @@ return [
         'max_upload_bytes' => 5 * 1024 * 1024,
         'allowed_image_mime' => ['image/png', 'image/jpeg', 'image/webp'],
         'max_image_bytes' => 2 * 1024 * 1024,
+        // Documentos de contratação anexados à candidatura (correção de 2026-11) — separado de
+        // allowed_upload_mime (currículo, só PDF): RG/CPF/comprovantes tipicamente chegam como
+        // foto/imagem, não só PDF.
+        'allowed_document_mime' => ['application/pdf', 'image/png', 'image/jpeg'],
+        'max_document_bytes' => 5 * 1024 * 1024,
         // Mantenha "false" em produção. Só ative como "true" em ambiente local para testar
         // webhooks contra um n8n rodando na própria máquina/rede interna — com "false" (padrão),
         // URLs de webhook que resolvem para IP privado/loopback/reservado são bloqueadas (SSRF).

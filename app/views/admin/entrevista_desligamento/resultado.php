@@ -60,7 +60,7 @@ $texto = static function (?string $t): string {
       <?php endif; ?>
     </section>
 
-    <?php foreach (EntrevistaDesligamentoService::SECOES_ESCALA as $secao): ?>
+    <?php foreach (EntrevistaDesligamentoService::SECOES_ESCALA as $chaveSecao => $secao): ?>
       <section class="rounded-ds-lg border border-border bg-surface p-4">
         <h3 class="text-sm font-bold text-text-primary"><?= Security::e($secao['titulo']) ?></h3>
         <table class="mt-2 min-w-full text-sm">
@@ -73,6 +73,12 @@ $texto = static function (?string $t): string {
             <?php endforeach; ?>
           </tbody>
         </table>
+        <?php $campoComentario = EntrevistaDesligamentoService::COMENTARIOS_SECAO[$chaveSecao] ?? null; if ($campoComentario !== null): ?>
+          <div class="mt-3 border-t border-border pt-3">
+            <h4 class="text-xs font-semibold uppercase tracking-wide text-text-secondary">Comentário</h4>
+            <p class="mt-1 text-sm text-text-primary"><?= $texto($e[$campoComentario] ?? null) ?></p>
+          </div>
+        <?php endif; ?>
       </section>
     <?php endforeach; ?>
 
@@ -80,6 +86,10 @@ $texto = static function (?string $t): string {
       <div class="rounded-ds-lg border border-border bg-surface p-4">
         <h3 class="text-sm font-bold text-text-primary">Experiência geral</h3>
         <p class="mt-2 text-2xl font-bold text-text-primary"><?= (int)$e['experiencia_geral'] ?><span class="text-sm font-normal text-text-secondary"> / 10</span></p>
+        <div class="mt-3 border-t border-border pt-3">
+          <h4 class="text-xs font-semibold uppercase tracking-wide text-text-secondary">Comentário</h4>
+          <p class="mt-1 text-sm text-text-primary"><?= $texto($e[EntrevistaDesligamentoService::COMENTARIO_EXPERIENCIA_GERAL] ?? null) ?></p>
+        </div>
       </div>
       <div class="rounded-ds-lg border border-border bg-surface p-4">
         <h3 class="text-sm font-bold text-text-primary">eNPS</h3>

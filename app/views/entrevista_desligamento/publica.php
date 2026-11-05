@@ -126,6 +126,12 @@ $tituloSecao = 'text-sm font-bold uppercase tracking-wide text-[#5B5F4E]';
               </div>
             <?php endforeach; ?>
           </div>
+          <?php $campoComentario = EntrevistaDesligamentoService::COMENTARIOS_SECAO[$chaveSecao] ?? null; if ($campoComentario !== null): ?>
+            <div class="mt-4">
+              <label for="<?= Security::e($campoComentario) ?>" class="block text-sm font-medium">Comentários sobre <?= Security::e($secao['titulo']) ?> <span class="font-normal text-[#5B5F4E]">(opcional)</span></label>
+              <textarea id="<?= Security::e($campoComentario) ?>" name="<?= Security::e($campoComentario) ?>" rows="3" maxlength="<?= EntrevistaDesligamentoService::LIMITE_TEXTO ?>" class="<?= $campoTexto ?>"><?= Security::e($valor($campoComentario)) ?></textarea>
+            </div>
+          <?php endif; ?>
         </section>
       <?php endforeach; ?>
 
@@ -147,6 +153,12 @@ $tituloSecao = 'text-sm font-bold uppercase tracking-wide text-[#5B5F4E]';
             <?php endfor; ?>
           </div>
           <div class="mt-1.5 flex justify-between text-xs text-[#5B5F4E]"><span><?= Security::e($pontaMin) ?></span><span><?= Security::e($pontaMax) ?></span></div>
+          <?php if ($campo === 'experiencia_geral'): ?>
+            <div class="mt-4">
+              <label for="<?= EntrevistaDesligamentoService::COMENTARIO_EXPERIENCIA_GERAL ?>" class="block text-sm font-medium">Comentários sobre Experiência geral <span class="font-normal text-[#5B5F4E]">(opcional)</span></label>
+              <textarea id="<?= EntrevistaDesligamentoService::COMENTARIO_EXPERIENCIA_GERAL ?>" name="<?= EntrevistaDesligamentoService::COMENTARIO_EXPERIENCIA_GERAL ?>" rows="3" maxlength="<?= EntrevistaDesligamentoService::LIMITE_TEXTO ?>" class="<?= $campoTexto ?>"><?= Security::e($valor(EntrevistaDesligamentoService::COMENTARIO_EXPERIENCIA_GERAL)) ?></textarea>
+            </div>
+          <?php endif; ?>
         </section>
       <?php endforeach; ?>
 

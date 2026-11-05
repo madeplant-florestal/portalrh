@@ -554,6 +554,18 @@ class RhIndicadoresService
         while ($forcarQuantidadeMeses !== null ? $indice < $forcarQuantidadeMeses : $cursor <= $limite) {
             $mesInicio = $cursor;
             $mesFim = $cursor->modify('last day of this month');
+            // Correção de 2026-11 (RH): o mês corrente (em andamento) nunca pode se estender além
+            // de $fim — sem este corte, o último mês da série (quando é o mês atual) reexpandia
+            // para o calendário cheio e contava desligamentos/admissões com data FUTURA em
+            // relação a $fim como se já tivessem ocorrido (ex.: demissão cadastrada para dia
+            // ainda não chegado). Só pode agir no ÚLTIMO mês da série: para qualquer mês anterior,
+            // cursor < limite garante que o fim natural do mês já é <= $fim. Não se aplica quando
+            // $forcarQuantidadeMeses está definido (série comparativa de serieMensalComparativa():
+            // ali $fim é só um parâmetro posicional sem significado de limite, sempre um período já
+            // encerrado no passado — nunca precisa deste corte).
+            if ($forcarQuantidadeMeses === null && $mesFim > $fim) {
+                $mesFim = $fim;
+            }
             $ativos = count(self::ativosNoPeriodo($contratosAtivos, $mesInicio, $mesFim));
             $desligamentos = count(self::desligamentosNoPeriodo($contratos, $mesInicio, $mesFim, $excluirDemissaoIds));
             $admissoes = count(self::admissoesNoPeriodo($contratos, $mesInicio, $mesFim, $excluirAdmissaoIds));

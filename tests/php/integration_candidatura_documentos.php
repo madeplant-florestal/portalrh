@@ -142,7 +142,11 @@ try {
     $check(str_contains($corpoDownload, "\$_GET['inline']") && str_contains($corpoDownload, "'inline'") && str_contains($corpoDownload, "'attachment'"), '(visualização) downloadDocumento() decide inline/attachment pelo mesmo endpoint autorizado, sem criar rota nova');
 
     $corpoShow = file_get_contents(__DIR__ . '/../../app/views/admin/candidaturas/show.php');
-    $check(str_contains($corpoShow, 'grid-cols-2') && str_contains($corpoShow, 'sm:grid-cols-3') && str_contains($corpoShow, 'md:grid-cols-4') && str_contains($corpoShow, 'lg:grid-cols-6'), '(layout) Seção de Documentos usa grade responsiva (mais colunas conforme a largura da tela), nunca card de largura total');
+    // Correção de homologação 2026-11: a grade por breakpoints (grid-cols-2/3/4/6) deixava cada
+    // card esticar até ~280px em telas largas (card = largura da coluna). Trilhas de largura FIXA
+    // (145px, auto-fill) garantem card sempre pequeno, nunca ampliado para preencher o espaço.
+    $check(str_contains($corpoShow, 'grid-cols-[repeat(auto-fill,145px)]'), '(layout) Seção de Documentos usa colunas de largura FIXA (145px, auto-fill) — vários cards por linha, responsivo, nunca esticando para preencher o espaço disponível');
+    $check(!preg_match('/class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6/', $corpoShow), '(layout) A grade de documentos não volta a usar breakpoints manuais (grid-cols-2/3/4/6), que faziam o card crescer em telas largas');
     $check(str_contains($corpoShow, 'aspect-square'), '(layout) Mini cards são quadrados');
     $check(str_contains($corpoShow, 'truncate'), '(layout) Nome de arquivo longo é truncado sem quebrar o layout do card');
     $check(str_contains($corpoShow, "\$ehImagem") && str_contains($corpoShow, "'image/png', 'image/jpeg'"), '(layout) PNG/JPG recebem miniatura real (img); os demais tipos (PDF) recebem o ícone');

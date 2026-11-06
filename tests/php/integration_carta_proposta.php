@@ -30,10 +30,16 @@ $check = static function (bool $cond, string $msg) use (&$falhas): void {
 };
 
 $suffix = substr((string)time(), -5) . (string)random_int(10, 99);
-$criados = ['vagas' => [], 'beneficios' => [], 'candidaturas' => [], 'mensagens' => [], 'cartas' => [], 'arquivosPdf' => []];
+$criados = ['vagas' => [], 'beneficios' => [], 'candidaturas' => [], 'mensagens' => [], 'cartas' => [], 'arquivosPdf' => [], 'solicitacoesVaga' => []];
 
 try {
     // ---- template de mensagem (não existe por padrão — precisa ser criado em Configurações) --
+    // IMPORTANTE (correção de homologação 2026-11): este teste NUNCA cria/sobrescreve uma linha
+    // sob o código de PRODUÇÃO ('carta_proposta_enviada') — uma versão anterior fazia isso como
+    // rede de segurança, e um run interrompido (pipe head/tail cortado) deixou presa, no ambiente
+    // real, uma linha "(fixture de teste)" sob esse código, vazando para a tela do RH. O teste só
+    // LÊ o que já existe; quando não existe nada ativo, os passos que dependem dele são pulados
+    // com aviso explícito, nunca fabricados sob o código real.
     $tpl = Mensagem::create([
         'codigo' => 'zzcp_carta_proposta_' . $suffix,
         'titulo' => 'ZZCP Carta Proposta enviada',
@@ -42,18 +48,13 @@ try {
     ]);
     $check($tpl['ok'] ?? false, '(setup) Template de mensagem criado para o teste');
     $criados['mensagens'][] = $tpl['id'];
-    // PHP não permite sobrescrever uma constante de classe em runtime, e o código é fixo
-    // (CartaPropostaService::CODIGO_MENSAGEM_ENVIO) — por isso o teste garante que o template
-    // OFICIAL existe (cria um só se o ambiente ainda não tiver nenhum), em vez de usar um código
-    // fictício que o serviço nunca procuraria.
+
     $codigoOriginal = CartaPropostaService::CODIGO_MENSAGEM_ENVIO;
-    $existente = Mensagem::findAtivaByCodigo($codigoOriginal);
-    if ($existente === null) {
-        Mensagem::create(['codigo' => $codigoOriginal, 'titulo' => 'Carta Proposta enviada (fixture de teste)', 'conteudo' => 'Olá [Nome], [Link da Proposta]', 'ativo' => true]);
-        $criadoOficial = Mensagem::findAtivaByCodigo($codigoOriginal);
-        if ($criadoOficial !== null) { $criados['mensagens'][] = (int)$criadoOficial['id']; }
+    $templateOficial = Mensagem::findAtivaByCodigo($codigoOriginal);
+    $check($templateOficial !== null, '(pré-condição) Existe um template ATIVO para "' . $codigoOriginal . '" em Configurações → Mensagens (sem ele, "preparar envio" é rejeitado com erro claro — nunca fabricado automaticamente sob o código de produção)');
+    if ($templateOficial !== null) {
+        $check(!str_contains((string)$templateOficial['titulo'], 'fixture de teste') && !str_contains((string)$templateOficial['titulo'], 'ZZCP'), '(template oficial) O template ativo em produção não é um leftover de teste');
     }
-    $check(Mensagem::findAtivaByCodigo($codigoOriginal) !== null, '(setup) Template oficial "' . $codigoOriginal . '" está disponível para o teste (criado se ainda não existia)');
 
     // ---- usuário RH ---------------------------------------------------------------------------
     $usuarioId = (int)$pdo->query("SELECT id FROM usuarios WHERE role IN ('admin','rh') ORDER BY id LIMIT 1")->fetchColumn();
@@ -97,6 +98,37 @@ try {
     $service = new CartaPropostaService();
     $repo = new CartaPropostaRepository();
 
+    // ---- 1a) template ausente/inativo -> prepararEnvio() rejeita com mensagem clara, orientando
+    // o RH a cadastrar em Configurações → Mensagens (nunca fabrica nada sob o código de produção) --
+    if ($templateOficial !== null) {
+        $pdo->prepare('UPDATE mensagens SET ativo = 0 WHERE id = ?')->execute([(int)$templateOficial['id']]);
+    }
+    try {
+        $pdo->prepare("INSERT INTO vagas (titulo, descricao, requisitos, ativo) VALUES (?, 'desc', 'req', 1)")->execute(["ZZCP Vaga Template Ausente {$suffix}"]);
+        $vagaTemplateAusenteId = (int)$pdo->lastInsertId();
+        $criados['vagas'][] = $vagaTemplateAusenteId;
+        $candTemplateAusente = $mkCandidatura($vagaTemplateAusenteId, 'CandidatoTemplateAusente');
+        $rTemplateAusente = $service->criarOuReaproveitarRascunho($candTemplateAusente, $usuarioId);
+        $idTemplateAusente = (int)$rTemplateAusente['id'];
+        $criados['cartas'][] = $idTemplateAusente;
+        $service->atualizarRascunho($idTemplateAusente, [
+            'nome_candidato' => "ZZCP CandidatoTemplateAusente {$suffix}", 'cargo' => 'ZZCP Cargo', 'setor' => null,
+            'empresa_contratante' => 'ZZCP Empresa', 'salario_proposto' => 3000, 'jornada_trabalho' => '40h semanais',
+            'escala_horario' => null, 'beneficios_texto' => null, 'local_trabalho' => null, 'previsao_inicio' => null,
+            'validade_proposta' => (new DateTimeImmutable('today'))->modify('+10 days')->format('Y-m-d'), 'observacoes' => null,
+        ]);
+        $service->emitir($idTemplateAusente);
+        $cartaTemplateAusente = $repo->buscarPorId($idTemplateAusente);
+        $criados['arquivosPdf'][] = STORAGE_PATH . DIRECTORY_SEPARATOR . 'cartas_propostas' . DIRECTORY_SEPARATOR . $cartaTemplateAusente['pdf_nome_armazenado'];
+        $preparoSemTemplate = $service->prepararEnvio($idTemplateAusente, $usuarioId);
+        $check(($preparoSemTemplate['ok'] ?? true) === false, '(template ausente) Sem template ativo para "' . $codigoOriginal . '", preparar envio é rejeitado (nunca fabrica um template sob o código de produção)');
+        $check(str_contains((string)($preparoSemTemplate['error'] ?? ''), $codigoOriginal), '(template ausente) A mensagem de erro orienta claramente qual template cadastrar/ativar');
+    } finally {
+        if ($templateOficial !== null) {
+            $pdo->prepare('UPDATE mensagens SET ativo = 1 WHERE id = ?')->execute([(int)$templateOficial['id']]);
+        }
+    }
+
     // ---- 1) criação do rascunho + pré-preenchimento ---------------------------------------------
     $r1 = $service->criarOuReaproveitarRascunho($candA, $usuarioId);
     $check($r1['ok'] ?? false, '(criar) Rascunho criado com sucesso');
@@ -133,6 +165,58 @@ try {
         'base' => '', 'carta' => $cartaSemBeneficios, 'candidatura' => Candidatura::find($candSemBeneficios), 'historico' => $repo->listarPorCandidatura($candSemBeneficios), 'csrf' => Security::csrfToken(),
     ]);
     $check(str_contains($htmlSemBeneficios, 'Carta Proposta'), '(abertura) Página de edição renderiza sem exceção também para candidatura SEM benefícios cadastrados');
+
+    // ---- 1c) pré-preenchimento a partir de uma Solicitação de Vaga vinculada (correção de
+    // homologação 2026-11: setor/jornada/escala vinham do solicitacoes_vaga, mas local_trabalho e
+    // escala_horario ficavam sempre null por não serem lidos) ---------------------------------------
+    $setorReal = $pdo->query("SELECT id, nome FROM setores ORDER BY id LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+    $cargoRealId = (int)$pdo->query("SELECT id FROM cargos ORDER BY id LIMIT 1")->fetchColumn();
+    $centroCustoRealId = (int)$pdo->query("SELECT id FROM centros_custo ORDER BY id LIMIT 1")->fetchColumn();
+    $colaboradorRealId = (int)$pdo->query("SELECT id FROM colaboradores ORDER BY id LIMIT 1")->fetchColumn();
+    $check($setorReal !== false && $cargoRealId > 0 && $centroCustoRealId > 0 && $colaboradorRealId > 0, '(pré-condição) Catálogos de Setor/Cargo/Centro de Custo/Colaborador existem localmente para montar a fixture de Solicitação de Vaga');
+
+    $escalaPlano = "ZZCP Seg a sex, 08h às 18h {$suffix}";
+    $pdo->prepare(
+        "INSERT INTO solicitacoes_vaga (
+            setor_id, quantidade_vagas, cargo_id, gestor_solicitante_colaborador_id, solicitante_usuario_id,
+            tipo_vaga, tipo_contratacao, salario_previsto, centro_custo_id, previsto_orcamento,
+            jornada_trabalho, escala_encrypted, escolaridade_minima, entregas_esperadas_encrypted,
+            nivel_responsabilidade, data_prevista_inicio, urgencia, status_fluxo
+         ) VALUES (?, 1, ?, ?, ?, 'nova_posicao', 'clt', 3200.00, ?, 1, 'ZZCP 44h semanais', ?, 'medio', 'x', 'operacional', CURDATE(), 'media', 'aprovada')"
+    )->execute([(int)$setorReal['id'], $cargoRealId, $colaboradorRealId, $usuarioId, $centroCustoRealId, Cipher::encrypt($escalaPlano)]);
+    $solicitacaoId = (int)$pdo->lastInsertId();
+    $criados['solicitacoesVaga'][] = $solicitacaoId;
+
+    $pdo->prepare("INSERT INTO vagas (solicitacao_vaga_id, titulo, descricao, requisitos, area, local, ativo) VALUES (?, ?, 'desc', 'req', ?, ?, 1)")
+        ->execute([$solicitacaoId, "ZZCP Vaga Com Solicitacao {$suffix}", "ZZCP Area Vaga Nunca Deve Aparecer {$suffix}", "ZZCP Local Direto Da Vaga {$suffix}"]);
+    $vagaComSolicitacaoId = (int)$pdo->lastInsertId();
+    $criados['vagas'][] = $vagaComSolicitacaoId;
+    $candComSolicitacao = $mkCandidatura($vagaComSolicitacaoId, 'CandidatoComSolicitacao');
+    $rComSolicitacao = $service->criarOuReaproveitarRascunho($candComSolicitacao, $usuarioId);
+    $criados['cartas'][] = (int)$rComSolicitacao['id'];
+    $cartaComSolicitacao = $repo->buscarPorId((int)$rComSolicitacao['id']);
+    $check($cartaComSolicitacao['setor'] === $setorReal['nome'], '(pré-preenchimento/solicitação) Setor vem do setor_id da Solicitação de Vaga (catálogo oficial), nunca de vagas.area');
+    $check($cartaComSolicitacao['jornada_trabalho'] === 'ZZCP 44h semanais', '(pré-preenchimento/solicitação) Jornada de trabalho vem da Solicitação de Vaga');
+    $check((float)$cartaComSolicitacao['salario_proposto'] === 3200.0, '(pré-preenchimento/solicitação) Salário previsto vem da Solicitação de Vaga (fonte válida, nunca presumido)');
+    $check($cartaComSolicitacao['escala_horario'] === $escalaPlano, '(pré-preenchimento/solicitação) Escala/Horário é decriptada a partir de solicitacoes_vaga.escala_encrypted (antes ficava sempre null)');
+    $check($cartaComSolicitacao['local_trabalho'] === "ZZCP Local Direto Da Vaga {$suffix}", '(pré-preenchimento) Local de trabalho vem de vagas.local — igual com ou sem Solicitação vinculada');
+
+    // ---- 1d) vaga LEGADA/manual, sem Solicitação de Vaga vinculada: usa o texto livre já
+    // cadastrado na própria vaga (area/local) como aproximação; jornada/salário continuam
+    // genuinamente ausentes (nenhuma origem cadastral existe para eles nesse caso — nunca inventados) --
+    $pdo->prepare("INSERT INTO vagas (titulo, descricao, requisitos, area, local, ativo) VALUES (?, 'desc', 'req', ?, ?, 1)")
+        ->execute(["ZZCP Vaga Legada {$suffix}", "ZZCP Area Legada {$suffix}", "ZZCP Local Legado {$suffix}"]);
+    $vagaLegadaId = (int)$pdo->lastInsertId();
+    $criados['vagas'][] = $vagaLegadaId;
+    $candLegada = $mkCandidatura($vagaLegadaId, 'CandidatoVagaLegada');
+    $rLegada = $service->criarOuReaproveitarRascunho($candLegada, $usuarioId);
+    $criados['cartas'][] = (int)$rLegada['id'];
+    $cartaLegada = $repo->buscarPorId((int)$rLegada['id']);
+    $check($cartaLegada['setor'] === "ZZCP Area Legada {$suffix}", '(pré-preenchimento/legado) Sem Solicitação vinculada, Setor cai no fallback de vagas.area (texto livre revisável pelo RH)');
+    $check($cartaLegada['local_trabalho'] === "ZZCP Local Legado {$suffix}", '(pré-preenchimento/legado) Local de trabalho vem de vagas.local');
+    $check($cartaLegada['jornada_trabalho'] === '', '(pré-preenchimento/legado) Jornada de trabalho fica genuinamente vazia — não existe outra origem cadastral, nunca inventada');
+    $check((float)$cartaLegada['salario_proposto'] === 0.0, '(pré-preenchimento/legado) Salário fica 0 (vazio) — nunca presumido — quando não há Solicitação de Vaga vinculada');
+    $check($cartaLegada['empresa_contratante'] === '', '(pré-preenchimento/legado) Empresa contratante fica vazia quando a vaga não tem empresa_id cadastrado — ausência real, RH preenche');
 
     // ---- 2) reabrir não duplica versão -----------------------------------------------------------
     $r1b = $service->criarOuReaproveitarRascunho($candA, $usuarioId);
@@ -305,6 +389,46 @@ try {
     $resolvidoExpirado = $service->resolverParaPagina($tokenExpirado, new DateTimeImmutable('now'));
     $check($resolvidoExpirado['estado'] === 'indisponivel', '(token) Token tecnicamente expirado -> "indisponivel", categoria DIFERENTE de "proposta_vencida" (validade de negócio) — as duas checagens são independentes');
 
+    // ---- 17b) Histórico da candidatura: timeline unificada projeta aceite/recusa/envio da Carta
+    // Proposta a partir de cartas_propostas, SEM gravar nada novo e sem duplicar o que já existe
+    // em comunicacoes (correção de homologação 2026-11) ----------------------------------------------
+    $metodoEventos = new ReflectionMethod(AdminCandidaturasController::class, 'eventosCartaProposta');
+    $controllerCandidaturas = new AdminCandidaturasController();
+
+    $eventosA = $metodoEventos->invoke($controllerCandidaturas, $repo->listarPorCandidatura($candA));
+    $tiposA = array_column($eventosA, 'situacao');
+    $check(in_array('enviada', $tiposA, true), '(histórico) Evento "Carta Proposta enviada" é projetado a partir de cartas_propostas.enviada_em');
+    $check(in_array('aceita', $tiposA, true), '(histórico) Evento "Carta Proposta aceita" é projetado a partir de cartas_propostas.decisao_em/status');
+    $eventoAceite = current(array_filter($eventosA, static fn(array $e): bool => $e['situacao'] === 'aceita'));
+    $check(($eventoAceite['usuario_nome'] ?? null) === 'Candidato', '(histórico) O evento de aceite identifica claramente que a decisão foi do CANDIDATO, nunca do RH');
+    $check(str_contains((string)($eventoAceite['mensagem_titulo'] ?? ''), 'versão 1'), '(histórico) Evento de aceite referencia a versão correta da proposta (versão 1, a única decidida de A)');
+
+    $eventosB = $metodoEventos->invoke($controllerCandidaturas, $repo->listarPorCandidatura($candB));
+    $tiposB = array_column($eventosB, 'situacao');
+    $check(in_array('recusada', $tiposB, true), '(histórico) Evento "Carta Proposta recusada" é projetado a partir de cartas_propostas.decisao_em/status');
+    $eventoRecusa = current(array_filter($eventosB, static fn(array $e): bool => $e['situacao'] === 'recusada'));
+    $check(str_contains((string)($eventoRecusa['conteudo'] ?? ''), 'salário abaixo'), '(histórico) Evento de recusa expõe o motivo já registrado em cartas_propostas.motivo_recusa, sem duplicar o armazenamento');
+
+    $comunicacoesReaisA = Comunicacao::allByCandidatura($candA);
+    $check(count($eventosA) === 2, '(histórico) Exatamente 2 eventos projetados para A (enviada + aceita da versão 1 — a versão 2 nunca foi de fato enviada pelo serviço, só manipulada por SQL para o teste de token expirado)');
+    $totalMerged = array_merge($comunicacoesReaisA, $eventosA);
+    usort($totalMerged, static fn(array $a, array $b): int => strtotime((string)$b['created_at']) <=> strtotime((string)$a['created_at']));
+    $check(count($totalMerged) === count($comunicacoesReaisA) + count($eventosA), '(histórico) A mescla com as comunicações reais (mesma lógica do controller) não perde nem duplica nenhum item');
+
+    // ---- 17c) Título da página pública (correção de homologação 2026-11: layout compartilhado com
+    // a Entrevista de Desligamento mostrava o título errado na Carta Proposta) ----------------------
+    $viewPublica = new View();
+    $paramsPublicos = ['base' => '', 'estado' => 'invalido', 'titulo' => 'Carta Proposta | Madeplant', 'csrf' => Security::csrfToken()];
+    $conteudoPublico = $viewPublica->renderPartial('carta_proposta/publica', $paramsPublicos);
+    $htmlPublico = $viewPublica->renderPartial('layouts/publico-seguro', $paramsPublicos + ['content' => $conteudoPublico]);
+    $check(str_contains($htmlPublico, '<title>Carta Proposta | Madeplant</title>'), '(título) A página pública da Carta Proposta usa o título correto, nunca o da Entrevista de Desligamento');
+    $check(!str_contains($htmlPublico, 'Entrevista de Desligamento'), '(título) Nenhuma referência à Entrevista de Desligamento aparece na página pública da Carta Proposta');
+
+    $paramsEntrevista = ['base' => '', 'estado' => 'invalido', 'csrf' => Security::csrfToken()];
+    $conteudoEntrevista = $viewPublica->renderPartial('entrevista_desligamento/publica', $paramsEntrevista);
+    $htmlEntrevistaDefault = $viewPublica->renderPartial('layouts/publico-seguro', $paramsEntrevista + ['content' => $conteudoEntrevista]);
+    $check(str_contains($htmlEntrevistaDefault, '<title>Entrevista de Desligamento — Madeplant</title>'), '(título) O título padrão da Entrevista de Desligamento continua INALTERADO (layout compartilhado, mas default preservado)');
+
     // ---- 18) permissões — inspeção de código (mesmo padrão já usado para documentos) --------------
     $corpoAdmin = file_get_contents(__DIR__ . '/../../app/controllers/AdminCartaPropostaController.php');
     foreach (['criar', 'editar', 'atualizar', 'emitir', 'prepararEnvio', 'confirmarEnvio', 'pdf'] as $metodo) {
@@ -364,6 +488,10 @@ try {
         $ph = implode(',', array_fill(0, count($criados['vagas']), '?'));
         $pdo->prepare("DELETE FROM vaga_beneficios WHERE vaga_id IN ($ph)")->execute($criados['vagas']);
         $pdo->prepare("DELETE FROM vagas WHERE id IN ($ph)")->execute($criados['vagas']);
+    }
+    if (!empty($criados['solicitacoesVaga'])) {
+        $ph = implode(',', array_fill(0, count($criados['solicitacoesVaga']), '?'));
+        $pdo->prepare("DELETE FROM solicitacoes_vaga WHERE id IN ($ph)")->execute($criados['solicitacoesVaga']);
     }
     if (!empty($criados['beneficios'])) {
         $ph = implode(',', array_fill(0, count($criados['beneficios']), '?'));

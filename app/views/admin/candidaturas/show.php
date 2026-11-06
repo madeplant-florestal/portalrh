@@ -215,7 +215,7 @@ require_once APP_PATH . '/views/partials/modulo-topo.php';
     <?php if (empty($documentos)): ?>
       <p class="text-sm text-text-secondary">Nenhum documento anexado ainda.</p>
     <?php else: ?>
-      <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+      <div class="grid grid-cols-[repeat(auto-fill,145px)] gap-3">
         <?php foreach ($documentos as $doc): ?>
           <?php
             $urlDoc = $base . '/admin/candidaturas/' . (int)$c['id'] . '/documentos/' . (int)$doc['id'];
@@ -315,10 +315,11 @@ require_once APP_PATH . '/views/partials/modulo-topo.php';
       <ul role="list" class="-mb-8">
         <?php foreach ($comunicacoes as $idx => $com): ?>
         <?php
-          $situacaoLabel = ['preparada' => 'Preparada', 'enviada' => 'Enviada', 'erro' => 'Erro no envio'][$com['situacao']] ?? $com['situacao'];
+          $situacaoLabel = ['preparada' => 'Preparada', 'enviada' => 'Enviada', 'erro' => 'Erro no envio', 'aceita' => 'Aceita pelo candidato', 'recusada' => 'Recusada pelo candidato'][$com['situacao']] ?? $com['situacao'];
           $entregue = !empty($com['entregue_em']);
           $visualizada = !empty($com['visualizada_em']);
-          $detalheId = 'comunicacao-conteudo-' . (int)$com['id'];
+          $detalheId = 'comunicacao-conteudo-' . preg_replace('/[^a-zA-Z0-9_-]/', '', (string)$com['id']);
+          $corIcone = ['aceita' => 'bg-success', 'recusada' => 'bg-danger'][$com['situacao']] ?? 'bg-primary-600';
         ?>
         <li>
           <div class="relative pb-8">
@@ -327,7 +328,7 @@ require_once APP_PATH . '/views/partials/modulo-topo.php';
             <?php endif; ?>
             <div class="relative flex gap-3">
               <div>
-                <span class="h-8 w-8 rounded-full bg-primary-600 flex items-center justify-center ring-8 ring-white">
+                <span class="h-8 w-8 rounded-full <?= $corIcone ?> flex items-center justify-center ring-8 ring-white">
                   <svg class="h-5 w-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                 </span>
               </div>

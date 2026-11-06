@@ -137,6 +137,6 @@ class CartaPropostaController extends Controller
     private function renderizar(string $estado, array $params = [], int $status = 200): void
     {
         http_response_code($status);
-        $this->view->render('carta_proposta/publica', $params + ['estado' => $estado], 'layouts/publico-seguro');
+        $this->view->render('carta_proposta/publica', $params + ['estado' => $estado, 'titulo' => 'Carta Proposta | Madeplant'], 'layouts/publico-seguro');
     }
 }

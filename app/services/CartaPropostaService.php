@@ -64,9 +64,10 @@ class CartaPropostaService
         $salario = null;
         $jornada = '';
         $setor = null;
+        $escala = null;
         if ($vaga !== null && !empty($vaga['solicitacao_vaga_id'])) {
             $stmt = Database::conn()->prepare(
-                'SELECT sv.salario_previsto, sv.jornada_trabalho, s.nome AS setor_nome
+                'SELECT sv.salario_previsto, sv.jornada_trabalho, sv.escala_encrypted, s.nome AS setor_nome
                  FROM solicitacoes_vaga sv
                  LEFT JOIN setores s ON s.id = sv.setor_id
                  WHERE sv.id = ?'
@@ -77,7 +78,14 @@ class CartaPropostaService
                 $salario = $sol['salario_previsto'];
                 $jornada = (string)$sol['jornada_trabalho'];
                 $setor = $sol['setor_nome'];
+                $escala = Cipher::decrypt($sol['escala_encrypted'] ?? null);
             }
+        } elseif ($vaga !== null && trim((string)($vaga['area'] ?? '')) !== '') {
+            // Vaga legada/manual (sem Solicitação de Vaga vinculada — cadastro de exceção, ver
+            // AdminVagasController): "Área" é texto livre preenchido pelo RH no cadastro manual da
+            // vaga. Não é o catálogo oficial de Setores, mas é a melhor aproximação disponível;
+            // o RH sempre revisa antes de emitir.
+            $setor = trim((string)$vaga['area']);
         }
 
         // Benefícios por VAGA (vaga_beneficios) — nunca cargo_beneficios. Só o pré-preenchimento:
@@ -90,6 +98,9 @@ class CartaPropostaService
             }
         }
 
+        $localTrabalho = $vaga !== null ? trim((string)($vaga['local'] ?? '')) : '';
+        $escala = trim((string)($escala ?? ''));
+
         return [
             'nome_candidato' => (string)($candidatura['nome'] ?? ''),
             'cargo' => (string)($candidatura['cargo_pretendido'] ?: ($candidatura['vaga_titulo'] ?? '')),
@@ -97,9 +108,9 @@ class CartaPropostaService
             'empresa_contratante' => (string)($candidatura['vaga_empresa_nome'] ?? ''),
             'salario_proposto' => $salario ?? 0,
             'jornada_trabalho' => $jornada,
-            'escala_horario' => null,
+            'escala_horario' => $escala !== '' ? $escala : null,
             'beneficios_texto' => $beneficiosTexto,
-            'local_trabalho' => null,
+            'local_trabalho' => $localTrabalho !== '' ? $localTrabalho : null,
             'previsao_inicio' => null,
             'validade_proposta' => (new DateTimeImmutable('today'))->modify('+7 days')->format('Y-m-d'),
             'observacoes' => null,

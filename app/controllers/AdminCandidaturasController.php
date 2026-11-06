@@ -31,18 +31,30 @@ class AdminCandidaturasController extends Controller
         $stages = PipelineStage::all();
         $csrf = Security::csrfToken();
 
+        $cartaPropostaRepository = new CartaPropostaRepository();
+
         // Seções novas (Sprint "Histórico de Comunicação + Experiência do Candidato") são
         // permission-gated de verdade: sem a permissão, nem os dados são buscados — não é só a
         // view escondendo HTML.
         $podeVerComunicacoes = Authorization::temPermissao('comunicacoes.visualizar');
-        $comunicacoes = $podeVerComunicacoes ? Comunicacao::allByCandidatura((int)$id) : [];
+        $comunicacoes = [];
+        if ($podeVerComunicacoes) {
+            // Timeline unificada: eventos de envio/aceite/recusa da Carta Proposta são projetados
+            // a partir de `cartas_propostas` (nenhum armazenamento novo, nenhuma comunicação
+            // artificial inserida) e mesclados com as mensagens reais de `comunicacoes`.
+            $comunicacoes = array_merge(
+                Comunicacao::allByCandidatura((int)$id),
+                $this->eventosCartaProposta($cartaPropostaRepository->listarPorCandidatura((int)$id))
+            );
+            usort($comunicacoes, static fn(array $a, array $b): int => strtotime((string)$b['created_at']) <=> strtotime((string)$a['created_at']));
+        }
 
         $podeVerPesquisa = Authorization::temPermissao('pesquisa_experiencia.visualizar');
         $pesquisa = $podeVerPesquisa ? PesquisaExperiencia::findByCandidatura((int)$id) : null;
 
         $documentos = CandidaturaDocumento::allByCandidatura((int)$id);
-        $cartaPropostaAtual = (new CartaPropostaRepository())->buscarUltimaPorCandidatura((int)$id);
-        $podeAgendarExame = (new CartaPropostaRepository())->existeVersaoAceita((int)$id);
+        $cartaPropostaAtual = $cartaPropostaRepository->buscarUltimaPorCandidatura((int)$id);
+        $podeAgendarExame = $cartaPropostaRepository->existeVersaoAceita((int)$id);
         $exameAdmissional = (new ExameAdmissionalRepository())->buscarPorCandidatura((int)$id);
 
         $this->view->render('admin/candidaturas/show', [
@@ -60,6 +72,51 @@ class AdminCandidaturasController extends Controller
             'podeAgendarExame' => $podeAgendarExame,
             'exameAdmissional' => $exameAdmissional,
         ], 'layouts/app-shell');
+    }
+
+    /**
+     * Projeta eventos de envio/aceite/recusa da Carta Proposta no mesmo formato usado pela
+     * timeline de `comunicacoes` (correção de homologação de 2026-11) — sem gravar nada novo.
+     * Aceite/recusa já têm evidências completas em `cartas_propostas` (status, IP, user agent,
+     * motivo); aqui só reaproveitamos para exibição, deixando explícito que a decisão é do
+     * candidato, nunca do RH.
+     */
+    private function eventosCartaProposta(array $cartas): array
+    {
+        $eventos = [];
+        foreach ($cartas as $cp) {
+            if (!empty($cp['enviada_em'])) {
+                $eventos[] = [
+                    'id' => 'cp-' . (int)$cp['id'] . '-enviada',
+                    'mensagem_titulo' => 'Carta Proposta enviada (versão ' . (int)$cp['versao'] . ')',
+                    'situacao' => 'enviada',
+                    'canal' => 'Carta Proposta',
+                    'origem' => 'MANUAL',
+                    'usuario_nome' => $cp['enviada_por_nome'] ?? null,
+                    'conteudo' => 'Carta Proposta (versão ' . (int)$cp['versao'] . ') enviada ao candidato para aceite eletrônico.',
+                    'erro_mensagem' => null,
+                    'created_at' => $cp['enviada_em'],
+                ];
+            }
+            if (in_array($cp['status'], ['aceita', 'recusada'], true) && !empty($cp['decisao_em'])) {
+                $eventos[] = [
+                    'id' => 'cp-' . (int)$cp['id'] . '-decisao',
+                    'mensagem_titulo' => $cp['status'] === 'aceita'
+                        ? 'Carta Proposta aceita pelo candidato (versão ' . (int)$cp['versao'] . ')'
+                        : 'Carta Proposta recusada pelo candidato (versão ' . (int)$cp['versao'] . ')',
+                    'situacao' => $cp['status'],
+                    'canal' => 'Carta Proposta — decisão do candidato',
+                    'origem' => 'CANDIDATO',
+                    'usuario_nome' => 'Candidato',
+                    'conteudo' => $cp['status'] === 'recusada'
+                        ? (string)($cp['motivo_recusa'] ?? '')
+                        : 'Aceite eletrônico registrado pelo candidato através do link seguro da Carta Proposta.',
+                    'erro_mensagem' => null,
+                    'created_at' => $cp['decisao_em'],
+                ];
+            }
+        }
+        return $eventos;
     }
     
     public function download(string $id): void

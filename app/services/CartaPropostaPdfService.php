@@ -38,6 +38,48 @@ class CartaPropostaPdfService
         return $nomeArmazenado;
     }
 
+    /**
+     * Gera a VIA com comprovante de aceite — PDF SEPARADO do original (nunca sobrescreve/altera
+     * o PDF emitido pelo RH), só chamado depois de um aceite já confirmado no banco
+     * (CartaPropostaService::registrarDecisao()). Mesmo padrão de gerar(): template HTML próprio
+     * (comprovante_pdf.php) renderizado para dompdf, salvo no MESMO diretório storage/cartas_propostas/.
+     *
+     * @param array $proposta Snapshot da carta (já com status='aceita', decisao_em preenchido).
+     */
+    public static function gerarComprovante(array $proposta, string $identificador): string
+    {
+        require_once BASE_PATH . '/vendor/autoload.php';
+
+        $html = self::renderizarHtmlComprovante($proposta + ['comprovante_identificador' => $identificador]);
+
+        $dompdf = new \Dompdf\Dompdf([
+            'isRemoteEnabled' => false,
+            'isHtml5ParserEnabled' => true,
+        ]);
+        $dompdf->setPaper('A4', 'portrait');
+        $dompdf->loadHtml($html, 'UTF-8');
+        $dompdf->render();
+
+        $destDir = STORAGE_PATH . DIRECTORY_SEPARATOR . 'cartas_propostas';
+        if (!is_dir($destDir)) {
+            @mkdir($destDir, 0775, true);
+        }
+        $nomeArmazenado = bin2hex(random_bytes(16)) . '.pdf';
+        $destPath = $destDir . DIRECTORY_SEPARATOR . $nomeArmazenado;
+        if (file_put_contents($destPath, $dompdf->output()) === false) {
+            throw new \RuntimeException('Não foi possível salvar a via com comprovante de aceite da Carta Proposta.');
+        }
+        return $nomeArmazenado;
+    }
+
+    private static function renderizarHtmlComprovante(array $proposta): string
+    {
+        extract($proposta, EXTR_SKIP);
+        ob_start();
+        require APP_PATH . '/views/carta_proposta/comprovante_pdf.php';
+        return (string)ob_get_clean();
+    }
+
     private static function renderizarHtml(array $proposta): string
     {
         extract($proposta, EXTR_SKIP);

@@ -139,8 +139,32 @@ class AdminCartaPropostaController extends Controller
         if ($real === false || $realDir === false || strpos($real, $realDir) !== 0 || !is_file($real)) {
             http_response_code(404); echo 'Arquivo não encontrado'; return;
         }
+        $disposicao = ($_GET['inline'] ?? '') === '1' ? 'inline' : 'attachment';
         header('Content-Type: application/pdf');
-        header('Content-Disposition: inline; filename="carta-proposta-v' . (int)$carta['versao'] . '.pdf"');
+        header('Content-Disposition: ' . $disposicao . '; filename="carta-proposta-v' . (int)$carta['versao'] . '.pdf"');
+        header('Content-Length: ' . filesize($real));
+        readfile($real);
+        exit;
+    }
+
+    /** Via com comprovante de aceite — mesmo padrão de acesso/guard de path do pdf() original. */
+    public function comprovante(string $id): void
+    {
+        Auth::requireRole(['admin', 'rh']);
+        $carta = (new CartaPropostaRepository())->buscarPorId((int)$id);
+        if ($carta === null || empty($carta['comprovante_pdf_nome_armazenado'])) {
+            http_response_code(404); echo 'Comprovante não encontrado'; return;
+        }
+        $dir = STORAGE_PATH . DIRECTORY_SEPARATOR . 'cartas_propostas';
+        $file = $dir . DIRECTORY_SEPARATOR . basename((string)$carta['comprovante_pdf_nome_armazenado']);
+        $real = realpath($file);
+        $realDir = realpath($dir);
+        if ($real === false || $realDir === false || strpos($real, $realDir) !== 0 || !is_file($real)) {
+            http_response_code(404); echo 'Arquivo não encontrado'; return;
+        }
+        $disposicao = ($_GET['inline'] ?? '') === '1' ? 'inline' : 'attachment';
+        header('Content-Type: application/pdf');
+        header('Content-Disposition: ' . $disposicao . '; filename="carta-proposta-aceita-v' . (int)$carta['versao'] . '.pdf"');
         header('Content-Length: ' . filesize($real));
         readfile($real);
         exit;

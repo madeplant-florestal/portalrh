@@ -409,8 +409,9 @@ try {
     $eventoRecusa = current(array_filter($eventosB, static fn(array $e): bool => $e['situacao'] === 'recusada'));
     $check(str_contains((string)($eventoRecusa['conteudo'] ?? ''), 'salário abaixo'), '(histórico) Evento de recusa expõe o motivo já registrado em cartas_propostas.motivo_recusa, sem duplicar o armazenamento');
 
+    $check(in_array('emitida', $tiposA, true), '(histórico) Evento "Carta Proposta emitida" é projetado a partir de cartas_propostas.gerada_em');
     $comunicacoesReaisA = Comunicacao::allByCandidatura($candA);
-    $check(count($eventosA) === 2, '(histórico) Exatamente 2 eventos projetados para A (enviada + aceita da versão 1 — a versão 2 nunca foi de fato enviada pelo serviço, só manipulada por SQL para o teste de token expirado)');
+    $check(count($eventosA) === 3, '(histórico) Exatamente 3 eventos projetados para A (emitida + enviada + aceita da versão 1 — a versão 2 nunca foi de fato emitida/enviada pelo serviço, só manipulada por SQL para o teste de token expirado)');
     $totalMerged = array_merge($comunicacoesReaisA, $eventosA);
     usort($totalMerged, static fn(array $a, array $b): int => strtotime((string)$b['created_at']) <=> strtotime((string)$a['created_at']));
     $check(count($totalMerged) === count($comunicacoesReaisA) + count($eventosA), '(histórico) A mescla com as comunicações reais (mesma lógica do controller) não perde nem duplica nenhum item');
@@ -428,6 +429,90 @@ try {
     $conteudoEntrevista = $viewPublica->renderPartial('entrevista_desligamento/publica', $paramsEntrevista);
     $htmlEntrevistaDefault = $viewPublica->renderPartial('layouts/publico-seguro', $paramsEntrevista + ['content' => $conteudoEntrevista]);
     $check(str_contains($htmlEntrevistaDefault, '<title>Entrevista de Desligamento — Madeplant</title>'), '(título) O título padrão da Entrevista de Desligamento continua INALTERADO (layout compartilhado, mas default preservado)');
+
+    // ---- 17d) Via com comprovante de aceite: gerada automaticamente após o aceite, PDF SEPARADO
+    // do original, nunca sobrescreve o original, idempotente (correção de homologação 2026-11) ------
+    $cartaA1ComComprovante = $repo->buscarPorId($idA1);
+    $check(!empty($cartaA1ComComprovante['comprovante_pdf_nome_armazenado']), '(comprovante) Via com comprovante de aceite é gerada automaticamente logo após o aceite válido');
+    $check(!empty($cartaA1ComComprovante['comprovante_identificador']), '(comprovante) Identificador público da decisão é gerado (nunca o id interno auto-increment)');
+    $check($cartaA1ComComprovante['comprovante_pdf_nome_armazenado'] !== $cartaA1ComComprovante['pdf_nome_armazenado'], '(comprovante) O comprovante é um ARQUIVO SEPARADO do PDF original, nunca o sobrescreve');
+    $caminhoComprovanteA1 = STORAGE_PATH . DIRECTORY_SEPARATOR . 'cartas_propostas' . DIRECTORY_SEPARATOR . $cartaA1ComComprovante['comprovante_pdf_nome_armazenado'];
+    $criados['arquivosPdf'][] = $caminhoComprovanteA1;
+    $check(is_file($caminhoComprovanteA1) && filesize($caminhoComprovanteA1) > 0, '(comprovante) O arquivo do comprovante foi realmente salvo em disco, com conteúdo');
+    $caminhoOriginalA1 = STORAGE_PATH . DIRECTORY_SEPARATOR . 'cartas_propostas' . DIRECTORY_SEPARATOR . $cartaA1ComComprovante['pdf_nome_armazenado'];
+    $check(is_file($caminhoOriginalA1), '(comprovante) O PDF ORIGINAL continua preservado e intacto no disco, sem alteração');
+
+    $reflGerarComprovante = new ReflectionMethod(CartaPropostaService::class, 'gerarComprovanteAceite');
+    $reflGerarComprovante->invoke($service, $idA1);
+    $cartaA1Reconsultada = $repo->buscarPorId($idA1);
+    $check($cartaA1Reconsultada['comprovante_pdf_nome_armazenado'] === $cartaA1ComComprovante['comprovante_pdf_nome_armazenado'], '(comprovante) Idempotente: chamar de novo nunca gera um segundo comprovante para a mesma versão');
+
+    // Tela de edição (admin) renderiza sem exceção no estado 'aceita' COM comprovante já gerado —
+    // branch nova desta correção (links de Visualizar/Baixar comprovante).
+    $htmlAceitaComComprovante = $viewTeste->renderPartial('admin/carta_proposta/editar', [
+        'base' => '', 'carta' => $cartaA1Reconsultada, 'candidatura' => Candidatura::find($candA), 'historico' => $repo->listarPorCandidatura($candA), 'csrf' => Security::csrfToken(),
+    ]);
+    $check(str_contains($htmlAceitaComComprovante, 'Visualizar comprovante') && str_contains($htmlAceitaComComprovante, 'Baixar comprovante'), '(abertura) Página de edição, com a proposta já aceita e o comprovante já gerado, mostra os links de Visualizar/Baixar comprovante sem exceção');
+
+    // ---- 17e) Link de decisão já utilizado NUNCA mais expõe PDF (nem o original, nem qualquer
+    // dado) — único gate (resolverAcessoPorToken) reaproveitado pela página E pelo PDF -------------
+    $acessoAposDecisaoA = $service->resolverAcessoPorToken($tokenA, new DateTimeImmutable('now'));
+    $check($acessoAposDecisaoA['estado'] === 'concluida' && $acessoAposDecisaoA['carta'] === null, '(segurança) Depois de decidida, resolverAcessoPorToken nunca devolve a carta (nenhum PDF pode ser servido pelo link já usado)');
+
+    // ---- 17f) Validade vencida bloqueia o PDF mesmo de uma proposta JÁ ACEITA (a validade do link
+    // de aceite é independente do direito de acesso posterior à via aceita, que é outro mecanismo) --
+    $pdo->prepare("UPDATE cartas_propostas SET validade_proposta = ? WHERE id = ?")
+        ->execute([(new DateTimeImmutable('-30 days'))->format('Y-m-d'), $idA1]);
+    $acessoVencidaMesmoAceita = $service->resolverAcessoPorToken($tokenA, new DateTimeImmutable('now'));
+    $check($acessoVencidaMesmoAceita['estado'] === 'proposta_vencida' && $acessoVencidaMesmoAceita['carta'] === null, '(validade) Depois que a validade da proposta passa, o link mostra "vencida" mesmo para uma proposta JÁ ACEITA — nunca mais "concluída"');
+    // restaura para não afetar nenhuma checagem seguinte que ainda use $tokenA/$idA1.
+    $pdo->prepare("UPDATE cartas_propostas SET validade_proposta = ? WHERE id = ?")
+        ->execute([(new DateTimeImmutable('today'))->modify('+10 days')->format('Y-m-d'), $idA1]);
+
+    // ---- 17g) Fuso de NEGÓCIO (Campo Grande/MS) no corte de validade — independente do timezone
+    // padrão do servidor PHP (correção de homologação 2026-11: ambiente roda em Europe/Berlin,
+    // 5h adiantado em relação a Campo Grande; sem fuso explícito, o corte de "23:59:59" expirava
+    // a proposta ~5h mais cedo do que o horário real do candidato) -----------------------------------
+    $rFuso = $service->criarOuReaproveitarRascunho($candB, $usuarioId); // reaproveita candB (já tem versões decididas -> nova versão)
+    $idFuso = (int)$rFuso['id'];
+    $criados['cartas'][] = $idFuso;
+    $service->atualizarRascunho($idFuso, [
+        'nome_candidato' => "ZZCP CandidatoFuso {$suffix}", 'cargo' => 'ZZCP Cargo Fuso', 'setor' => null,
+        'empresa_contratante' => 'ZZCP Empresa Fuso', 'salario_proposto' => 3000, 'jornada_trabalho' => '40h semanais',
+        'escala_horario' => null, 'beneficios_texto' => null, 'local_trabalho' => null, 'previsao_inicio' => null,
+        'validade_proposta' => '2026-01-01', 'observacoes' => null,
+    ]);
+    $service->emitir($idFuso);
+    $cartaFuso = $repo->buscarPorId($idFuso);
+    $criados['arquivosPdf'][] = STORAGE_PATH . DIRECTORY_SEPARATOR . 'cartas_propostas' . DIRECTORY_SEPARATOR . $cartaFuso['pdf_nome_armazenado'];
+    $preparoFuso = $service->prepararEnvio($idFuso, $usuarioId);
+    preg_match('#/carta-proposta/([0-9a-f]{64})#', (string)$preparoFuso['texto'], $mFuso);
+    $tokenFuso = $mFuso[1] ?? '';
+    $service->confirmarEnvio($idFuso, $usuarioId);
+
+    // 2026-01-02 01:00 UTC está DEPOIS de "2026-01-01 23:59:59" interpretado em Berlin (UTC+1,
+    // = 2026-01-01 22:59:59 UTC) mas ainda ANTES de "2026-01-01 23:59:59" em Campo Grande (UTC-4,
+    // = 2026-01-02 03:59:59 UTC). Se o código não fixar o fuso de negócio, este instante já
+    // apareceria como vencido (bug); com o fuso correto, ainda deve estar dentro do prazo.
+    $agoraEntreOsDoisFusos = new DateTimeImmutable('2026-01-02 01:00:00', new DateTimeZone('UTC'));
+    $acessoFuso = $service->resolverAcessoPorToken($tokenFuso, $agoraEntreOsDoisFusos);
+    $check($acessoFuso['estado'] === 'formulario', '(fuso) Corte de validade usa o fuso de NEGÓCIO (America/Campo_Grande) explicitamente — não expira ~5h mais cedo por causa do timezone padrão do servidor (Europe/Berlin)');
+
+    // Bem depois do corte em QUALQUER fuso -> vencida de qualquer forma.
+    $acessoFusoBemDepois = $service->resolverAcessoPorToken($tokenFuso, new DateTimeImmutable('2026-01-05 12:00:00', new DateTimeZone('UTC')));
+    $check($acessoFusoBemDepois['estado'] === 'proposta_vencida', '(fuso) Bem depois do corte, em qualquer fuso, a proposta aparece vencida');
+
+    // ---- 17h) Documentos unificados: PDF original + comprovante aparecem ao lado dos documentos
+    // reais, sem copiar nenhum arquivo físico para candidatura_documentos ---------------------------
+    $reflDocsUnificados = new ReflectionMethod(AdminCandidaturasController::class, 'documentosUnificados');
+    $controllerCandidaturasDocs = new AdminCandidaturasController();
+    $docsUnificadosA = $reflDocsUnificados->invoke($controllerCandidaturasDocs, [], $repo->listarPorCandidatura($candA));
+    $nomesDocsA = array_column($docsUnificadosA, 'nome_original');
+    $check(in_array('Carta Proposta — Versão 1.pdf', $nomesDocsA, true), '(documentos) PDF original da Carta Proposta aparece na listagem unificada, com o nome esperado');
+    $check(in_array('Carta Proposta Aceita — Versão 1.pdf', $nomesDocsA, true), '(documentos) Via com comprovante de aceite aparece na listagem unificada, com o nome esperado');
+    $docOriginalA = current(array_filter($docsUnificadosA, static fn(array $d): bool => $d['nome_original'] === 'Carta Proposta — Versão 1.pdf'));
+    $check($docOriginalA['url_baixar'] === '/admin/cartas-propostas/' . $idA1 . '/pdf', '(documentos) URL de download do PDF original reaproveita o endpoint já existente, sem rota nova');
+    $check($docOriginalA['mime'] === 'application/pdf' && $docOriginalA['tamanho_bytes'] > 0, '(documentos) Tamanho real do arquivo é lido do disco (não é um valor fictício)');
 
     // ---- 18) permissões — inspeção de código (mesmo padrão já usado para documentos) --------------
     $corpoAdmin = file_get_contents(__DIR__ . '/../../app/controllers/AdminCartaPropostaController.php');

@@ -12,11 +12,17 @@ $erro = $erro ?? null;
 $mensagens = [
     'invalido' => ['Link inválido', 'Não encontramos esta Carta Proposta. Verifique se o link foi copiado por completo ou solicite um novo ao RH da Madeplant.'],
     'indisponivel' => ['Link indisponível', 'Este link não está mais disponível. Solicite um novo ao RH da Madeplant.'],
-    'proposta_vencida' => ['Proposta expirada', 'O prazo de validade desta proposta já passou. Entre em contato com o RH da Madeplant para verificar a disponibilidade da vaga.'],
-    'concluida' => ['Decisão registrada', 'Obrigado! Sua decisão foi registrada com sucesso. Em caso de dúvidas, entre em contato com o RH da Madeplant.'],
+    'proposta_vencida' => ['Proposta expirada', 'Esta Carta Proposta expirou. O prazo para avaliação e aceite foi encerrado. Caso tenha interesse em continuar o processo, entre em contato com a equipe de RH.'],
+    'concluida' => ['Decisão registrada', 'Sua decisão foi registrada com sucesso. Em caso de dúvidas, entre em contato com o RH da Madeplant.'],
+    'concluida_aceita' => ['Decisão registrada', 'Esta Carta Proposta já foi aceita por você. Seu aceite foi registrado com sucesso.'],
+    'concluida_recusada' => ['Decisão registrada', 'Esta Carta Proposta já foi recusada. Sua decisão foi registrada com sucesso.'],
     'sessao_expirada' => ['Sessão expirada', 'Por segurança, sua sessão expirou antes do envio. Abra o link novamente para revisar e decidir.'],
     'bloqueado' => ['Muitas tentativas', 'Recebemos muitas tentativas em pouco tempo. Aguarde alguns minutos e tente novamente.'],
 ];
+if ($estado === 'concluida') {
+    $decisaoConcluida = (string)($contexto['decisao'] ?? '');
+    $estado = $decisaoConcluida === 'aceita' ? 'concluida_aceita' : ($decisaoConcluida === 'recusada' ? 'concluida_recusada' : 'concluida');
+}
 
 $fmtData = static fn(?string $d): string => ($d !== null && $d !== '' && strtotime($d) !== false) ? date('d/m/Y', strtotime($d)) : '';
 $fmtMoeda = static fn($v): string => 'R$ ' . number_format((float)$v, 2, ',', '.');

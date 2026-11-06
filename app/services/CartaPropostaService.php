@@ -227,38 +227,74 @@ class CartaPropostaService
     }
 
     /**
-     * Resolve o token bruto para o estado da página pública — mesmo vocabulário da Entrevista de
-     * Desligamento (invalido | indisponivel | formulario), mais `proposta_vencida` (prazo de
-     * ACEITE da proposta, validade_proposta, verificado no backend independentemente do prazo
-     * técnico do token). Uma versão 'gerada' mas ainda não 'enviada' (mensagem só preparada,
-     * envio não confirmado) é tratada IGUAL a token inexistente — nunca revela estado interno.
+     * Único ponto de verificação de acesso por token — usado pela página pública E pelo PDF
+     * público (CartaPropostaController::pdf()), nunca duplicado (correção de homologação de
+     * 2026-11: antes cada rota tinha sua própria checagem, e a do PDF nem verificava
+     * validade_proposta). A validade de NEGÓCIO da proposta (prazo de aceite, definido pelo RH)
+     * tem prioridade sobre tudo, inclusive sobre uma decisão já registrada — passada a validade,
+     * o link para de expor qualquer dado, mesmo que a proposta já tenha sido aceita; a via aceita
+     * continua preservada e recuperável por fora deste link (mecanismo do RH), são operações
+     * diferentes. Mesmo vocabulário da Entrevista de Desligamento (invalido | indisponivel |
+     * formulario), mais `proposta_vencida` e `concluida`.
+     *
+     * `carta` só vem preenchida no estado 'formulario' — todos os demais estados (inclusive
+     * 'concluida') nunca expõem a linha inteira: o PDF só pode ser servido enquanto a decisão
+     * ainda não foi tomada e a proposta está dentro da validade.
+     *
+     * @return array{estado:string,carta:?array,decisao:?string}
+     */
+    public function resolverAcessoPorToken(string $tokenBruto, DateTimeImmutable $agora): array
+    {
+        if (!preg_match('/^[0-9a-f]{64}$/', $tokenBruto)) {
+            return ['estado' => 'invalido', 'carta' => null, 'decisao' => null];
+        }
+        $carta = $this->repository->buscarPorTokenHash(hash('sha256', $tokenBruto));
+        if ($carta === null || !in_array($carta['status'], ['enviada', 'aceita', 'recusada'], true)) {
+            // 'rascunho'/'gerada' (sem confirmação de envio) ou 'substituida' — tratado igual a
+            // token inexistente, nunca revela estado interno a quem não deveria ver.
+            return ['estado' => 'invalido', 'carta' => null, 'decisao' => null];
+        }
+
+        if ($carta['validade_proposta'] !== null) {
+            // Fuso de NEGÓCIO explícito (Campo Grande/MS) — independente do timezone padrão do
+            // servidor PHP (ver nota em CLAUDE.md/riscos-conhecidos.md: o timezone padrão deste
+            // ambiente não é o do Brasil; aqui fixamos explicitamente para não deslocar o corte
+            // das 23:59:59 em relação ao horário real do candidato).
+            $limite = new DateTimeImmutable($carta['validade_proposta'] . ' 23:59:59', new DateTimeZone('America/Campo_Grande'));
+            if ($limite < $agora) {
+                return ['estado' => 'proposta_vencida', 'carta' => null, 'decisao' => null];
+            }
+        }
+
+        if (in_array($carta['status'], ['aceita', 'recusada'], true)) {
+            return ['estado' => 'concluida', 'carta' => null, 'decisao' => $carta['status']];
+        }
+
+        // status === 'enviada', ainda não decidida: só falta o prazo TÉCNICO do token (independente
+        // da validade de negócio, já checada acima).
+        if ($carta['token_expira_em'] !== null && new DateTimeImmutable($carta['token_expira_em']) < $agora) {
+            return ['estado' => 'indisponivel', 'carta' => null, 'decisao' => null];
+        }
+        return ['estado' => 'formulario', 'carta' => $carta, 'decisao' => null];
+    }
+
+    /**
+     * Adapta resolverAcessoPorToken() para o vocabulário/formato já usado pela página pública —
+     * nunca expõe a carta inteira fora do estado 'formulario' (privacidade: nem para 'concluida'
+     * nem para 'proposta_vencida' o contexto traz dados pessoais).
      *
      * @return array{estado:string,contexto:?array}
      */
     public function resolverParaPagina(string $tokenBruto, DateTimeImmutable $agora): array
     {
-        if (!preg_match('/^[0-9a-f]{64}$/', $tokenBruto)) {
-            return ['estado' => 'invalido', 'contexto' => null];
+        $acesso = $this->resolverAcessoPorToken($tokenBruto, $agora);
+        if ($acesso['estado'] === 'formulario') {
+            return ['estado' => 'formulario', 'contexto' => $acesso['carta']];
         }
-        $carta = $this->repository->buscarPorTokenHash(hash('sha256', $tokenBruto));
-        if ($carta === null) {
-            return ['estado' => 'invalido', 'contexto' => null];
+        if ($acesso['estado'] === 'concluida') {
+            return ['estado' => 'concluida', 'contexto' => ['decisao' => $acesso['decisao']]];
         }
-        if (in_array($carta['status'], ['aceita', 'recusada'], true)) {
-            return ['estado' => 'concluida', 'contexto' => null];
-        }
-        if ($carta['status'] !== 'enviada') {
-            // 'gerada' sem confirmação de envio, ou 'substituida' por uma versão nova — tratado
-            // igual a token inexistente, nunca revela estado interno a quem não deveria ver.
-            return ['estado' => 'invalido', 'contexto' => null];
-        }
-        if ($carta['token_expira_em'] !== null && new DateTimeImmutable($carta['token_expira_em']) < $agora) {
-            return ['estado' => 'indisponivel', 'contexto' => null];
-        }
-        if ($carta['validade_proposta'] !== null && new DateTimeImmutable($carta['validade_proposta'] . ' 23:59:59') < $agora) {
-            return ['estado' => 'proposta_vencida', 'contexto' => ['nome_candidato' => $carta['nome_candidato']]];
-        }
-        return ['estado' => 'formulario', 'contexto' => $carta];
+        return ['estado' => $acesso['estado'], 'contexto' => null];
     }
 
     /**
@@ -290,9 +326,35 @@ class CartaPropostaService
 
         if ($decisao === 'aceita') {
             $this->moverParaAdmissaoSeNecessario((int)$carta['candidatura_id'], $carta);
+            $this->gerarComprovanteAceite((int)$carta['id']);
         }
 
         return ['ok' => true, 'decisao' => $decisao];
+    }
+
+    /**
+     * Gera a via com comprovante de aceite (PDF separado do original) depois que o aceite já foi
+     * gravado no banco — nunca bloqueia/desfaz o aceite em si: uma falha aqui fica só registrada
+     * em log (o aceite real já está garantido; a via pode ser gerada manualmente depois, se
+     * necessário). Idempotente: nunca gera uma segunda via para a mesma versão.
+     */
+    private function gerarComprovanteAceite(int $cartaId): void
+    {
+        try {
+            $cartaAtual = $this->repository->buscarPorId($cartaId);
+            if ($cartaAtual === null || $cartaAtual['status'] !== 'aceita' || !empty($cartaAtual['comprovante_pdf_nome_armazenado'])) {
+                return;
+            }
+            $identificador = strtoupper(bin2hex(random_bytes(6)));
+            $nomeArmazenado = CartaPropostaPdfService::gerarComprovante($cartaAtual, $identificador);
+            $agora = (new DateTimeImmutable('now'))->format('Y-m-d H:i:s');
+            $this->repository->registrarComprovante($cartaId, $nomeArmazenado, $identificador, $agora);
+        } catch (\Throwable $e) {
+            Logger::error('Falha ao gerar a via com comprovante de aceite da Carta Proposta', [
+                'carta_id' => $cartaId,
+                'erro' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**

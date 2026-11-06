@@ -32,6 +32,7 @@ class AdminCandidaturasController extends Controller
         $csrf = Security::csrfToken();
 
         $cartaPropostaRepository = new CartaPropostaRepository();
+        $cartasPropostas = $cartaPropostaRepository->listarPorCandidatura((int)$id);
 
         // Seções novas (Sprint "Histórico de Comunicação + Experiência do Candidato") são
         // permission-gated de verdade: sem a permissão, nem os dados são buscados — não é só a
@@ -39,12 +40,13 @@ class AdminCandidaturasController extends Controller
         $podeVerComunicacoes = Authorization::temPermissao('comunicacoes.visualizar');
         $comunicacoes = [];
         if ($podeVerComunicacoes) {
-            // Timeline unificada: eventos de envio/aceite/recusa da Carta Proposta são projetados
-            // a partir de `cartas_propostas` (nenhum armazenamento novo, nenhuma comunicação
-            // artificial inserida) e mesclados com as mensagens reais de `comunicacoes`.
+            // Timeline unificada: eventos de emissão/envio/aceite/recusa/substituição da Carta
+            // Proposta são projetados a partir de `cartas_propostas` (nenhum armazenamento novo,
+            // nenhuma comunicação artificial inserida) e mesclados com as mensagens reais de
+            // `comunicacoes`.
             $comunicacoes = array_merge(
                 Comunicacao::allByCandidatura((int)$id),
-                $this->eventosCartaProposta($cartaPropostaRepository->listarPorCandidatura((int)$id))
+                $this->eventosCartaProposta($cartasPropostas)
             );
             usort($comunicacoes, static fn(array $a, array $b): int => strtotime((string)$b['created_at']) <=> strtotime((string)$a['created_at']));
         }
@@ -52,7 +54,14 @@ class AdminCandidaturasController extends Controller
         $podeVerPesquisa = Authorization::temPermissao('pesquisa_experiencia.visualizar');
         $pesquisa = $podeVerPesquisa ? PesquisaExperiencia::findByCandidatura((int)$id) : null;
 
-        $documentos = CandidaturaDocumento::allByCandidatura((int)$id);
+        // Documentos: listagem UNIFICADA (correção de homologação de 2026-11) — o PDF original da
+        // Carta Proposta e a via com comprovante de aceite aparecem ao lado dos documentos reais,
+        // sem copiar nenhum arquivo para candidatura_documentos (sempre lidos de
+        // storage/cartas_propostas/ pelos endpoints já existentes e protegidos).
+        $documentos = $this->documentosUnificados(
+            CandidaturaDocumento::allByCandidatura((int)$id),
+            $cartasPropostas
+        );
         $cartaPropostaAtual = $cartaPropostaRepository->buscarUltimaPorCandidatura((int)$id);
         $podeAgendarExame = $cartaPropostaRepository->existeVersaoAceita((int)$id);
         $exameAdmissional = (new ExameAdmissionalRepository())->buscarPorCandidatura((int)$id);
@@ -75,16 +84,86 @@ class AdminCandidaturasController extends Controller
     }
 
     /**
-     * Projeta eventos de envio/aceite/recusa da Carta Proposta no mesmo formato usado pela
-     * timeline de `comunicacoes` (correção de homologação de 2026-11) — sem gravar nada novo.
-     * Aceite/recusa já têm evidências completas em `cartas_propostas` (status, IP, user agent,
-     * motivo); aqui só reaproveitamos para exibição, deixando explícito que a decisão é do
-     * candidato, nunca do RH.
+     * Mescla os documentos reais (candidatura_documentos) com os PDFs da Carta Proposta (original
+     * e via com comprovante de aceite), no mesmo formato de card usado pela view — cada um aponta
+     * para o endpoint protegido já existente (nunca uma cópia física do arquivo).
+     */
+    private function documentosUnificados(array $documentosReais, array $cartasPropostas): array
+    {
+        $unificados = array_map(static function (array $doc): array {
+            $urlBase = '/admin/candidaturas/' . (int)$doc['candidatura_id'] . '/documentos/' . (int)$doc['id'];
+            return [
+                'nome_original' => $doc['nome_original'],
+                'mime' => $doc['mime'],
+                'tamanho_bytes' => $doc['tamanho_bytes'],
+                'criado_em' => $doc['criado_em'],
+                'enviado_por_nome' => $doc['enviado_por_nome'] ?? null,
+                'url_visualizar' => $urlBase . '?inline=1',
+                'url_baixar' => $urlBase,
+            ];
+        }, $documentosReais);
+
+        foreach ($cartasPropostas as $cp) {
+            if (!empty($cp['pdf_nome_armazenado'])) {
+                $urlBase = '/admin/cartas-propostas/' . (int)$cp['id'] . '/pdf';
+                $unificados[] = [
+                    'nome_original' => 'Carta Proposta — Versão ' . (int)$cp['versao'] . '.pdf',
+                    'mime' => 'application/pdf',
+                    'tamanho_bytes' => self::tamanhoArquivoCartaProposta($cp['pdf_nome_armazenado']),
+                    'criado_em' => $cp['gerada_em'],
+                    'enviado_por_nome' => $cp['gerada_por_nome'] ?? null,
+                    'url_visualizar' => $urlBase . '?inline=1',
+                    'url_baixar' => $urlBase,
+                ];
+            }
+            if (!empty($cp['comprovante_pdf_nome_armazenado'])) {
+                $urlBase = '/admin/cartas-propostas/' . (int)$cp['id'] . '/comprovante';
+                $unificados[] = [
+                    'nome_original' => 'Carta Proposta Aceita — Versão ' . (int)$cp['versao'] . '.pdf',
+                    'mime' => 'application/pdf',
+                    'tamanho_bytes' => self::tamanhoArquivoCartaProposta($cp['comprovante_pdf_nome_armazenado']),
+                    'criado_em' => $cp['comprovante_gerado_em'],
+                    'enviado_por_nome' => 'Sistema (gerado após o aceite do candidato)',
+                    'url_visualizar' => $urlBase . '?inline=1',
+                    'url_baixar' => $urlBase,
+                ];
+            }
+        }
+
+        usort($unificados, static fn(array $a, array $b): int => strtotime((string)$b['criado_em']) <=> strtotime((string)$a['criado_em']));
+        return $unificados;
+    }
+
+    private static function tamanhoArquivoCartaProposta(string $nomeArmazenado): ?int
+    {
+        $file = STORAGE_PATH . DIRECTORY_SEPARATOR . 'cartas_propostas' . DIRECTORY_SEPARATOR . basename($nomeArmazenado);
+        return is_file($file) ? filesize($file) : null;
+    }
+
+    /**
+     * Projeta eventos de emissão/envio/aceite/recusa/substituição da Carta Proposta no mesmo
+     * formato usado pela timeline de `comunicacoes` (correção de homologação de 2026-11) — sem
+     * gravar nada novo. Aceite/recusa já têm evidências completas em `cartas_propostas` (status,
+     * IP, user agent, motivo); aqui só reaproveitamos para exibição, deixando explícito que a
+     * decisão é do candidato, nunca do RH.
      */
     private function eventosCartaProposta(array $cartas): array
     {
         $eventos = [];
         foreach ($cartas as $cp) {
+            if (!empty($cp['gerada_em'])) {
+                $eventos[] = [
+                    'id' => 'cp-' . (int)$cp['id'] . '-emitida',
+                    'mensagem_titulo' => 'Carta Proposta emitida (versão ' . (int)$cp['versao'] . ')',
+                    'situacao' => 'emitida',
+                    'canal' => 'Carta Proposta',
+                    'origem' => 'MANUAL',
+                    'usuario_nome' => $cp['gerada_por_nome'] ?? null,
+                    'conteudo' => 'PDF da Carta Proposta (versão ' . (int)$cp['versao'] . ') emitido.',
+                    'erro_mensagem' => null,
+                    'created_at' => $cp['gerada_em'],
+                ];
+            }
             if (!empty($cp['enviada_em'])) {
                 $eventos[] = [
                     'id' => 'cp-' . (int)$cp['id'] . '-enviada',
@@ -115,10 +194,23 @@ class AdminCandidaturasController extends Controller
                     'created_at' => $cp['decisao_em'],
                 ];
             }
+            if ($cp['status'] === 'substituida') {
+                $eventos[] = [
+                    'id' => 'cp-' . (int)$cp['id'] . '-substituida',
+                    'mensagem_titulo' => 'Carta Proposta substituída (versão ' . (int)$cp['versao'] . ')',
+                    'situacao' => 'substituida',
+                    'canal' => 'Carta Proposta',
+                    'origem' => 'MANUAL',
+                    'usuario_nome' => null,
+                    'conteudo' => 'Esta versão foi substituída por uma nova versão emitida pelo RH antes de uma decisão do candidato.',
+                    'erro_mensagem' => null,
+                    'created_at' => $cp['updated_at'],
+                ];
+            }
         }
         return $eventos;
     }
-    
+
     public function download(string $id): void
     {
         Auth::requireRole(['admin', 'rh']);

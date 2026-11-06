@@ -4,6 +4,7 @@ $c = $carta;
 $cand = $candidatura;
 $fmtDataInput = static fn(?string $d): string => ($d !== null && $d !== '' && strtotime($d) !== false) ? date('Y-m-d', strtotime($d)) : '';
 $fmtDataHora = static fn(?string $d): string => ($d !== null && $d !== '' && strtotime($d) !== false) ? date('d/m/Y H:i', strtotime($d)) : '—';
+$fmtData = static fn(?string $d): string => ($d !== null && $d !== '' && strtotime($d) !== false) ? date('d/m/Y', strtotime($d)) : '—';
 $editavel = $c['status'] === 'rascunho';
 $rotulosStatus = [
     'rascunho' => 'Rascunho', 'gerada' => 'Gerada (PDF emitido)', 'enviada' => 'Enviada ao candidato',
@@ -91,7 +92,11 @@ $rotulosStatus = [
     <?php if ($c['status'] !== 'rascunho'): ?>
       <div class="mt-6 border-t pt-4">
         <h3 class="text-sm font-bold text-text-primary">PDF emitido em <?= Security::e($fmtDataHora($c['gerada_em'])) ?> por <?= Security::e((string)($c['gerada_por_nome'] ?? '')) ?></h3>
-        <a href="<?= $base ?>/admin/cartas-propostas/<?= (int)$c['id'] ?>/pdf" target="_blank" class="mt-2 inline-flex items-center rounded border border-border px-4 py-2 text-sm">Visualizar PDF</a>
+        <p class="mt-1 text-sm text-text-secondary">Prazo de validade (aceite pelo candidato): <strong><?= Security::e($fmtData($c['validade_proposta'])) ?></strong></p>
+        <div class="mt-2 flex gap-3">
+          <a href="<?= $base ?>/admin/cartas-propostas/<?= (int)$c['id'] ?>/pdf?inline=1" target="_blank" class="inline-flex items-center rounded border border-border px-4 py-2 text-sm">Visualizar PDF</a>
+          <a href="<?= $base ?>/admin/cartas-propostas/<?= (int)$c['id'] ?>/pdf" class="inline-flex items-center rounded border border-border px-4 py-2 text-sm">Baixar PDF</a>
+        </div>
       </div>
     <?php endif; ?>
 
@@ -101,19 +106,30 @@ $rotulosStatus = [
           <input type="hidden" name="csrf" value="<?= Security::e($csrf ?? '') ?>">
           <button type="submit" class="border border-border px-4 py-2 rounded text-sm">Preparar Mensagem de Envio</button>
         </form>
-        <?php if (!empty($c['comunicacao_id'])): ?>
-          <?php $comunicacao = Comunicacao::find((int)$c['comunicacao_id']); ?>
-          <div class="rounded-ds-md border border-border bg-surface-secondary p-4">
-            <p class="text-sm font-semibold text-text-primary">Mensagem preparada — copie e envie pelo canal usual:</p>
-            <textarea readonly rows="8" class="mt-2 w-full rounded border bg-white px-3 py-2 text-sm"><?= Security::e((string)($comunicacao['conteudo'] ?? '')) ?></textarea>
+      </div>
+    <?php endif; ?>
+
+    <?php if (!empty($c['comunicacao_id'])): ?>
+      <?php
+        $comunicacao = Comunicacao::find((int)$c['comunicacao_id']);
+        $textareaId = 'mensagem-carta-proposta-' . (int)$c['id'];
+      ?>
+      <div class="mt-4 border-t pt-4">
+        <div class="rounded-ds-md border border-border bg-surface-secondary p-4">
+          <p class="text-sm font-semibold text-text-primary">
+            <?= $c['status'] === 'gerada' ? 'Mensagem preparada — copie e envie pelo canal usual:' : 'Mensagem registrada:' ?>
+          </p>
+          <textarea id="<?= Security::e($textareaId) ?>" readonly rows="8" class="mt-2 w-full rounded border bg-white px-3 py-2 text-sm"><?= Security::e((string)($comunicacao['conteudo'] ?? '')) ?></textarea>
+          <button type="button" data-copiar-destino="<?= Security::e($textareaId) ?>" class="mt-2 border border-border px-3 py-1.5 rounded text-xs">Copiar mensagem</button>
+          <?php if ($c['status'] === 'gerada'): ?>
             <form method="post" action="<?= $base ?>/admin/cartas-propostas/<?= (int)$c['id'] ?>/confirmar-envio" class="mt-3">
               <input type="hidden" name="csrf" value="<?= Security::e($csrf ?? '') ?>">
               <button type="submit" class="bg-primary-700 text-white px-4 py-2 rounded text-sm">Confirmar que o envio foi realizado</button>
             </form>
             <p class="mt-2 text-xs text-text-secondary">O link só fica acessível ao candidato depois de você confirmar o envio aqui.</p>
             <p class="mt-2 text-xs text-text-secondary">O Portal não anexa o PDF automaticamente ao envio. Baixe o PDF (botão "Visualizar PDF" acima) e anexe-o manualmente junto com este texto no WhatsApp ou e-mail.</p>
-          </div>
-        <?php endif; ?>
+          <?php endif; ?>
+        </div>
       </div>
     <?php endif; ?>
 
@@ -129,6 +145,19 @@ $rotulosStatus = [
         <p class="text-text-secondary">Registrada em <?= Security::e($fmtDataHora($c['decisao_em'])) ?></p>
         <?php if (!empty($c['motivo_recusa'])): ?>
           <p class="mt-1 text-text-secondary">Motivo informado: <?= nl2br(Security::e((string)$c['motivo_recusa'])) ?></p>
+        <?php endif; ?>
+        <?php if ($c['status'] === 'aceita'): ?>
+          <?php if (!empty($c['comprovante_pdf_nome_armazenado'])): ?>
+            <div class="mt-3 rounded-ds-md border border-border bg-surface-secondary p-3">
+              <p class="text-text-secondary">Via com comprovante de aceite — identificador <strong><?= Security::e((string)$c['comprovante_identificador']) ?></strong>, gerada em <?= Security::e($fmtDataHora($c['comprovante_gerado_em'])) ?>.</p>
+              <div class="mt-2 flex gap-3">
+                <a href="<?= $base ?>/admin/cartas-propostas/<?= (int)$c['id'] ?>/comprovante?inline=1" target="_blank" class="inline-flex items-center rounded border border-border px-3 py-1.5 text-xs">Visualizar comprovante</a>
+                <a href="<?= $base ?>/admin/cartas-propostas/<?= (int)$c['id'] ?>/comprovante" class="inline-flex items-center rounded border border-border px-3 py-1.5 text-xs">Baixar comprovante</a>
+              </div>
+            </div>
+          <?php else: ?>
+            <p class="mt-2 text-xs text-text-secondary">A via com comprovante de aceite ainda está sendo gerada. Atualize a página em alguns instantes.</p>
+          <?php endif; ?>
         <?php endif; ?>
       </div>
     <?php endif; ?>
@@ -148,3 +177,4 @@ $rotulosStatus = [
     </div>
   <?php endif; ?>
 </div>
+<?php ui_script_pagina('carta_proposta.js'); // JS movido para assets/carta_proposta.js (CSP: sem <script> inline) ?>

@@ -19,3 +19,13 @@ Identificados na auditoria arquitetural de 2026-07-09, documentados aqui para n�
    está definida na config — os dados `*_encrypted` ficam protegidos por uma chave previsível a
    partir de outros valores de config. Verificar se produção tem a chave explícita definida antes
    de assumir que os dados sensíveis estão realmente protegidos.
+4. **Timezone padrão do PHP não é o do Brasil** — identificado em 2026-11 durante a correção de
+   expiração da Carta Proposta: `date_default_timezone_get()` retorna `Europe/Berlin` neste
+   ambiente (confirmado via `php -r`), não `America/Campo_Grande`. Qualquer `new
+   DateTimeImmutable('string sem timezone')`/`strtotime()`/`date()` construído sem fuso explícito
+   no resto do código (candidaturas, folha, indicadores, etc.) herda esse timezone — podendo
+   deslocar comparações e exibições de data/hora em ~4-5h em relação ao horário real do Brasil.
+   Na Carta Proposta isso foi corrigido localmente (`CartaPropostaService::resolverAcessoPorToken()`
+   fixa `America/Campo_Grande` explicitamente só nessa comparação). **Não foi investigado nem
+   corrigido em nenhum outro lugar do sistema** — mudar o timezone padrão globalmente (bootstrap)
+   afetaria todo o Portal e exige uma auditoria dedicada antes de qualquer alteração.

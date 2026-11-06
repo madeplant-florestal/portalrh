@@ -199,6 +199,21 @@ class CartaPropostaRepository
         return $stmt->rowCount() > 0;
     }
 
+    /**
+     * Grava a via com comprovante de aceite (PDF SEPARADO do original, nunca sobrescreve
+     * `pdf_nome_armazenado`) — só chamado depois de um aceite já confirmado no banco. Idempotente
+     * por WHERE (nunca sobrescreve um comprovante já gerado).
+     */
+    public function registrarComprovante(int $id, string $pdfNomeArmazenado, string $identificador, string $agora): bool
+    {
+        $stmt = $this->connection()->prepare(
+            "UPDATE cartas_propostas SET comprovante_pdf_nome_armazenado = ?, comprovante_identificador = ?, comprovante_gerado_em = ?
+             WHERE id = ? AND status = 'aceita' AND comprovante_pdf_nome_armazenado IS NULL"
+        );
+        $stmt->execute([$pdfNomeArmazenado, $identificador, $agora, $id]);
+        return $stmt->rowCount() > 0;
+    }
+
     /** Uma nova versão foi gerada antes desta ser decidida — invalida o token desta (nunca é apagada). */
     public function marcarSubstituida(int $id): bool
     {
@@ -209,11 +224,6 @@ class CartaPropostaRepository
         return $stmt->rowCount() > 0;
     }
 
-    /**
-     * Rede de segurança para ambientes onde a migration 2026-11-06-cartas-propostas.sql ainda não
-     * rodou (não há runner de migrations neste projeto — ver CLAUDE.md §3.7). Mesmo padrão de
-     * CandidaturaDocumento::ensureSchema().
-     */
     public static function ensureSchema(PDO $pdo): void
     {
         if (self::$ensured) {
@@ -264,5 +274,24 @@ class CartaPropostaRepository
             CONSTRAINT fk_cartas_propostas_usuario_enviou FOREIGN KEY (enviada_por_usuario_id) REFERENCES usuarios(id) ON DELETE SET NULL,
             CONSTRAINT fk_cartas_propostas_comunicacao FOREIGN KEY (comunicacao_id) REFERENCES comunicacoes(id) ON DELETE SET NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+        // Rede de segurança para 2026-11-06-cartas-propostas-comprovante.sql (via com comprovante
+        // de aceite, correção de homologação de 2026-11) — mesmo padrão de columnExists já usado
+        // em RecruitmentWebhookSchemaService.
+        $colExists = static function (PDO $pdo, string $column): bool {
+            $stmt = $pdo->prepare('SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?');
+            $stmt->execute(['cartas_propostas', $column]);
+            return (int)$stmt->fetchColumn() > 0;
+        };
+        if (!$colExists($pdo, 'comprovante_pdf_nome_armazenado')) {
+            $pdo->exec('ALTER TABLE cartas_propostas ADD COLUMN comprovante_pdf_nome_armazenado VARCHAR(64) NULL AFTER pdf_nome_armazenado');
+        }
+        if (!$colExists($pdo, 'comprovante_identificador')) {
+            $pdo->exec('ALTER TABLE cartas_propostas ADD COLUMN comprovante_identificador VARCHAR(32) NULL');
+            $pdo->exec('ALTER TABLE cartas_propostas ADD UNIQUE KEY uk_cartas_propostas_comprovante_identificador (comprovante_identificador)');
+        }
+        if (!$colExists($pdo, 'comprovante_gerado_em')) {
+            $pdo->exec('ALTER TABLE cartas_propostas ADD COLUMN comprovante_gerado_em DATETIME NULL');
+        }
     }
 }

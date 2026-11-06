@@ -218,16 +218,18 @@ require_once APP_PATH . '/views/partials/modulo-topo.php';
       <div class="grid grid-cols-[repeat(auto-fill,145px)] gap-3">
         <?php foreach ($documentos as $doc): ?>
           <?php
-            $urlDoc = $base . '/admin/candidaturas/' . (int)$c['id'] . '/documentos/' . (int)$doc['id'];
+            $urlVisualizar = $base . $doc['url_visualizar'];
+            $urlBaixar = $base . $doc['url_baixar'];
             $ehImagem = in_array($doc['mime'], ['image/png', 'image/jpeg'], true);
-            $tamanhoKb = Security::e(number_format(((int)$doc['tamanho_bytes']) / 1024, 0, ',', '.'));
-            $dataEnvio = Security::e(date('d/m/Y H:i', strtotime($doc['criado_em'])));
+            $tamanhoBytes = $doc['tamanho_bytes'];
+            $tamanhoKb = $tamanhoBytes !== null ? Security::e(number_format(((int)$tamanhoBytes) / 1024, 0, ',', '.')) : '—';
+            $dataEnvio = !empty($doc['criado_em']) ? Security::e(date('d/m/Y H:i', strtotime($doc['criado_em']))) : '—';
             $responsavel = Security::e($doc['enviado_por_nome'] ?? 'Sistema');
           ?>
           <div class="flex flex-col overflow-hidden rounded-ds-md border border-border bg-white" title="<?= Security::e($doc['nome_original']) ?> — enviado em <?= $dataEnvio ?> por <?= $responsavel ?> — <?= $tamanhoKb ?> KB">
-            <a href="<?= $urlDoc ?>?inline=1" target="_blank" rel="noopener" class="flex aspect-square items-center justify-center bg-surface-secondary">
+            <a href="<?= $urlVisualizar ?>" target="_blank" rel="noopener" class="flex aspect-square items-center justify-center bg-surface-secondary">
               <?php if ($ehImagem): ?>
-                <img src="<?= $urlDoc ?>?inline=1" alt="<?= Security::e($doc['nome_original']) ?>" class="h-full w-full object-cover">
+                <img src="<?= $urlVisualizar ?>" alt="<?= Security::e($doc['nome_original']) ?>" class="h-full w-full object-cover">
               <?php else: ?>
                 <svg class="h-10 w-10 text-text-secondary" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M9 2.25H7A2.25 2.25 0 0 0 4.75 4.5v15A2.25 2.25 0 0 0 7 21.75h10A2.25 2.25 0 0 0 19.25 19.5V9.75L13.5 4 9 2.25Z" />
@@ -240,8 +242,8 @@ require_once APP_PATH . '/views/partials/modulo-topo.php';
               <p class="truncate text-xs text-text-secondary"><?= $dataEnvio ?> · <?= $tamanhoKb ?> KB</p>
             </div>
             <div class="flex divide-x divide-border border-t border-border text-xs">
-              <a href="<?= $urlDoc ?>?inline=1" target="_blank" rel="noopener" class="flex-1 py-1 text-center text-primary-700 hover:bg-surface-secondary">Visualizar</a>
-              <a href="<?= $urlDoc ?>" class="flex-1 py-1 text-center text-primary-700 hover:bg-surface-secondary">Baixar</a>
+              <a href="<?= $urlVisualizar ?>" target="_blank" rel="noopener" class="flex-1 py-1 text-center text-primary-700 hover:bg-surface-secondary">Visualizar</a>
+              <a href="<?= $urlBaixar ?>" class="flex-1 py-1 text-center text-primary-700 hover:bg-surface-secondary">Baixar</a>
             </div>
           </div>
         <?php endforeach; ?>
@@ -315,7 +317,7 @@ require_once APP_PATH . '/views/partials/modulo-topo.php';
       <ul role="list" class="-mb-8">
         <?php foreach ($comunicacoes as $idx => $com): ?>
         <?php
-          $situacaoLabel = ['preparada' => 'Preparada', 'enviada' => 'Enviada', 'erro' => 'Erro no envio', 'aceita' => 'Aceita pelo candidato', 'recusada' => 'Recusada pelo candidato'][$com['situacao']] ?? $com['situacao'];
+          $situacaoLabel = ['preparada' => 'Preparada', 'enviada' => 'Enviada', 'erro' => 'Erro no envio', 'aceita' => 'Aceita pelo candidato', 'recusada' => 'Recusada pelo candidato', 'emitida' => 'Emitida', 'substituida' => 'Substituída'][$com['situacao']] ?? $com['situacao'];
           $entregue = !empty($com['entregue_em']);
           $visualizada = !empty($com['visualizada_em']);
           $detalheId = 'comunicacao-conteudo-' . preg_replace('/[^a-zA-Z0-9_-]/', '', (string)$com['id']);

@@ -150,7 +150,13 @@ try {
     $check(str_contains($corpoShow, 'aspect-square'), '(layout) Mini cards são quadrados');
     $check(str_contains($corpoShow, 'truncate'), '(layout) Nome de arquivo longo é truncado sem quebrar o layout do card');
     $check(str_contains($corpoShow, "\$ehImagem") && str_contains($corpoShow, "'image/png', 'image/jpeg'"), '(layout) PNG/JPG recebem miniatura real (img); os demais tipos (PDF) recebem o ícone');
-    $check(str_contains($corpoShow, '?inline=1') && str_contains($corpoShow, 'Visualizar') && str_contains($corpoShow, 'Baixar'), '(layout) Cada card tem ação de Visualizar (inline) e Baixar (attachment), reusando o endpoint de documentos');
+    // Correção de homologação 2026-11: as URLs agora vêm prontas do controller
+    // (url_visualizar/url_baixar) — a listagem passou a ser UNIFICADA com os PDFs da Carta
+    // Proposta (documentosUnificados()), não mais montadas a partir de $doc['id'] na própria view.
+    $check(str_contains($corpoShow, "\$doc['url_visualizar']") && str_contains($corpoShow, "\$doc['url_baixar']") && str_contains($corpoShow, 'Visualizar') && str_contains($corpoShow, 'Baixar'), '(layout) Cada card tem ação de Visualizar e Baixar, usando as URLs já resolvidas pelo controller');
+    $corpoCandidaturasController = file_get_contents(__DIR__ . '/../../app/controllers/AdminCandidaturasController.php');
+    $check(str_contains($corpoCandidaturasController, '?inline=1') && str_contains($corpoCandidaturasController, 'function documentosUnificados'), '(layout) A decisão inline/attachment é montada no controller (documentosUnificados()), reusando o endpoint já existente de documentos — nenhuma rota nova');
+    $check(str_contains($corpoCandidaturasController, "Carta Proposta — Versão") && str_contains($corpoCandidaturasController, "Carta Proposta Aceita — Versão"), '(layout) Listagem unificada inclui o PDF original e a via com comprovante de aceite da Carta Proposta, sem duplicar arquivo físico em candidatura_documentos');
 
     echo "\nCANDIDATURA_DOCUMENTOS_OK\n";
 } finally {

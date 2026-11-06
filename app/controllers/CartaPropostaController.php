@@ -99,17 +99,20 @@ class CartaPropostaController extends Controller
         ]);
     }
 
-    /** PDF da proposta — mesmas regras de acesso da página (token válido e já enviado/decidido). */
+    /**
+     * PDF da proposta original — mesmo gate único de acesso da página (CartaPropostaService::
+     * resolverAcessoPorToken()), nunca duplicado. Só disponível enquanto o estado é 'formulario':
+     * uma vez decidida (aceita/recusada) ou vencida a validade, o link de decisão já utilizado
+     * nunca mais expõe o PDF — a via aceita é recuperada por outro mecanismo (RH), nunca por aqui.
+     */
     public function pdf(string $token): void
     {
         self::enviarCabecalhosSeguros();
-        if (!preg_match('/^[0-9a-f]{64}$/', $token)) {
+        $resolvido = (new CartaPropostaService())->resolverAcessoPorToken($token, new DateTimeImmutable('now'));
+        if ($resolvido['estado'] !== 'formulario' || $resolvido['carta'] === null || empty($resolvido['carta']['pdf_nome_armazenado'])) {
             http_response_code(404); echo 'Não encontrado'; return;
         }
-        $carta = (new CartaPropostaRepository())->buscarPorTokenHash(hash('sha256', $token));
-        if ($carta === null || !in_array($carta['status'], ['enviada', 'aceita', 'recusada'], true) || empty($carta['pdf_nome_armazenado'])) {
-            http_response_code(404); echo 'Não encontrado'; return;
-        }
+        $carta = $resolvido['carta'];
         $dir = STORAGE_PATH . DIRECTORY_SEPARATOR . 'cartas_propostas';
         $file = $dir . DIRECTORY_SEPARATOR . basename((string)$carta['pdf_nome_armazenado']);
         $real = realpath($file);

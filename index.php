@@ -62,6 +62,10 @@ try {
     // Layout sem recursos de terceiros, Referrer-Policy no-referrer e rate limit. Ver EntrevistaDesligamentoController.
     $router->get('/entrevista-desligamento/{token}', [EntrevistaDesligamentoController::class, 'show']);
     $router->post('/entrevista-desligamento/{token}', [EntrevistaDesligamentoController::class, 'store']);
+    // Layout sem recursos de terceiros, Referrer-Policy no-referrer e rate limit. Ver CartaPropostaController.
+    $router->get('/carta-proposta/{token}', [CartaPropostaController::class, 'show']);
+    $router->post('/carta-proposta/{token}', [CartaPropostaController::class, 'decidir']);
+    $router->get('/carta-proposta/{token}/pdf', [CartaPropostaController::class, 'pdf']);
 
     $router->post('/api/check-cpf', [ApiController::class, 'checkCpf']);
     $router->post('/api/pipeline/move', [AdminPipelineController::class, 'move']);
@@ -241,6 +245,13 @@ try {
     $router->post('/admin/candidaturas/{id}/indicacao', [AdminCandidaturasController::class, 'updateIndicacao']);
     $router->post('/admin/candidaturas/{id}/documentos', [AdminCandidaturasController::class, 'uploadDocumento']);
     $router->get('/admin/candidaturas/{id}/documentos/{docId}', [AdminCandidaturasController::class, 'downloadDocumento']);
+    $router->post('/admin/candidaturas/{id}/carta-proposta', [AdminCartaPropostaController::class, 'criar']);
+    $router->get('/admin/cartas-propostas/{id}/editar', [AdminCartaPropostaController::class, 'editar']);
+    $router->post('/admin/cartas-propostas/{id}', [AdminCartaPropostaController::class, 'atualizar']);
+    $router->post('/admin/cartas-propostas/{id}/emitir', [AdminCartaPropostaController::class, 'emitir']);
+    $router->post('/admin/cartas-propostas/{id}/preparar-envio', [AdminCartaPropostaController::class, 'prepararEnvio']);
+    $router->post('/admin/cartas-propostas/{id}/confirmar-envio', [AdminCartaPropostaController::class, 'confirmarEnvio']);
+    $router->get('/admin/cartas-propostas/{id}/pdf', [AdminCartaPropostaController::class, 'pdf']);
     $router->get('/admin/indicacoes', [AdminIndicacoesController::class, 'index']);
     $router->get('/admin/indicacoes/export', [AdminIndicacoesController::class, 'export']);
     $router->post('/admin/indicacoes/{id}/pagar', [AdminIndicacoesController::class, 'markPago']);

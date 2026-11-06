@@ -165,7 +165,8 @@ try {
     $templatePesquisa = Mensagem::findByCodigo('pesquisa_experiencia_candidato');
     $check($templatePesquisa !== null, "template 'pesquisa_experiencia_candidato' existe");
     $check(MensagemService::isPlaceholderReconhecido('Link da Pesquisa') === true, "'[Link da Pesquisa]' é uma variável reconhecida pelo catálogo oficial");
-    $check(count(MensagemService::catalogoVariaveis()) === 10, 'catálogo de variáveis passou de 9 para exatamente 10');
+    // 11 a partir da correção de 2026-11 (Carta Proposta): nova entrada 'Link da Proposta'.
+    $check(count(MensagemService::catalogoVariaveis()) === 11, 'catálogo de variáveis tem exatamente 11 entradas (9 originais + Link da Pesquisa + Link da Proposta)');
 
     // ---- 16. mensagem ativa aceita [Link da Pesquisa] sem ser rejeitada por placeholder desconhecido
     if ($templatePesquisa !== null) {

@@ -153,6 +153,30 @@ require_once APP_PATH . '/views/partials/modulo-topo.php';
   </div>
   <?php ui_script_pagina('candidaturas.js'); // JS movido para assets/candidaturas.js (CSP: sem <script> inline) ?>
 
+  <!-- Carta Proposta (Fase 1 da formalização da contratação, correção de 2026-11) -->
+  <?php
+    $rotulosStatusCarta = [
+        'rascunho' => 'Rascunho', 'gerada' => 'Gerada (PDF emitido)', 'enviada' => 'Enviada ao candidato',
+        'aceita' => 'Aceita pelo candidato', 'recusada' => 'Recusada pelo candidato', 'substituida' => 'Substituída por versão posterior',
+    ];
+  ?>
+  <div class="mt-8 rounded bg-surface-secondary p-6">
+    <h3 class="text-lg font-semibold text-text-primary mb-1">Carta Proposta</h3>
+    <?php if (empty($cartaPropostaAtual)): ?>
+      <p class="text-sm text-text-secondary mb-3">Nenhuma Carta Proposta gerada ainda.</p>
+    <?php else: ?>
+      <p class="text-sm text-text-secondary mb-3">Versão <?= (int)$cartaPropostaAtual['versao'] ?> — status: <strong><?= Security::e($rotulosStatusCarta[$cartaPropostaAtual['status']] ?? $cartaPropostaAtual['status']) ?></strong></p>
+    <?php endif; ?>
+    <?php if (!empty($podeGerenciarDocumentos)): ?>
+      <form method="post" action="<?= $base ?>/admin/candidaturas/<?= (int)$c['id'] ?>/carta-proposta">
+        <input type="hidden" name="csrf" value="<?= Security::e($csrf ?? '') ?>">
+        <button type="submit" class="bg-primary-700 text-white px-4 py-2 rounded hover:bg-primary-800 shadow-sm text-sm">
+          <?= (empty($cartaPropostaAtual) || in_array($cartaPropostaAtual['status'], ['aceita', 'recusada', 'substituida'], true)) ? 'Gerar Carta Proposta' : 'Editar Carta Proposta' ?>
+        </button>
+      </form>
+    <?php endif; ?>
+  </div>
+
   <!-- Documentos de contratação (correção de 2026-11) -->
   <div class="mt-8 rounded bg-surface-secondary p-6">
     <h3 class="text-lg font-semibold text-text-primary mb-1">Documentos</h3>

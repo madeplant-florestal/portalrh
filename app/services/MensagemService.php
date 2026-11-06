@@ -64,6 +64,10 @@ class MensagemService
             'nome' => 'Link da pesquisa de experiência',
             'descricao' => 'Link individual para o candidato responder à pesquisa de experiência do processo seletivo.',
         ],
+        'Link da Proposta' => [
+            'nome' => 'Link da Carta Proposta',
+            'descricao' => 'Link individual e seguro para o candidato consultar a Carta Proposta e registrar o aceite ou a recusa.',
+        ],
     ];
 
     /**

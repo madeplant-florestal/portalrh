@@ -41,6 +41,7 @@ class AdminCandidaturasController extends Controller
         $pesquisa = $podeVerPesquisa ? PesquisaExperiencia::findByCandidatura((int)$id) : null;
 
         $documentos = CandidaturaDocumento::allByCandidatura((int)$id);
+        $cartaPropostaAtual = (new CartaPropostaRepository())->buscarUltimaPorCandidatura((int)$id);
 
         $this->view->render('admin/candidaturas/show', [
             'c' => $c,
@@ -52,6 +53,7 @@ class AdminCandidaturasController extends Controller
             'podeVerPesquisa' => $podeVerPesquisa,
             'pesquisa' => $pesquisa,
             'documentos' => $documentos,
+            'cartaPropostaAtual' => $cartaPropostaAtual,
             'podeGerenciarDocumentos' => in_array(Auth::role(), ['admin', 'rh'], true),
         ], 'layouts/app-shell');
     }

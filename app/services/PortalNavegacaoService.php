@@ -28,8 +28,12 @@
  *   - `perm_qualquer:<a>,<b>` qualquer uma das permissões individuais (a Central de Pesquisas de Integração abre com a de Reação OU
  *                         a da Integração — ver AdminPesquisaReacaoIntegracaoController::index);
  *   - `staff`             admin/supervisor/rh, SEM permissão individual: espelha um gate de backend deliberadamente restrito por
- *                         regra funcional documentada (ex.: a listagem de Colaboradores expõe salário individual — ver
- *                         AdminColaboradoresController::index, que proíbe `viewer` mesmo com `colaboradores.visualizar`).
+ *                         regra funcional documentada (ex.: endpoints que proíbem `viewer` mesmo com a permissão individual).
+ *   - `staff_ou_setor_gerenciado:<codigo>` staff OU (a permissão individual E pelo menos 1 Setor Gerenciado em
+ *                         `usuario_setores_gerenciados` — correção de 2026-11, caso Odair Pedro Tonin). Espelha
+ *                         EXATAMENTE o gate de `AdminColaboradoresController::index()`: setor PRINCIPAL ou ADICIONAL de
+ *                         atuação (`usuario_setores`) nunca conta aqui, só Setor Gerenciado. Usado por Colaboradores —
+ *                         ver `integration_colaboradores_navegacao_gestor.php`.
  *
  * ABAS DE MÓDULO (`definicaoAbas`/`abas`): navegação interna de um módulo migrado. Regra de ouro: uma aba só aparece se o
  * usuário REALMENTE consegue abrir o destino (nunca uma aba que leva a 403). As regras das abas são as MESMAS da sidebar e da
@@ -45,18 +49,26 @@ class PortalNavegacaoService
     private ?string $role;
     private bool $supervisor;
     private bool $podeSolicitarVaga;
+    /** @var callable():bool */
+    private $temSetorGerenciado;
 
     /**
      * Sem argumentos usa a SESSÃO atual (o normal). Os parâmetros existem para testar sem depender de `$_SESSION`.
      *
      * @param (callable(string):bool)|null $temPermissao
+     * @param (callable():bool)|null $temSetorGerenciado true se a sessão atual gerencia >=1 Setor
+     *        (`usuario_setores_gerenciados` — nunca `usuario_setores`/setor de atuação).
      */
-    public function __construct(?callable $temPermissao = null, ?string $role = null, ?bool $supervisor = null, ?bool $podeSolicitarVaga = null)
+    public function __construct(?callable $temPermissao = null, ?string $role = null, ?bool $supervisor = null, ?bool $podeSolicitarVaga = null, ?callable $temSetorGerenciado = null)
     {
         $this->temPermissao = $temPermissao ?? static fn(string $codigo): bool => Authorization::temPermissao($codigo);
         $this->role = $role ?? Auth::role();
         $this->supervisor = $supervisor ?? !empty($_SESSION['user_is_supervisor']);
         $this->podeSolicitarVaga = $podeSolicitarVaga ?? self::resolverPodeSolicitarVagaDaSessao();
+        $this->temSetorGerenciado = $temSetorGerenciado ?? static function (): bool {
+            $usuarioId = (int)($_SESSION['user_id'] ?? 0);
+            return $usuarioId > 0 && (new UsuarioSetoresGerenciadosService())->codigosSetorGerenciadosPor($usuarioId) !== [];
+        };
     }
 
     /**
@@ -105,7 +117,7 @@ class PortalNavegacaoService
             ['chave' => 'colaboradores', 'titulo' => 'Colaboradores', 'icone' => 'colaboradores',
                 'descricao' => 'Cadastro de colaboradores e movimentações de pessoal.',
                 'itens' => [
-                    ['href' => '/admin/colaboradores', 'regra' => 'staff'], // backend admin/rh por regra documentada (salário) — a sidebar antiga é mais permissiva
+                    ['href' => '/admin/colaboradores', 'regra' => 'staff_ou_setor_gerenciado:colaboradores.visualizar'], // correção de 2026-11: espelha o gate real de AdminColaboradoresController::index()
                     ['href' => '/admin/movimentacoes-pessoal', 'regra' => 'aberto'],
                 ]],
             ['chave' => 'avaliacoes-desenvolvimento', 'titulo' => 'Avaliações e Desenvolvimento', 'icone' => 'avaliacoes-desenvolvimento',
@@ -169,7 +181,7 @@ class PortalNavegacaoService
         return [
             // Bloco C — Pessoas. `trilha_modulo` false: o breadcrumb é Portal RH › <Aba> (sem nível de módulo intermediário).
             'pessoas' => ['titulo' => 'Pessoas', 'trilha_modulo' => false, 'abas' => [
-                ['chave' => 'colaboradores', 'label' => 'Colaboradores', 'href' => '/admin/colaboradores', 'regra' => 'staff'],
+                ['chave' => 'colaboradores', 'label' => 'Colaboradores', 'href' => '/admin/colaboradores', 'regra' => 'staff_ou_setor_gerenciado:colaboradores.visualizar'],
                 ['chave' => 'usuarios', 'label' => 'Usuários e Acessos', 'href' => '/admin/usuarios', 'regra' => 'admin_supervisor'],
             ]],
             // Bloco F — Indicadores de RH: duas telas irmãs reais e independentes (services próprios), o mesmo agrupamento do card da Central.
@@ -324,6 +336,12 @@ class PortalNavegacaoService
         }
         if (str_starts_with($regra, 'staff_ou:')) {
             return $staff || $perm(substr($regra, 9));
+        }
+        if (str_starts_with($regra, 'staff_ou_setor_gerenciado:')) {
+            // Espelha EXATAMENTE AdminColaboradoresController::index(): staff OU (permissão E >=1
+            // Setor Gerenciado) — setor principal/adicional de atuação nunca conta. `&&` já evita a
+            // consulta de setores gerenciados quando a permissão nem existe.
+            return $staff || ($perm(substr($regra, 26)) && ($this->temSetorGerenciado)());
         }
         return false; // regra desconhecida nunca libera nada
     }

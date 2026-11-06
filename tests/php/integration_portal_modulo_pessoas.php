@@ -132,14 +132,14 @@ try {
     }
     $check($problemas === [], '(regra de ouro) Toda aba visível leva a um destino que o controller realmente aceita, para ' . count($perfis) . ' perfis' . ($problemas === [] ? '' : ': ' . implode(' | ', $problemas)));
     $check($visiveis['Admin'] === ['colaboradores', 'usuarios'] && $visiveis['supervisor'] === ['colaboradores', 'usuarios'] && $visiveis['RH'] === ['colaboradores'] && $visiveis['viewer'] === [], '(abas) Admin/supervisor veem as duas; RH só Colaboradores (lista de usuários é admin); viewer nenhuma');
-    // Correção de 2026-11 (escopo gerencial de Colaboradores, caso Odair Pedro Tonin): o backend
-    // de AdminColaboradoresController::index() passou a aceitar viewer com colaboradores.visualizar
-    // (escopado por Setor Gerenciado, sem salário — ver integration_colaboradores_escopo_gestor.php).
-    // A regra `staff` da ABA em si (PortalNavegacaoService) não foi tocada por esta correção — a
-    // aba continua sem aparecer para quem não é admin/supervisor/rh; isso não viola a "regra de
-    // ouro" (nenhuma aba visível leva a 403), só deixa de oferecer um atalho de navegação para um
-    // acesso que agora existe de verdade — follow-up de UI, não desta correção de autorização.
-    $check($visiveis['viewer+colaboradores.visualizar'] === [] && $backendPermite('/admin/colaboradores', $viewerColab), '(correção 2026-11) viewer com colaboradores.visualizar: a aba continua sem aparecer (regra `staff`, inalterada), mas o backend agora PERMITE o acesso (escopado por Setor Gerenciado) — divergência invertida, não mais um 403 escondido');
+    // Correção de 2026-11 (escopo gerencial de Colaboradores, caso Odair Pedro Tonin): a regra da
+    // aba mudou de `staff` para `staff_ou_setor_gerenciado:colaboradores.visualizar` (espelha o
+    // gate real de AdminColaboradoresController::index()). `$viewerColab` tem a permissão mas
+    // NENHUM Setor Gerenciado (fixture deste arquivo nunca atribuiu um) — por isso a aba CONTINUA
+    // sem aparecer aqui, corretamente (regra 1: permissão E setor gerenciado, os dois exigidos).
+    // O cenário completo (permissão + Setor Gerenciado -> aba aparece) está em
+    // integration_colaboradores_navegacao_gestor.php, que cobre a correção de fato.
+    $check($visiveis['viewer+colaboradores.visualizar'] === [] && $backendPermite('/admin/colaboradores', $viewerColab), '(correção 2026-11) viewer com colaboradores.visualizar mas SEM Setor Gerenciado: aba continua sem aparecer (regra exige os dois); backend permite o acesso (resultado fica vazio, nunca 403)');
 
     // ---- aba atual sem acesso ---------------------------------------------------------------------------------------------------
     $comoUsuario($rh);

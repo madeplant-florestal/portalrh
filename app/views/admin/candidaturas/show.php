@@ -177,6 +177,36 @@ require_once APP_PATH . '/views/partials/modulo-topo.php';
     <?php endif; ?>
   </div>
 
+  <!-- Exame Admissional (liberado só após o aceite da Carta Proposta — correção de 2026-11) -->
+  <?php
+    $rotulosStatusExame = [
+        'rascunho' => 'Rascunho', 'mensagem_preparada' => 'Mensagem preparada', 'enviado' => 'Envio confirmado pelo RH',
+    ];
+  ?>
+  <div class="mt-8 rounded bg-surface-secondary p-6">
+    <h3 class="text-lg font-semibold text-text-primary mb-1">Exame Admissional</h3>
+    <?php if (empty($podeAgendarExame)): ?>
+      <p class="text-sm text-text-secondary mb-3">Disponível somente depois do aceite da Carta Proposta pelo candidato.</p>
+    <?php elseif (empty($exameAdmissional)): ?>
+      <p class="text-sm text-text-secondary mb-3">Nenhum agendamento criado ainda.</p>
+    <?php else: ?>
+      <p class="text-sm text-text-secondary mb-1">Situação: <strong><?= Security::e($rotulosStatusExame[$exameAdmissional['status']] ?? $exameAdmissional['status']) ?></strong></p>
+      <p class="text-sm text-text-secondary mb-3">
+        <?= Security::e((string)($exameAdmissional['clinica'] ?: '—')) ?> ·
+        <?= !empty($exameAdmissional['data_exame']) ? Security::e(date('d/m/Y', strtotime((string)$exameAdmissional['data_exame']))) : '—' ?>
+        <?= !empty($exameAdmissional['horario']) ? Security::e(substr((string)$exameAdmissional['horario'], 0, 5)) : '' ?>
+      </p>
+    <?php endif; ?>
+    <?php if (!empty($podeGerenciarDocumentos) && !empty($podeAgendarExame)): ?>
+      <form method="post" action="<?= $base ?>/admin/candidaturas/<?= (int)$c['id'] ?>/exame-admissional">
+        <input type="hidden" name="csrf" value="<?= Security::e($csrf ?? '') ?>">
+        <button type="submit" class="bg-primary-700 text-white px-4 py-2 rounded hover:bg-primary-800 shadow-sm text-sm">
+          <?= empty($exameAdmissional) ? 'Agendar Exame Admissional' : 'Editar Agendamento' ?>
+        </button>
+      </form>
+    <?php endif; ?>
+  </div>
+
   <!-- Documentos de contratação (correção de 2026-11) -->
   <div class="mt-8 rounded bg-surface-secondary p-6">
     <h3 class="text-lg font-semibold text-text-primary mb-1">Documentos</h3>

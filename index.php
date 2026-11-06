@@ -252,6 +252,11 @@ try {
     $router->post('/admin/cartas-propostas/{id}/preparar-envio', [AdminCartaPropostaController::class, 'prepararEnvio']);
     $router->post('/admin/cartas-propostas/{id}/confirmar-envio', [AdminCartaPropostaController::class, 'confirmarEnvio']);
     $router->get('/admin/cartas-propostas/{id}/pdf', [AdminCartaPropostaController::class, 'pdf']);
+    $router->post('/admin/candidaturas/{id}/exame-admissional', [AdminExameAdmissionalController::class, 'criar']);
+    $router->get('/admin/exames-admissionais/{id}/editar', [AdminExameAdmissionalController::class, 'editar']);
+    $router->post('/admin/exames-admissionais/{id}', [AdminExameAdmissionalController::class, 'atualizar']);
+    $router->post('/admin/exames-admissionais/{id}/preparar-envio', [AdminExameAdmissionalController::class, 'prepararEnvio']);
+    $router->post('/admin/exames-admissionais/{id}/confirmar-envio', [AdminExameAdmissionalController::class, 'confirmarEnvio']);
     $router->get('/admin/indicacoes', [AdminIndicacoesController::class, 'index']);
     $router->get('/admin/indicacoes/export', [AdminIndicacoesController::class, 'export']);
     $router->post('/admin/indicacoes/{id}/pagar', [AdminIndicacoesController::class, 'markPago']);

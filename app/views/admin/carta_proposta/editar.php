@@ -111,6 +111,7 @@ $rotulosStatus = [
               <button type="submit" class="bg-primary-700 text-white px-4 py-2 rounded text-sm">Confirmar que o envio foi realizado</button>
             </form>
             <p class="mt-2 text-xs text-text-secondary">O link só fica acessível ao candidato depois de você confirmar o envio aqui.</p>
+            <p class="mt-2 text-xs text-text-secondary">O Portal não anexa o PDF automaticamente ao envio. Baixe o PDF (botão "Visualizar PDF" acima) e anexe-o manualmente junto com este texto no WhatsApp ou e-mail.</p>
           </div>
         <?php endif; ?>
       </div>

@@ -116,6 +116,18 @@ class CartaPropostaRepository
         return $row ?: null;
     }
 
+    /** Gate do Agendamento do Exame Admissional: existe ALGUMA versão aceita, mesmo que depois
+     * tenha sido criada uma versão mais nova (correção pontual pós-aceite nunca desfaz o aceite já
+     * ocorrido). Nunca usar buscarUltimaPorCandidatura() para esta checagem. */
+    public function existeVersaoAceita(int $candidaturaId): bool
+    {
+        $stmt = $this->connection()->prepare(
+            "SELECT 1 FROM cartas_propostas WHERE candidatura_id = ? AND status = 'aceita' LIMIT 1"
+        );
+        $stmt->execute([$candidaturaId]);
+        return $stmt->fetchColumn() !== false;
+    }
+
     /** rascunho -> gerada: congela o snapshot (nenhuma coluna de dados é alterada aqui, só o PDF e o status). */
     public function marcarGerada(int $id, string $pdfNomeArmazenado, string $agora): bool
     {

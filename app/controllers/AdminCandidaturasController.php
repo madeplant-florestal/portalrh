@@ -42,6 +42,8 @@ class AdminCandidaturasController extends Controller
 
         $documentos = CandidaturaDocumento::allByCandidatura((int)$id);
         $cartaPropostaAtual = (new CartaPropostaRepository())->buscarUltimaPorCandidatura((int)$id);
+        $podeAgendarExame = (new CartaPropostaRepository())->existeVersaoAceita((int)$id);
+        $exameAdmissional = (new ExameAdmissionalRepository())->buscarPorCandidatura((int)$id);
 
         $this->view->render('admin/candidaturas/show', [
             'c' => $c,
@@ -55,6 +57,8 @@ class AdminCandidaturasController extends Controller
             'documentos' => $documentos,
             'cartaPropostaAtual' => $cartaPropostaAtual,
             'podeGerenciarDocumentos' => in_array(Auth::role(), ['admin', 'rh'], true),
+            'podeAgendarExame' => $podeAgendarExame,
+            'exameAdmissional' => $exameAdmissional,
         ], 'layouts/app-shell');
     }
     

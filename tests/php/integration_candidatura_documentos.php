@@ -135,6 +135,19 @@ try {
     $check(str_contains($corpoDownload, 'realpath') && str_contains($corpoDownload, 'strpos($real, $realDir)'), '(segurança) downloadDocumento() usa o mesmo guard de path traversal (realpath + strpos) já confiado no download() de currículo');
     $check(str_contains($corpoDownload, 'basename('), '(segurança) O nome do arquivo em disco é sempre passado por basename() antes de montar o caminho');
 
+    // ---- layout em mini cards (correção de 2026-11, homologação) --------------------------------
+    // downloadDocumento() agora aceita ?inline=1 para visualização (miniatura/abrir no navegador)
+    // pelo MESMO endpoint autorizado — nunca um endpoint novo/público, e nunca sem o MIME já
+    // validado contra allowed_document_mime no upload (nunca HTML/SVG/script).
+    $check(str_contains($corpoDownload, "\$_GET['inline']") && str_contains($corpoDownload, "'inline'") && str_contains($corpoDownload, "'attachment'"), '(visualização) downloadDocumento() decide inline/attachment pelo mesmo endpoint autorizado, sem criar rota nova');
+
+    $corpoShow = file_get_contents(__DIR__ . '/../../app/views/admin/candidaturas/show.php');
+    $check(str_contains($corpoShow, 'grid-cols-2') && str_contains($corpoShow, 'sm:grid-cols-3') && str_contains($corpoShow, 'md:grid-cols-4') && str_contains($corpoShow, 'lg:grid-cols-6'), '(layout) Seção de Documentos usa grade responsiva (mais colunas conforme a largura da tela), nunca card de largura total');
+    $check(str_contains($corpoShow, 'aspect-square'), '(layout) Mini cards são quadrados');
+    $check(str_contains($corpoShow, 'truncate'), '(layout) Nome de arquivo longo é truncado sem quebrar o layout do card');
+    $check(str_contains($corpoShow, "\$ehImagem") && str_contains($corpoShow, "'image/png', 'image/jpeg'"), '(layout) PNG/JPG recebem miniatura real (img); os demais tipos (PDF) recebem o ícone');
+    $check(str_contains($corpoShow, '?inline=1') && str_contains($corpoShow, 'Visualizar') && str_contains($corpoShow, 'Baixar'), '(layout) Cada card tem ação de Visualizar (inline) e Baixar (attachment), reusando o endpoint de documentos');
+
     echo "\nCANDIDATURA_DOCUMENTOS_OK\n";
 } finally {
     if (!empty($criados['documentos'])) {

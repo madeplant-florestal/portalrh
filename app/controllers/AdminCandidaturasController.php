@@ -206,8 +206,13 @@ class AdminCandidaturasController extends Controller
         if ($real === false || $realDir === false || strpos($real, $realDir) !== 0 || !is_file($real)) {
             http_response_code(404); echo 'Arquivo não encontrado'; return;
         }
+        // ?inline=1: visualização (miniatura/abrir no navegador) pelo MESMO endpoint autorizado —
+        // seguro porque o MIME já é validado contra allowed_document_mime no upload (Upload::
+        // saveDocumento()), nunca HTML/SVG/script. Sem o parâmetro, mantém o comportamento padrão
+        // de download (attachment).
+        $disposicao = ($_GET['inline'] ?? '') === '1' ? 'inline' : 'attachment';
         header('Content-Type: ' . $documento['mime']);
-        header('Content-Disposition: attachment; filename="' . Security::sanitizeString((string)$documento['nome_original']) . '"');
+        header('Content-Disposition: ' . $disposicao . '; filename="' . Security::sanitizeString((string)$documento['nome_original']) . '"');
         header('Content-Length: ' . filesize($real));
         readfile($real);
         exit;

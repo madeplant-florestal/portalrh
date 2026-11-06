@@ -215,19 +215,37 @@ require_once APP_PATH . '/views/partials/modulo-topo.php';
     <?php if (empty($documentos)): ?>
       <p class="text-sm text-text-secondary">Nenhum documento anexado ainda.</p>
     <?php else: ?>
-      <ul class="divide-y divide-border rounded border border-border bg-white">
+      <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
         <?php foreach ($documentos as $doc): ?>
-          <li class="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
-            <div>
-              <a href="<?= $base ?>/admin/candidaturas/<?= (int)$c['id'] ?>/documentos/<?= (int)$doc['id'] ?>" class="font-medium text-primary-700 hover:underline"><?= Security::e($doc['nome_original']) ?></a>
-              <div class="text-xs text-text-secondary">
-                Enviado em <?= Security::e(date('d/m/Y H:i', strtotime($doc['criado_em']))) ?> por <?= Security::e($doc['enviado_por_nome'] ?? 'Sistema') ?>
-                · <?= Security::e(number_format(((int)$doc['tamanho_bytes']) / 1024, 0, ',', '.')) ?> KB
-              </div>
+          <?php
+            $urlDoc = $base . '/admin/candidaturas/' . (int)$c['id'] . '/documentos/' . (int)$doc['id'];
+            $ehImagem = in_array($doc['mime'], ['image/png', 'image/jpeg'], true);
+            $tamanhoKb = Security::e(number_format(((int)$doc['tamanho_bytes']) / 1024, 0, ',', '.'));
+            $dataEnvio = Security::e(date('d/m/Y H:i', strtotime($doc['criado_em'])));
+            $responsavel = Security::e($doc['enviado_por_nome'] ?? 'Sistema');
+          ?>
+          <div class="flex flex-col overflow-hidden rounded-ds-md border border-border bg-white" title="<?= Security::e($doc['nome_original']) ?> — enviado em <?= $dataEnvio ?> por <?= $responsavel ?> — <?= $tamanhoKb ?> KB">
+            <a href="<?= $urlDoc ?>?inline=1" target="_blank" rel="noopener" class="flex aspect-square items-center justify-center bg-surface-secondary">
+              <?php if ($ehImagem): ?>
+                <img src="<?= $urlDoc ?>?inline=1" alt="<?= Security::e($doc['nome_original']) ?>" class="h-full w-full object-cover">
+              <?php else: ?>
+                <svg class="h-10 w-10 text-text-secondary" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 2.25H7A2.25 2.25 0 0 0 4.75 4.5v15A2.25 2.25 0 0 0 7 21.75h10A2.25 2.25 0 0 0 19.25 19.5V9.75L13.5 4 9 2.25Z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4v4.5a1 1 0 0 0 1 1h4.5" />
+                </svg>
+              <?php endif; ?>
+            </a>
+            <div class="px-2 py-1.5">
+              <p class="truncate text-xs font-medium text-text-primary"><?= Security::e($doc['nome_original']) ?></p>
+              <p class="truncate text-xs text-text-secondary"><?= $dataEnvio ?> · <?= $tamanhoKb ?> KB</p>
             </div>
-          </li>
+            <div class="flex divide-x divide-border border-t border-border text-xs">
+              <a href="<?= $urlDoc ?>?inline=1" target="_blank" rel="noopener" class="flex-1 py-1 text-center text-primary-700 hover:bg-surface-secondary">Visualizar</a>
+              <a href="<?= $urlDoc ?>" class="flex-1 py-1 text-center text-primary-700 hover:bg-surface-secondary">Baixar</a>
+            </div>
+          </div>
         <?php endforeach; ?>
-      </ul>
+      </div>
     <?php endif; ?>
 
     <?php if (!empty($podeGerenciarDocumentos)): ?>

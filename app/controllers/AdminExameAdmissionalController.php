@@ -6,8 +6,14 @@
  */
 class AdminExameAdmissionalController extends Controller
 {
-    /** Cria (ou reaproveita) o agendamento e vai direto para a edição. Gate "Carta Proposta aceita" é checado no Service. */
-    public function criar(string $candidaturaId): void
+    /**
+     * Cria (ou reaproveita) o agendamento e vai direto para a edição. Gate "Carta Proposta aceita"
+     * é checado no Service.
+     *
+     * O parâmetro PRECISA se chamar $id (mesmo motivo de AdminCartaPropostaController::criar()):
+     * Router despacha por nome do grupo nomeado da rota ({id}) via argumentos NOMEADOS.
+     */
+    public function criar(string $id): void
     {
         Auth::requireRole(['admin', 'rh']);
         if (!Security::csrfCheck($_POST['csrf'] ?? '')) {
@@ -16,7 +22,7 @@ class AdminExameAdmissionalController extends Controller
             return;
         }
         $usuarioId = (int)($_SESSION['user_id'] ?? 0);
-        $resultado = (new ExameAdmissionalService())->obterOuCriar((int)$candidaturaId, $usuarioId);
+        $resultado = (new ExameAdmissionalService())->obterOuCriar((int)$id, $usuarioId);
         if (!($resultado['ok'] ?? false)) {
             http_response_code(422);
             echo Security::e((string)($resultado['error'] ?? 'Falha ao criar o agendamento do exame admissional.'));

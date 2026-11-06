@@ -56,7 +56,7 @@ try {
     $pdo->prepare(
         "INSERT INTO candidaturas (vaga_id, nome, email, telefone, cpf, cargo_pretendido, experiencia, pdf_path, status)
          VALUES (?, ?, ?, '11999999999', ?, 'Cargo Teste', 'exp', 'x.pdf', 'novo')"
-    )->execute([$vagaId, "ZZEA Candidato Silva {$suffix}", "zzea{$suffix}@teste.local", '30000000001']);
+    )->execute([$vagaId, "ZZEA Candidato Silva {$suffix}", "zzea{$suffix}@teste.local", '4' . $suffix]);
     $candId = (int)$pdo->lastInsertId();
     $criados['candidaturas'][] = $candId;
 
@@ -221,6 +221,30 @@ try {
         $check(str_contains($corpo, "Auth::requireRole(['admin', 'rh'])"), "(acesso) AdminExameAdmissionalController::{$metodo}() exige admin/rh");
         if ($metodo !== 'editar') {
             $check(str_contains($corpo, 'Security::csrfCheck'), "(CSRF) AdminExameAdmissionalController::{$metodo}() verifica CSRF no POST");
+        }
+    }
+
+    // ---- 15) regressão: nome do parâmetro do método PRECISA bater com o placeholder da rota -------
+    // Mesmo bug real encontrado em AdminCartaPropostaController::criar() durante a homologação da
+    // Carta Proposta (Router::invoke() despacha por argumento NOMEADO a partir do grupo nomeado da
+    // rota) — esta controller nova tem a mesma forma de rota ({id} em '/admin/candidaturas/{id}/
+    // exame-admissional'), então herda o mesmo risco.
+    $indexPhp = file_get_contents(__DIR__ . '/../../index.php');
+    preg_match_all(
+        "#\\\$router->(?:get|post)\\('([^']+)',\\s*\\[AdminExameAdmissionalController::class,\\s*'(\\w+)'\\]\\)#",
+        $indexPhp,
+        $rotasExame,
+        PREG_SET_ORDER
+    );
+    $check(count($rotasExame) >= 5, '(rotas) Todas as rotas de AdminExameAdmissionalController foram encontradas em index.php para a checagem');
+    foreach ($rotasExame as [, $rota, $metodo]) {
+        preg_match_all('#\{([a-zA-Z_][a-zA-Z0-9_]*)\}#', $rota, $mPlaceholders);
+        $parametrosMetodo = array_map(
+            static fn(ReflectionParameter $p): string => $p->getName(),
+            (new ReflectionMethod(AdminExameAdmissionalController::class, $metodo))->getParameters()
+        );
+        foreach ($mPlaceholders[1] as $nomePlaceholder) {
+            $check(in_array($nomePlaceholder, $parametrosMetodo, true), "(rotas) {$rota} -> {$metodo}(): parâmetro \${$nomePlaceholder} existe (placeholder da rota vira argumento NOMEADO)");
         }
     }
 

@@ -108,6 +108,32 @@ try {
     $check(!str_contains((string)$cartaA1['beneficios_texto'], 'ZZCP Beneficio Vaga B'), '(isolamento) Benefício de OUTRA vaga nunca aparece aqui (vaga_beneficios é por vaga, não pelo catálogo inteiro)');
     $check($cartaA1['nome_candidato'] === "ZZCP CandidatoA {$suffix}", '(pré-preenchimento) Nome do candidato vem da candidatura');
 
+    // ---- 1b) abertura da página de edição não lança exceção (correção de homologação: rota com
+    // {id} + parâmetro de método com nome diferente quebrava em runtime antes do fix) — renderiza o
+    // MESMO template usado por AdminCartaPropostaController::editar(), com candidatura COM benefícios.
+    $viewTeste = new View();
+    $htmlComBeneficios = $viewTeste->renderPartial('admin/carta_proposta/editar', [
+        'base' => '', 'carta' => $cartaA1, 'candidatura' => Candidatura::find($candA), 'historico' => $repo->listarPorCandidatura($candA), 'csrf' => Security::csrfToken(),
+    ]);
+    $check(str_contains($htmlComBeneficios, 'ZZCP Vale Alimentação'), '(abertura) Página de edição renderiza sem exceção para candidatura COM benefícios cadastrados');
+
+    // vaga SEM nenhum benefício cadastrado (vaga_beneficios vazio) — prefillDados() nunca pode
+    // lançar exceção aqui, só deixar beneficios_texto null.
+    $pdo->prepare("INSERT INTO vagas (titulo, descricao, requisitos, ativo) VALUES (?, 'desc', 'req', 1)")->execute(["ZZCP Vaga Sem Beneficios {$suffix}"]);
+    $vagaSemBeneficiosId = (int)$pdo->lastInsertId();
+    $criados['vagas'][] = $vagaSemBeneficiosId;
+    $candSemBeneficios = $mkCandidatura($vagaSemBeneficiosId, 'CandidatoSemBeneficios');
+    $rSemBeneficios = $service->criarOuReaproveitarRascunho($candSemBeneficios, $usuarioId);
+    $check($rSemBeneficios['ok'] ?? false, '(sem benefícios) Rascunho é criado normalmente para vaga sem nenhum vaga_beneficios');
+    $idSemBeneficios = (int)$rSemBeneficios['id'];
+    $criados['cartas'][] = $idSemBeneficios;
+    $cartaSemBeneficios = $repo->buscarPorId($idSemBeneficios);
+    $check($cartaSemBeneficios['beneficios_texto'] === null, '(sem benefícios) beneficios_texto fica null, nunca uma exceção, quando a vaga não tem nenhum benefício cadastrado');
+    $htmlSemBeneficios = $viewTeste->renderPartial('admin/carta_proposta/editar', [
+        'base' => '', 'carta' => $cartaSemBeneficios, 'candidatura' => Candidatura::find($candSemBeneficios), 'historico' => $repo->listarPorCandidatura($candSemBeneficios), 'csrf' => Security::csrfToken(),
+    ]);
+    $check(str_contains($htmlSemBeneficios, 'Carta Proposta'), '(abertura) Página de edição renderiza sem exceção também para candidatura SEM benefícios cadastrados');
+
     // ---- 2) reabrir não duplica versão -----------------------------------------------------------
     $r1b = $service->criarOuReaproveitarRascunho($candA, $usuarioId);
     $check(($r1b['id'] ?? null) === $idA1 && ($r1b['nova_versao'] ?? true) === false, '(sem duplicidade) Reabrir o rascunho devolve a MESMA versão, nunca cria uma nova sem necessidade');
@@ -290,6 +316,33 @@ try {
         $check(str_contains($corpo, "Auth::requireRole(['admin', 'rh'])"), "(acesso) AdminCartaPropostaController::{$metodo}() exige admin/rh");
     }
     unset($corpoAdmin);
+
+    // ---- 19) regressão: nome do parâmetro do método PRECISA bater com o placeholder da rota -------
+    // Router::invoke() despacha via call_user_func_array() com um array ASSOCIATIVO vindo dos grupos
+    // nomeados da própria rota ({id}, {token}, ...) — PHP interpreta isso como argumentos NOMEADOS.
+    // Um parâmetro com nome diferente do placeholder (ex.: {id} + `function criar(string $candidaturaId)`)
+    // nunca dá erro no `php -l`/autoload — só estoura em runtime, na primeira requisição real
+    // (bug real encontrado em homologação local: "Unknown named parameter $id" em Router.php:57,
+    // mascarado pelo catch genérico de index.php como "Erro interno do sistema.").
+    $indexPhp = file_get_contents(__DIR__ . '/../../index.php');
+    preg_match_all(
+        "#\\\$router->(?:get|post)\\('([^']+)',\\s*\\[AdminCartaPropostaController::class,\\s*'(\\w+)'\\]\\)#",
+        $indexPhp,
+        $rotas,
+        PREG_SET_ORDER
+    );
+    $check(count($rotas) >= 7, '(rotas) Todas as rotas de AdminCartaPropostaController foram encontradas em index.php para a checagem');
+    foreach ($rotas as [, $rota, $metodo]) {
+        preg_match_all('#\{([a-zA-Z_][a-zA-Z0-9_]*)\}#', $rota, $mPlaceholders);
+        $placeholders = $mPlaceholders[1];
+        $parametrosMetodo = array_map(
+            static fn(ReflectionParameter $p): string => $p->getName(),
+            (new ReflectionMethod(AdminCartaPropostaController::class, $metodo))->getParameters()
+        );
+        foreach ($placeholders as $nomePlaceholder) {
+            $check(in_array($nomePlaceholder, $parametrosMetodo, true), "(rotas) {$rota} -> {$metodo}(): parâmetro \${$nomePlaceholder} existe (placeholder da rota vira argumento NOMEADO)");
+        }
+    }
 
     echo "\nCARTA_PROPOSTA_OK\n";
 } finally {

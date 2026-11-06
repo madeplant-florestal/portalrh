@@ -7,8 +7,16 @@
  */
 class AdminCartaPropostaController extends Controller
 {
-    /** Cria (ou reaproveita) o rascunho e vai direto para a edição. */
-    public function criar(string $candidaturaId): void
+    /**
+     * Cria (ou reaproveita) o rascunho e vai direto para a edição.
+     *
+     * O parâmetro PRECISA se chamar $id (não $candidaturaId): Router::invoke() despacha via
+     * call_user_func_array() com um array associativo vindo do nome do grupo nomeado da rota
+     * ({id} em '/admin/candidaturas/{id}/carta-proposta'), o que o PHP interpreta como
+     * argumentos NOMEADOS — um nome de parâmetro diferente do placeholder da rota lança
+     * `Error: Unknown named parameter` (bug real encontrado em homologação local).
+     */
+    public function criar(string $id): void
     {
         Auth::requireRole(['admin', 'rh']);
         if (!Security::csrfCheck($_POST['csrf'] ?? '')) {
@@ -17,7 +25,7 @@ class AdminCartaPropostaController extends Controller
             return;
         }
         $usuarioId = (int)($_SESSION['user_id'] ?? 0);
-        $resultado = (new CartaPropostaService())->criarOuReaproveitarRascunho((int)$candidaturaId, $usuarioId);
+        $resultado = (new CartaPropostaService())->criarOuReaproveitarRascunho((int)$id, $usuarioId);
         if (!($resultado['ok'] ?? false)) {
             http_response_code(422);
             echo Security::e((string)($resultado['error'] ?? 'Falha ao criar a Carta Proposta.'));

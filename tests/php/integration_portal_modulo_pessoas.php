@@ -132,7 +132,14 @@ try {
     }
     $check($problemas === [], '(regra de ouro) Toda aba visível leva a um destino que o controller realmente aceita, para ' . count($perfis) . ' perfis' . ($problemas === [] ? '' : ': ' . implode(' | ', $problemas)));
     $check($visiveis['Admin'] === ['colaboradores', 'usuarios'] && $visiveis['supervisor'] === ['colaboradores', 'usuarios'] && $visiveis['RH'] === ['colaboradores'] && $visiveis['viewer'] === [], '(abas) Admin/supervisor veem as duas; RH só Colaboradores (lista de usuários é admin); viewer nenhuma');
-    $check($visiveis['viewer+colaboradores.visualizar'] === [] && !$backendPermite('/admin/colaboradores', $viewerColab), '(divergência documentada) viewer com colaboradores.visualizar NÃO recebe a aba: o controller (admin/rh, listagem expõe salário) o bloqueia — a autorização de backend não foi alterada');
+    // Correção de 2026-11 (escopo gerencial de Colaboradores, caso Odair Pedro Tonin): o backend
+    // de AdminColaboradoresController::index() passou a aceitar viewer com colaboradores.visualizar
+    // (escopado por Setor Gerenciado, sem salário — ver integration_colaboradores_escopo_gestor.php).
+    // A regra `staff` da ABA em si (PortalNavegacaoService) não foi tocada por esta correção — a
+    // aba continua sem aparecer para quem não é admin/supervisor/rh; isso não viola a "regra de
+    // ouro" (nenhuma aba visível leva a 403), só deixa de oferecer um atalho de navegação para um
+    // acesso que agora existe de verdade — follow-up de UI, não desta correção de autorização.
+    $check($visiveis['viewer+colaboradores.visualizar'] === [] && $backendPermite('/admin/colaboradores', $viewerColab), '(correção 2026-11) viewer com colaboradores.visualizar: a aba continua sem aparecer (regra `staff`, inalterada), mas o backend agora PERMITE o acesso (escopado por Setor Gerenciado) — divergência invertida, não mais um 403 escondido');
 
     // ---- aba atual sem acesso ---------------------------------------------------------------------------------------------------
     $comoUsuario($rh);
@@ -208,7 +215,10 @@ try {
 
     // ---- autorização inalterada / sem legado -----------------------------------------------------------------------------------------
     $gates = [
-        [AdminColaboradoresController::class, 'index', "Auth::requireRole(['admin', 'rh'])"],
+        // index() ganhou o escopo gerencial de 2026-11 (viewer + colaboradores.visualizar + Setor
+        // Gerenciado, nunca salário) — ver integration_colaboradores_escopo_gestor.php. As demais
+        // linhas desta lista (edição, acesso, Usuários) continuam exatamente como antes.
+        [AdminColaboradoresController::class, 'index', "Auth::requireRole(['admin', 'rh', 'viewer'])"],
         [AdminColaboradoresController::class, 'editRh', "Auth::requireRole(['admin', 'rh'])"],
         [AdminColaboradoresController::class, 'acesso', "Auth::requireRole(['admin', 'rh'])"],
         [AdminUsuariosController::class, 'index', "Auth::requireRole(['admin'])"],

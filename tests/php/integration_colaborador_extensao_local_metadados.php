@@ -227,7 +227,11 @@ try {
         }
         return $corpo;
     };
-    $check(str_contains($corpoDoMetodo(AdminColaboradoresController::class, 'index'), "Auth::requireRole(['admin', 'rh'])"), 'index() (listagem) continua exigindo admin/rh');
+    // Correção de 2026-11 (escopo gerencial de Colaboradores): index() passou a aceitar também
+    // 'viewer' (Gestor com colaboradores.visualizar + Setor Gerenciado, salário nunca selecionado
+    // nesse caso) — ver integration_colaboradores_escopo_gestor.php. As demais ações do módulo
+    // (linha abaixo) continuam admin/rh apenas, sem alteração.
+    $check(str_contains($corpoDoMetodo(AdminColaboradoresController::class, 'index'), "Auth::requireRole(['admin', 'rh', 'viewer'])"), 'index() (listagem) agora também aceita viewer (escopo gerencial — correção de 2026-11)');
     $check(str_contains($corpoDoMetodo(AdminColaboradoresController::class, 'materializarExtensaoLocal'), "Auth::requireRole(['admin', 'rh'])"), 'materializarExtensaoLocal() exige admin/rh, mesma regra das demais ações do módulo');
     $check(str_contains($corpoDoMetodo(AdminColaboradoresController::class, 'materializarExtensaoLocal'), 'Security::csrfCheck'), 'materializarExtensaoLocal() exige CSRF, mesmo padrão das demais ações POST do módulo');
 

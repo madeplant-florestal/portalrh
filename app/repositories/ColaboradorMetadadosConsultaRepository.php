@@ -39,13 +39,17 @@ class ColaboradorMetadadosConsultaRepository
         return $this->pdo;
     }
 
-    public function summary(): array
+    public function summary(?array $codigosSetorPermitidos = null): array
     {
         // `ativos` representa a população vigente AGORA: um contrato marcado `ausente_na_origem
         // = 1` (chave que sumiu de um sync completo — ver migration de reconciliação) nunca deve
         // contar aqui, mesmo que `ativo` continue 1 (esse campo não muda de sentido — ver
         // docstring da migration). `desligados`/`contratos` continuam somando tudo: são
         // contagens históricas, não population vigente, e a ausência não apaga histórico.
+        $where = [ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusao('id')];
+        $params = [];
+        $this->aplicarEscopoSetor($where, $params, $codigosSetorPermitidos);
+
         $sql = 'SELECT
                     COUNT(*) AS contratos,
                     SUM(CASE WHEN ativo = 1 AND ausente_na_origem = 0 THEN 1 ELSE 0 END) AS ativos,
@@ -54,8 +58,10 @@ class ColaboradorMetadadosConsultaRepository
                     COUNT(DISTINCT COALESCE(NULLIF(codigo_cargo, \'\'), cargo)) AS cargos_distintos,
                     COUNT(DISTINCT codigo_pessoa) AS pessoas_distintas
                 FROM colaboradores_metadados
-                WHERE ' . ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusao('id');
-        $row = $this->connection()->query($sql)->fetch(PDO::FETCH_ASSOC) ?: [];
+                WHERE ' . implode(' AND ', $where);
+        $stmt = $this->connection()->prepare($sql);
+        $stmt->execute($params);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
 
         return [
             'contratos' => (int)($row['contratos'] ?? 0),
@@ -73,14 +79,22 @@ class ColaboradorMetadadosConsultaRepository
      * @param array $filtros Chaves: q, empresa (codigo_empresa), setor (texto), cargo (texto),
      *                       situacao ('ativos'|'desligados'|''), sexo ('M'|'F'|'nao_informado'|''),
      *                       situacao_metadados ('sincronizado'|'ausente'|''). Ausente/vazio = sem filtro.
+     * @param ?array $codigosSetorPermitidos Escopo por setor para atores sem acesso global (Gestor —
+     *                       correção de 2026-11, mesmo padrão de AvaliacaoExperienciaService).
+     *                       `null` = sem restrição (admin/RH). Array = só esses `codigo_setor`,
+     *                       incondicional, nunca sobrescrito pelos filtros da própria tela. `[]` =
+     *                       nenhum resultado (usuário sem Setor Gerenciado nunca vê "tudo").
+     *                       Quando restrito, `salario_atual` nem é selecionado (nunca chega à
+     *                       resposta do backend, não é só ocultado na view).
      * @return array{items:array,total:int,page:int,per_page:int,pages:int}
      */
-    public function paginate(array $filtros, int $page, int $perPage): array
+    public function paginate(array $filtros, int $page, int $perPage, ?array $codigosSetorPermitidos = null): array
     {
         $perPage = in_array($perPage, self::ALLOWED_PER_PAGE, true) ? $perPage : self::ALLOWED_PER_PAGE[0];
         $page = max(1, $page);
 
         [$where, $params] = $this->montarFiltros($filtros);
+        $this->aplicarEscopoSetor($where, $params, $codigosSetorPermitidos);
         $whereSql = $where === [] ? '' : (' WHERE ' . implode(' AND ', $where));
 
         $countStmt = $this->connection()->prepare(
@@ -96,10 +110,11 @@ class ColaboradorMetadadosConsultaRepository
         $offset = ($page - 1) * $perPage;
 
         // LEFT JOIN só para trazer o id local; UNIQUE(metadados_id) garante 0..1 correspondência.
+        $colunaSalario = $codigosSetorPermitidos === null ? ', m.salario_atual' : '';
         $sql = 'SELECT
                     m.id, m.nome, m.cargo, m.empresa, m.setor, m.unidade,
                     m.numero_contrato, m.codigo_empresa, m.codigo_pessoa,
-                    m.cpf, m.salario_atual, m.sexo, m.ausente_na_origem,
+                    m.cpf, m.sexo, m.ausente_na_origem' . $colunaSalario . ',
                     m.admissao, m.nascimento, m.demissao, m.motivo_rescisao_descricao,
                     m.ativo,
                     c.id AS local_id
@@ -209,29 +224,46 @@ class ColaboradorMetadadosConsultaRepository
     /**
      * Valores distintos para os selects de filtro — mesmo critério do Dashboard de Indicadores:
      * empresa agrupada pelo código estável (`codigo_empresa`), exibindo o nome mais recente;
-     * setor e cargo pelo valor textual sincronizado.
+     * setor e cargo pelo valor textual sincronizado. Escopado pelo mesmo `$codigosSetorPermitidos`
+     * de paginate() — um Gestor nunca vê, nos próprios filtros, empresa/cargo/setor que não
+     * ocorrem dentro do que ele gerencia.
      */
-    public function opcoesFiltro(): array
+    public function opcoesFiltro(?array $codigosSetorPermitidos = null): array
     {
         $pdo = $this->connection();
 
-        $empresas = $pdo->query(
+        $whereEmpresas = ["codigo_empresa IS NOT NULL AND codigo_empresa <> ''"];
+        $paramsEmpresas = [];
+        $this->aplicarEscopoSetor($whereEmpresas, $paramsEmpresas, $codigosSetorPermitidos);
+        $stmtEmpresas = $pdo->prepare(
             'SELECT codigo_empresa, MAX(empresa) AS empresa
              FROM colaboradores_metadados
-             WHERE codigo_empresa IS NOT NULL AND codigo_empresa <> \'\'
+             WHERE ' . implode(' AND ', $whereEmpresas) . '
              GROUP BY codigo_empresa
              ORDER BY empresa'
-        )->fetchAll(PDO::FETCH_ASSOC);
+        );
+        $stmtEmpresas->execute($paramsEmpresas);
+        $empresas = $stmtEmpresas->fetchAll(PDO::FETCH_ASSOC);
 
-        $setores = $pdo->query(
+        $whereSetores = ["setor IS NOT NULL AND setor <> ''"];
+        $paramsSetores = [];
+        $this->aplicarEscopoSetor($whereSetores, $paramsSetores, $codigosSetorPermitidos);
+        $stmtSetores = $pdo->prepare(
             'SELECT DISTINCT setor FROM colaboradores_metadados
-             WHERE setor IS NOT NULL AND setor <> \'\' ORDER BY setor'
-        )->fetchAll(PDO::FETCH_COLUMN);
+             WHERE ' . implode(' AND ', $whereSetores) . ' ORDER BY setor'
+        );
+        $stmtSetores->execute($paramsSetores);
+        $setores = $stmtSetores->fetchAll(PDO::FETCH_COLUMN);
 
-        $cargos = $pdo->query(
+        $whereCargos = ["cargo IS NOT NULL AND cargo <> ''"];
+        $paramsCargos = [];
+        $this->aplicarEscopoSetor($whereCargos, $paramsCargos, $codigosSetorPermitidos);
+        $stmtCargos = $pdo->prepare(
             'SELECT DISTINCT cargo FROM colaboradores_metadados
-             WHERE cargo IS NOT NULL AND cargo <> \'\' ORDER BY cargo'
-        )->fetchAll(PDO::FETCH_COLUMN);
+             WHERE ' . implode(' AND ', $whereCargos) . ' ORDER BY cargo'
+        );
+        $stmtCargos->execute($paramsCargos);
+        $cargos = $stmtCargos->fetchAll(PDO::FETCH_COLUMN);
 
         return [
             'empresas' => $empresas,
@@ -253,6 +285,32 @@ class ColaboradorMetadadosConsultaRepository
         );
         $stmt->execute([$id]);
         return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+    }
+
+    /**
+     * Escopo por setor para atores sem acesso global (Gestor — correção de 2026-11, mesmo padrão
+     * de AvaliacaoExperienciaService::escopoSetores()). Incondicional: sempre aplicado além/independente
+     * dos filtros escolhidos na tela, nunca substituído por eles. `null` = sem restrição (admin/
+     * RH/supervisor). `[]` = nenhum resultado (usuário sem nenhum Setor Gerenciado).
+     *
+     * Usa `m.codigo_setor` (ou a tabela sem alias `colaboradores_metadados`, conforme o SQL de
+     * cada chamador) — o código oficial, mesma identidade de `setores.codigo_setor` usada em todo
+     * o People Analytics, nunca o texto `setor` (que pode variar de grafia).
+     */
+    private function aplicarEscopoSetor(array &$where, array &$params, ?array $codigosSetorPermitidos): void
+    {
+        if ($codigosSetorPermitidos === null) {
+            return;
+        }
+        if ($codigosSetorPermitidos === []) {
+            $where[] = '1 = 0';
+            return;
+        }
+        $placeholders = implode(',', array_fill(0, count($codigosSetorPermitidos), '?'));
+        $where[] = "codigo_setor IN ($placeholders)";
+        foreach ($codigosSetorPermitidos as $codigo) {
+            $params[] = $codigo;
+        }
     }
 
     /**

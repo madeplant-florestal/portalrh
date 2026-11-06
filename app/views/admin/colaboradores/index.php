@@ -62,6 +62,12 @@ $formatarSalario = static function ($valor): string {
     ? 'R$ ' . number_format((float)$valor, 2, ',', '.')
     : 'Não informado';
 };
+// Correção de autorização (2026-11): escopo gerencial (viewer com colaboradores.visualizar +
+// Setores Gerenciados) nunca vê salário nem ações administrativas — ver AdminColaboradoresController.
+$podeVerSalario = (bool)($podeVerSalario ?? true);
+$podeGerenciar = (bool)($podeGerenciar ?? true);
+$setoresGerenciados = $setoresGerenciados ?? null;
+$totalColunas = 13 + ($podeVerSalario ? 1 : 0) + ($podeGerenciar ? 1 : 0);
 ?>
 <div class="space-y-6">
   <?= ui_modulo_topo($base, 'pessoas', 'colaboradores', [
@@ -76,6 +82,16 @@ $formatarSalario = static function ($valor): string {
   <?php endif; ?>
   <?php if (!empty($flashSuccess)): ?>
     <div class="rounded-ds-lg border border-success/30 bg-success/10 px-4 py-3 text-sm text-success shadow-sm"><?= Security::e($flashSuccess) ?></div>
+  <?php endif; ?>
+  <?php if (!$podeGerenciar): ?>
+    <div class="rounded-ds-lg border border-info/30 bg-info/10 px-4 py-3 text-sm text-info shadow-sm">
+      Você está vendo somente os colaboradores dos setores que gerencia<?php if (!empty($setoresGerenciados)): ?>:
+        <strong><?= Security::e(implode(', ', array_map(static fn(array $s): string => (string)($s['descricao_oficial'] ?: $s['nome']), $setoresGerenciados))) ?></strong>
+      <?php else: ?>
+        — nenhum setor gerenciado está definido para o seu usuário, por isso a lista está vazia. Fale com o RH se isso não estiver correto.
+      <?php endif; ?>
+      Dados salariais e ações administrativas ficam restritos a Admin/RH.
+    </div>
   <?php endif; ?>
 
   <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
@@ -249,11 +265,11 @@ $formatarSalario = static function ($valor): string {
             <th class="p-3 text-left font-medium text-text-secondary">Demissão</th>
             <th class="p-3 text-left font-medium text-text-secondary">Motivo rescisão</th>
             <th class="p-3 text-left font-medium text-text-secondary">CPF</th>
-            <th class="p-3 text-left font-medium text-text-secondary">Salário</th>
+            <?php if ($podeVerSalario): ?><th class="p-3 text-left font-medium text-text-secondary">Salário</th><?php endif; ?>
             <th class="p-3 text-left font-medium text-text-secondary">Sexo</th>
             <th class="p-3 text-left font-medium text-text-secondary">Situação</th>
             <th class="p-3 text-left font-medium text-text-secondary">Situação METADADOS</th>
-            <th class="p-3 text-right font-medium text-text-secondary">Ações</th>
+            <?php if ($podeGerenciar): ?><th class="p-3 text-right font-medium text-text-secondary">Ações</th><?php endif; ?>
           </tr>
         </thead>
         <tbody class="divide-y divide-border">
@@ -274,7 +290,7 @@ $formatarSalario = static function ($valor): string {
               <td class="p-3 text-text-primary"><?= Security::e($formatarData($colaborador['demissao'] ?? null)) ?></td>
               <td class="p-3 text-text-primary"><?= Security::e($colaborador['motivo_rescisao_descricao'] ?: 'Não informado') ?></td>
               <td class="p-3 text-text-primary"><?= Security::e($mascararCpf($colaborador['cpf'] ?? null)) ?></td>
-              <td class="p-3 text-text-primary"><?= Security::e($formatarSalario($colaborador['salario_atual'] ?? null)) ?></td>
+              <?php if ($podeVerSalario): ?><td class="p-3 text-text-primary"><?= Security::e($formatarSalario($colaborador['salario_atual'] ?? null)) ?></td><?php endif; ?>
               <td class="p-3 text-text-primary"><?= Security::e($rotuloSexo($colaborador['sexo'] ?? null)) ?></td>
               <td class="p-3">
                 <span class="inline-flex rounded-full px-3 py-1 text-xs font-semibold <?= $isActive ? 'bg-success/10 text-success' : 'bg-surface-secondary text-text-secondary' ?>">
@@ -286,6 +302,7 @@ $formatarSalario = static function ($valor): string {
                   <?= $isAusente ? 'Ausente na origem' : 'Sincronizado' ?>
                 </span>
               </td>
+              <?php if ($podeGerenciar): ?>
               <td class="p-3">
                 <div class="flex items-center justify-end gap-2">
                   <?php if ($localId !== null): ?>
@@ -317,11 +334,12 @@ $formatarSalario = static function ($valor): string {
                   <?php endif; ?>
                 </div>
               </td>
+              <?php endif; ?>
             </tr>
           <?php endforeach; ?>
           <?php if (empty($colaboradores)): ?>
             <tr>
-              <td colspan="15" class="p-6 text-center text-text-secondary">Nenhum colaborador encontrado para os filtros informados.</td>
+              <td colspan="<?= $totalColunas ?>" class="p-6 text-center text-text-secondary">Nenhum colaborador encontrado para os filtros informados.</td>
             </tr>
           <?php endif; ?>
         </tbody>
@@ -346,7 +364,7 @@ $formatarSalario = static function ($valor): string {
           <div class="mt-1 text-sm text-text-secondary">Demissão: <?= Security::e($formatarData($colaborador['demissao'] ?? null)) ?></div>
           <div class="mt-1 text-sm text-text-secondary">Motivo rescisão: <?= Security::e($colaborador['motivo_rescisao_descricao'] ?: 'Não informado') ?></div>
           <div class="mt-1 text-sm text-text-secondary">CPF: <?= Security::e($mascararCpf($colaborador['cpf'] ?? null)) ?></div>
-          <div class="mt-1 text-sm text-text-secondary">Salário: <?= Security::e($formatarSalario($colaborador['salario_atual'] ?? null)) ?></div>
+          <?php if ($podeVerSalario): ?><div class="mt-1 text-sm text-text-secondary">Salário: <?= Security::e($formatarSalario($colaborador['salario_atual'] ?? null)) ?></div><?php endif; ?>
           <div class="mt-1 text-sm text-text-secondary">Sexo: <?= Security::e($rotuloSexo($colaborador['sexo'] ?? null)) ?></div>
           <div class="mt-3 flex flex-wrap gap-2">
             <span class="inline-flex rounded-full px-3 py-1 text-xs font-semibold <?= $isActive ? 'bg-success/10 text-success' : 'bg-surface-secondary text-text-secondary' ?>">
@@ -356,6 +374,7 @@ $formatarSalario = static function ($valor): string {
               <?= $isAusente ? 'Ausente na origem' : 'Sincronizado' ?>
             </span>
           </div>
+          <?php if ($podeGerenciar): ?>
           <div class="mt-4 flex gap-2">
             <?php if ($localId !== null): ?>
               <a href="<?= $base ?>/admin/colaboradores/<?= $localId ?>/acesso" class="<?= $actionButtonClass ?>" title="Acesso e liderança" aria-label="Acesso e liderança">
@@ -385,6 +404,7 @@ $formatarSalario = static function ($valor): string {
               <?php endforeach; ?>
             <?php endif; ?>
           </div>
+          <?php endif; ?>
         </div>
       <?php endforeach; ?>
     </div>

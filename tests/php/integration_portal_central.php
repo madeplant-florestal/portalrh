@@ -294,7 +294,11 @@ try {
     }
     $check($divergencias === [], '(gates reais) Para ' . count($perfis) . ' perfis, nenhum card visível na Central leva a 403 no controller real' . ($divergencias === [] ? '' : ' — DIVERGÊNCIAS: ' . implode(' | ', $divergencias)));
     $comoUsuario($usuariosPorPerm['colaboradores.visualizar']);
-    $check(!(new PortalNavegacaoService())->visivel('staff') && $cards()['colaboradores'] === '/admin/movimentacoes-pessoal' && !$backendPermiteColab(), '(exceção documentada) viewer com colaboradores.visualizar: o backend (admin/rh — a listagem expõe salário) bloqueia; a Central NÃO oferece o card e ele cai em Movimentações (aberta)');
+    // Correção de 2026-11 (escopo gerencial de Colaboradores): o backend agora PERMITE esse viewer
+    // (escopado por Setor Gerenciado, nunca salário — ver integration_colaboradores_escopo_gestor.php).
+    // A regra `staff` do card em si não foi tocada: continua caindo em Movimentações, sem oferecer
+    // atalho — mesma observação de integration_portal_modulo_pessoas.php (follow-up de UI em aberto).
+    $check(!(new PortalNavegacaoService())->visivel('staff') && $cards()['colaboradores'] === '/admin/movimentacoes-pessoal' && $backendPermiteColab(), '(correção 2026-11) viewer com colaboradores.visualizar: a Central continua sem oferecer o card (regra `staff` inalterada), mas o backend agora permite o acesso real (escopado) — não é mais um 403 escondido');
     $comoUsuario($admin);
     $hrefsCentral = array_column($todosItens, 'href');
     $rotas = (string)file_get_contents(BASE_PATH . '/index.php');

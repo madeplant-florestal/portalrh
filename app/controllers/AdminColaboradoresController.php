@@ -3,9 +3,33 @@ class AdminColaboradoresController extends Controller
 {
     public function index(): void
     {
-        // Restrito a admin/RH: a listagem expõe salário individual dos colaboradores. `viewer`
-        // (usado a partir da sprint de Vagas para o acesso de líderes) NÃO deve ver isto.
-        Auth::requireRole(['admin', 'rh']);
+        // Correção de autorização (2026-11): a listagem expõe salário individual, por isso
+        // continua vedada a edição/exclusão/ações administrativas para quem não é admin/RH — mas
+        // agora um "Gestor" (viewer com a permissão `colaboradores.visualizar` E pelo menos um
+        // Setor Gerenciado em `usuario_setores_gerenciados`) pode CONSULTAR, só dentro do próprio
+        // escopo, sem salário. Mesmo padrão já usado em AvaliacaoExperienciaService::escopoTotal()/
+        // escopoSetores() — nenhum mecanismo paralelo, nenhum perfil novo armazenado.
+        Auth::requireRole(['admin', 'rh', 'viewer']);
+
+        $usuarioId = (int)($_SESSION['user_id'] ?? 0);
+        // is_supervisor sempre teve bypass total em requireRole() (ver Auth::requireRole) — mantém
+        // exatamente o mesmo acesso global que supervisores já tinham antes desta correção.
+        $ehGlobal = in_array(Auth::role(), ['admin', 'rh'], true) || !empty($_SESSION['user_is_supervisor']);
+
+        if (!$ehGlobal) {
+            if (!Authorization::usuarioTemPermissao($usuarioId, 'colaboradores.visualizar')) {
+                http_response_code(403);
+                echo 'Acesso negado';
+                return;
+            }
+        }
+
+        // null = sem restrição (admin/RH/supervisor, escopo total, como já era). Array = só os
+        // Setores Gerenciados do ator; [] quando ele não gerencia nenhum (nunca "sem restrição").
+        $setoresGerenciados = $ehGlobal ? null : (new UsuarioSetoresGerenciadosService())->setoresDoUsuario($usuarioId);
+        $codigosSetorPermitidos = $ehGlobal ? null : array_column($setoresGerenciados, 'codigo');
+        $podeVerSalario = $ehGlobal;
+        $podeGerenciar = $ehGlobal;
 
         $page = max(1, (int)($_GET['page'] ?? 1));
         $perPage = ctype_digit((string)($_GET['per_page'] ?? '')) ? (int)$_GET['per_page'] : 20;
@@ -26,9 +50,9 @@ class AdminColaboradoresController extends Controller
         $repo = new ColaboradorMetadadosConsultaRepository();
         $erro = null;
         try {
-            $resultado = $repo->paginate($filtros, $page, $perPage);
-            $summary = $repo->summary();
-            $opcoesFiltro = $repo->opcoesFiltro();
+            $resultado = $repo->paginate($filtros, $page, $perPage, $codigosSetorPermitidos);
+            $summary = $repo->summary($codigosSetorPermitidos);
+            $opcoesFiltro = $repo->opcoesFiltro($codigosSetorPermitidos);
         } catch (Throwable $e) {
             Logger::exception($e, 'ERROR', ['controller' => __CLASS__, 'action' => __FUNCTION__]);
             $erro = 'Não foi possível carregar a base de colaboradores agora. Tente novamente em instantes.';
@@ -53,6 +77,9 @@ class AdminColaboradoresController extends Controller
             'erro' => $erro,
             'flashError' => Security::sanitizeString($_GET['erro'] ?? ''),
             'flashSuccess' => Security::sanitizeString($_GET['ok'] ?? ''),
+            'podeVerSalario' => $podeVerSalario,
+            'podeGerenciar' => $podeGerenciar,
+            'setoresGerenciados' => $setoresGerenciados,
         ], 'layouts/app-shell');
     }
 

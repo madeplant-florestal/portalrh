@@ -16,7 +16,7 @@ class AvaliacaoDesempenho
                 INNER JOIN colaboradores c ON c.id = a.colaborador_id
                 INNER JOIN cargos cg ON cg.id = c.cargo_id
                 LEFT JOIN setores s ON s.id = c.setor_id
-                WHERE 1=1';
+                WHERE 1=1 AND ' . ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusaoPorMetadadosId('c.metadados_id');
         $params = [];
 
         $q = trim((string)($filters['q'] ?? ''));
@@ -51,7 +51,7 @@ class AvaliacaoDesempenho
         );
         $stmt->execute([$id]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
-        return $row ?: null;
+        return ColaboradorMetadadosElegibilidadeService::filtrarProcessoIndividual($row ?: null, ['colaborador_id']);
     }
 
     public static function create(array $data): array
@@ -120,7 +120,7 @@ class AvaliacaoDesempenho
             'SELECT c.id, c.nome, c.matricula, cg.nome AS cargo_nome
              FROM colaboradores c
              INNER JOIN cargos cg ON cg.id = c.cargo_id
-             WHERE c.ativo = 1
+             WHERE c.ativo = 1 AND ' . ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusaoPorMetadadosId('c.metadados_id') . '
              ORDER BY c.nome ASC'
         );
         return $stmt->fetchAll(PDO::FETCH_ASSOC);

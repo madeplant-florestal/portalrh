@@ -13,7 +13,7 @@ final class ExclusaoFixtures
     /** @var array<string,int[]> */
     public array $criados = [
         'cm' => [], 'avexp' => [], 'avdes' => [], 'fb' => [], 'pdi' => [], 'ent' => [], 'pesq' => [],
-        'col' => [], 'uc' => [], 'sv' => [], 'mp' => [], 'setor' => [], 'usuario' => [], 'lib' => [],
+        'col' => [], 'uc' => [], 'sv' => [], 'mp' => [], 'setor' => [], 'usuario' => [], 'lib' => [], 'cav' => [],
     ];
 
     public function __construct(public PDO $pdo)
@@ -140,6 +140,12 @@ final class ExclusaoFixtures
         return $this->reg('mp', $this->inserirGenerico('movimentacoes_pessoal', $v));
     }
 
+    /** Avaliação do modelo LEGADO (colaborador_avaliacoes), ligada a um colaborador local. */
+    public function avaliacaoLegada(int $colaboradorId, string $titulo): int
+    {
+        return $this->reg('cav', $this->inserirGenerico('colaborador_avaliacoes', ['colaborador_id' => $colaboradorId, 'titulo' => $titulo, 'nota' => 8, 'periodo_referencia' => 'ZZEXF']));
+    }
+
     public function liberacaoEntrevista(int $metadadosId): int
     {
         return $this->reg('lib', $this->inserirGenerico('entrevista_desligamento_liberacoes', ['metadados_id' => $metadadosId, 'liberada_em' => '2026-01-10 10:00:00', 'liberada_por_usuario_id' => 1]));
@@ -205,7 +211,7 @@ final class ExclusaoFixtures
             }
             $mapa = ['avexp' => 'avaliacoes_experiencia', 'avdes' => 'avaliacoes_desempenho', 'fb' => 'feedbacks', 'pdi' => 'pdis',
                 'ent' => 'entrevistas_desligamento', 'pesq' => 'pesquisas_integracao', 'lib' => 'entrevista_desligamento_liberacoes',
-                'sv' => 'solicitacoes_vaga', 'mp' => 'movimentacoes_pessoal', 'setor' => 'setores', 'usuario' => 'usuarios',
+                'sv' => 'solicitacoes_vaga', 'mp' => 'movimentacoes_pessoal', 'cav' => 'colaborador_avaliacoes', 'setor' => 'setores', 'usuario' => 'usuarios',
                 'col' => 'colaboradores', 'cm' => 'colaboradores_metadados'];
             foreach ($mapa as $grupo => $tabela) {
                 if (!empty($this->criados[$grupo])) {

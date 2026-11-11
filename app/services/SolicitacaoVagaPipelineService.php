@@ -176,9 +176,14 @@ class SolicitacaoVagaPipelineService
 
     private function fetchRow(int $solicitacaoId): ?array
     {
-        $stmt = Database::conn()->prepare('SELECT id, situacao_kanban_id FROM solicitacoes_vaga WHERE id = ? LIMIT 1');
+        $stmt = Database::conn()->prepare(
+            'SELECT id, situacao_kanban_id, gestor_solicitante_colaborador_id, colaborador_substituido_id,
+                    lider_imediato_colaborador_id, nome_contratado_colaborador_id
+             FROM solicitacoes_vaga WHERE id = ? LIMIT 1'
+        );
         $stmt->execute([$solicitacaoId]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
-        return $row ?: null;
+        // Exclusão analítica GLOBAL: o Kanban não move (nem encerra) processo ligado a colaborador de contrato excluído.
+        return ColaboradorMetadadosElegibilidadeService::filtrarProcessoIndividual($row ?: null, SolicitacaoVaga::CAMPOS_COLABORADOR_PROCESSO);
     }
 }

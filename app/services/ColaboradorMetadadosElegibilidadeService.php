@@ -184,6 +184,86 @@ class ColaboradorMetadadosElegibilidadeService
     }
 
     /**
+     * FASE C — cadastro LOCAL (`colaboradores`). Para colunas de PROCESSO que guardam o id de um
+     * colaborador local (`solicitacoes_vaga.colaborador_substituido_id`, `movimentacoes_pessoal.
+     * colaborador_id`…): o processo cujo colaborador está ligado (`colaboradores.metadados_id`) a um
+     * contrato excluído não entra em lista nem em estatística. Coluna sem valor (NULL) não é afetada.
+     *
+     * @param string $colunaColaboradorId SEMPRE `alias.coluna` (validado; só identificadores).
+     */
+    public static function clausulaSqlExclusaoColaboradorLocal(string $colunaColaboradorId): string
+    {
+        if (!preg_match('/^[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*$/', $colunaColaboradorId)) {
+            throw new InvalidArgumentException("Coluna de colaborador local inválida para a cláusula de exclusão analítica: {$colunaColaboradorId}");
+        }
+
+        if (self::modoSchema() === self::MODO_NATURAL) {
+            return "({$colunaColaboradorId} IS NULL OR NOT EXISTS (SELECT 1 FROM colaboradores xlc"
+                . ' INNER JOIN colaboradores_metadados xcm ON xcm.id = xlc.metadados_id'
+                . ' INNER JOIN ' . self::TABELA . ' xex'
+                . ' ON xex.codigo_empresa = xcm.codigo_empresa'
+                . ' AND xex.codigo_unidade = xcm.codigo_unidade'
+                . ' AND xex.numero_contrato = xcm.numero_contrato'
+                . " WHERE xlc.id = {$colunaColaboradorId}))";
+        }
+
+        return "({$colunaColaboradorId} IS NULL OR NOT EXISTS (SELECT 1 FROM colaboradores xlc"
+            . ' WHERE xlc.id = ' . $colunaColaboradorId . ' AND xlc.metadados_id IN (SELECT metadados_id FROM ' . self::TABELA . ')))';
+    }
+
+    /**
+     * Conjunto de cláusulas (unidas por AND) para um PROCESSO que referencia vários colaboradores
+     * locais: basta UM dos envolvidos estar ligado a contrato excluído para o processo sair das
+     * listas e das estatísticas. Preserva o processo (nada é alterado nem apagado).
+     *
+     * @param string[] $colunas cada uma `alias.coluna`
+     */
+    public static function clausulaSqlExclusaoProcesso(array $colunas): string
+    {
+        return implode(' AND ', array_map([self::class, 'clausulaSqlExclusaoColaboradorLocal'], $colunas));
+    }
+
+    /** Contrato (`colaboradores_metadados.id`) a que um colaborador LOCAL está ligado, ou null. */
+    public static function metadadosIdDoColaboradorLocal(?int $colaboradorId): ?int
+    {
+        if ($colaboradorId === null || $colaboradorId <= 0) {
+            return null;
+        }
+        $stmt = Database::conn()->prepare('SELECT metadados_id FROM colaboradores WHERE id = ?');
+        $stmt->execute([$colaboradorId]);
+        $valor = $stmt->fetchColumn();
+        return ($valor !== false && $valor !== null) ? (int)$valor : null;
+    }
+
+    /** O colaborador LOCAL está ligado a um contrato excluído? (uso em validação de NOVOS processos — vale para qualquer perfil) */
+    public static function colaboradorLocalExcluido(?int $colaboradorId): bool
+    {
+        $metadadosId = self::metadadosIdDoColaboradorLocal($colaboradorId);
+        return $metadadosId !== null && self::estaExcluido($metadadosId);
+    }
+
+    /**
+     * Acesso INDIVIDUAL a um PROCESSO já carregado (solicitação de vaga, movimentação…): se QUALQUER dos
+     * colaboradores locais referenciados por `$camposColaborador` estiver ligado a contrato excluído, vale
+     * a mesma barreira de acessoIndividual() (só Admin, só leitura; demais → 404).
+     *
+     * @param string[] $camposColaborador chaves do registro que guardam ids de colaboradores locais
+     */
+    public static function filtrarProcessoIndividual(?array $registro, array $camposColaborador): ?array
+    {
+        if ($registro === null) {
+            return null;
+        }
+        foreach ($camposColaborador as $campo) {
+            $mid = self::metadadosIdDoColaboradorLocal(isset($registro[$campo]) && $registro[$campo] !== null ? (int)$registro[$campo] : null);
+            if (!self::acessoIndividual($mid)) {
+                return null;
+            }
+        }
+        return $registro;
+    }
+
+    /**
      * Aplica acessoIndividual() a um registro já carregado: devolve o próprio registro ou null.
      * O contrato vem de `metadados_id`; se vazio e houver `colaborador_id` (fluxos antigos), do vínculo
      * do colaborador local (`colaboradores.metadados_id`). Sem vínculo nenhum → o registro passa.

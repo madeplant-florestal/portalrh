@@ -5,6 +5,22 @@ class SolicitacaoVaga
     // (ex.: SolicitacaoVagaPublicacaoService).
     public const STATUS_PENDENTE_LIDER = 'pendente_lider';
     public const STATUS_PENDENTE_RH = 'pendente_rh';
+    /**
+     * Colunas de `solicitacoes_vaga` (qualificadas pelo alias `sv`) que guardam o id de um colaborador LOCAL.
+     * Exclusão analítica GLOBAL: a vaga ligada a colaborador de contrato excluído sai das listas e das
+     * estatísticas (ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusaoProcesso()).
+     */
+    public const COLUNAS_COLABORADOR_PROCESSO = [
+        'sv.gestor_solicitante_colaborador_id', 'sv.colaborador_substituido_id',
+        'sv.lider_imediato_colaborador_id', 'sv.nome_contratado_colaborador_id',
+    ];
+
+    /** Mesmas colunas, sem alias (para registros já carregados — ver filtrarProcessoIndividual()). */
+    public const CAMPOS_COLABORADOR_PROCESSO = [
+        'gestor_solicitante_colaborador_id', 'colaborador_substituido_id',
+        'lider_imediato_colaborador_id', 'nome_contratado_colaborador_id',
+    ];
+
     public const STATUS_APROVADA = 'aprovada';
     public const STATUS_REPROVADA_LIDER = 'reprovada_lider';
     public const STATUS_REPROVADA_RH = 'reprovada_rh';
@@ -291,6 +307,7 @@ class SolicitacaoVaga
              INNER JOIN cargos cg ON cg.id = c.cargo_id
              INNER JOIN usuarios u ON u.id = uc.usuario_id
              WHERE uc.ativo = 1 AND uc.is_gestor = 1 AND uc.pode_solicitar_vaga = 1 AND c.ativo = 1
+               AND " . ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusaoPorMetadadosId('c.metadados_id') . "
              ORDER BY c.nome ASC"
         )->fetchAll(PDO::FETCH_ASSOC);
 
@@ -299,6 +316,7 @@ class SolicitacaoVaga
              FROM colaboradores c
              INNER JOIN cargos cg ON cg.id = c.cargo_id
              LEFT JOIN setores s ON s.id = c.setor_id
+             WHERE " . ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusaoPorMetadadosId('c.metadados_id') . "
              ORDER BY c.nome ASC"
         )->fetchAll(PDO::FETCH_ASSOC);
 
@@ -570,7 +588,8 @@ class SolicitacaoVaga
                 LEFT JOIN colaboradores g ON g.id = sv.gestor_solicitante_colaborador_id
                 LEFT JOIN solicitacao_vaga_aprovacoes ap_lider ON ap_lider.solicitacao_id = sv.id AND ap_lider.etapa = 'lider_imediato'
                 LEFT JOIN solicitacao_vaga_aprovacoes ap_rh ON ap_rh.solicitacao_id = sv.id AND ap_rh.etapa = 'rh'
-                WHERE 1=1";
+                WHERE 1=1
+                  AND " . ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusaoProcesso(self::COLUNAS_COLABORADOR_PROCESSO);
         $params = [];
 
         $currentRole = strtolower(trim((string)$currentRole));
@@ -649,6 +668,13 @@ class SolicitacaoVaga
         if (!$row) {
             return null;
         }
+        // Exclusão analítica GLOBAL: solicitação ligada a colaborador de contrato excluído só é consultável por Admin (auditoria, leitura).
+        $row = ColaboradorMetadadosElegibilidadeService::filtrarProcessoIndividual($row, [
+            'gestor_solicitante_colaborador_id', 'colaborador_substituido_id', 'lider_imediato_colaborador_id', 'nome_contratado_colaborador_id',
+        ]);
+        if ($row === null) {
+            return null;
+        }
 
         $row['beneficios'] = self::selectedBenefits((int)$row['id']);
         $row['competencias_tecnicas'] = self::selectedCompetencies((int)$row['id'], self::TIPO_COMPETENCIA_TECNICA);
@@ -688,7 +714,8 @@ class SolicitacaoVaga
                 LEFT JOIN colaboradores g ON g.id = sv.gestor_solicitante_colaborador_id
                 LEFT JOIN solicitacao_vaga_stages st ON st.id = sv.situacao_kanban_id
                 LEFT JOIN solicitacao_vaga_aprovacoes ap_lider ON ap_lider.solicitacao_id = sv.id AND ap_lider.etapa = 'lider_imediato'
-                WHERE 1=1";
+                WHERE 1=1
+                  AND " . ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusaoProcesso(self::COLUNAS_COLABORADOR_PROCESSO);
         $params = [];
 
         $currentRole = strtolower(trim((string)$currentRole));
@@ -1769,6 +1796,7 @@ class SolicitacaoVaga
              INNER JOIN colaboradores c ON c.id = uc.colaborador_id
              INNER JOIN cargos cg ON cg.id = c.cargo_id
              WHERE uc.ativo = 1 AND c.setor_id = ? AND c.id <> ?
+               AND " . ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusaoPorMetadadosId('c.metadados_id') . "
              ORDER BY c.nome ASC"
         );
         $stmt->execute([$setorId, $excludeColaboradorId]);
@@ -1841,7 +1869,8 @@ class SolicitacaoVaga
         $stmt = Database::conn()->prepare("SELECT * FROM solicitacoes_vaga WHERE id = ? LIMIT 1");
         $stmt->execute([$id]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
-        return $row ?: null;
+        // Exclusão analítica GLOBAL: ações sobre processo ligado a colaborador de contrato excluído são negadas (escrita nunca liberada).
+        return ColaboradorMetadadosElegibilidadeService::filtrarProcessoIndividual($row ?: null, self::CAMPOS_COLABORADOR_PROCESSO);
     }
 
     private static function approvalRow(int $solicitacaoId, string $step): ?array
@@ -1990,6 +2019,10 @@ class SolicitacaoVaga
     {
         $id = self::nullableInt($value);
         if (!$id || !self::findSimple($table, $id)) {
+            throw new InvalidArgumentException(sprintf('Selecione um valor válido para "%s".', $label));
+        }
+        // Exclusão analítica GLOBAL: não se inicia processo envolvendo colaborador ligado a contrato excluído (qualquer perfil).
+        if ($table === 'colaboradores' && ColaboradorMetadadosElegibilidadeService::colaboradorLocalExcluido($id)) {
             throw new InvalidArgumentException(sprintf('Selecione um valor válido para "%s".', $label));
         }
         return $id;

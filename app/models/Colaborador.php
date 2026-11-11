@@ -59,7 +59,9 @@ class Colaborador
             return 0;
         }
 
-        $stmt = Database::conn()->query('SELECT COUNT(*) FROM colaboradores');
+        $stmt = Database::conn()->query(
+            'SELECT COUNT(*) FROM colaboradores WHERE ' . ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusaoPorMetadadosId('colaboradores.metadados_id')
+        );
         return (int)$stmt->fetchColumn();
     }
 
@@ -82,7 +84,8 @@ class Colaborador
                     SUM(CASE WHEN empresa_id IS NOT NULL THEN 1 ELSE 0 END) AS com_empresa,
                     SUM(CASE WHEN setor_id IS NOT NULL THEN 1 ELSE 0 END) AS com_setor,
                     COUNT(DISTINCT cargo_id) AS cargos_distintos
-                FROM colaboradores';
+                FROM colaboradores
+                WHERE ' . ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusaoPorMetadadosId('colaboradores.metadados_id');
         $stmt = Database::conn()->query($sql);
         $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
 
@@ -134,6 +137,11 @@ class Colaborador
         $stmt->execute([$id]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
         if (!$row) {
+            return null;
+        }
+        // Exclusão analítica GLOBAL: colaborador local ligado a contrato excluído só é consultável por Admin (auditoria, leitura).
+        $row = ColaboradorMetadadosElegibilidadeService::filtrarRegistroIndividual($row);
+        if ($row === null) {
             return null;
         }
 
@@ -515,7 +523,7 @@ class Colaborador
                 INNER JOIN cargos cg ON cg.id = c.cargo_id
                 LEFT JOIN empresas e ON e.id = c.empresa_id
                 LEFT JOIN setores s ON s.id = c.setor_id
-                WHERE 1=1';
+                WHERE 1=1 AND ' . ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusaoPorMetadadosId('c.metadados_id');
         $params = [];
 
         $q = trim((string)($filters['q'] ?? ''));

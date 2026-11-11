@@ -222,7 +222,7 @@ class CadastroOrganizacional
 
         $referenceColumn = self::meta($table)['reference_column'];
         $stmt = Database::conn()->prepare(sprintf(
-            'SELECT COUNT(*) FROM colaboradores WHERE %s = ?',
+            'SELECT COUNT(*) FROM colaboradores WHERE %s = ? AND ' . ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusaoPorMetadadosId('colaboradores.metadados_id'),
             $referenceColumn
         ));
         $stmt->execute([$id]);
@@ -256,7 +256,7 @@ class CadastroOrganizacional
 
         $referenceColumn = self::meta($table)['reference_column'];
         $stmt = Database::conn()->query(sprintf(
-            'SELECT COUNT(DISTINCT %s) FROM colaboradores WHERE %s IS NOT NULL',
+            'SELECT COUNT(DISTINCT %s) FROM colaboradores WHERE %s IS NOT NULL AND ' . ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusaoPorMetadadosId('colaboradores.metadados_id'),
             $referenceColumn,
             $referenceColumn
         ));

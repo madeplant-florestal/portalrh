@@ -36,8 +36,10 @@ $tituloPagina = trim((string)($tituloPagina ?? '')) ?: ui_titulo_pagina();
   <a href="#conteudo" class="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-2 focus:z-50 focus:rounded-ds-md focus:bg-surface focus:px-3 focus:py-2 focus:text-primary-700 focus:shadow-elevated">Ir para o conteúdo</a>
   <?= ui_header_v2($base . '/admin', $base . '/assets/logo-escura.png', $base . '/admin/logout', (string)($_SESSION['user_name'] ?? '')) ?>
 <?php if (($avisoAuditoria = ColaboradorMetadadosElegibilidadeService::avisoAuditoria()) !== null): ?>
-  <div role="alert" data-aviso-auditoria-exclusao="1" style="margin:12px 24px 0;padding:12px 16px;border:1px solid #B23B3B;border-left-width:6px;border-radius:6px;background:#FBEAEA;color:#6E1F1F;font-size:14px;line-height:1.4">
-    <strong>Contrato excluído analiticamente.</strong> <?= Security::e($avisoAuditoria) ?>
+  <div class="px-gutter py-3">
+    <div role="alert" data-aviso-auditoria-exclusao="1" class="rounded-ds-md border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
+      <strong>Contrato excluído analiticamente.</strong> <?= Security::e($avisoAuditoria) ?>
+    </div>
   </div>
 <?php endif; ?>
   <main id="conteudo" tabindex="-1" class="px-gutter py-6 focus:outline-none">

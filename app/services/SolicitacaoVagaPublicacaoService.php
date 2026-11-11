@@ -172,7 +172,8 @@ class SolicitacaoVagaPublicacaoService
              WHERE s.id = ? LIMIT 1"
         );
         $stmt->execute([$id]);
-        return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+        // Exclusão analítica GLOBAL: não se publica vaga de solicitação ligada a colaborador de contrato excluído.
+        return ColaboradorMetadadosElegibilidadeService::filtrarProcessoIndividual($stmt->fetch(PDO::FETCH_ASSOC) ?: null, SolicitacaoVaga::CAMPOS_COLABORADOR_PROCESSO);
     }
 
     /**

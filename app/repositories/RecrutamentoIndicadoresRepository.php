@@ -122,6 +122,8 @@ class RecrutamentoIndicadoresRepository
             "sv.status_fluxo = '" . SolicitacaoVaga::STATUS_APROVADA . "'",
             "st.slug NOT IN ('fechada', 'cancelada')",
             'sv.cancelada_em IS NULL',
+            // Exclusão analítica GLOBAL: vaga ligada a colaborador de contrato excluído não conta nas estatísticas.
+            ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusaoProcesso(SolicitacaoVaga::COLUNAS_COLABORADOR_PROCESSO),
         ];
         $params = [];
         if ($empresaId !== null) {
@@ -142,7 +144,8 @@ class RecrutamentoIndicadoresRepository
     /** Solicitações fechadas no período (situação = 'fechada', recorte por `fechada_em`). */
     public function contarSolicitacoesFechadas(DateTimeImmutable $inicio, DateTimeImmutable $fim, ?int $empresaId): array
     {
-        $where = ["st.slug = 'fechada'", 'sv.fechada_em >= ?', 'sv.fechada_em <= ?'];
+        $where = ["st.slug = 'fechada'", 'sv.fechada_em >= ?', 'sv.fechada_em <= ?',
+            ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusaoProcesso(SolicitacaoVaga::COLUNAS_COLABORADOR_PROCESSO)];
         $params = [$inicio->format('Y-m-d 00:00:00'), $fim->format('Y-m-d 23:59:59')];
         if ($empresaId !== null) {
             $where[] = 'se.empresa_id = ?';

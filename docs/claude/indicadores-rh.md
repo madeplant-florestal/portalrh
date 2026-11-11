@@ -121,10 +121,20 @@ registro bruto recebido do METADADOS (auditoria preservada; a sincronização nu
   e qualquer escrita (inclusive de Admin) recebem **404**. A consulta de auditoria nunca alimenta
   lista, indicador nem exportação (as cláusulas SQL prevalecem até para Admin). Carregador individual
   novo sobre essas tabelas DEVE chamar a barreira (o teste de cobertura exige).
+- **Cadastro LOCAL e processos (Fase C)**: o colaborador local (`colaboradores`) ligado por
+  `metadados_id` a contrato excluído sai de listas, seletores (Solicitação de Vaga, Movimentação de
+  Pessoal, líder imediato, avaliação legada), contagens e do Cadastro Organizacional; não se inicia
+  novo processo com ele (qualquer perfil). Processos EXISTENTES que o referenciam (Solicitação de Vaga,
+  Movimentação de Pessoal, avaliação legada) **não são apagados nem têm o estado alterado**: saem das
+  listas, do Kanban e das estatísticas (`clausulaSqlExclusaoColaboradorLocal()` /
+  `clausulaSqlExclusaoProcesso()`), e as ações por id (Kanban, publicação de vaga, carta proposta,
+  aprovar/assinar) são negadas; consulta individual só pela barreira (Admin, leitura).
 - **Exceções administrativas deliberadas** (continuam sem filtro): sincronizador e reconciliação do
   METADADOS; vínculo de Usuários e contexto organizacional técnico do usuário (por id; não quebram
-  login); `ColaboradorExtensaoLocalService`. Nada disso autoriza exposição em lista, dashboard,
-  relatório ou exportação.
+  login); `ColaboradorExtensaoLocalService`; seeds de desenvolvimento e deduplicação da importação
+  XLSX. Cada uma é uma exceção **por função, com motivo**, no teste de cobertura — não existe exceção
+  genérica por arquivo, e exceção sem efeito faz o teste falhar. Nada disso autoriza exposição em lista,
+  dashboard, relatório ou exportação.
 - **Dependentes em produção**: `database/diagnosticos/2026-11-11-dependencias-exclusao-analitica.sql`
   (somente leitura; só referencia tabelas/colunas que existem) conta, por tabela, os registros ligados
   a contratos excluídos — diretos (`metadados_id`) e indiretos (via colaborador local). Executar antes

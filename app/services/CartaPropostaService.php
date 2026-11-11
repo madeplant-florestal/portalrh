@@ -67,13 +67,19 @@ class CartaPropostaService
         $escala = null;
         if ($vaga !== null && !empty($vaga['solicitacao_vaga_id'])) {
             $stmt = Database::conn()->prepare(
-                'SELECT sv.salario_previsto, sv.jornada_trabalho, sv.escala_encrypted, s.nome AS setor_nome
+                'SELECT sv.salario_previsto, sv.jornada_trabalho, sv.escala_encrypted, s.nome AS setor_nome,
+                        sv.gestor_solicitante_colaborador_id, sv.colaborador_substituido_id,
+                        sv.lider_imediato_colaborador_id, sv.nome_contratado_colaborador_id
                  FROM solicitacoes_vaga sv
                  LEFT JOIN setores s ON s.id = sv.setor_id
                  WHERE sv.id = ?'
             );
             $stmt->execute([(int)$vaga['solicitacao_vaga_id']]);
             $sol = $stmt->fetch(PDO::FETCH_ASSOC);
+            // Exclusão analítica GLOBAL: não se pré-preenche carta a partir de solicitação ligada a colaborador de contrato excluído.
+            if ($sol !== false) {
+                $sol = ColaboradorMetadadosElegibilidadeService::filtrarProcessoIndividual($sol, SolicitacaoVaga::CAMPOS_COLABORADOR_PROCESSO) ?? false;
+            }
             if ($sol !== false) {
                 $salario = $sol['salario_previsto'];
                 $jornada = (string)$sol['jornada_trabalho'];

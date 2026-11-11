@@ -34,8 +34,9 @@ Identificados na auditoria arquitetural de 2026-07-09, documentados aqui para n�
    reapareceu em produção (tabela existia, vazia, sem erro nenhum). A identificação passou a ser pela
    chave natural (ver `indicadores-rh.md`), mas continua valendo: ambiente novo/reconstruído exige
    reaplicar as exclusões. Desde 2026-11 a exclusão é GLOBAL (todos os módulos analíticos e
-   operacionais — ver `indicadores-rh.md`) e protegida por teste de cobertura estático. Resta
-   descoberto, por decisão pendente: o cadastro local `colaboradores` (Solicitação de Vaga,
-   Movimentação de Pessoal, `usuario_colaboradores`) — um colaborador local ligado a contrato
-   excluído ainda aparece nesses fluxos. Registros de módulo ligados a contrato excluído (avaliações,
-   entrevistas, PDIs…) ficam preservados no banco, invisíveis para o RH.
+   operacionais, inclusive o cadastro local `colaboradores` e os processos que o referenciam — ver
+   `indicadores-rh.md`) e protegida por teste de cobertura estático sem exceções genéricas. Registros de
+   módulo e processos ligados a contrato excluído (avaliações, entrevistas, PDIs, solicitações de vaga,
+   movimentações…) ficam preservados no banco, invisíveis para o RH; antes de aplicar a regra em um
+   ambiente, rodar `database/diagnosticos/2026-11-11-dependencias-exclusao-analitica.sql` para saber
+   se existem.

@@ -22,20 +22,29 @@
 
 $raiz = realpath(__DIR__ . '/../../app');
 $tabelas = [
+    // contratos do METADADOS e tabelas de módulo que guardam metadados_id
     'colaboradores_metadados', 'pdis', 'avaliacoes_experiencia', 'avaliacoes_desempenho',
     'entrevistas_desligamento', 'entrevista_desligamento_liberacoes', 'feedbacks', 'pesquisas_integracao',
+    // Fase C: cadastro LOCAL (colaboradores.metadados_id) e processos que referenciam colaboradores locais
+    'colaboradores', 'solicitacoes_vaga', 'movimentacoes_pessoal', 'usuario_colaboradores', 'colaborador_avaliacoes',
 ];
 
 /** "arquivo::função" (ou "arquivo::*") => motivo. "(const)" = constante de classe cujo filtro é aplicado nos pontos de uso. */
 $excecoes = [
     // --- sincronização, reconciliação e administração do espelho ---
-    'services/MetadadosSyncService.php::*' => 'sincronização do METADADOS (vê todos os contratos)',
-    'repositories/ColaboradorMetadadosRepository.php::*' => 'upsert/reconciliação do sincronizador',
-    'services/ColaboradorMetadadosReconciliationService.php::*' => 'reconciliação local×METADADOS (análise administrativa)',
-    'services/ColaboradorMetadadosLinkService.php::*' => 'vínculo local×METADADOS (administrativo)',
-    'services/ColaboradorExtensaoLocalService.php::*' => 'materialização da extensão local por id (administrativo)',
-    'services/ColaboradorMetadadosElegibilidadeService.php::*' => 'o próprio mecanismo de exclusão (cadastro/auditoria das exclusões)',
-    'core/SchemaManager.php::*' => 'manutenção de schema',
+    'services/MetadadosSyncService.php::originConflict' => 'sincronização do METADADOS: precisa ver TODOS os contratos para detectar mistura de origem',
+    'repositories/ColaboradorMetadadosRepository.php::findByVinculo' => 'upsert do sincronizador, pela chave natural',
+    'services/ColaboradorMetadadosReconciliationService.php::loadLocalRows' => 'reconciliação local×METADADOS (análise administrativa)',
+    'services/ColaboradorMetadadosReconciliationService.php::loadMirrorRows' => 'reconciliação local×METADADOS (análise administrativa)',
+    'services/ColaboradorMetadadosLinkService.php::validateAgainstDatabase' => 'serviço de vínculo local×METADADOS (técnico)',
+    'services/ColaboradorMetadadosLinkService.php::apply' => 'serviço de vínculo local×METADADOS (técnico)',
+    'services/ColaboradorExtensaoLocalService.php::obterOuCriar' => 'materialização técnica da extensão local por id',
+    'services/ColaboradorExtensaoLocalService.php::buscarIdPorMetadadosId' => 'operação técnica da extensão local',
+    'services/ColaboradorExtensaoLocalService.php::gerarSlugUnico' => 'operação técnica da extensão local (unicidade de slug)',
+    'services/ColaboradorMetadadosElegibilidadeService.php::excluirPorVinculo' => 'cadastro da exclusão: valida a existência do vínculo',
+    'services/ColaboradorMetadadosElegibilidadeService.php::listarExcluidos' => 'auditoria das exclusões',
+    'services/ColaboradorMetadadosElegibilidadeService.php::vinculoPorMetadadosId' => 'resolve a chave natural do contrato (mecanismo da exclusão)',
+    'services/ColaboradorMetadadosElegibilidadeService.php::metadadosIdDoColaboradorLocal' => 'resolve o contrato de um colaborador local (mecanismo da exclusão)',
     // --- busca PONTUAL por id/token (administração, autenticação, registro já aberto) ---
     'models/User.php::vincularMetadados' => 'valida existência do contrato ao vincular um usuário (por id, administrativo)',
     'services/UsuarioContextoOrganizacionalService.php::resolverContextoOficial' => 'herança de setor/cargo do vínculo do usuário (por id; não quebra login)',
@@ -50,15 +59,27 @@ $excecoes = [
     'repositories/DashboardIntegracaoRepository.php::(const)' => 'SELECT_BASE: filtro aplicado em montarWhere()',
     'repositories/EntrevistaDesligamentoRepository.php::(const)' => 'SELECT_CONTRATO/FROM_OPERACIONAL: filtro em condicoesElegiveis()/listarEntrevistas(); usos por id são pontuais',
     'repositories/PdiRepository.php::(const)' => 'SELECT_CONTRATO: filtro em buscarContratos(); buscarContrato() é por id',
-    // --- fora desta entrega (decisão pendente com o RH) ---
-    'models/MovimentacaoPessoal.php::*' => 'módulo Movimentação de Pessoal (cadastro local) — fora do escopo desta entrega',
+    // --- Fase C: contexto organizacional técnico do usuário, seeds de desenvolvimento e importações técnicas ---
+    'models/MovimentacaoPessoal.php::userAccessProfile' => 'perfil de acesso técnico do usuário logado (contexto organizacional; não quebra login)',
+    'models/MovimentacaoPessoal.php::seedReferenceData' => 'seed de dados de desenvolvimento (não é leitura operacional)',
+    'models/SolicitacaoVaga.php::seedReferenceData' => 'seed de dados de desenvolvimento (não é leitura operacional)',
+    'models/SolicitacaoVaga.php::findUserColaboradorByColaboradorId' => 'resolve o usuário de um colaborador JÁ validado por requiredEntityId() (técnico, por id)',
+    'models/Candidatura.php::all' => 'lista de CANDIDATOS: só lê o título/dados da vaga vinculada; o processo de vaga em si é protegido nas listas e barreiras',
+    'repositories/UsuarioColaboradorRepository.php::findByColaboradorId' => 'vínculo técnico usuário×colaborador (contexto organizacional do usuário)',
+    'repositories/UsuarioColaboradorRepository.php::findByUsuarioId' => 'vínculo técnico usuário×colaborador (contexto organizacional do usuário)',
+    'services/CollaboratorSpreadsheetImportService.php::findCollaboratorsByCompanyAndCode' => 'importação XLSX: deduplicação técnica contra o cadastro local',
+    'services/CollaboratorSpreadsheetImportService.php::findCollaboratorsByCpfAndAdmission' => 'importação XLSX: deduplicação técnica contra o cadastro local',
+    'services/CollaboratorSpreadsheetImportService.php::findActiveCollaboratorsByCompanyAndCpf' => 'importação XLSX: deduplicação técnica contra o cadastro local',
+    'services/CollaboratorSpreadsheetImportService.php::collaboratorSlugExists' => 'importação XLSX: unicidade técnica de slug',
+    'models/AvaliacaoDesempenho.php::delete' => 'remoção administrativa por id de avaliação legada (DELETE, não é leitura analítica)',
 ];
 
 // Cláusula SQL (listas/agregados) OU barreira de acesso individual (um registro por id/token).
-$marcadores = '/clausulaSqlExclusao|acessoIndividual\(|filtrarRegistroIndividual\(/';
+$marcadores = '/clausulaSqlExclusao|acessoIndividual\(|filtrarRegistroIndividual\(|filtrarProcessoIndividual\(|colaboradorLocalExcluido\(/';
 
 $falhas = [];
 $achados = 0;
+$usadas = [];
 
 $ls = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($raiz, FilesystemIterator::SKIP_DOTS));
 $arquivos = [];
@@ -109,8 +130,9 @@ foreach ($arquivos as $rel => $path) {
             $nome = $fn['nome'] ?? '(const)';
             $corpo = $fn['corpo'] ?? $l;
 
-            if (isset($excecoes["{$rel}::*"]) || isset($excecoes["{$rel}::{$nome}"])) {
-                continue; // exceção justificada
+            if (isset($excecoes["{$rel}::{$nome}"])) {
+                $usadas["{$rel}::{$nome}"] = true;
+                continue; // exceção justificada (sempre por FUNÇÃO — não há exceção genérica por arquivo)
             }
             if (preg_match($marcadores, $corpo)) {
                 continue; // (a)
@@ -133,8 +155,12 @@ foreach ($arquivos as $rel => $path) {
 // Cada exceção precisa continuar apontando para algo que existe (evita lista de exceções morta).
 foreach ($excecoes as $chave => $motivo) {
     [$arq, $fn] = explode('::', $chave, 2);
-    if (!isset($arquivos[$arq])) {
+    if (str_ends_with($chave, '::*')) {
+        $falhas[] = "exceção GENÉRICA por arquivo não é permitida (use uma exceção por função, com motivo): {$chave}";
+    } elseif (!isset($arquivos[$arq])) {
         $falhas[] = "exceção aponta para arquivo inexistente: {$chave}";
+    } elseif (!isset($usadas[$chave])) {
+        $falhas[] = "exceção sem efeito (a função não lê mais essas tabelas ou foi renomeada) — remova: {$chave}";
     }
 }
 

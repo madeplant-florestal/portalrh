@@ -131,6 +131,7 @@ class MovimentacaoPessoal
                                  INNER JOIN cargos cg ON cg.id = c.cargo_id
                                  INNER JOIN usuarios u ON u.id = uc.usuario_id
                                  WHERE uc.ativo = 1 AND uc.is_gestor = 1 AND c.ativo = 1
+                                   AND " . ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusaoPorMetadadosId('c.metadados_id') . "
                                  ORDER BY c.nome ASC")->fetchAll(PDO::FETCH_ASSOC);
         $colaboradores = $pdo->query("SELECT c.id, c.nome, c.matricula, c.salario_atual, c.data_admissao, c.data_inicio_cargo,
                                              c.ativo, c.setor_id, c.cargo_id, cg.nome AS cargo_nome, s.nome AS setor_nome, e.nome AS empresa_nome
@@ -139,6 +140,7 @@ class MovimentacaoPessoal
                                       LEFT JOIN setores s ON s.id = c.setor_id
                                       LEFT JOIN empresas e ON e.id = c.empresa_id
                                       WHERE c.ativo = 1
+                                        AND " . ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusaoPorMetadadosId('c.metadados_id') . "
                                       ORDER BY c.nome ASC")->fetchAll(PDO::FETCH_ASSOC);
         // Avaliação de Desempenho NATIVA (Etapa 6): só avaliações CONCLUÍDAS, ligadas via a coluna-ponte
         // `colaboradores.metadados_id` (colaboradores sem metadados_id vinculado ficam sem opção de
@@ -148,6 +150,7 @@ class MovimentacaoPessoal
                                    FROM avaliacoes_desempenho ad
                                    INNER JOIN colaboradores c ON c.metadados_id = ad.metadados_id
                                    WHERE ad.status = 'concluido'
+                                     AND " . ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusaoPorMetadadosId('ad.metadados_id') . "
                                    ORDER BY ad.data_realizacao DESC, ad.id DESC")->fetchAll(PDO::FETCH_ASSOC);
 
         $avaliacoesByColaborador = [];
@@ -223,7 +226,8 @@ class MovimentacaoPessoal
                 LEFT JOIN cargos nc ON nc.id = mp.novo_cargo_id
                 INNER JOIN setores s ON s.id = mp.setor_id
                 LEFT JOIN setores ns ON ns.id = mp.nova_area_setor_id
-                WHERE 1=1";
+                WHERE 1=1
+                  AND " . ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusaoProcesso(['mp.colaborador_id', 'mp.gestor_solicitante_colaborador_id']);
         $params = [];
         $role = strtolower(trim((string)$role));
         if (!$isSupervisor && !in_array($role, ['admin', 'rh'], true)) {
@@ -269,6 +273,11 @@ class MovimentacaoPessoal
         $stmt->execute($params);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
         if (!$row) {
+            return null;
+        }
+        // Exclusão analítica GLOBAL: processo de colaborador ligado a contrato excluído só é consultável por Admin (auditoria, leitura).
+        $row = ColaboradorMetadadosElegibilidadeService::filtrarProcessoIndividual($row, ['colaborador_id', 'gestor_solicitante_colaborador_id']);
+        if ($row === null) {
             return null;
         }
         $row = self::hydrateRecord($row);
@@ -828,7 +837,8 @@ class MovimentacaoPessoal
         $stmt = Database::conn()->prepare("SELECT * FROM colaboradores WHERE id = ? LIMIT 1");
         $stmt->execute([$id]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
-        return $row ?: null;
+        // Novo processo/edição sobre colaborador ligado a contrato excluído: negado (escrita nunca é liberada, nem para Admin).
+        return ColaboradorMetadadosElegibilidadeService::filtrarRegistroIndividual($row ?: null);
     }
 
     private static function findUser(int $id): ?array
@@ -844,7 +854,8 @@ class MovimentacaoPessoal
         $stmt = Database::conn()->prepare("SELECT * FROM movimentacoes_pessoal WHERE id = ? LIMIT 1");
         $stmt->execute([$id]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
-        return $row ?: null;
+        // Exclusão analítica GLOBAL: ações sobre processo de colaborador ligado a contrato excluído são negadas (escrita nunca liberada).
+        return ColaboradorMetadadosElegibilidadeService::filtrarProcessoIndividual($row ?: null, ['colaborador_id', 'gestor_solicitante_colaborador_id']);
     }
 
     private static function findSimple(string $table, int $id): ?array

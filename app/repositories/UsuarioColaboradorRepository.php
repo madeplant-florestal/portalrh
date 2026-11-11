@@ -111,7 +111,7 @@ class UsuarioColaboradorRepository
              INNER JOIN colaboradores c ON c.id = uc.colaborador_id
              INNER JOIN cargos cg ON cg.id = c.cargo_id
              LEFT JOIN setores s ON s.id = c.setor_id
-             WHERE uc.ativo = 1
+             WHERE uc.ativo = 1 AND " . ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusaoPorMetadadosId('c.metadados_id') . "
              ORDER BY c.nome ASC"
         );
         return array_map(static function (array $r): array {

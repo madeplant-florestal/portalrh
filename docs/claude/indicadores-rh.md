@@ -112,11 +112,23 @@ registro bruto recebido do METADADOS (auditoria preservada; a sincronização nu
   falha se uma consulta sobre `colaboradores_metadados` ou sobre as tabelas de módulo não aplicar a
   exclusão (direta ou via helper verificado do mesmo arquivo) e não estiver na lista de exceções
   justificadas. `integration_exclusao_analitica_global.php` prova o comportamento módulo a módulo.
+- **Acesso INDIVIDUAL (por id/token) a registro de contrato excluído** — barreira única
+  `ColaboradorMetadadosElegibilidadeService::acessoIndividual()` / `filtrarRegistroIndividual()`,
+  chamada pelos carregadores individuais (Avaliação de Experiência/Desempenho, Feedback, PDI,
+  Entrevista de Desligamento — inclusive o fluxo público por token —, Pesquisa de Integração):
+  somente **Admin**, e só em **leitura** (GET/HEAD), consulta o registro, com aviso fixo no shell
+  ("contrato excluído analiticamente… somente leitura"); RH, Gestor, Viewer, visitante, token público
+  e qualquer escrita (inclusive de Admin) recebem **404**. A consulta de auditoria nunca alimenta
+  lista, indicador nem exportação (as cláusulas SQL prevalecem até para Admin). Carregador individual
+  novo sobre essas tabelas DEVE chamar a barreira (o teste de cobertura exige).
 - **Exceções administrativas deliberadas** (continuam sem filtro): sincronizador e reconciliação do
-  METADADOS; busca PONTUAL por id/token (vínculo de Usuários, contexto organizacional do usuário,
-  edição de um registro já aberto, fluxos públicos por token) — preservam a rastreabilidade e não
-  quebram login. Fora desta entrega, por decisão pendente com o RH: o cadastro local `colaboradores`
-  (Solicitação de Vaga, Movimentação de Pessoal, `usuario_colaboradores`).
+  METADADOS; vínculo de Usuários e contexto organizacional técnico do usuário (por id; não quebram
+  login); `ColaboradorExtensaoLocalService`. Nada disso autoriza exposição em lista, dashboard,
+  relatório ou exportação.
+- **Dependentes em produção**: `database/diagnosticos/2026-11-11-dependencias-exclusao-analitica.sql`
+  (somente leitura; só referencia tabelas/colunas que existem) conta, por tabela, os registros ligados
+  a contratos excluídos — diretos (`metadados_id`) e indiretos (via colaborador local). Executar antes
+  de aplicar a regra em ambiente novo.
 
 ## Fórmulas
 

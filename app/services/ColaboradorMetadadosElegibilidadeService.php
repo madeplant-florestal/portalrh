@@ -47,6 +47,9 @@ class ColaboradorMetadadosElegibilidadeService
 
     private static ?string $modoCache = null;
     private static bool $avisouLegado = false;
+    /** Estado DESTA requisição (ver acessoIndividual()). */
+    private static ?string $avisoAuditoria = null;
+    private static bool $ocultadoNaRequisicao = false;
 
     /**
      * Compatibilidade do schema real com este código (cache por processo).
@@ -141,6 +144,82 @@ class ColaboradorMetadadosElegibilidadeService
         }
 
         return "({$expressaoMetadadosId} IS NULL OR {$expressaoMetadadosId} NOT IN (SELECT metadados_id FROM " . self::TABELA . '))';
+    }
+
+    /**
+     * BARREIRA de acesso INDIVIDUAL (um registro por id/token) a algo ligado a um contrato excluído
+     * analiticamente. Os carregadores individuais dos módulos (avaliações, feedback, PDI, entrevista,
+     * pesquisa…) chamam isto e devolvem "não encontrado" quando devolve false.
+     *
+     *   - contrato NÃO excluído, ou sem vínculo (`null`)  → true (nada muda);
+     *   - excluído + usuário ADMIN + requisição de LEITURA (GET/HEAD) → true: consulta técnica de
+     *     auditoria, somente leitura, sinalizada por `avisoAuditoria()` (o shell exibe um aviso);
+     *   - qualquer outro caso (RH, Gestor, Viewer, visitante, token público, ou escrita — inclusive
+     *     de Admin) → false; numa requisição web responde 404 e encerra.
+     *
+     * A exclusão prevalece SEMPRE nas listagens, indicadores e exportações (cláusulas SQL): isto só
+     * abre a consulta técnica individual, nunca alimenta cálculo nem relatório.
+     */
+    public static function acessoIndividual(?int $metadadosId): bool
+    {
+        if ($metadadosId === null || $metadadosId <= 0 || !self::estaExcluido($metadadosId)) {
+            return true;
+        }
+
+        $metodo = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
+        $somenteLeitura = in_array($metodo, ['GET', 'HEAD'], true);
+        if ($somenteLeitura && strtolower(trim((string)Auth::role())) === 'admin') {
+            self::$avisoAuditoria = 'Este registro pertence a um contrato EXCLUÍDO ANALITICAMENTE (cadastro indevido). '
+                . 'Consulta técnica de auditoria, somente leitura: não participa de listas, indicadores nem relatórios do RH.';
+            return true;
+        }
+
+        self::$ocultadoNaRequisicao = true;
+        if (PHP_SAPI !== 'cli' && !headers_sent()) {
+            http_response_code(404);
+            echo 'Registro não encontrado.';
+            exit;
+        }
+        return false;
+    }
+
+    /**
+     * Aplica acessoIndividual() a um registro já carregado: devolve o próprio registro ou null.
+     * O contrato vem de `metadados_id`; se vazio e houver `colaborador_id` (fluxos antigos), do vínculo
+     * do colaborador local (`colaboradores.metadados_id`). Sem vínculo nenhum → o registro passa.
+     */
+    public static function filtrarRegistroIndividual(?array $registro): ?array
+    {
+        if ($registro === null) {
+            return null;
+        }
+        $metadadosId = isset($registro['metadados_id']) && $registro['metadados_id'] !== null ? (int)$registro['metadados_id'] : null;
+        if ($metadadosId === null && !empty($registro['colaborador_id'])) {
+            $stmt = Database::conn()->prepare('SELECT metadados_id FROM colaboradores WHERE id = ?');
+            $stmt->execute([(int)$registro['colaborador_id']]);
+            $valor = $stmt->fetchColumn();
+            $metadadosId = ($valor !== false && $valor !== null) ? (int)$valor : null;
+        }
+        return self::acessoIndividual($metadadosId) ? $registro : null;
+    }
+
+    /** Mensagem de auditoria desta requisição (Admin consultando registro excluído), ou null. */
+    public static function avisoAuditoria(): ?string
+    {
+        return self::$avisoAuditoria;
+    }
+
+    /** Esta requisição já ocultou algum registro por exclusão analítica? (testes/diagnóstico) */
+    public static function ocultadoNaRequisicao(): bool
+    {
+        return self::$ocultadoNaRequisicao;
+    }
+
+    /** Zera o estado por requisição (testes; em produção cada requisição é um processo novo). */
+    public static function reiniciarEstadoDaRequisicao(): void
+    {
+        self::$avisoAuditoria = null;
+        self::$ocultadoNaRequisicao = false;
     }
 
     /** Contrato (identificado pelo id interno atual) está excluído das estatísticas? */

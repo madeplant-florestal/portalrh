@@ -27,7 +27,7 @@ class PesquisaIntegracao
         );
         $stmt->execute([$colaboradorId, $integracaoData]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
-        return $row ?: null;
+        return ColaboradorMetadadosElegibilidadeService::filtrarRegistroIndividual($row ?: null);
     }
 
     public static function find(int $id): ?array
@@ -36,7 +36,7 @@ class PesquisaIntegracao
         $stmt = Database::conn()->prepare('SELECT * FROM pesquisas_integracao WHERE id = ? LIMIT 1');
         $stmt->execute([$id]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
-        return $row ?: null;
+        return ColaboradorMetadadosElegibilidadeService::filtrarRegistroIndividual($row ?: null);
     }
 
     /** Usado pela página pública — nunca guarda/recebe o token bruto, só o hash para comparar. */
@@ -46,7 +46,8 @@ class PesquisaIntegracao
         $stmt = Database::conn()->prepare('SELECT * FROM pesquisas_integracao WHERE token_hash = ? LIMIT 1');
         $stmt->execute([hash('sha256', $rawToken)]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
-        return $row ?: null;
+        // Fluxo público por token: contrato excluído → 404.
+        return ColaboradorMetadadosElegibilidadeService::filtrarRegistroIndividual($row ?: null);
     }
 
     /**

@@ -41,24 +41,8 @@ $excecoes = [
     'services/UsuarioContextoOrganizacionalService.php::resolverContextoOficial' => 'herança de setor/cargo do vínculo do usuário (por id; não quebra login)',
     'models/Colaborador.php::mesclarComEspelhoOficial' => 'mescla o espelho de UM contrato por id (cadastro local)',
     'repositories/ColaboradorMetadadosConsultaRepository.php::findById' => 'um contrato por id (administração de Usuários / auditoria)',
-    'repositories/AvaliacaoDesempenhoRepository.php::buscarContrato' => 'contrato por id (registro já aberto)',
-    'repositories/AvaliacaoDesempenhoRepository.php::buscarPorId' => 'registro por id',
-    'repositories/AvaliacaoDesempenhoRepository.php::buscarPorContrato' => 'registros de UM contrato já escolhido',
-    'repositories/AvaliacaoExperienciaRepository.php::buscarContrato' => 'contrato por id (registro já aberto)',
-    'repositories/AvaliacaoExperienciaRepository.php::buscarAvaliacao' => 'registro de UM contrato/tipo já escolhido',
-    'repositories/AvaliacaoExperienciaRepository.php::buscarPorId' => 'registro por id',
-    'repositories/AvaliacaoExperienciaRepository.php::codigoSetorAtual' => 'setor atual de UM contrato (checagem de acesso por id)',
-    'repositories/FeedbackRepository.php::buscarContrato' => 'contrato por id (registro já aberto)',
-    'repositories/FeedbackRepository.php::buscarPorId' => 'registro por id',
-    'repositories/PdiRepository.php::buscarPdi' => 'PDI por id (registro já aberto)',
-    'repositories/PdiRepository.php::pdisPorOrigem' => 'navegação reversa de UM documento de origem',
-    'repositories/PdiRepository.php::pdisDoContrato' => 'PDIs de UM contrato já escolhido',
-    'repositories/EntrevistaDesligamentoRepository.php::buscarLiberacao' => 'liberação de UM contrato por id',
-    'repositories/EntrevistaDesligamentoRepository.php::buscarPorMetadadosId' => 'entrevista de UM contrato por id',
-    'repositories/EntrevistaDesligamentoRepository.php::buscarPorHash' => 'fluxo público por token da entrevista',
-    'models/PesquisaIntegracao.php::findByColaboradorEData' => 'pesquisa de UM colaborador/data (fluxo individual)',
-    'models/PesquisaIntegracao.php::find' => 'pesquisa por id',
-    'models/PesquisaIntegracao.php::findByRawToken' => 'fluxo público por token da pesquisa',
+    'repositories/AvaliacaoExperienciaRepository.php::codigoSetorAtual' => 'setor atual de UM contrato (checagem técnica de acesso por Setor Gerenciado, por id)',
+    'repositories/PdiRepository.php::pdisPorOrigem' => 'navegação reversa a partir de UM documento de origem já protegido pela barreira individual',
     'models/PesquisaIntegracaoQr.php::buscarPesquisaDoEvento' => 'checagem de duplicidade de UM contrato/evento',
     'models/PesquisaIntegracaoQr.php::contratosPorIds' => 'nome/cargo de respondentes já listados (por id)',
     // --- constantes de consulta: o filtro é aplicado onde são usadas (verificado pelas funções que as usam) ---
@@ -69,6 +53,9 @@ $excecoes = [
     // --- fora desta entrega (decisão pendente com o RH) ---
     'models/MovimentacaoPessoal.php::*' => 'módulo Movimentação de Pessoal (cadastro local) — fora do escopo desta entrega',
 ];
+
+// Cláusula SQL (listas/agregados) OU barreira de acesso individual (um registro por id/token).
+$marcadores = '/clausulaSqlExclusao|acessoIndividual\(|filtrarRegistroIndividual\(/';
 
 $falhas = [];
 $achados = 0;
@@ -97,7 +84,7 @@ foreach ($arquivos as $rel => $path) {
     // Helpers que, eles mesmos, aplicam a cláusula (verificados, não presumidos).
     $aplicadoras = [];
     foreach ($funcoes as $f) {
-        if (str_contains($f['corpo'], 'clausulaSqlExclusao')) {
+        if (preg_match($marcadores, $f['corpo'])) {
             $aplicadoras[] = $f['nome'];
         }
     }
@@ -125,7 +112,7 @@ foreach ($arquivos as $rel => $path) {
             if (isset($excecoes["{$rel}::*"]) || isset($excecoes["{$rel}::{$nome}"])) {
                 continue; // exceção justificada
             }
-            if (str_contains($corpo, 'clausulaSqlExclusao')) {
+            if (preg_match($marcadores, $corpo)) {
                 continue; // (a)
             }
             $viaHelper = false;

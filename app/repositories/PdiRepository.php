@@ -85,6 +85,10 @@ class PdiRepository
 
     public function buscarContrato(int $metadadosId): ?array
     {
+        // Exclusão analítica GLOBAL: contrato excluído só é consultável individualmente por Admin (auditoria, leitura).
+        if (!ColaboradorMetadadosElegibilidadeService::acessoIndividual($metadadosId)) {
+            return null;
+        }
         return $this->uma(sprintf(self::SELECT_CONTRATO, self::SQL_CARGO_CATALOGO) . ' WHERE cm.id = ? LIMIT 1', [$metadadosId]);
     }
 
@@ -154,7 +158,7 @@ class PdiRepository
     /** PDI + contexto ATUAL do contrato oficial (para sinalizar divergência com o snapshot) + nome atual do gestor. */
     public function buscarPdi(int $id): ?array
     {
-        return $this->uma(
+        return ColaboradorMetadadosElegibilidadeService::filtrarRegistroIndividual($this->uma(
             'SELECT p.*, cm.codigo_empresa AS atual_codigo_empresa, cm.codigo_unidade AS atual_codigo_unidade,
                     cm.codigo_cargo AS atual_codigo_cargo, cm.data_inicio_cargo AS atual_data_inicio_cargo,
                     cm.demissao AS atual_demissao, u.nome AS gestor_nome_atual, cr.nome AS criado_por_nome
@@ -164,7 +168,7 @@ class PdiRepository
              LEFT JOIN usuarios cr ON cr.id = p.criado_por_usuario_id
              WHERE p.id = ? LIMIT 1',
             [$id]
-        );
+        ));
     }
 
     /**
@@ -387,6 +391,9 @@ class PdiRepository
     /** PDIs do MESMO contrato (para "Adicionar a PDI existente" — nunca de outro colaborador, §15). */
     public function pdisDoContrato(int $metadadosId, ?int $escopoGestor): array
     {
+        if (!ColaboradorMetadadosElegibilidadeService::acessoIndividual($metadadosId)) {
+            return [];
+        }
         $where = 'p.metadados_id = ?';
         $params = [$metadadosId];
         if ($escopoGestor !== null) {

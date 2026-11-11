@@ -59,6 +59,10 @@ class FeedbackRepository
 
     public function buscarContrato(int $metadadosId): ?array
     {
+        // Exclusão analítica GLOBAL: contrato excluído só é consultável individualmente por Admin (auditoria, leitura).
+        if (!ColaboradorMetadadosElegibilidadeService::acessoIndividual($metadadosId)) {
+            return null;
+        }
         $sql = 'SELECT cm.id AS metadados_id, cm.nome, cm.codigo_empresa, cm.empresa, cm.codigo_unidade, cm.unidade,
                        cm.codigo_setor, cm.setor, cm.codigo_cargo,
                        COALESCE(' . self::SQL_CARGO_CATALOGO . ', NULLIF(cm.cargo, \'\')) AS cargo,
@@ -81,7 +85,9 @@ class FeedbackRepository
 
     public function buscarPorId(int $id): ?array
     {
-        return $this->uma('SELECT * FROM feedbacks WHERE id = ? LIMIT 1', [$id]);
+        return ColaboradorMetadadosElegibilidadeService::filtrarRegistroIndividual(
+            $this->uma('SELECT * FROM feedbacks WHERE id = ? LIMIT 1', [$id])
+        );
     }
 
     public function inserir(array $dados): int

@@ -60,6 +60,10 @@ class AvaliacaoDesempenhoRepository
 
     public function buscarContrato(int $metadadosId): ?array
     {
+        // Exclusão analítica GLOBAL: contrato excluído só é consultável individualmente por Admin (auditoria, leitura).
+        if (!ColaboradorMetadadosElegibilidadeService::acessoIndividual($metadadosId)) {
+            return null;
+        }
         $sql = 'SELECT cm.id AS metadados_id, cm.nome, cm.codigo_empresa, cm.empresa, cm.codigo_unidade, cm.unidade,
                        cm.codigo_setor, cm.setor, cm.codigo_cargo,
                        COALESCE(' . self::SQL_CARGO_CATALOGO . ', NULLIF(cm.cargo, \'\')) AS cargo,
@@ -82,12 +86,17 @@ class AvaliacaoDesempenhoRepository
 
     public function buscarPorId(int $id): ?array
     {
-        return $this->uma('SELECT * FROM avaliacoes_desempenho WHERE id = ? LIMIT 1', [$id]);
+        return ColaboradorMetadadosElegibilidadeService::filtrarRegistroIndividual(
+            $this->uma('SELECT * FROM avaliacoes_desempenho WHERE id = ? LIMIT 1', [$id])
+        );
     }
 
     /** @return array<int,array<string,mixed>> avaliações do contrato, mais recente primeiro. */
     public function buscarPorContrato(int $metadadosId): array
     {
+        if (!ColaboradorMetadadosElegibilidadeService::acessoIndividual($metadadosId)) {
+            return [];
+        }
         return $this->todas('SELECT * FROM avaliacoes_desempenho WHERE metadados_id = ? ORDER BY criado_em DESC, id DESC', [$metadadosId]);
     }
 

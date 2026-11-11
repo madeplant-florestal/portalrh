@@ -80,6 +80,10 @@ class EntrevistaDesligamentoRepository
 
     public function buscarContrato(int $metadadosId): ?array
     {
+        // Exclusão analítica GLOBAL: contrato excluído só é consultável individualmente por Admin (auditoria, leitura).
+        if (!ColaboradorMetadadosElegibilidadeService::acessoIndividual($metadadosId)) {
+            return null;
+        }
         $stmt = $this->connection()->prepare(self::SELECT_CONTRATO . ' WHERE cm.id = ? LIMIT 1');
         $stmt->execute([$metadadosId]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -92,6 +96,9 @@ class EntrevistaDesligamentoRepository
     /** Liberação (ativa ou não) deste contrato, se existir. */
     public function buscarLiberacao(int $metadadosId): ?array
     {
+        if (!ColaboradorMetadadosElegibilidadeService::acessoIndividual($metadadosId)) {
+            return null;
+        }
         $stmt = $this->connection()->prepare(
             'SELECT id, metadados_id, liberada_em, liberada_por_usuario_id, cancelada_em, cancelada_por_usuario_id
              FROM entrevista_desligamento_liberacoes WHERE metadados_id = ? LIMIT 1'
@@ -274,11 +281,14 @@ class EntrevistaDesligamentoRepository
         );
         $stmt->execute([$id]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
-        return $row ?: null;
+        return ColaboradorMetadadosElegibilidadeService::filtrarRegistroIndividual($row ?: null);
     }
 
     public function buscarPorMetadadosId(int $metadadosId): ?array
     {
+        if (!ColaboradorMetadadosElegibilidadeService::acessoIndividual($metadadosId)) {
+            return null;
+        }
         $stmt = $this->connection()->prepare(
             'SELECT id, metadados_id, expira_em, cancelada_em, respondida_em FROM entrevistas_desligamento WHERE metadados_id = ? LIMIT 1'
         );
@@ -291,12 +301,17 @@ class EntrevistaDesligamentoRepository
     public function buscarPorHash(string $tokenHash): ?array
     {
         $stmt = $this->connection()->prepare(
-            'SELECT id, expira_em, cancelada_em, respondida_em, snap_nome, snap_cargo, snap_admissao, snap_demissao
+            'SELECT id, metadados_id, expira_em, cancelada_em, respondida_em, snap_nome, snap_cargo, snap_admissao, snap_demissao
              FROM entrevistas_desligamento WHERE token_hash = ? LIMIT 1'
         );
         $stmt->execute([$tokenHash]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
-        return $row ?: null;
+        // Fluxo público por token: contrato excluído → 404 (ninguém, nem Admin, responde por aqui).
+        $row = ColaboradorMetadadosElegibilidadeService::filtrarRegistroIndividual($row ?: null);
+        if ($row !== null) {
+            unset($row['metadados_id']); // a página pública nunca recebe identificadores extras
+        }
+        return $row;
     }
 
     /** @return string[] */

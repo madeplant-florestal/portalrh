@@ -70,11 +70,14 @@ class TurnoverDashboardRepository
     public function opcoesFiltro(): array
     {
         $pdo = $this->connection();
+        // Exclusão analítica GLOBAL: opções de filtro nunca nascem de um contrato excluído.
+        $excluidosSemAlias = ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusao('id');
+        $excluidosCm = ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusao('cm.id');
 
         $empresas = $pdo->query(
             "SELECT codigo_empresa, MAX(empresa) AS empresa
              FROM colaboradores_metadados
-             WHERE codigo_empresa IS NOT NULL AND codigo_empresa <> ''
+             WHERE codigo_empresa IS NOT NULL AND codigo_empresa <> '' AND {$excluidosSemAlias}
              GROUP BY codigo_empresa
              ORDER BY empresa"
         )->fetchAll(PDO::FETCH_ASSOC);
@@ -89,7 +92,7 @@ class TurnoverDashboardRepository
                       cm.codigo_cargo
                     ) AS nome
              FROM colaboradores_metadados cm
-             WHERE cm.codigo_cargo IS NOT NULL AND cm.codigo_cargo <> ''
+             WHERE cm.codigo_cargo IS NOT NULL AND cm.codigo_cargo <> '' AND {$excluidosCm}
              GROUP BY cm.codigo_cargo
              ORDER BY nome"
         )->fetchAll(PDO::FETCH_ASSOC);
@@ -129,7 +132,10 @@ class TurnoverDashboardRepository
     /** Primeiro ano com algum desligamento no espelho — define até onde o histórico é utilizável. */
     public function primeiroAnoComDesligamento(): ?int
     {
-        $ano = $this->connection()->query('SELECT MIN(YEAR(demissao)) FROM colaboradores_metadados WHERE demissao IS NOT NULL')->fetchColumn();
+        $ano = $this->connection()->query(
+        'SELECT MIN(YEAR(demissao)) FROM colaboradores_metadados WHERE demissao IS NOT NULL AND '
+        . ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusao('id')
+    )->fetchColumn();
         return $ano !== false && $ano !== null ? (int)$ano : null;
     }
 }

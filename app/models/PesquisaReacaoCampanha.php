@@ -112,11 +112,14 @@ class PesquisaReacaoCampanha
     public static function opcoesEmpresaSetor(): array
     {
         $pdo = Database::conn();
+        // Exclusão analítica GLOBAL: opções nunca nascem de um contrato excluído.
+        $excluidosSemAlias = ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusao('id');
+        $excluidosCm = ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusao('cm.id');
 
         $empresas = $pdo->query(
             "SELECT codigo_empresa, MAX(empresa) AS empresa
              FROM colaboradores_metadados
-             WHERE codigo_empresa IS NOT NULL AND codigo_empresa <> ''
+             WHERE codigo_empresa IS NOT NULL AND codigo_empresa <> '' AND {$excluidosSemAlias}
              GROUP BY codigo_empresa
              ORDER BY empresa"
         )->fetchAll(PDO::FETCH_ASSOC);
@@ -126,7 +129,7 @@ class PesquisaReacaoCampanha
              FROM colaboradores_metadados cm
              LEFT JOIN setores s
                ON s.codigo_setor COLLATE utf8mb4_general_ci = cm.codigo_setor COLLATE utf8mb4_general_ci
-             WHERE cm.codigo_setor IS NOT NULL AND cm.codigo_setor <> ''
+             WHERE cm.codigo_setor IS NOT NULL AND cm.codigo_setor <> '' AND {$excluidosCm}
              GROUP BY cm.codigo_setor, s.descricao_oficial, s.nome
              ORDER BY nome"
         )->fetchAll(PDO::FETCH_ASSOC);

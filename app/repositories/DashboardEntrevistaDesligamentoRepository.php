@@ -65,12 +65,17 @@ class DashboardEntrevistaDesligamentoRepository
 
     private function condicoesContrato(array $f): array
     {
-        return $this->condicoes($f, 'cm.demissao', 'cm.codigo_empresa', 'cm.codigo_unidade', 'cm.codigo_cargo');
+        [$where, $params] = $this->condicoes($f, 'cm.demissao', 'cm.codigo_empresa', 'cm.codigo_unidade', 'cm.codigo_cargo');
+        // Exclusão analítica GLOBAL: contrato excluído não conta como desligamento nem como elegível.
+        $where[] = ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusao('cm.id');
+        return [$where, $params];
     }
 
     private function condicoesEntrevista(array $f, bool $soRespondidas = false): array
     {
         [$where, $params] = $this->condicoes($f, 'e.snap_demissao', 'e.snap_codigo_empresa', 'e.snap_codigo_unidade', 'e.snap_codigo_cargo');
+        // Exclusão analítica GLOBAL: entrevista de contrato excluído não entra em nenhuma agregação.
+        $where[] = ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusaoPorMetadadosId('e.metadados_id');
         if ($soRespondidas) {
             $where[] = 'e.respondida_em IS NOT NULL';
         }
@@ -229,6 +234,7 @@ class DashboardEntrevistaDesligamentoRepository
             "SELECT codigo_empresa, codigo_unidade, MAX(NULLIF(unidade, '')) AS unidade, MAX(NULLIF(empresa, '')) AS empresa
              FROM colaboradores_metadados
              WHERE demissao IS NOT NULL AND codigo_unidade <> '' AND codigo_empresa <> ''
+               AND " . ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusao('id') . "
              GROUP BY codigo_empresa, codigo_unidade
              ORDER BY unidade, empresa"
         )->fetchAll(PDO::FETCH_ASSOC);
@@ -242,6 +248,7 @@ class DashboardEntrevistaDesligamentoRepository
                     COALESCE(' . sprintf(self::SQL_CARGO_CATALOGO, 'cm.codigo_cargo') . ", MAX(NULLIF(cm.cargo, '')), cm.codigo_cargo) AS nome
              FROM colaboradores_metadados cm
              WHERE cm.demissao IS NOT NULL AND cm.codigo_cargo IS NOT NULL AND cm.codigo_cargo <> ''
+               AND " . ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusao('cm.id') . "
              GROUP BY cm.codigo_cargo
              ORDER BY nome"
         )->fetchAll(PDO::FETCH_ASSOC);

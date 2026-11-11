@@ -110,6 +110,39 @@ class ColaboradorMetadadosElegibilidadeService
         return "{$colunaId} NOT IN (SELECT metadados_id FROM " . self::TABELA . ')';
     }
 
+    /**
+     * Mesma regra de `clausulaSqlExclusao()`, para consultas que NÃO leem `colaboradores_metadados`
+     * mas uma tabela de módulo que guarda o vínculo em `metadados_id` (pdis, avaliacoes_*,
+     * entrevistas_desligamento, feedbacks, pesquisas_integracao…) — a exclusão é GLOBAL: o registro
+     * desse módulo vinculado a um contrato excluído não entra em lista, contagem, média nem
+     * distribuição. Linhas sem vínculo (`metadados_id` NULL) NÃO são afetadas.
+     *
+     * @param string $expressaoMetadadosId `alias.coluna` ou `COALESCE(alias.a, alias.b)` — SEMPRE
+     *                                     qualificado (a tabela de exclusões também tem uma coluna
+     *                                     `metadados_id`: sem qualificador a subconsulta leria a
+     *                                     coluna errada) e só identificadores (validado; nunca texto
+     *                                     vindo de request). Sem alias na query, use o nome da tabela.
+     * @throws InvalidArgumentException se a expressão não tiver uma dessas formas.
+     */
+    public static function clausulaSqlExclusaoPorMetadadosId(string $expressaoMetadadosId): string
+    {
+        $id = '[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*';
+        if (!preg_match("/^(?:{$id}|COALESCE\\(\\s*{$id}\\s*,\\s*{$id}\\s*\\))$/", $expressaoMetadadosId)) {
+            throw new InvalidArgumentException("Expressão de metadados_id inválida para a cláusula de exclusão analítica: {$expressaoMetadadosId}");
+        }
+
+        if (self::modoSchema() === self::MODO_NATURAL) {
+            return "({$expressaoMetadadosId} IS NULL OR NOT EXISTS (SELECT 1 FROM colaboradores_metadados xcm"
+                . ' INNER JOIN ' . self::TABELA . ' xex'
+                . ' ON xex.codigo_empresa = xcm.codigo_empresa'
+                . ' AND xex.codigo_unidade = xcm.codigo_unidade'
+                . ' AND xex.numero_contrato = xcm.numero_contrato'
+                . " WHERE xcm.id = {$expressaoMetadadosId}))";
+        }
+
+        return "({$expressaoMetadadosId} IS NULL OR {$expressaoMetadadosId} NOT IN (SELECT metadados_id FROM " . self::TABELA . '))';
+    }
+
     /** Contrato (identificado pelo id interno atual) está excluído das estatísticas? */
     public static function estaExcluido(int $metadadosId): bool
     {

@@ -33,7 +33,9 @@ Identificados na auditoria arquitetural de 2026-07-09, documentados aqui para n�
    as 3 exclusões de 29/10 foram gravadas só no banco de desenvolvimento e o contrato "excluído"
    reapareceu em produção (tabela existia, vazia, sem erro nenhum). A identificação passou a ser pela
    chave natural (ver `indicadores-rh.md`), mas continua valendo: ambiente novo/reconstruído exige
-   reaplicar as exclusões. Além disso o filtro só existe na listagem de Colaboradores e nos
-   repositórios de Headcount/Turnover/People Analytics — Entrevistas de Desligamento, Avaliações,
-   Feedback, PDI, Pesquisas e `buscarContratosParaMovimentacao()` leem `colaboradores_metadados` sem
-   ele (revisão planejada, fase própria).
+   reaplicar as exclusões. Desde 2026-11 a exclusão é GLOBAL (todos os módulos analíticos e
+   operacionais — ver `indicadores-rh.md`) e protegida por teste de cobertura estático. Resta
+   descoberto, por decisão pendente: o cadastro local `colaboradores` (Solicitação de Vaga,
+   Movimentação de Pessoal, `usuario_colaboradores`) — um colaborador local ligado a contrato
+   excluído ainda aparece nesses fluxos. Registros de módulo ligados a contrato excluído (avaliações,
+   entrevistas, PDIs…) ficam preservados no banco, invisíveis para o RH.

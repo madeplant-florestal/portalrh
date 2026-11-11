@@ -232,7 +232,9 @@ class ColaboradorMetadadosConsultaRepository
     {
         $pdo = $this->connection();
 
-        $whereEmpresas = ["codigo_empresa IS NOT NULL AND codigo_empresa <> ''"];
+        // Exclusão analítica GLOBAL: opções de filtro nunca nascem de um contrato excluído.
+    $excluidos = ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusao('id');
+    $whereEmpresas = ["codigo_empresa IS NOT NULL AND codigo_empresa <> ''", $excluidos];
         $paramsEmpresas = [];
         $this->aplicarEscopoSetor($whereEmpresas, $paramsEmpresas, $codigosSetorPermitidos);
         $stmtEmpresas = $pdo->prepare(
@@ -245,7 +247,7 @@ class ColaboradorMetadadosConsultaRepository
         $stmtEmpresas->execute($paramsEmpresas);
         $empresas = $stmtEmpresas->fetchAll(PDO::FETCH_ASSOC);
 
-        $whereSetores = ["setor IS NOT NULL AND setor <> ''"];
+        $whereSetores = ["setor IS NOT NULL AND setor <> ''", $excluidos];
         $paramsSetores = [];
         $this->aplicarEscopoSetor($whereSetores, $paramsSetores, $codigosSetorPermitidos);
         $stmtSetores = $pdo->prepare(
@@ -255,7 +257,7 @@ class ColaboradorMetadadosConsultaRepository
         $stmtSetores->execute($paramsSetores);
         $setores = $stmtSetores->fetchAll(PDO::FETCH_COLUMN);
 
-        $whereCargos = ["cargo IS NOT NULL AND cargo <> ''"];
+        $whereCargos = ["cargo IS NOT NULL AND cargo <> ''", $excluidos];
         $paramsCargos = [];
         $this->aplicarEscopoSetor($whereCargos, $paramsCargos, $codigosSetorPermitidos);
         $stmtCargos = $pdo->prepare(

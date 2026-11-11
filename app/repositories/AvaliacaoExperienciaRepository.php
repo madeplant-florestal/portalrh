@@ -96,7 +96,9 @@ class AvaliacaoExperienciaRepository
      */
     public function candidatosPendencia(string $tipo, string $cutoffAdmissao, array $filtros, ?array $escopoSetores): array
     {
-        $where = ['cm.ausente_na_origem = 0', 'cm.admissao IS NOT NULL', '(cm.admissao >= ? OR ae.id IS NOT NULL)'];
+        // Exclusão analítica GLOBAL: contrato excluído nunca é pendência nem aparece com avaliação já gravada.
+        $where = ['cm.ausente_na_origem = 0', 'cm.admissao IS NOT NULL', '(cm.admissao >= ? OR ae.id IS NOT NULL)',
+            ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusao('cm.id')];
         $params = [$tipo, $cutoffAdmissao];
 
         if (!empty($filtros['codigo_empresa'])) {
@@ -212,13 +214,14 @@ class AvaliacaoExperienciaRepository
 
     public function opcoesFiltro(): array
     {
+        $excluidos = ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusao('id');
         $empresas = $this->todas(
             "SELECT codigo_empresa, MAX(empresa) AS empresa FROM colaboradores_metadados
-             WHERE codigo_empresa IS NOT NULL AND codigo_empresa <> '' GROUP BY codigo_empresa ORDER BY empresa"
+             WHERE codigo_empresa IS NOT NULL AND codigo_empresa <> '' AND {$excluidos} GROUP BY codigo_empresa ORDER BY empresa"
         );
         $setores = $this->todas(
             "SELECT codigo_setor, MAX(setor) AS setor FROM colaboradores_metadados
-             WHERE codigo_setor IS NOT NULL AND codigo_setor <> '' GROUP BY codigo_setor ORDER BY setor"
+             WHERE codigo_setor IS NOT NULL AND codigo_setor <> '' AND {$excluidos} GROUP BY codigo_setor ORDER BY setor"
         );
         return ['empresas' => $empresas, 'setores' => $setores];
     }

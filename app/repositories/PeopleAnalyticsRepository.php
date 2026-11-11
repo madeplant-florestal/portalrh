@@ -129,7 +129,8 @@ class PeopleAnalyticsRepository
     {
         $sql = 'SELECT identificador, cpf, codigo_empresa, admissao, demissao, ausente_na_origem,
                        data_ultima_transferencia
-                FROM colaboradores_metadados';
+                FROM colaboradores_metadados
+                WHERE ' . ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusao('id');
         return $this->connection()->query($sql)->fetchAll(PDO::FETCH_ASSOC);
     }
 
@@ -143,11 +144,14 @@ class PeopleAnalyticsRepository
     public function opcoesFiltro(): array
     {
         $pdo = $this->connection();
+        // Exclusão analítica GLOBAL: opções de filtro nunca nascem de um contrato excluído.
+        $excluidosSemAlias = ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusao('id');
+        $excluidosCm = ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusao('cm.id');
 
         $empresas = $pdo->query(
             'SELECT codigo_empresa, MAX(empresa) AS empresa
              FROM colaboradores_metadados
-             WHERE codigo_empresa IS NOT NULL AND codigo_empresa <> \'\'
+             WHERE codigo_empresa IS NOT NULL AND codigo_empresa <> \'\' AND ' . $excluidosSemAlias . '
              GROUP BY codigo_empresa
              ORDER BY empresa'
         )->fetchAll(PDO::FETCH_ASSOC);
@@ -157,7 +161,7 @@ class PeopleAnalyticsRepository
              FROM colaboradores_metadados cm
              LEFT JOIN setores s
                ON s.codigo_setor COLLATE utf8mb4_general_ci = cm.codigo_setor COLLATE utf8mb4_general_ci
-             WHERE cm.codigo_setor IS NOT NULL AND cm.codigo_setor <> ''
+             WHERE cm.codigo_setor IS NOT NULL AND cm.codigo_setor <> '' AND {$excluidosCm}
              GROUP BY cm.codigo_setor, s.descricao_oficial, s.nome
              ORDER BY nome"
         )->fetchAll(PDO::FETCH_ASSOC);
@@ -209,9 +213,11 @@ class PeopleAnalyticsRepository
     public function buscarNotasNpsIntegracao(DateTimeImmutable $inicio, DateTimeImmutable $fim): array
     {
         $stmt = $this->connection()->prepare(
-            'SELECT nota_nps FROM pesquisas_integracao
-             WHERE respondida_em IS NOT NULL
-               AND respondida_em >= ? AND respondida_em <= ?'
+            'SELECT p.nota_nps FROM pesquisas_integracao p
+             LEFT JOIN colaboradores col ON col.id = p.colaborador_id
+             WHERE p.respondida_em IS NOT NULL
+               AND p.respondida_em >= ? AND p.respondida_em <= ?
+               AND ' . ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusaoPorMetadadosId('COALESCE(p.metadados_id, col.metadados_id)')
         );
         $stmt->execute([$inicio->format('Y-m-d 00:00:00'), $fim->format('Y-m-d 23:59:59')]);
         return array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));

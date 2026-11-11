@@ -94,7 +94,7 @@ class PdiRepository
         $like = '%' . str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $busca) . '%';
         return $this->todas(
             sprintf(self::SELECT_CONTRATO, self::SQL_CARGO_CATALOGO)
-            . " WHERE (cm.demissao IS NULL OR cm.demissao > ?)
+            . " WHERE (cm.demissao IS NULL OR cm.demissao > ?) AND " . ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusao('cm.id') . "
                  AND (cm.nome LIKE ? ESCAPE '\\\\' OR cm.empresa LIKE ? ESCAPE '\\\\' OR cm.unidade LIKE ? ESCAPE '\\\\')
                ORDER BY cm.nome LIMIT " . max(1, $limite),
             [$hoje, $like, $like, $like]
@@ -217,6 +217,8 @@ class PdiRepository
             $where[] = "p.status IN ('nao_iniciado','em_andamento') AND p.data_prevista_conclusao >= ?";
             $params[] = $hoje;
         }
+        // Exclusão analítica GLOBAL: PDI de contrato excluído não entra na lista operacional.
+        $where[] = ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusaoPorMetadadosId('p.metadados_id');
         $sql = "SELECT p.id, p.metadados_id, p.snap_nome, p.snap_empresa, p.snap_unidade, p.snap_cargo, p.gestor_usuario_id,
                        p.gestor_nome_snapshot, p.origem_tipo, p.status, p.data_abertura, p.data_prevista_conclusao,
                        p.data_real_conclusao, p.avaliacao_final,
@@ -235,7 +237,9 @@ class PdiRepository
     /** Opções dos filtros da lista, dentro do escopo (só valores que existem em PDIs acessíveis). */
     public function opcoesFiltro(?int $escopoGestor): array
     {
-        $escopo = $escopoGestor !== null ? ' WHERE gestor_usuario_id = ?' : '';
+        // Exclusão analítica GLOBAL: as opções de filtro só nascem de PDIs de contratos elegíveis.
+        $escopo = ' WHERE ' . ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusaoPorMetadadosId('pdis.metadados_id')
+            . ($escopoGestor !== null ? ' AND gestor_usuario_id = ?' : '');
         $params = $escopoGestor !== null ? [$escopoGestor] : [];
         return [
             'empresas' => $this->todas("SELECT snap_codigo_empresa AS codigo, MAX(snap_empresa) AS nome FROM pdis{$escopo} GROUP BY snap_codigo_empresa ORDER BY nome", $params),

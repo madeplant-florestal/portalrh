@@ -285,7 +285,7 @@ class CadastroOrganizacional
              FROM colaboradores_metadados cm
              INNER JOIN empresas e
                ON e.codigo_empresa COLLATE utf8mb4_general_ci = cm.codigo_empresa COLLATE utf8mb4_general_ci
-             WHERE cm.ativo = 1 AND e.id = ?'
+             WHERE cm.ativo = 1 AND e.id = ? AND ' . ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusao('cm.id')
         );
         $stmt->execute([$empresaId]);
 
@@ -304,7 +304,8 @@ class CadastroOrganizacional
         }
 
         $stmt = Database::conn()->query(
-            'SELECT COUNT(DISTINCT codigo_pessoa) FROM colaboradores_metadados WHERE ativo = 1'
+            'SELECT COUNT(DISTINCT codigo_pessoa) FROM colaboradores_metadados WHERE ativo = 1 AND '
+        . ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusao('id')
         );
 
         return (int)$stmt->fetchColumn();

@@ -37,6 +37,7 @@ class SessaoIntegracao
                     (SELECT COUNT(*) FROM pesquisas_integracao p
                       WHERE p.metadados_id IS NOT NULL
                         AND p.respondida_em IS NOT NULL
+                        AND ' . ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusaoPorMetadadosId('p.metadados_id') . '
                         AND p.integracao_data_relacionada = s.data_integracao) AS respostas_qr
              FROM sessoes_integracao s
              ORDER BY s.created_at DESC, s.id DESC

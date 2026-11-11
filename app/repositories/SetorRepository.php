@@ -74,6 +74,8 @@ class SetorRepository
         // COLLATE utf8mb4_general_ci dos dois lados: colaboradores_metadados usa a collation do
         // espelho (utf8mb4_0900_ai_ci/utf8mb4_uca1400_ai_ci em produção), setores usa
         // utf8mb4_general_ci — sem isso o JOIN falha com "Illegal mix of collations" no MariaDB.
+        // Exclusão analítica GLOBAL: contrato excluído nunca conta como colaborador vinculado ao setor.
+        $excluidosCm = ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusao('cm.id');
         $sql = "SELECT s.id, s.nome, s.slug, s.ativo, s.created_at, s.empresa_id,
                        e.nome AS empresa_nome,
                        e.ativo AS empresa_ativa,
@@ -85,6 +87,7 @@ class SetorRepository
                 LEFT JOIN colaboradores_metadados cm
                   ON cm.codigo_setor COLLATE utf8mb4_general_ci = s.codigo_setor COLLATE utf8mb4_general_ci
                  AND cm.ativo = 1
+                 AND {$excluidosCm}
                  AND s.codigo_setor IS NOT NULL AND s.codigo_setor <> ''
                  AND cm.codigo_setor IS NOT NULL AND cm.codigo_setor <> ''
                 {$whereSql}
@@ -113,6 +116,8 @@ class SetorRepository
         // Mesma fonte oficial de paginateAdmin() — ver comentário lá para o porquê de
         // cargo_setores_metadados/colaboradores_metadados (nunca cargo_setores/colaboradores) e
         // do COLLATE explícito no JOIN por codigo_setor.
+        // Exclusão analítica GLOBAL: contrato excluído nunca conta como colaborador vinculado ao setor.
+        $excluidosCm = ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusao('cm.id');
         $sql = "SELECT s.id, s.nome, s.slug, s.ativo, s.created_at, s.empresa_id,
                        e.nome AS empresa_nome,
                        COUNT(DISTINCT csm.cargo_id) AS cargos_vinculados,
@@ -123,6 +128,7 @@ class SetorRepository
                 LEFT JOIN colaboradores_metadados cm
                   ON cm.codigo_setor COLLATE utf8mb4_general_ci = s.codigo_setor COLLATE utf8mb4_general_ci
                  AND cm.ativo = 1
+                 AND {$excluidosCm}
                  AND s.codigo_setor IS NOT NULL AND s.codigo_setor <> ''
                  AND cm.codigo_setor IS NOT NULL AND cm.codigo_setor <> ''
                 {$whereSql}

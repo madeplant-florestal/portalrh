@@ -48,7 +48,9 @@ class DashboardIntegracaoRepository
      */
     private function montarWhere(array $filtros): array
     {
-        $where = ['p.integracao_data_relacionada BETWEEN ? AND ?'];
+        // Exclusão analítica GLOBAL: pesquisa de contrato excluído não entra em nenhuma métrica
+        // (pesquisa sem contrato resolvido continua contando, como antes).
+        $where = ['p.integracao_data_relacionada BETWEEN ? AND ?', ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusao('cm.id')];
         $params = [$filtros['inicio'], $filtros['fim']];
         if ($filtros['codigo_empresa'] !== '') {
             $where[] = 'cm.codigo_empresa = ?';
@@ -126,6 +128,7 @@ class DashboardIntegracaoRepository
                 LEFT JOIN colaboradores col ON col.id = p.colaborador_id
                 INNER JOIN colaboradores_metadados cm ON cm.id = COALESCE(p.metadados_id, col.metadados_id)
                 WHERE cm.codigo_empresa IS NOT NULL AND cm.codigo_empresa <> ''
+                  AND " . ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusao('cm.id') . "
                 ORDER BY empresa, unidade, setor";
         return $this->connection()->query($sql)->fetchAll(PDO::FETCH_ASSOC);
     }
@@ -147,7 +150,8 @@ class DashboardIntegracaoRepository
      */
     public function integracoesRealizadas(array $filtros): int
     {
-        $where = ["c.integracao_status = 'realizada'", 'c.integracao_data BETWEEN ? AND ?'];
+        $where = ["c.integracao_status = 'realizada'", 'c.integracao_data BETWEEN ? AND ?',
+            ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusao('cm.id')];
         $params = [$filtros['inicio'], $filtros['fim']];
         if ($filtros['codigo_empresa'] !== '') {
             $where[] = 'cm.codigo_empresa = ?';

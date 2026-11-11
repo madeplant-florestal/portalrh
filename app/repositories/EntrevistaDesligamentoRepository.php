@@ -166,6 +166,8 @@ class EntrevistaDesligamentoRepository
             "COALESCE(TRIM(cm.motivo_rescisao_codigo), '') <> ?",
             '((cm.demissao IS NOT NULL AND cm.demissao <= ?) OR (edl.id IS NOT NULL AND edl.cancelada_em IS NULL))',
             'NOT EXISTS (SELECT 1 FROM entrevistas_desligamento ed WHERE ed.metadados_id = cm.id)',
+            // Exclusão analítica GLOBAL: contrato excluído nunca é elegível a entrevista.
+            ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusao('cm.id'),
         ];
         $params = [(string)$criterios['motivo_excluido'], (string)$criterios['hoje']];
 
@@ -191,7 +193,7 @@ class EntrevistaDesligamentoRepository
         return $this->connection()->query(
             "SELECT codigo_empresa, MAX(empresa) AS empresa
              FROM colaboradores_metadados
-             WHERE demissao IS NOT NULL AND codigo_empresa <> ''
+             WHERE demissao IS NOT NULL AND codigo_empresa <> '' AND " . ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusao('id') . "
              GROUP BY codigo_empresa
              ORDER BY empresa"
         )->fetchAll(PDO::FETCH_ASSOC);
@@ -221,7 +223,8 @@ class EntrevistaDesligamentoRepository
         if ($condicao === null) {
             return [];
         }
-        $where = [$condicao];
+        // Exclusão analítica GLOBAL: entrevista de contrato excluído não entra na lista operacional.
+        $where = [$condicao, ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusao('cm.id')];
         $params = str_contains($condicao, '?') ? [$agora] : [];
         if (!empty($filtros['codigo_empresa'])) {
             $where[] = 'e.snap_codigo_empresa = ?';
@@ -248,7 +251,8 @@ class EntrevistaDesligamentoRepository
                     COALESCE(SUM(respondida_em IS NOT NULL), 0) AS respondidas,
                     COALESCE(SUM(respondida_em IS NULL AND cancelada_em IS NULL AND expira_em <= ?), 0) AS expiradas,
                     COALESCE(SUM(respondida_em IS NULL AND cancelada_em IS NOT NULL), 0) AS canceladas
-             FROM entrevistas_desligamento'
+             FROM entrevistas_desligamento
+             WHERE ' . ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusaoPorMetadadosId('entrevistas_desligamento.metadados_id')
         );
         $stmt->execute([$agora, $agora]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
@@ -400,7 +404,8 @@ class EntrevistaDesligamentoRepository
                     COALESCE(SUM(enps >= 9), 0) AS promotores,
                     COALESCE(SUM(enps BETWEEN 7 AND 8), 0) AS neutros,
                     COALESCE(SUM(enps <= 6), 0) AS detratores
-             FROM entrevistas_desligamento WHERE respondida_em IS NOT NULL AND enps IS NOT NULL'
+             FROM entrevistas_desligamento WHERE respondida_em IS NOT NULL AND enps IS NOT NULL AND '
+            . ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusaoPorMetadadosId('entrevistas_desligamento.metadados_id')
         )->fetch(PDO::FETCH_ASSOC) ?: [];
         return [
             'promotores' => (int)($row['promotores'] ?? 0),

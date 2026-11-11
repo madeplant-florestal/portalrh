@@ -74,7 +74,7 @@ class FeedbackRepository
         $sql = 'SELECT cm.id AS metadados_id, cm.nome, cm.empresa, cm.unidade,
                        COALESCE(' . self::SQL_CARGO_CATALOGO . ', NULLIF(cm.cargo, \'\')) AS cargo
                 FROM colaboradores_metadados cm
-                WHERE (cm.demissao IS NULL OR cm.demissao > ?) AND cm.nome LIKE ? ESCAPE \'\\\\\'
+                WHERE (cm.demissao IS NULL OR cm.demissao > ?) AND ' . ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusao('cm.id') . ' AND cm.nome LIKE ? ESCAPE \'\\\\\'
                 ORDER BY cm.nome LIMIT ' . max(1, $limite);
         return $this->todas($sql, [$hoje, $like]);
     }
@@ -144,7 +144,8 @@ class FeedbackRepository
      */
     public function listar(array $f, ?int $escopoGestor, int $limite): array
     {
-        $where = ['1 = 1'];
+        // Exclusão analítica GLOBAL: feedback de contrato excluído não entra na lista operacional.
+        $where = [ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusaoPorMetadadosId('f.metadados_id')];
         $params = [];
         if ($escopoGestor !== null) {
             $where[] = 'f.gestor_usuario_id = ?';

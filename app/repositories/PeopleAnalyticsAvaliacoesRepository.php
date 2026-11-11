@@ -50,6 +50,9 @@ class PeopleAnalyticsAvaliacoesRepository
             $where .= " AND {$alias}.snap_codigo_setor = ?";
             $params[] = $setor;
         }
+        // Exclusão analítica GLOBAL: documento de contrato excluído nunca entra em contagem, média,
+        // percentual nem distribuição (todas as agregações deste repositório passam por aqui).
+        $where .= ' AND ' . ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusaoPorMetadadosId($alias . '.metadados_id');
         return [$where, $params];
     }
 
@@ -195,7 +198,8 @@ class PeopleAnalyticsAvaliacoesRepository
     /** Backlog ATUAL (ativos = não_iniciado/em_andamento; manual = origem_tipo sem documento). */
     public function pdiSituacaoAtual(?string $empresa, ?string $setor): array
     {
-        $where = ' WHERE p.status IN (\'nao_iniciado\', \'em_andamento\')';
+        $where = ' WHERE p.status IN (\'nao_iniciado\', \'em_andamento\') AND '
+            . ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusaoPorMetadadosId('p.metadados_id');
         $params = [];
         $join = '';
         if ($empresa !== null && $empresa !== '') {
@@ -213,7 +217,8 @@ class PeopleAnalyticsAvaliacoesRepository
 
     public function pdiConcluidosPeriodo(DateTimeImmutable $inicio, DateTimeImmutable $fim, ?string $empresa, ?string $setor): int
     {
-        $where = " WHERE p.status = 'concluido' AND p.data_real_conclusao BETWEEN ? AND ?";
+        $where = " WHERE p.status = 'concluido' AND p.data_real_conclusao BETWEEN ? AND ? AND "
+            . ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusaoPorMetadadosId('p.metadados_id');
         $params = [$inicio->format('Y-m-d'), $fim->format('Y-m-d')];
         $join = '';
         if ($empresa !== null && $empresa !== '') {
@@ -240,6 +245,8 @@ class PeopleAnalyticsAvaliacoesRepository
         $joinCm = ($setor !== null && $setor !== '') ? ' LEFT JOIN colaboradores_metadados cm ON cm.id = p.metadados_id' : '';
         $extraEmpresa = ($empresa !== null && $empresa !== '') ? ' AND p.snap_codigo_empresa = ?' : '';
         $extraSetor = ($setor !== null && $setor !== '') ? ' AND cm.codigo_setor = ?' : '';
+        // Exclusão analítica GLOBAL: PDI de contrato excluído não conta em nenhuma origem.
+        $extraSetor .= ' AND ' . ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusaoPorMetadadosId('p.metadados_id');
         $paramsBase = [];
         if ($empresa !== null && $empresa !== '') {
             $paramsBase[] = $empresa;

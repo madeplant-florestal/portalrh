@@ -93,10 +93,13 @@ class RhIndicadoresRepository
     public function opcoesFiltro(): array
     {
         $pdo = $this->connection();
+        // Exclusão analítica GLOBAL: opções de filtro nunca nascem de um contrato excluído.
+        $excluidos = ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusao('id');
 
         $empresas = $pdo->query(
             'SELECT codigo_empresa, MAX(empresa) AS empresa
              FROM colaboradores_metadados
+             WHERE ' . $excluidos . '
              GROUP BY codigo_empresa
              ORDER BY empresa'
         )->fetchAll(PDO::FETCH_ASSOC);
@@ -104,23 +107,24 @@ class RhIndicadoresRepository
         $unidades = $pdo->query(
             'SELECT codigo_unidade, MAX(unidade) AS unidade
              FROM colaboradores_metadados
+             WHERE ' . $excluidos . '
              GROUP BY codigo_unidade
              ORDER BY unidade'
         )->fetchAll(PDO::FETCH_ASSOC);
 
         $cargos = $pdo->query(
             'SELECT DISTINCT cargo FROM colaboradores_metadados
-             WHERE cargo IS NOT NULL AND cargo <> \'\' ORDER BY cargo'
+             WHERE cargo IS NOT NULL AND cargo <> \'\' AND ' . $excluidos . ' ORDER BY cargo'
         )->fetchAll(PDO::FETCH_COLUMN);
 
         $setores = $pdo->query(
             'SELECT DISTINCT setor FROM colaboradores_metadados
-             WHERE setor IS NOT NULL AND setor <> \'\' ORDER BY setor'
+             WHERE setor IS NOT NULL AND setor <> \'\' AND ' . $excluidos . ' ORDER BY setor'
         )->fetchAll(PDO::FETCH_COLUMN);
 
         $centrosCusto = $pdo->query(
             'SELECT DISTINCT centro_custo FROM colaboradores_metadados
-             WHERE centro_custo IS NOT NULL AND centro_custo <> \'\' ORDER BY centro_custo'
+             WHERE centro_custo IS NOT NULL AND centro_custo <> \'\' AND ' . $excluidos . ' ORDER BY centro_custo'
         )->fetchAll(PDO::FETCH_COLUMN);
 
         return [
@@ -140,7 +144,8 @@ class RhIndicadoresRepository
             'SELECT MIN(admissao) AS primeira_admissao,
                     MAX(admissao) AS ultima_admissao,
                     MAX(demissao) AS ultima_demissao
-             FROM colaboradores_metadados'
+             FROM colaboradores_metadados
+             WHERE ' . ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusao('id')
         )->fetch(PDO::FETCH_ASSOC);
         return $row ?: ['primeira_admissao' => null, 'ultima_admissao' => null, 'ultima_demissao' => null];
     }

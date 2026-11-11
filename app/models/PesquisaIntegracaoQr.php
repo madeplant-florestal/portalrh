@@ -47,7 +47,8 @@ class PesquisaIntegracaoQr
     public static function contratosAtivosPorCpfENascimento(string $cpfDigitos, string $nascimentoYmd): array
     {
         $stmt = Database::conn()->prepare(
-            self::SELECT_CONTRATO . ' AND cm.cpf = ? AND cm.nascimento = ? ORDER BY cm.admissao DESC, cm.id DESC'
+            self::SELECT_CONTRATO . ' AND ' . ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusao('cm.id')
+            . ' AND cm.cpf = ? AND cm.nascimento = ? ORDER BY cm.admissao DESC, cm.id DESC'
         );
         $stmt->execute([$cpfDigitos, $nascimentoYmd]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -56,7 +57,9 @@ class PesquisaIntegracaoQr
     /** Revalida um contrato pelo id oficial (ainda ativo?) — usado ao exibir e ao enviar. */
     public static function contratoAtivoPorId(int $metadadosId): ?array
     {
-        $stmt = Database::conn()->prepare(self::SELECT_CONTRATO . ' AND cm.id = ? LIMIT 1');
+        $stmt = Database::conn()->prepare(
+            self::SELECT_CONTRATO . ' AND ' . ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusao('cm.id') . ' AND cm.id = ? LIMIT 1'
+        );
         $stmt->execute([$metadadosId]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
         return $row ?: null;
@@ -135,6 +138,7 @@ class PesquisaIntegracaoQr
     {
         $stmt = Database::conn()->query(
             'SELECT p.integracao_data_relacionada, p.nota_nps FROM pesquisas_integracao p WHERE ' . self::FILTRO_ORIGEM_QR
+            . ' AND ' . ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusaoPorMetadadosId('p.metadados_id')
         );
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
@@ -146,7 +150,7 @@ class PesquisaIntegracaoQr
             'SELECT p.metadados_id, p.nota_nps, p.nota_clareza, p.nota_acolhimento, p.nota_normas,
                     p.nota_utilidade, p.nota_satisfacao_geral, p.comentarios, p.respondida_em
              FROM pesquisas_integracao p
-             WHERE ' . self::FILTRO_ORIGEM_QR . ' AND p.integracao_data_relacionada = ?
+             WHERE ' . self::FILTRO_ORIGEM_QR . ' AND ' . ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusaoPorMetadadosId('p.metadados_id') . ' AND p.integracao_data_relacionada = ?
              ORDER BY p.respondida_em DESC, p.id DESC'
         );
         $stmt->execute([$dataIntegracao]);

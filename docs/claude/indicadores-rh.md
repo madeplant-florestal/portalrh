@@ -94,8 +94,29 @@ registro bruto recebido do METADADOS (auditoria preservada; a sincronização nu
 - O serviço **não cria nem altera tabelas em runtime**. `modoSchema()` valida o schema: sem a tabela
   = erro controlado; sem a migration 2026-11-11 = modo legado (filtro de leitura por `metadados_id`,
   com aviso no log; escrita recusada com orientação).
-- Fora do escopo desta entrega (a revisar): Entrevistas de Desligamento, Avaliações, Feedback, PDI,
-  Pesquisas e `buscarContratosParaMovimentacao()` (transferências) ainda não aplicam a exclusão.
+- **A exclusão é GLOBAL e RETROATIVA** (decisão do RH, 2026-11): o contrato excluído é tratado como
+  se nunca tivesse existido para fins operacionais, estatísticos e gerenciais — Colaboradores,
+  Headcount (atual e histórico), Admissões, Desligamentos, Turnover, People Analytics (inclusive
+  Transferências), Avaliação de Experiência/Desempenho, Entrevista de Desligamento (e seu
+  dashboard), Feedback, PDI, Pesquisas de Integração/Reação, Setores/Cadastro Organizacional,
+  opções de filtro e exportações. Vale para qualquer período: a vigência NUNCA usa o `created_at`
+  da exclusão. Registros de módulo (avaliação, entrevista, PDI, feedback, pesquisa) ligados ao
+  contrato **não são apagados**, só deixam de contar em lista, contagem, média, percentual e filtro.
+- **Duas cláusulas centrais** (única fonte da regra, `ColaboradorMetadadosElegibilidadeService`):
+  `clausulaSqlExclusao('[alias.]id')` para consultas sobre `colaboradores_metadados`, e
+  `clausulaSqlExclusaoPorMetadadosId('alias.coluna' | 'COALESCE(a.x, b.y)')` para tabelas de módulo
+  que guardam `metadados_id` (sempre qualificada: a tabela de exclusões também tem `metadados_id`).
+  Linhas sem vínculo (`metadados_id` NULL) não são afetadas. A regra entra na ORIGEM do conjunto
+  (WHERE/JOIN), nunca depois de agregar. Consulta nova sobre essas tabelas DEVE usar uma das duas.
+- **Guarda automática**: `tests/php/integration_exclusao_analitica_cobertura.php` varre `app/` e
+  falha se uma consulta sobre `colaboradores_metadados` ou sobre as tabelas de módulo não aplicar a
+  exclusão (direta ou via helper verificado do mesmo arquivo) e não estiver na lista de exceções
+  justificadas. `integration_exclusao_analitica_global.php` prova o comportamento módulo a módulo.
+- **Exceções administrativas deliberadas** (continuam sem filtro): sincronizador e reconciliação do
+  METADADOS; busca PONTUAL por id/token (vínculo de Usuários, contexto organizacional do usuário,
+  edição de um registro já aberto, fluxos públicos por token) — preservam a rastreabilidade e não
+  quebram login. Fora desta entrega, por decisão pendente com o RH: o cadastro local `colaboradores`
+  (Solicitação de Vaga, Movimentação de Pessoal, `usuario_colaboradores`).
 
 ## Fórmulas
 

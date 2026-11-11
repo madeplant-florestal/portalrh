@@ -29,3 +29,11 @@ Identificados na auditoria arquitetural de 2026-07-09, documentados aqui para n�
    fixa `America/Campo_Grande` explicitamente só nessa comparação). **Não foi investigado nem
    corrigido em nenhum outro lugar do sistema** — mudar o timezone padrão globalmente (bootstrap)
    afetaria todo o Portal e exige uma auditoria dedicada antes de qualquer alteração.
+5. **Exclusão analítica é dado, não deploy; cobertura ainda parcial** — identificado em 2026-11:
+   as 3 exclusões de 29/10 foram gravadas só no banco de desenvolvimento e o contrato "excluído"
+   reapareceu em produção (tabela existia, vazia, sem erro nenhum). A identificação passou a ser pela
+   chave natural (ver `indicadores-rh.md`), mas continua valendo: ambiente novo/reconstruído exige
+   reaplicar as exclusões. Além disso o filtro só existe na listagem de Colaboradores e nos
+   repositórios de Headcount/Turnover/People Analytics — Entrevistas de Desligamento, Avaliações,
+   Feedback, PDI, Pesquisas e `buscarContratosParaMovimentacao()` leem `colaboradores_metadados` sem
+   ele (revisão planejada, fase própria).

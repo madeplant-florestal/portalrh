@@ -19,13 +19,23 @@
  *   - o registro original permanece intacto em colaboradores_metadados (nunca apagado);
  *   - um contrato "sem setor" NÃO excluído continua aparecendo normalmente em todas essas
  *     consultas (a regra rejeitada "sem setor = excluir" não ressurgiu escondida);
- *   - FK RESTRICT protege o registro excluído contra exclusão física enquanto a marca existir;
+ *   - (a FK RESTRICT deixou de fazer parte do desenho — a exclusão é pela chave natural);
  *   - duplicidade, motivo vazio e contrato inexistente são rejeitados.
  */
 
 require __DIR__ . '/../../app/core/bootstrap.php';
 
 $pdo = Database::conn();
+
+// Este teste roda no banco da aplicação e exercita ESCRITA (excluir/incluir), que só existe com a
+// chave natural (migration 2026-11-11-colaboradores-metadados-exclusoes-chave-natural.sql). Sem ela
+// o serviço opera em modo legado (só leitura por metadados_id) e recusa escrita por desenho — a
+// cobertura do modo legado, da migração e da chave natural está em
+// integration_exclusao_analitica_chave_natural.php (banco descartável).
+if (ColaboradorMetadadosElegibilidadeService::modoSchema() !== ColaboradorMetadadosElegibilidadeService::MODO_NATURAL) {
+    echo "PULADO: migration 2026-11-11 (chave natural) não aplicada neste banco — ver integration_exclusao_analitica_chave_natural.php\n";
+    exit(0);
+}
 $falhas = [];
 $check = static function (bool $cond, string $msg) use (&$falhas): void {
     if (!$cond) {
@@ -88,14 +98,8 @@ try {
     $original = $stmt->fetch(PDO::FETCH_ASSOC);
     $check($original !== false && str_contains((string)$original['nome'], 'ZZEXC Excluido'), 'O registro original permanece intacto em colaboradores_metadados (nunca apagado)');
 
-    // ---- FK RESTRICT: não é possível excluir fisicamente um contrato marcado -------------------
-    $bloqueouDelete = false;
-    try {
-        $pdo->prepare('DELETE FROM colaboradores_metadados WHERE id = ?')->execute([$idExcluido]);
-    } catch (PDOException $e) {
-        $bloqueouDelete = true;
-    }
-    $check($bloqueouDelete, 'FK RESTRICT impede excluir fisicamente um contrato com marca de exclusão analítica ativa');
+    // (A proteção por FK RESTRICT deixou de fazer parte do desenho: a exclusão é identificada pela
+    // chave natural e produção não tem FK nessa tabela — ver integration_exclusao_analitica_chave_natural.php.)
 
     // ---- ColaboradorMetadadosConsultaRepository ---------------------------------------------------
     $consulta = new ColaboradorMetadadosConsultaRepository($pdo);
@@ -151,7 +155,13 @@ try {
     echo "\nCOLABORADOR_METADADOS_EXCLUSAO_ANALITICA_OK\n";
 } finally {
     foreach ($criados['metadados'] as $mid) {
-        $pdo->prepare('DELETE FROM colaboradores_metadados_exclusoes_analiticas WHERE metadados_id = ?')->execute([$mid]);
+        // Exclusões novas são identificadas pela chave natural (metadados_id fica NULL).
+        $pdo->prepare(
+            'DELETE FROM colaboradores_metadados_exclusoes_analiticas
+             WHERE metadados_id = ?
+                OR (codigo_empresa, codigo_unidade, numero_contrato) IN
+                   (SELECT codigo_empresa, codigo_unidade, numero_contrato FROM colaboradores_metadados WHERE id = ?)'
+        )->execute([$mid, $mid]);
     }
     if (!empty($criados['metadados'])) {
         $placeholders = implode(',', array_fill(0, count($criados['metadados']), '?'));

@@ -69,6 +69,34 @@ uma limitação técnica.
   numérico para uma empresa totalmente diferente em outro ambiente) — agrupamentos por empresa
   usam sempre `codigo_empresa` como chave estável, nunca o nome.
 
+## Exclusão analítica de contratos (chave natural)
+
+Contratos que o RH/Diretoria decidiu que **não representam colaborador válido** para estatística
+ficam em `colaboradores_metadados_exclusoes_analiticas` (motivo + quem + quando) e saem da listagem
+de Colaboradores, Headcount, Admissões/Desligamentos, Turnover e People Analytics — **sem apagar** o
+registro bruto recebido do METADADOS (auditoria preservada; a sincronização nunca limpa a tabela).
+
+- **Identidade = chave natural do vínculo** `(codigo_empresa, codigo_unidade, numero_contrato)`
+  (UNIQUE em `colaboradores_metadados`, a mesma do upsert do sincronizador), nunca `metadados_id`
+  (AUTO_INCREMENT: difere entre ambientes e muda numa reconstrução da base — foi o que fez as 3
+  exclusões feitas em desenvolvimento não valerem em produção). Migration
+  `2026-11-11-colaboradores-metadados-exclusoes-chave-natural.sql` (+ rollback); `metadados_id`
+  permanece só como referência histórica das exclusões migradas e nunca decide a exclusão.
+- Uma exclusão afeta **só aquele vínculo**: não alcança outro contrato da mesma pessoa, outra
+  empresa/unidade com o mesmo nº de contrato, nem o novo vínculo de uma transferência interempresa.
+  Nunca por CPF ou nome; "sem setor" **não** é critério (a maioria dos contratos não tem setor).
+- Único ponto de aplicação: `ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusao('[alias.]id')`.
+  `findById()` (telas administrativas de ponto único) deliberadamente **não** filtra.
+- **São dados, não deploy**: a tabela é preenchida por `scripts/excluir_colaborador_analitico.php
+  excluir <empresa-unidade-contrato> <usuario_id> "<motivo>"` (identificador oficial, ex.
+  `0002-0002-347`; `incluir`/`listar` também). Um ambiente novo ou reconstruído recebe a tabela
+  vazia — as exclusões precisam ser reaplicadas (ou migradas) conscientemente.
+- O serviço **não cria nem altera tabelas em runtime**. `modoSchema()` valida o schema: sem a tabela
+  = erro controlado; sem a migration 2026-11-11 = modo legado (filtro de leitura por `metadados_id`,
+  com aviso no log; escrita recusada com orientação).
+- Fora do escopo desta entrega (a revisar): Entrevistas de Desligamento, Avaliações, Feedback, PDI,
+  Pesquisas e `buscarContratosParaMovimentacao()` (transferências) ainda não aplicam a exclusão.
+
 ## Fórmulas
 
 ### Turnover (geral e por dimensão)

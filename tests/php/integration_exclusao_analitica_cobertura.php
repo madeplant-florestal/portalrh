@@ -64,7 +64,7 @@ $excecoes = [
     'models/MovimentacaoPessoal.php::seedReferenceData' => 'seed de dados de desenvolvimento (não é leitura operacional)',
     'models/SolicitacaoVaga.php::seedReferenceData' => 'seed de dados de desenvolvimento (não é leitura operacional)',
     'models/SolicitacaoVaga.php::findUserColaboradorByColaboradorId' => 'resolve o usuário de um colaborador JÁ validado por requiredEntityId() (técnico, por id)',
-    'models/Candidatura.php::all' => 'lista de CANDIDATOS: só lê o título/dados da vaga vinculada; o processo de vaga em si é protegido nas listas e barreiras',
+    'models/Candidatura.php::all' => 'lista de CANDIDATOS (pessoas externas) e Kanban de recrutamento: só lê sv.setor_id da vaga; CONDICIONADA (ver $condicoes) a nunca ler colaborador/contrato — provado por integration_exclusao_analitica_candidaturas.php',
     'repositories/UsuarioColaboradorRepository.php::findByColaboradorId' => 'vínculo técnico usuário×colaborador (contexto organizacional do usuário)',
     'repositories/UsuarioColaboradorRepository.php::findByUsuarioId' => 'vínculo técnico usuário×colaborador (contexto organizacional do usuário)',
     'services/CollaboratorSpreadsheetImportService.php::findCollaboratorsByCompanyAndCode' => 'importação XLSX: deduplicação técnica contra o cadastro local',
@@ -76,6 +76,15 @@ $excecoes = [
 
 // Cláusula SQL (listas/agregados) OU barreira de acesso individual (um registro por id/token).
 $marcadores = '/clausulaSqlExclusao|acessoIndividual\(|filtrarRegistroIndividual\(|filtrarProcessoIndividual\(|colaboradorLocalExcluido\(/';
+
+/**
+ * Exceções CONDICIONADAS: a função só continua isenta enquanto o corpo dela NÃO casar com o padrão proibido.
+ * Se alguém passar a ler colaborador/contrato nela, a exceção deixa de valer e o teste falha.
+ */
+$condicoes = [
+    'models/Candidatura.php::all' => '/(?:FROM|JOIN)\s+(?:colaboradores|colaboradores_metadados|usuario_colaboradores|movimentacoes_pessoal|colaborador_avaliacoes)\b'
+        . '|\bmetadados_id\b|\bsv\.(?:gestor_solicitante|colaborador_substituido|lider_imediato|nome_contratado)/i',
+];
 
 $falhas = [];
 $achados = 0;
@@ -132,6 +141,9 @@ foreach ($arquivos as $rel => $path) {
 
             if (isset($excecoes["{$rel}::{$nome}"])) {
                 $usadas["{$rel}::{$nome}"] = true;
+                if (isset($condicoes["{$rel}::{$nome}"]) && preg_match($condicoes["{$rel}::{$nome}"], $corpo) === 1) {
+                    $falhas[] = sprintf('%s:%d  %s(): a exceção condicionada foi VIOLADA — a função passou a ler colaborador/contrato; aplique a exclusão analítica', $rel, $i + 1, $nome);
+                }
                 continue; // exceção justificada (sempre por FUNÇÃO — não há exceção genérica por arquivo)
             }
             if (preg_match($marcadores, $corpo)) {

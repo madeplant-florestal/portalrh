@@ -74,10 +74,12 @@ try {
     $processosAntes = $estadoProcessos();
 
     $recrut = new RecrutamentoIndicadoresRepository($pdo);
+    $empresaId = $fx->empresaOficial();
+    $cargoUsoId = (int)$pdo->query('SELECT id FROM cargos ORDER BY id LIMIT 1')->fetchColumn();
     $nomes = static fn(array $linhas, string $chave): array => array_column($linhas, $chave);
     $ids = static fn(array $linhas): array => array_map('intval', array_column($linhas, 'id'));
 
-    $observar = static function () use ($recrut, $nomes, $ids, $svExc, $svOk): array {
+    $observar = static function () use ($recrut, $nomes, $ids, $svExc, $svOk, $empresaId, $cargoUsoId): array {
         $o = [];
         $o['col_total'] = Colaborador::paginateAdmin(['q' => 'ZZEXF'], 1, 100)['total'];
         $o['col_summary_total'] = Colaborador::summary()['total'];
@@ -94,6 +96,8 @@ try {
         $o['avleg_lista'] = array_column(AvaliacaoDesempenho::all(['q' => 'ZZEXF']), 'titulo');
         $o['avleg_opcoes'] = array_column(AvaliacaoDesempenho::colaboradorOptions(), 'nome');
         $o['recrut_fechadas'] = (int)($recrut->contarSolicitacoesFechadas(new DateTimeImmutable('2025-06-01'), new DateTimeImmutable('2025-06-30'), null)['total'] ?? 0);
+        $o['org_empresa_pessoas'] = CadastroOrganizacional::usageCount('empresas', $empresaId);
+        $o['org_cargo_colaboradores'] = CadastroOrganizacional::usageCount('cargos', $cargoUsoId);
         return $o;
     };
 
@@ -120,6 +124,11 @@ try {
     $check(!in_array('ZZEXF Local Excluido', array_diff($depois['avleg_opcoes'], ['ZZEXF Local Excluido']), true)
         && count(array_keys($depois['avleg_opcoes'], 'ZZEXF Local Excluido', true)) === count(array_keys($antes['avleg_opcoes'], 'ZZEXF Local Excluido', true)) - 1,
         'Avaliação (modelo legado): opções de colaborador sem o ligado ao excluído');
+
+    $check($depois['org_empresa_pessoas'] === $antes['org_empresa_pessoas'] - 1 && $antes['org_empresa_pessoas'] === 2,
+        'Cadastro Organizacional: pessoas ativas da Empresa (contratos do METADADOS) caem de 2 para 1 ao excluir o contrato');
+    $check($depois['org_cargo_colaboradores'] === $antes['org_cargo_colaboradores'] - 1,
+        'Cadastro Organizacional: colaboradores locais vinculados ao Cargo excluem o ligado ao contrato excluído (−1)');
 
     // ------------------------------------------------------------ processos: fora de listas e estatísticas
     $check(!in_array($svExc, $depois['sv_lista'], true) && !in_array($svExc, $depois['sv_kanban'], true) && in_array($svOk, $depois['sv_lista'], true) && in_array($svOk, $depois['sv_kanban'], true),

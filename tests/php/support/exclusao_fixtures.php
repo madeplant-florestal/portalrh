@@ -14,6 +14,7 @@ final class ExclusaoFixtures
     public array $criados = [
         'cm' => [], 'avexp' => [], 'avdes' => [], 'fb' => [], 'pdi' => [], 'ent' => [], 'pesq' => [],
         'col' => [], 'uc' => [], 'sv' => [], 'mp' => [], 'setor' => [], 'usuario' => [], 'lib' => [], 'cav' => [],
+        'vaga' => [], 'cand' => [], 'emp' => [],
     ];
 
     public function __construct(public PDO $pdo)
@@ -146,6 +147,28 @@ final class ExclusaoFixtures
         return $this->reg('cav', $this->inserirGenerico('colaborador_avaliacoes', ['colaborador_id' => $colaboradorId, 'titulo' => $titulo, 'nota' => 8, 'periodo_referencia' => 'ZZEXF']));
     }
 
+    /** Empresa do catálogo local, casada com os contratos das fixtures pelo codigo_empresa oficial. */
+    public function empresaOficial(): int
+    {
+        return $this->reg('emp', $this->inserirGenerico('empresas', ['nome' => "ZZEXF Empresa {$this->emp}", 'slug' => 'zzexf-empresa-' . strtolower($this->emp), 'codigo_empresa' => $this->emp]));
+    }
+
+    /** Vaga publicada, opcionalmente ligada a uma Solicitação de Vaga. */
+    public function vaga(string $titulo, ?int $solicitacaoVagaId): int
+    {
+        return $this->reg('vaga', $this->inserirGenerico('vagas', ['titulo' => $titulo, 'solicitacao_vaga_id' => $solicitacaoVagaId]));
+    }
+
+    /** Candidatura de um candidato (pessoa externa) a uma vaga. */
+    public function candidatura(int $vagaId, string $nome): int
+    {
+        $n = count($this->criados['cand']);
+        return $this->reg('cand', $this->inserirGenerico('candidaturas', [
+            'vaga_id' => $vagaId, 'nome' => $nome, 'email' => "zzexf.{$this->suf}.{$n}@example.invalid",
+            'cpf' => substr('9' . $this->suf . $n . '00000000000', 0, 11), // único por candidatura
+        ]));
+    }
+
     public function liberacaoEntrevista(int $metadadosId): int
     {
         return $this->reg('lib', $this->inserirGenerico('entrevista_desligamento_liberacoes', ['metadados_id' => $metadadosId, 'liberada_em' => '2026-01-10 10:00:00', 'liberada_por_usuario_id' => 1]));
@@ -212,6 +235,7 @@ final class ExclusaoFixtures
             $mapa = ['avexp' => 'avaliacoes_experiencia', 'avdes' => 'avaliacoes_desempenho', 'fb' => 'feedbacks', 'pdi' => 'pdis',
                 'ent' => 'entrevistas_desligamento', 'pesq' => 'pesquisas_integracao', 'lib' => 'entrevista_desligamento_liberacoes',
                 'sv' => 'solicitacoes_vaga', 'mp' => 'movimentacoes_pessoal', 'cav' => 'colaborador_avaliacoes', 'setor' => 'setores', 'usuario' => 'usuarios',
+                'cand' => 'candidaturas', 'vaga' => 'vagas', 'emp' => 'empresas',
                 'col' => 'colaboradores', 'cm' => 'colaboradores_metadados'];
             foreach ($mapa as $grupo => $tabela) {
                 if (!empty($this->criados[$grupo])) {

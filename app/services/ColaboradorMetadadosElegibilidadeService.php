@@ -107,6 +107,23 @@ class ColaboradorMetadadosElegibilidadeService
     }
 
     /**
+     * Predicado de DESLIGADO na data de referência: desligamento EFETIVO, isto é, demissão preenchida e ANTERIOR à
+     * data (a data da demissão ainda é o último dia de vigência — ver clausulaSqlVigente). Não usa a flag `ativo`
+     * nem `ausente_na_origem`: contrato sem demissão, com admissão futura ou sem admissão nunca é "desligado", e
+     * um desligamento programado para o futuro ainda é vigente. Mesma convenção dos Desligamentos do People Analytics.
+     *
+     * @return array{0:string,1:array} [fragmento SQL com 1 placeholder posicional, parâmetros]
+     */
+    public static function clausulaSqlDesligado(string $alias, DateTimeImmutable $data): array
+    {
+        if ($alias !== '' && !preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $alias)) {
+            throw new InvalidArgumentException('Alias inválido para a cláusula de desligado.');
+        }
+        $p = $alias === '' ? '' : $alias . '.';
+        return ["({$p}demissao IS NOT NULL AND {$p}demissao < ?)", [$data->format('Y-m-d')]];
+    }
+
+    /**
      * Fragmento de WHERE autocontido (sem placeholders) para excluir contratos marcados — splica
      * direto em qualquer array de condições já existente.
      *

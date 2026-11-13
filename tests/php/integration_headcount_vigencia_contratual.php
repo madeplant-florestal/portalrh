@@ -49,9 +49,12 @@ try {
     $fx->contrato('9', 'P8', 'ZZHC multiplos B', $o(['admissao' => $d('-50 days')]));                                                             // vigente (mesma pessoa)
     $fx->contrato('10', 'P10', 'ZZHC sem admissao', $o(['admissao' => null, 'ativo' => 1]));                                                      // fora
     $pdo->prepare("UPDATE colaboradores_metadados SET ausente_na_origem = 1 WHERE codigo_empresa = ? AND numero_contrato = '6'")->execute([$fx->emp]);
+    $fx->contrato('11', 'P11', 'ZZHC ativo1 demissao passada', $o(['admissao' => $d('-300 days'), 'demissao' => $d('-3 days'), 'ativo' => 1]));  // inconsistência: fora de ativos, desligado
+    $fx->contrato('12', 'P12', 'ZZHC ativo0 sem demissao', $o(['admissao' => $d('-100 days'), 'ativo' => 0]));                              // vigente por data; NÃO é desligado
+    $fx->contrato('13', 'P13', 'ZZHC admissao futura ativo0', $o(['admissao' => $d('+10 days'), 'ativo' => 0]));                            // nem ativo nem desligado
     $pdo->prepare("UPDATE colaboradores_metadados SET admissao = NULL WHERE codigo_empresa = ? AND numero_contrato = '10'")->execute([$fx->emp]); // o helper troca null por default
     $fx->excluir('7');
-    $esperadoContratos = 5; // contratos 1, 2, 3, 8, 9
+    $esperadoContratos = 6; // contratos 1, 2, 3, 8, 9, 12
 
     $repo = new ColaboradorMetadadosConsultaRepository();
     $resumo = $repo->summary([$setor]);
@@ -78,12 +81,23 @@ try {
     $check(count($todos) === $pagina['total'], 'exportação (listarExecutivo) concorda com contador e paginação');
     $pagina2 = $repo->paginateExecutivo(['empresa' => $fx->emp, 'situacao' => 'ativos'], 1, 25);
     $check(count($pagina2['items']) === $pagina2['total'], 'itens da página somam o total (sem divergência de paginação)');
-    $check(count(array_unique(array_column($todos, 'codigo_pessoa'))) === 4, 'múltiplos contratos: 5 contratos, 4 pessoas distintas (unidade = contrato)');
+    $check(count(array_unique(array_column($todos, 'codigo_pessoa'))) === 5, 'múltiplos contratos: 6 contratos, 5 pessoas distintas (unidade = contrato)');
 
     // desligados é complemento de ativos: desligamento futuro NÃO aparece como desligado
     $deslig = array_column($repo->listarExecutivo(['empresa' => $fx->emp, 'situacao' => 'desligados']), 'nome');
     $check(!in_array('ZZHC desligamento futuro ativo0', $deslig, true), 'desligamento futuro não aparece em "desligados"');
     $check(in_array('ZZHC demissao ontem', $deslig, true), 'demissão passada aparece em "desligados"');
+    // Revisão pontual (2026-11-13): "desligado" = desligamento EFETIVO por data, nunca pela flag nem por ausência de dado
+    $check(in_array('ZZHC ativo1 demissao passada', $deslig, true), 'ativo=1 com demissão passada é desligado (a data manda) e não é ativo');
+    $check(!in_array('ZZHC ativo1 demissao passada', $nomes, true), 'ativo=1 com demissão passada sai de "ativos"');
+    $check(!in_array('ZZHC ativo0 sem demissao', $deslig, true), 'ativo=0 sem demissão não é desligado (sem desligamento efetivo)');
+    $check(!in_array('ZZHC admissao futura ativo0', $deslig, true) && !in_array('ZZHC admissao futura ativo0', $nomes, true), 'admissão futura não é ativa nem desligada');
+    $check(!in_array('ZZHC sem admissao', $deslig, true), 'sem admissão (sem demissão) não é desligado');
+    $check(!in_array('ZZHC ausente na origem', $deslig, true), 'ausente na origem sem demissão não é desligado');
+    $check(!in_array('ZZHC demissao hoje ativo0', $deslig, true), 'demissão hoje ainda é vigente, não desligado');
+    $resumo2 = $repo->summary([$setor]);
+    $check($resumo2['desligados'] === count($deslig), 'summary()[desligados] concorda com a listagem de desligados');
+    $check($resumo2['ativos'] + $resumo2['desligados'] <= $resumo2['contratos'], 'ativos e desligados não se sobrepõem');
 
     // distribuição por setor (gráfico) soma o mesmo que o card
     $dist = (new PeopleAnalyticsRepository())->distribuicaoAtivosPorSetor(['codigo_empresa' => $fx->emp]);
@@ -91,7 +105,7 @@ try {
 
     // headcount histórico preservado: no passado a regra por data continua valendo (demissão de ontem estava vigente há 2 dias)
     $hist = RhIndicadoresService::headcountEm($contratosCard, $hoje->modify('-2 days'));
-    $check($hist === 6, "histórico -2 dias: contratos 1,2,3,4,8,9 vigentes (admissão futura e excluído fora); obtido {$hist}");
+    $check($hist === 7, "histórico -2 dias: contratos 1,2,3,4,8,9,12 vigentes (admissão futura e excluído fora); obtido {$hist}");
 } finally {
     $fx->limpar();
     $_SESSION = $sessaoOriginal;

@@ -184,8 +184,9 @@ class PeopleAnalyticsRepository
      */
     public function distribuicaoAtivosPorSetor(array $filtros = []): array
     {
-        $where = ["cm.ativo = 1", "cm.ausente_na_origem = 0", ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusao('cm.id')];
-        $params = [];
+        [$vigenteSql, $vigenteParams] = ColaboradorMetadadosElegibilidadeService::clausulaSqlVigente('cm', new DateTimeImmutable('today'));
+        $where = [$vigenteSql, ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusao('cm.id')];
+        $params = $vigenteParams;
         if (!empty($filtros['codigo_empresa'])) {
             $where[] = 'cm.codigo_empresa = ?';
             $params[] = $filtros['codigo_empresa'];

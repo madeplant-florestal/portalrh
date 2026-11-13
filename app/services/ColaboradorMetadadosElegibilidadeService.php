@@ -83,6 +83,30 @@ class ColaboradorMetadadosElegibilidadeService
     }
 
     /**
+     * Predicado ÚNICO de VIGÊNCIA CONTRATUAL na data de referência (decisão de negócio 2026-11-13):
+     * admissão preenchida e <= data, demissão nula ou >= data (a data do desligamento é o último dia de
+     * vigência) e não ausente na origem. A flag `ativo` NÃO entra: um desligamento programado para data
+     * futura mantém o contrato vigente até lá. Mesma regra de RhIndicadoresService::contratoAtivoEm() +
+     * filtro `ausente_na_origem = 0` do card Headcount Atual. A exclusão analítica NÃO está aqui
+     * (use clausulaSqlExclusao()).
+     *
+     * @param string $alias Alias da tabela colaboradores_metadados na query ('' = sem alias).
+     * @return array{0:string,1:array} [fragmento SQL com 3 placeholders posicionais, parâmetros]
+     */
+    public static function clausulaSqlVigente(string $alias, DateTimeImmutable $data): array
+    {
+        if ($alias !== '' && !preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $alias)) {
+            throw new InvalidArgumentException('Alias inválido para a cláusula de vigência.');
+        }
+        $p = $alias === '' ? '' : $alias . '.';
+        $dia = $data->format('Y-m-d');
+        return [
+            "({$p}ausente_na_origem = 0 AND {$p}admissao IS NOT NULL AND {$p}admissao <= ? AND ({$p}demissao IS NULL OR {$p}demissao >= ?))",
+            [$dia, $dia],
+        ];
+    }
+
+    /**
      * Fragmento de WHERE autocontido (sem placeholders) para excluir contratos marcados — splica
      * direto em qualquer array de condições já existente.
      *

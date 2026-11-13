@@ -39,8 +39,9 @@ class ColaboradorMetadadosConsultaRepository
         return $this->pdo;
     }
 
-    public function summary(?array $codigosSetorPermitidos = null): array
+    public function summary(?array $codigosSetorPermitidos = null, ?DateTimeImmutable $referencia = null): array
     {
+        [$vigenteSql, $vigenteParams] = ColaboradorMetadadosElegibilidadeService::clausulaSqlVigente('', $referencia ?? new DateTimeImmutable('today'));
         // `ativos` representa a população vigente AGORA: um contrato marcado `ausente_na_origem
         // = 1` (chave que sumiu de um sync completo — ver migration de reconciliação) nunca deve
         // contar aqui, mesmo que `ativo` continue 1 (esse campo não muda de sentido — ver
@@ -50,17 +51,19 @@ class ColaboradorMetadadosConsultaRepository
         $params = [];
         $this->aplicarEscopoSetor($where, $params, $codigosSetorPermitidos);
 
+        // `ativos` = vigência contratual (predicado central); `desligados` = flag fora da vigência (um
+        // desligamento futuro ainda é vigente, nunca "desligado" — ativos + desligados não se sobrepõem).
         $sql = 'SELECT
                     COUNT(*) AS contratos,
-                    SUM(CASE WHEN ativo = 1 AND ausente_na_origem = 0 THEN 1 ELSE 0 END) AS ativos,
-                    SUM(CASE WHEN ativo IS NULL OR ativo = 0 THEN 1 ELSE 0 END) AS desligados,
+                    SUM(CASE WHEN ' . $vigenteSql . ' THEN 1 ELSE 0 END) AS ativos,
+                    SUM(CASE WHEN (ativo IS NULL OR ativo = 0) AND NOT ' . $vigenteSql . ' THEN 1 ELSE 0 END) AS desligados,
                     COUNT(DISTINCT codigo_empresa) AS empresas,
                     COUNT(DISTINCT COALESCE(NULLIF(codigo_cargo, \'\'), cargo)) AS cargos_distintos,
                     COUNT(DISTINCT codigo_pessoa) AS pessoas_distintas
                 FROM colaboradores_metadados
                 WHERE ' . implode(' AND ', $where);
         $stmt = $this->connection()->prepare($sql);
-        $stmt->execute($params);
+        $stmt->execute(array_merge($vigenteParams, $vigenteParams, $params));
         $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
 
         return [
@@ -364,10 +367,15 @@ class ColaboradorMetadadosConsultaRepository
 
         $situacao = (string)($filtros['situacao'] ?? '');
         if ($situacao === 'ativos') {
-            // Coerente com summary(): população vigente exclui quem sumiu de um sync completo.
-            $where[] = 'm.ativo = 1 AND m.ausente_na_origem = 0';
+            // Vigência contratual (predicado central, igual ao card Headcount Atual e a summary()).
+            [$vigenteSql, $vigenteParams] = ColaboradorMetadadosElegibilidadeService::clausulaSqlVigente('m', new DateTimeImmutable('today'));
+            $where[] = $vigenteSql;
+            array_push($params, ...$vigenteParams);
         } elseif ($situacao === 'desligados') {
-            $where[] = '(m.ativo IS NULL OR m.ativo = 0)';
+            // Complemento de 'ativos': flag inativa E fora da vigência (desligamento futuro ainda é vigente).
+            [$vigenteSql, $vigenteParams] = ColaboradorMetadadosElegibilidadeService::clausulaSqlVigente('m', new DateTimeImmutable('today'));
+            $where[] = '((m.ativo IS NULL OR m.ativo = 0) AND NOT ' . $vigenteSql . ')';
+            array_push($params, ...$vigenteParams);
         }
 
         $sexo = (string)($filtros['sexo'] ?? '');

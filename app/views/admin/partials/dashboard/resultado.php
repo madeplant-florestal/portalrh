@@ -146,8 +146,8 @@ $opcoesFiltro = $opcoesFiltro ?? ['empresas' => [], 'setores' => []];
             'variacao' => $fmtVariacao($painel['desligamentos']['variacao_absoluta'], $painel['desligamentos']['variacao_percentual']), 'comparativo' => true,
         ],
         [
-            'icone' => 'target', 'label' => 'Vagas Abertas', 'valor' => $fmtN($painel['vagas']['abertas']),
-            'variacao' => $painel['vagas']['empresa_sem_correspondencia'] ? 'sem correspondência' : ($fmtN($painel['vagas']['fechadas_no_periodo']) . ' fechadas no período'), 'comparativo' => false,
+            'icone' => 'target', 'label' => 'Anúncios Ativos', 'valor' => $fmtN($painel['vagas']['anuncios_ativos']),
+            'variacao' => $painel['vagas']['empresa_sem_correspondencia'] ? 'sem correspondência' : ($fmtN($painel['vagas']['posicoes_solicitadas']) . ' posições solicitadas · ' . $fmtN($painel['vagas']['fechadas_no_periodo']) . ' fechadas no período'), 'comparativo' => false,
         ],
     ];
   ?>
@@ -484,8 +484,9 @@ $opcoesFiltro = $opcoesFiltro ?? ['empresas' => [], 'setores' => []];
   <?php else: ?>
     <section class="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
       <div class="rounded-ds-lg border border-border bg-surface p-3.5">
-        <p class="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">Vagas Abertas</p>
-        <p class="mt-1 text-xl font-bold text-text-primary"><?= $fmtN($rec['vagas']['abertas']) ?></p>
+        <p class="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">Anúncios Ativos</p>
+        <p class="mt-1 text-xl font-bold text-text-primary"><?= $fmtN($rec['vagas']['anuncios_ativos']) ?></p>
+        <p class="text-[11px] text-text-secondary"><?= $fmtN($rec['vagas']['posicoes_solicitadas']) ?> posições solicitadas</p>
       </div>
       <div class="rounded-ds-lg border border-border bg-surface p-3.5">
         <p class="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">Vagas Fechadas</p>

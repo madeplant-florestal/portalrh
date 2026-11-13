@@ -95,7 +95,7 @@ class RecrutamentoIndicadoresService
         return [
             'abertas' => (int)($abertas['total'] ?? 0),
             'fechadas_no_periodo' => (int)($fechadas['total'] ?? 0),
-        ];
+        ] + $this->repository->resumirAnunciosEPosicoes($empresaId);
     }
 
     /**

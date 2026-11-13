@@ -57,11 +57,16 @@ $drsValorOuInsuficiente = static function (?float $valor, string $sufixo = ''): 
     <p class="mt-2 text-xs text-text-secondary">Período: <?= Security::e($periodoInicio->format('d/m/Y')) ?> a <?= Security::e($periodoFim->format('d/m/Y')) ?> · Empresa e Vaga não se aplicam aos indicadores de Efetivação/Turnover/Desligamento na experiência (fonte é o quadro oficial do METADADOS, sem vínculo direto com vaga/candidatura).</p>
   </section>
 
-  <section class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+  <section class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-6">
     <div class="responsive-panel ring-1 ring-border">
-      <p class="text-xs font-semibold uppercase tracking-wide text-text-secondary">Vagas Abertas</p>
-      <p class="mt-1 text-[2rem] font-bold leading-none text-text-primary"><?= number_format($painel['vagas']['abertas'], 0, ',', '.') ?></p>
-      <p class="mt-1 text-xs text-text-secondary">situação atual, fora de fechada/cancelada</p>
+      <p class="text-xs font-semibold uppercase tracking-wide text-text-secondary">Anúncios Ativos</p>
+      <p class="mt-1 text-[2rem] font-bold leading-none text-text-primary"><?= number_format($painel['vagas']['anuncios_ativos'], 0, ',', '.') ?></p>
+      <p class="mt-1 text-xs text-text-secondary">publicados agora<?= $painel['vagas']['anuncios_manuais'] > 0 ? ' · ' . (int)$painel['vagas']['anuncios_manuais'] . ' de cadastro manual' : '' ?></p>
+    </div>
+    <div class="responsive-panel ring-1 ring-border">
+      <p class="text-xs font-semibold uppercase tracking-wide text-text-secondary">Posições Solicitadas</p>
+      <p class="mt-1 text-[2rem] font-bold leading-none text-text-primary"><?= number_format($painel['vagas']['posicoes_solicitadas'], 0, ',', '.') ?></p>
+      <p class="mt-1 text-xs text-text-secondary">em <?= (int)$painel['vagas']['solicitacoes_com_anuncio'] ?> solicitação(ões) aprovada(s) com anúncio ativo<?= $painel['vagas']['aguardando_publicacao'] > 0 ? ' · ' . (int)$painel['vagas']['aguardando_publicacao'] . ' aprovada(s) aguardando publicação' : '' ?></p>
     </div>
     <div class="responsive-panel ring-1 ring-border">
       <p class="text-xs font-semibold uppercase tracking-wide text-text-secondary">Vagas Fechadas</p>
@@ -84,6 +89,35 @@ $drsValorOuInsuficiente = static function (?float $valor, string $sufixo = ''): 
       <p class="mt-1 text-xs text-text-secondary"><?= (int)$painel['qualidade']['efetivacao']['turnover_precoce']['total_desligamentos'] ?> desligamento(s) no período</p>
     </div>
   </section>
+
+  <?php if ($painel['vagas']['por_cargo'] !== []): ?>
+  <section class="responsive-panel ring-1 ring-border">
+    <div class="mb-3">
+      <h2 class="text-base font-bold text-text-primary">Vagas abertas por cargo</h2>
+      <p class="text-xs text-text-secondary">Situação atual. Posições vêm da Solicitação de Vaga aprovada; anúncios de cadastro manual não têm quantidade informada. Posições preenchidas ainda não são exibidas: não há registro confiável de contratação efetiva.</p>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="min-w-full text-sm">
+        <thead>
+          <tr class="text-left text-xs font-semibold uppercase tracking-wide text-text-secondary">
+            <th class="py-2 pr-4">Cargo / função</th>
+            <th class="py-2 pr-4 text-right">Anúncios ativos</th>
+            <th class="py-2 text-right">Posições solicitadas</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-border">
+          <?php foreach ($painel['vagas']['por_cargo'] as $linhaCargo): ?>
+            <tr>
+              <td class="py-2 pr-4 text-text-primary"><?= Security::e($linhaCargo['cargo']) ?></td>
+              <td class="py-2 pr-4 text-right text-text-primary"><?= number_format($linhaCargo['anuncios'], 0, ',', '.') ?></td>
+              <td class="py-2 text-right text-text-primary"><?= $linhaCargo['posicoes'] === null ? 'não informada' : number_format($linhaCargo['posicoes'], 0, ',', '.') ?></td>
+            </tr>
+          <?php endforeach; ?>
+        </tbody>
+      </table>
+    </div>
+  </section>
+  <?php endif; ?>
 
   <section class="grid grid-cols-1 gap-6 xl:grid-cols-2">
     <article class="responsive-panel ring-1 ring-border">

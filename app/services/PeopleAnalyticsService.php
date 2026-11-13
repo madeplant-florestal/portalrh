@@ -849,12 +849,12 @@ class PeopleAnalyticsService
                 'abertas' => (int)($vagasAbertas['total'] ?? 0),
                 'fechadas_no_periodo' => (int)($vagasFechadas['total'] ?? 0),
                 'empresa_sem_correspondencia' => false,
-            ];
+            ] + $this->recrutamentoRepository->resumirAnunciosEPosicoes(null);
         }
 
         $empresaLocalId = (new EmpresaMetadadosRepository())->findIdByCodigo($codigoEmpresa);
         if ($empresaLocalId === null) {
-            return ['abertas' => 0, 'fechadas_no_periodo' => 0, 'empresa_sem_correspondencia' => true];
+            return ['abertas' => 0, 'fechadas_no_periodo' => 0, 'empresa_sem_correspondencia' => true, 'anuncios_ativos' => 0, 'anuncios_manuais' => 0, 'posicoes_solicitadas' => 0, 'solicitacoes_com_anuncio' => 0, 'aguardando_publicacao' => 0, 'por_cargo' => []];
         }
 
         $vagasAbertas = $this->recrutamentoRepository->contarSolicitacoesAbertas($empresaLocalId);
@@ -863,7 +863,7 @@ class PeopleAnalyticsService
             'abertas' => (int)($vagasAbertas['total'] ?? 0),
             'fechadas_no_periodo' => (int)($vagasFechadas['total'] ?? 0),
             'empresa_sem_correspondencia' => false,
-        ];
+        ] + $this->recrutamentoRepository->resumirAnunciosEPosicoes($empresaLocalId);
     }
 
 

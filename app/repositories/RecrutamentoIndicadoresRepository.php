@@ -141,6 +141,91 @@ class RecrutamentoIndicadoresRepository
         return (array)$stmt->fetch(PDO::FETCH_ASSOC);
     }
 
+    /**
+     * ANÚNCIOS ATIVOS x POSIÇÕES SOLICITADAS (2026-11-13) — situação ATUAL (nunca recortada por período).
+     *
+     * Por que existe: `contarSolicitacoesAbertas()` conta SOLICITAÇÕES aprovadas em aberto e não olha a
+     * tabela `vagas`; por isso uma aprovada cujo anúncio ainda é rascunho (`vagas.ativo = 0`) entrava no
+     * card "Vagas Abertas". Aqui a unidade é o ANÚNCIO que o público realmente vê (`vagas.ativo = 1`, o
+     * mesmo critério de Vaga::allActive()) e a quantidade vem da Solicitação:
+     *  - anúncio ligado a solicitação: só conta se a solicitação segue aprovada, não cancelada e fora de
+     *    fechada/cancelada (mesma regra de contarSolicitacoesAbertas), e sem vínculo a contrato excluído;
+     *  - anúncio MANUAL (cadastro excepcional, sem solicitação): conta como anúncio ativo, mas NÃO tem campo
+     *    de quantidade — suas posições ficam "não informadas", nunca presumidas como 1;
+     *  - posições = SUM(quantidade_vagas) por SOLICITAÇÃO distinta (vários anúncios da mesma solicitação,
+     *    candidaturas e republicações não multiplicam);
+     *  - posições preenchidas/restantes NÃO são calculadas: não há evento confiável de contratação efetiva.
+     *
+     * @return array{anuncios_ativos:int,anuncios_manuais:int,posicoes_solicitadas:int,solicitacoes_com_anuncio:int,
+     *               aguardando_publicacao:int,por_cargo:array<int,array{cargo:string,anuncios:int,posicoes:?int}>}
+     */
+    public function resumirAnunciosEPosicoes(?int $empresaId): array
+    {
+        $where = [
+            'v.ativo = 1',
+            "(v.solicitacao_vaga_id IS NULL OR (sv.status_fluxo = '" . SolicitacaoVaga::STATUS_APROVADA . "'"
+                . " AND st.slug NOT IN ('fechada', 'cancelada') AND sv.cancelada_em IS NULL AND "
+                . ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusaoProcesso(SolicitacaoVaga::COLUNAS_COLABORADOR_PROCESSO) . '))',
+        ];
+        $params = [];
+        if ($empresaId !== null) {
+            $where[] = '((v.solicitacao_vaga_id IS NULL AND v.empresa_id = ?) OR se.empresa_id = ?)';
+            array_push($params, $empresaId, $empresaId);
+        }
+
+        $stmt = $this->connection()->prepare(
+            'SELECT v.id AS vaga_id, v.titulo, v.solicitacao_vaga_id, sv.quantidade_vagas, sv.cargo_id, c.nome AS cargo_nome
+             FROM vagas v
+             LEFT JOIN solicitacoes_vaga sv ON sv.id = v.solicitacao_vaga_id
+             LEFT JOIN solicitacao_vaga_stages st ON st.id = sv.situacao_kanban_id
+             LEFT JOIN setores se ON se.id = sv.setor_id
+             LEFT JOIN cargos c ON c.id = sv.cargo_id
+             WHERE ' . implode(' AND ', $where)
+        );
+        $stmt->execute($params);
+
+        $anuncios = 0;
+        $manuais = 0;
+        $solicitacoes = [];
+        $grupos = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $linha) {
+            $anuncios++;
+            $solicitacaoId = $linha['solicitacao_vaga_id'] !== null ? (int)$linha['solicitacao_vaga_id'] : null;
+            if ($solicitacaoId === null) {
+                $manuais++;
+                $chave = 'manual';
+                $rotulo = 'Cadastro manual (sem solicitação)';
+                $grupos[$chave]['posicoes'] = null;
+            } else {
+                $chave = 'cargo:' . (int)$linha['cargo_id'];
+                $rotulo = (string)($linha['cargo_nome'] ?? '') !== '' ? (string)$linha['cargo_nome'] : (string)$linha['titulo'];
+                $grupos[$chave]['posicoes'] = $grupos[$chave]['posicoes'] ?? 0;
+                // Posições contadas UMA vez por solicitação, mesmo com vários anúncios ligados a ela.
+                if (!isset($solicitacoes[$solicitacaoId])) {
+                    $solicitacoes[$solicitacaoId] = max(0, (int)$linha['quantidade_vagas']);
+                    $grupos[$chave]['posicoes'] += $solicitacoes[$solicitacaoId];
+                }
+            }
+            $grupos[$chave]['cargo'] = $rotulo;
+            $grupos[$chave]['anuncios'] = ($grupos[$chave]['anuncios'] ?? 0) + 1;
+        }
+
+        $porCargo = array_values($grupos);
+        usort($porCargo, static fn(array $a, array $b): int => ($b['posicoes'] ?? -1) <=> ($a['posicoes'] ?? -1) ?: strcmp($a['cargo'], $b['cargo']));
+
+        $abertas = (int)($this->contarSolicitacoesAbertas($empresaId)['total'] ?? 0);
+        return [
+            'anuncios_ativos' => $anuncios,
+            'anuncios_manuais' => $manuais,
+            'posicoes_solicitadas' => array_sum($solicitacoes),
+            'solicitacoes_com_anuncio' => count($solicitacoes),
+            'aguardando_publicacao' => max(0, $abertas - count($solicitacoes)),
+            'por_cargo' => array_map(static fn(array $g): array => [
+                'cargo' => (string)$g['cargo'], 'anuncios' => (int)$g['anuncios'], 'posicoes' => $g['posicoes'] === null ? null : (int)$g['posicoes'],
+            ], $porCargo),
+        ];
+    }
+
     /** Solicitações fechadas no período (situação = 'fechada', recorte por `fechada_em`). */
     public function contarSolicitacoesFechadas(DateTimeImmutable $inicio, DateTimeImmutable $fim, ?int $empresaId): array
     {

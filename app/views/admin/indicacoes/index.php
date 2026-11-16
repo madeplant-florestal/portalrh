@@ -121,7 +121,7 @@ if ($indicador !== '') { $params['indicador'] = $indicador; }
           <td class="p-3 text-text-primary"><?= Security::e($item['vaga_titulo'] ?? '-') ?></td>
           <td class="p-3 text-text-secondary"><?= !empty($item['created_at']) ? DateHelper::formatLocal((string)$item['created_at']) : '-' ?></td>
           <td class="p-3"><span class="whitespace-nowrap px-2 py-1 rounded-ds-sm text-xs font-semibold text-white" style="background-color: <?= Security::e($stageCor) ?>"><?= Security::e($item['stage_nome'] ?? 'Novo') ?></span></td>
-          <td class="p-3 text-text-primary"><?= !empty($contratacao) ? date('d/m/Y', strtotime((string)$contratacao)) : '-' ?></td>
+          <td class="p-3 text-text-primary"><?= !empty($contratacao) ? DateHelper::formatLocal((string)$contratacao, 'd/m/Y') : '-' ?></td>
           <td class="p-3 text-text-primary"><?= $dias !== null ? $dias . ' dias' : '-' ?></td>
           <td class="p-3 text-text-primary"><?= Security::e($expStatus) ?></td>
           <td class="p-3">
@@ -177,7 +177,7 @@ if ($indicador !== '') { $params['indicador'] = $indicador; }
         <div class="text-sm text-text-secondary">Indicado por: <?= Security::e($item['indicacao_colaborador_nome'] ?? '-') ?></div>
         <div class="text-sm text-text-secondary"><?= Security::e($item['vaga_titulo'] ?? '-') ?></div>
         <div class="mt-2 text-xs text-text-secondary">Etapa: <?= Security::e($item['stage_nome'] ?? 'Novo') ?></div>
-        <div class="mt-1 text-xs text-text-secondary">Contratado em: <?= !empty($contratacao) ? date('d/m/Y', strtotime((string)$contratacao)) : '-' ?></div>
+        <div class="mt-1 text-xs text-text-secondary">Contratado em: <?= !empty($contratacao) ? DateHelper::formatLocal((string)$contratacao, 'd/m/Y') : '-' ?></div>
         <div class="mt-1 text-xs text-text-secondary">Tempo: <?= $dias !== null ? $dias . ' dias' : '-' ?></div>
         <div class="mt-1 text-xs text-text-secondary">Experiência: <?= Security::e($expStatus) ?></div>
         <div class="mt-1 text-xs <?= Security::e($signal['text'] ?? 'text-text-primary') ?>">Pagamento: <span class="inline-flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full <?= Security::e($signal['dot'] ?? 'bg-text-muted') ?>"></span><?= $pago ? 'Pago em ' . date('d/m/Y', strtotime((string)$item['indicacao_data_pagamento'])) : 'Pendente' ?></span></div>

@@ -385,7 +385,7 @@ class EntrevistaDesligamentoService
 
     private static function formatoBanco(DateTimeImmutable $data): string
     {
-        return $data->format('Y-m-d H:i:s');
+        return DateHelper::paraUtcSql($data);
     }
 
     // ================================================================== administração
@@ -410,7 +410,7 @@ class EntrevistaDesligamentoService
             'codigo_empresa' => (string)($filtros['codigo_empresa'] ?? ''),
             'dias' => (int)($filtros['dias'] ?? 0),
         ];
-        $criterios = self::criteriosElegibilidade($agora);
+        $criterios = self::criteriosElegibilidade(DateHelper::diaOperacionalDe($agora));
 
         $painel = [
             'visao' => $visao,
@@ -483,7 +483,7 @@ class EntrevistaDesligamentoService
         if ($contrato === null) {
             return ['ok' => false, 'error' => 'Contrato não encontrado.'];
         }
-        $elegibilidade = self::elegibilidade($contrato, $agora);
+        $elegibilidade = self::elegibilidade($contrato, DateHelper::diaOperacionalDe($agora));
         if (!$elegibilidade['elegivel']) {
             return ['ok' => false, 'error' => (string)$elegibilidade['mensagem']];
         }
@@ -527,7 +527,7 @@ class EntrevistaDesligamentoService
             return ['ok' => false, 'error' => 'Esta entrevista já foi respondida e não pode ser reaberta.'];
         }
         $contrato = $this->repository->buscarContrato((int)$entrevista['metadados_id']);
-        $elegibilidade = $contrato === null ? ['elegivel' => false, 'mensagem' => 'Contrato não encontrado no METADADOS.'] : self::elegibilidade($contrato, $agora);
+        $elegibilidade = $contrato === null ? ['elegivel' => false, 'mensagem' => 'Contrato não encontrado no METADADOS.'] : self::elegibilidade($contrato, DateHelper::diaOperacionalDe($agora));
         if (!$elegibilidade['elegivel']) {
             return ['ok' => false, 'error' => 'Não é possível regenerar: ' . lcfirst((string)$elegibilidade['mensagem'])];
         }
@@ -578,7 +578,7 @@ class EntrevistaDesligamentoService
             return ['ok' => false, 'error' => 'Contratos encerrados por Falecimento não recebem Entrevista de Desligamento.'];
         }
         $demissao = self::data($contrato['demissao'] ?? null);
-        if ($demissao !== null && $demissao <= $agora->setTime(0, 0)) {
+        if ($demissao !== null && $demissao <= DateHelper::diaOperacionalDe($agora)) {
             return ['ok' => false, 'error' => 'Este contrato já está rescindido no METADADOS — a Entrevista já pode ser gerada normalmente, sem liberação manual.'];
         }
         if ($this->repository->buscarPorMetadadosId($metadadosId) !== null) {
@@ -608,7 +608,7 @@ class EntrevistaDesligamentoService
         }
         $contrato = $this->repository->buscarContrato($metadadosId);
         $demissao = $contrato !== null ? self::data($contrato['demissao'] ?? null) : null;
-        if ($demissao !== null && $demissao <= $agora->setTime(0, 0)) {
+        if ($demissao !== null && $demissao <= DateHelper::diaOperacionalDe($agora)) {
             return ['ok' => false, 'error' => 'Este contrato já está rescindido oficialmente no METADADOS — a liberação manual virou só histórico e não pode mais ser cancelada.'];
         }
         $entrevista = $this->repository->buscarPorMetadadosId($metadadosId);

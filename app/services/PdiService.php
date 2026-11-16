@@ -581,7 +581,9 @@ class PdiService
             return self::falha('Documento de origem não encontrado ou não concluído.');
         }
         $selecao = self::selecionarItens($contexto['itens'], $chavesSelecionadas);
-        $hoje = $agora->format('Y-m-d');
+        // `$agora` é um INSTANTE; a data de abertura/prazo é o DIA OPERACIONAL (Campo Grande) derivado dele.
+        $diaOperacional = DateHelper::diaOperacionalDe($agora);
+        $hoje = $diaOperacional->format('Y-m-d');
         $post = [
             'metadados_id' => (string)$contexto['metadados_id'],
             'gestor_usuario_id' => (string)$contexto['gestor_usuario_id'],
@@ -589,7 +591,7 @@ class PdiService
             'origem_ref_tipo' => $origemTipo,
             'origem_ref_id' => (string)$origemRefId,
             'data_abertura' => $hoje,
-            'data_prevista_conclusao' => $agora->modify('+90 days')->format('Y-m-d'),
+            'data_prevista_conclusao' => $diaOperacional->modify('+90 days')->format('Y-m-d'),
             'objetivo_esperado' => $selecao['texto'] !== '' ? $selecao['texto'] : null,
         ];
         $resultado = $this->criar($post, $ator, $agora, $ip);
@@ -630,7 +632,7 @@ class PdiService
             return $viaCriacao ? ['ok' => true, 'ja_vinculado' => true] : self::falha('Esta origem já está vinculada a este PDI.');
         }
         $selecao = self::selecionarItens($contexto['itens'], $chavesSelecionadas);
-        $agoraSql = $agora->format('Y-m-d H:i:s');
+        $agoraSql = DateHelper::paraUtcSql($agora);
         return $this->repository->transacao(function () use ($pdiId, $origemTipo, $origemRefId, $selecao, $ator, $ip, $agoraSql): array {
             $this->repository->inserirOrigem($pdiId, $origemTipo, $origemRefId, $selecao['texto'] !== '' ? $selecao['texto'] : null, (int)$ator['id'], $agoraSql);
             $this->repository->inserirEvento($pdiId, 'origem_vinculada', 'origem', null, self::ORIGENS[$origemTipo] . ' #' . $origemRefId, (int)$ator['id'], self::papelDoAtor($ator), false, $ip, $agoraSql);
@@ -673,7 +675,8 @@ class PdiService
         if ($contrato === null) {
             return self::falha('Selecione o colaborador (contrato oficial do METADADOS).');
         }
-        $hoje = $agora->format('Y-m-d');
+        // `$agora` é um INSTANTE; a comparação com a demissão (data civil do METADADOS) usa o dia operacional.
+        $hoje = DateHelper::diaOperacionalDe($agora)->format('Y-m-d');
         if (!empty($contrato['demissao']) && (string)$contrato['demissao'] <= $hoje) {
             return self::falha('Este contrato já foi desligado — não é possível abrir um novo PDI para ele.');
         }
@@ -707,7 +710,7 @@ class PdiService
             'status' => 'rascunho',
             'criado_por_usuario_id' => (int)$ator['id'],
         ];
-        $agoraSql = $agora->format('Y-m-d H:i:s');
+        $agoraSql = DateHelper::paraUtcSql($agora);
         $id = $this->repository->transacao(function () use ($dados, $v, $acoes, $agoraSql, $ator, $ip): int {
             $id = $this->repository->inserirPdi($dados, $agoraSql);
             foreach ($v['competencias'] as $texto) {
@@ -758,7 +761,7 @@ class PdiService
             return self::falha(array_values(array_unique($erros)));
         }
 
-        $agoraSql = $agora->format('Y-m-d H:i:s');
+        $agoraSql = DateHelper::paraUtcSql($agora);
         $this->repository->transacao(function () use ($id, $pdi, $v, $acoes, $gestorId, $gestorNome, $agoraSql, $ator, $ip): void {
             $novos = $v['dados'] + ['gestor_usuario_id' => $gestorId, 'gestor_nome_snapshot' => $gestorNome];
             $mudou = [];
@@ -927,7 +930,7 @@ class PdiService
         if (mb_strlen($texto) > self::LIMITE_TEXTO) {
             return self::falha('Comentário: máximo de ' . self::LIMITE_TEXTO . ' caracteres.');
         }
-        $agoraSql = $agora->format('Y-m-d H:i:s');
+        $agoraSql = DateHelper::paraUtcSql($agora);
         $papel = $emNomeDoColaborador ? 'colaborador_assistido' : self::papelDoAtor($ator);
         $novoId = $this->repository->transacao(function () use ($id, $ator, $papel, $emNomeDoColaborador, $texto, $agoraSql, $ip): int {
             $novoId = $this->repository->inserirAcompanhamento($id, (int)$ator['id'], $papel, $emNomeDoColaborador, $texto, $agoraSql);
@@ -959,7 +962,7 @@ class PdiService
                 return self::falha('Máximo de ' . self::LIMITE_TEXTO . ' caracteres por campo.');
             }
         }
-        $agoraSql = $agora->format('Y-m-d H:i:s');
+        $agoraSql = DateHelper::paraUtcSql($agora);
         $this->repository->transacao(function () use ($id, $pdi, $novos, $ator, $ip, $agoraSql): void {
             $mudou = [];
             foreach ($novos as $campo => $t) {
@@ -994,7 +997,7 @@ class PdiService
         if (self::normalizar($pdi['evidencias_evolucao']) === self::normalizar($t)) {
             return ['ok' => true, 'id' => $id];
         }
-        $agoraSql = $agora->format('Y-m-d H:i:s');
+        $agoraSql = DateHelper::paraUtcSql($agora);
         $this->repository->transacao(function () use ($id, $pdi, $t, $ator, $ip, $agoraSql): void {
             $this->repository->atualizarPdi($id, ['evidencias_evolucao' => self::normalizar($t)], $agoraSql);
             $this->evento($id, 'evidencias', 'evidencias_evolucao', self::normalizar($pdi['evidencias_evolucao']), self::normalizar($t), $ator, $ip, $agoraSql);
@@ -1029,7 +1032,7 @@ class PdiService
         if ((string)$acao['status'] === $status) {
             return ['ok' => true, 'id' => $id];
         }
-        $agoraSql = $agora->format('Y-m-d H:i:s');
+        $agoraSql = DateHelper::paraUtcSql($agora);
         $this->repository->transacao(function () use ($id, $ordem, $acao, $status, $ator, $ip, $agoraSql): void {
             $this->repository->atualizarStatusAcao($id, $ordem, $status, $agoraSql);
             $this->evento($id, 'acao_status', "acao_{$ordem}.status", (string)$acao['status'], $status, $ator, $ip, $agoraSql);
@@ -1110,9 +1113,10 @@ class PdiService
             return self::falha('Para iniciar, o PDI precisa ter ao menos 1 ação no plano de ação.');
         }
 
-        $agoraSql = $agora->format('Y-m-d H:i:s');
-        $hoje = $agora->format('Y-m-d');
-        $div = self::divergencias($pdi, $agora);
+        $agoraSql = DateHelper::paraUtcSql($agora);
+        $diaOperacional = DateHelper::diaOperacionalDe($agora);
+        $hoje = $diaOperacional->format('Y-m-d');
+        $div = self::divergencias($pdi, $diaOperacional);
         $this->repository->transacao(function () use ($id, $pdi, $origem, $destino, $tipoEvento, $extra, $ator, $ip, $agoraSql, $hoje, $div): void {
             $campos = ['status' => $destino];
             if ($tipoEvento === 'conclusao') {
@@ -1147,7 +1151,7 @@ class PdiService
         if ($pdi === null) {
             return self::falha('PDI não encontrado.');
         }
-        $div = self::divergencias($pdi, $agora);
+        $div = self::divergencias($pdi, DateHelper::diaOperacionalDe($agora));
         if (!$div['desligado']) {
             return self::falha('O contrato deste PDI não está desligado.');
         }
@@ -1158,7 +1162,7 @@ class PdiService
         if ($texto === '') {
             return self::falha('Informe a justificativa para manter o PDI.');
         }
-        $agoraSql = $agora->format('Y-m-d H:i:s');
+        $agoraSql = DateHelper::paraUtcSql($agora);
         $this->repository->transacao(function () use ($id, $div, $texto, $ator, $ip, $agoraSql): void {
             $this->evento($id, 'decisao_contrato_desligado', 'decisao', (string)$div['desligamento'], 'mantido — ' . $texto, $ator, $ip, $agoraSql);
         });

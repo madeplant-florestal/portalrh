@@ -313,7 +313,7 @@ class AdminColaboradoresController extends Controller
         $contratoEd = $metadadosId !== null ? $edRepo->buscarContrato((int)$metadadosId) : null;
         $entrevistaDesligamento = [
             'disponivel' => $contratoEd !== null,
-            'elegibilidade' => $contratoEd !== null ? EntrevistaDesligamentoService::elegibilidade($contratoEd, new DateTimeImmutable('now')) : null,
+            'elegibilidade' => $contratoEd !== null ? EntrevistaDesligamentoService::elegibilidade($contratoEd, DateHelper::hojeOperacional()) : null,
             'liberacao' => $contratoEd !== null && !empty($contratoEd['liberacao_ativa']) ? [
                 'liberada_em' => $contratoEd['liberada_em'],
             ] : null,

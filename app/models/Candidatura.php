@@ -534,16 +534,21 @@ class Candidatura
             $offset = ($page - 1) * $perPage;
         }
 
-        $sql = 'SELECT c.*, v.titulo AS vaga_titulo, s.nome AS stage_nome, s.cor AS stage_cor, CASE WHEN c.indicacao_data_contratacao IS NOT NULL THEN DATEDIFF(?, DATE(c.indicacao_data_contratacao)) ELSE NULL END AS dias_desde_contratacao FROM candidaturas c LEFT JOIN vagas v ON v.id = c.vaga_id LEFT JOIN pipeline_stages s ON s.id = c.stage_id'
+        $sql = 'SELECT c.*, v.titulo AS vaga_titulo, s.nome AS stage_nome, s.cor AS stage_cor FROM candidaturas c LEFT JOIN vagas v ON v.id = c.vaga_id LEFT JOIN pipeline_stages s ON s.id = c.stage_id'
             . $whereSql
             . ' ORDER BY c.created_at DESC LIMIT ? OFFSET ?';
         $stmt = Database::conn()->prepare($sql);
-        $queryParams = array_merge([DateHelper::hojeOperacionalSql()], $params);
+        $queryParams = $params;
         $queryParams[] = $perPage;
         $queryParams[] = $offset;
         $stmt->execute($queryParams);
+        $hojeOperacional = DateHelper::hojeOperacional();
+        $items = array_map(static function (array $row) use ($hojeOperacional): array {
+            $row['dias_desde_contratacao'] = self::diasDesdeContratacao($row['indicacao_data_contratacao'] ?? null, $hojeOperacional);
+            return $row;
+        }, $stmt->fetchAll(PDO::FETCH_ASSOC));
         return [
-            'items' => $stmt->fetchAll(PDO::FETCH_ASSOC),
+            'items' => $items,
             'total' => $total,
             'page' => $page,
             'per_page' => $perPage,
@@ -820,17 +825,35 @@ class Candidatura
         return in_array($normalized, ['contratado', 'admissao'], true);
     }
 
+    /**
+     * Dias entre o DIA da contratação e o dia operacional de hoje. `indicacao_data_contratacao` é um INSTANTE (DATETIME
+     * gravado com NOW(), em UTC): primeiro vira a data civil de Campo Grande, depois se calcula a diferença de dias
+     * (antes o SQL usava DATE() do valor em UTC, e uma contratação às 22h locais contava um dia a menos).
+     */
+    public static function diasDesdeContratacao(?string $instanteUtc, ?DateTimeImmutable $hojeOperacional = null): ?int
+    {
+        if ($instanteUtc === null || trim($instanteUtc) === '') {
+            return null;
+        }
+        $local = DateHelper::paraLocal($instanteUtc);
+        if ($local === null) {
+            return null;
+        }
+        $dia = new DateTimeImmutable($local->format('Y-m-d') . ' 00:00:00');
+        return (int)$dia->diff($hojeOperacional ?? DateHelper::hojeOperacional())->format('%r%a');
+    }
+
     private static function validatePaymentDate(string $isoDate, array $cand): array
     {
         $today = DateHelper::hojeOperacionalSql();
         if ($isoDate > $today) {
             return ['ok' => false, 'error' => 'A data de pagamento não pode ser futura.'];
         }
-        if ($isoDate < date('Y-m-d', strtotime('-90 days'))) {
+        if ($isoDate < DateHelper::hojeOperacional()->modify('-90 days')->format('Y-m-d')) {
             return ['ok' => false, 'error' => 'A data de pagamento não pode ser superior a 90 dias no passado.'];
         }
         if (!empty($cand['indicacao_data_contratacao'])) {
-            $admissao = date('Y-m-d', strtotime((string)$cand['indicacao_data_contratacao']));
+            $admissao = DateHelper::formatLocal((string)$cand['indicacao_data_contratacao'], 'Y-m-d'); // instante UTC → dia operacional
             if ($isoDate < $admissao) {
                 return ['ok' => false, 'error' => 'A data de pagamento não pode ser anterior à data de contratação.'];
             }

@@ -19,16 +19,7 @@ Identificados na auditoria arquitetural de 2026-07-09, documentados aqui para n�
    está definida na config — os dados `*_encrypted` ficam protegidos por uma chave previsível a
    partir de outros valores de config. Verificar se produção tem a chave explícita definida antes
    de assumir que os dados sensíveis estão realmente protegidos.
-4. **Timezone padrão do PHP não é o do Brasil** — identificado em 2026-11 durante a correção de
-   expiração da Carta Proposta: `date_default_timezone_get()` retorna `Europe/Berlin` neste
-   ambiente (confirmado via `php -r`), não `America/Campo_Grande`. Qualquer `new
-   DateTimeImmutable('string sem timezone')`/`strtotime()`/`date()` construído sem fuso explícito
-   no resto do código (candidaturas, folha, indicadores, etc.) herda esse timezone — podendo
-   deslocar comparações e exibições de data/hora em ~4-5h em relação ao horário real do Brasil.
-   Na Carta Proposta isso foi corrigido localmente (`CartaPropostaService::resolverAcessoPorToken()`
-   fixa `America/Campo_Grande` explicitamente só nessa comparação). **Não foi investigado nem
-   corrigido em nenhum outro lugar do sistema** — mudar o timezone padrão globalmente (bootstrap)
-   afetaria todo o Portal e exige uma auditoria dedicada antes de qualquer alteração.
+4. **Política temporal (Frente D, 2026-11) — RESOLVIDO, com regras permanentes.** Instantes são persistidos em UTC (bootstrap fixa o PHP em UTC; `Database::conn()` fixa a SESSÃO do banco em `+00:00`; produção já operava em UTC) e apresentados em `America/Campo_Grande` por conversão EXPLÍCITA (`DateHelper::formatLocal/paraLocal`, com origem declarada `utc`/`php_legado`/`civil`). Regra de negócio que depende do DIA civil usa `DateHelper::hojeOperacional()`/`hojeOperacionalSql()`/`diaOperacionalDe($instante)` — NUNCA `new DateTimeImmutable('today')`, `date('Y-m-d')`, `strtotime('today')` ou `CURDATE()` (entre 20h e 23h59 locais o UTC já é o dia seguinte); `tests/php/unit_data_operacional_cobertura.php` barra novas ocorrências. Contrato dos serviços: `$agora` = INSTANTE (gravado com `DateHelper::paraUtcSql`), `$hoje` = data CIVIL; datas do METADADOS/usuário não são convertidas. Colunas DATE e agendamentos permanecem civis. Dados históricos não foram alterados. Residual: `DATE()` em SQL de colunas de instante UTC não vira dia local (converter em PHP, como em `Candidatura::diasDesdeContratacao`).
 5. **Exclusão analítica é dado, não deploy; cobertura ainda parcial** — identificado em 2026-11:
    as 3 exclusões de 29/10 foram gravadas só no banco de desenvolvimento e o contrato "excluído"
    reapareceu em produção (tabela existia, vazia, sem erro nenhum). A identificação passou a ser pela

@@ -26,6 +26,9 @@ try {
 
     $router->get('/vagas', [HomeController::class, 'index']);
     $router->get('/vaga/{id}', [HomeController::class, 'vaga']);
+    // API pública somente-leitura das vagas abertas (consumida por madeplant.com.br/trabalhe-conosco).
+    // Mesma fonte de /vagas (Vaga::allActive()); só GET — qualquer outro método cai no 404 do Router.
+    $router->get('/api/public/vagas', [PublicVagasApiController::class, 'index']);
     $router->post('/candidatar/{id}', [HomeController::class, 'candidatar']);
 
     // Pesquisa de Experiência do Candidato — página pública, sem login, acessada por token

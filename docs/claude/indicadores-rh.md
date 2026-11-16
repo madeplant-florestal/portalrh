@@ -247,3 +247,16 @@ anos / 3 a 5 anos / 5 a 10 anos / Acima de 10 anos.
   "Não informado" até o METADADOS preencher mais contratos.
 - Os 30 colaboradores locais sem vínculo continuam pendentes de reconciliação (Fase 3.4) — não
   bloqueiam esta camada, mas também não são "corrigidos" por ela.
+
+## Headcount de uma data (People Analytics) — correção de 2026-11-15
+
+O Headcount é a **fotografia do quadro na data de referência** (fim do período, limitado a hoje pelo controller):
+contrato vigente = admissão preenchida e <= data, demissão nula ou >= data (o dia do desligamento é o último dia
+de vigência). Unidade = **contrato** (não pessoa). A população vem de
+`PeopleAnalyticsService::contratosParaHeadcount()`: vigência analítica das transferências contínuas (origem até o
+dia anterior, destino a partir do dia da transferência) e, quando a data da transferência é desconhecida, o contrato
+de origem sai (o destino carrega a admissão original). **Bug corrigido:** meses históricos liam os contratos brutos e
+contavam origem e destino da mesma transferência (o mês atual escondia o erro com `ausente_na_origem = 0`).
+Limitação: `ausente_na_origem`/`ativo`/`codigo_setor` são o estado da última sincronização, não histórico; uma
+ausência SEM sucessor continua contando no histórico (não se inventa quando sumiu). O denominador do Turnover
+permanece "ativos do período" (definição congelada) e usa a população consolidada, não este Headcount.

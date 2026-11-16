@@ -229,13 +229,20 @@ class PeopleAnalyticsService
             $this->origemContinuaParaExcluir($contratosVigenciaAnalitica, $classificacao['continuas'])
         );
 
+        // POPULAÇÃO DO HEADCOUNT NA DATA (correção 2026-11-15, "Headcount histórico inflado"): vigência analítica
+        // (origem de transferência contínua até o dia anterior, destino a partir do dia da transferência) e, nos
+        // pares SEM data conhecida, o contrato de origem sai (o destino já carrega a admissão original — contar os
+        // dois somaria a mesma pessoa duas vezes). Antes, o Headcount de qualquer mês histórico lia $contratos BRUTOS e
+        // contava origem E destino da mesma transferência (no mês atual o filtro ausente_na_origem=0 escondia o erro).
+        $contratosHeadcount = $this->contratosParaHeadcount($contratosVigenciaAnalitica, $classificacao['continuas']);
+
         // Unidade oficial dos indicadores corporativos de Headcount/movimentação: CONTRATO do
         // METADADOS (não pessoa distinta) — reaproveita a MESMA semântica consolidada em
         // RhIndicadoresService (headcountEm/admissoesNoPeriodo/desligamentosNoPeriodo), nunca uma
         // interpretação paralela. Uma mesma pessoa pode ter múltiplos contratos oficiais válidos —
         // eles não são deduplicados por codigo_pessoa aqui (só o par de transferência acima).
-        $headcountFim = RhIndicadoresService::headcountEm($contratos, $fim);
-        $headcountInicio = RhIndicadoresService::headcountEm($contratos, $inicio->modify('-1 day'));
+        $headcountFim = RhIndicadoresService::headcountEm($contratosHeadcount, $fim);
+        $headcountInicio = RhIndicadoresService::headcountEm($contratosHeadcount, $inicio->modify('-1 day'));
         // Admissões/Desligamentos SEMPRE a partir de $contratos ORIGINAL (nunca de
         // $contratosConsolidado/vigência analítica) — a data de corte da transferência é uma
         // fronteira de POPULAÇÃO, não um evento; usá-la aqui fabricaria uma admissão/desligamento
@@ -275,11 +282,11 @@ class PeopleAnalyticsService
         // Turnover Geral/Voluntário/Involuntário acima continuam intocados.
         $hoje = new DateTimeImmutable('today');
         $fimEhHoje = $fim->format('Y-m-d') === $hoje->format('Y-m-d');
-        $contratosParaHeadcountAtual = $contratos;
+        $contratosParaHeadcountAtual = $contratosHeadcount;
         $headcountAtualVigente = $headcountFim;
         if ($fimEhHoje) {
             $contratosParaHeadcountAtual = array_values(array_filter(
-                $contratos,
+                $contratosHeadcount,
                 static fn(array $c): bool => (int)($c['ausente_na_origem'] ?? 0) === 0
             ));
             $headcountAtualVigente = RhIndicadoresService::headcountEm($contratosParaHeadcountAtual, $fim);
@@ -321,7 +328,7 @@ class PeopleAnalyticsService
         $ativosPeriodoComp = count(RhIndicadoresService::ativosNoPeriodo($contratosConsolidado, $compInicio, $compFim));
         $turnoverGeralComp = RhIndicadoresService::taxaTurnoverPeriodo(count($desligamentosComp), $ativosPeriodoComp);
         $admissoesComp = RhIndicadoresService::admissoesReaisNoPeriodo($contratos, $compInicio, $compFim, $excluirAdmissaoIds, $classificacao['origem_continua_ids']);
-        $headcountFimComp = RhIndicadoresService::headcountEm($contratosConsolidado, $compFim);
+        $headcountFimComp = RhIndicadoresService::headcountEm($contratosHeadcount, $compFim);
 
         // ---- Evolução mensal + Admissões×Desligamentos: um único dataset por período, SEMPRE com
         // o mesmo número de pontos nas duas séries (alinhamento por índice de mês, nunca por
@@ -671,6 +678,20 @@ class PeopleAnalyticsService
      * em si é sempre global (buscarContratosParaMovimentacao()), mas a decisão de excluir depende
      * do que está realmente em jogo na consulta atual (ver comentário em montarPainel()).
      */
+    /**
+     * População para o Headcount em uma DATA: parte da cópia com vigência analítica e remove o contrato de ORIGEM dos
+     * pares de transferência contínua cuja data é desconhecida (sem data não há corte de dia; o destino já tem a
+     * admissão original). Só remove quando origem E destino estão no escopo atual. Nunca muta os contratos.
+     */
+    private function contratosParaHeadcount(array $contratosVigenciaAnalitica, array $paresContinuas): array
+    {
+        $semData = array_values(array_filter($paresContinuas, static fn(array $p): bool => ($p['data_transferencia'] ?? null) === null));
+        return $this->filtrarPorIdentificadoresExcluidos(
+            $contratosVigenciaAnalitica,
+            $this->origemContinuaParaExcluir($contratosVigenciaAnalitica, $semData)
+        );
+    }
+
     private function origemContinuaParaExcluir(array $contratos, array $paresContinuas): array
     {
         $presentes = array_flip(array_column($contratos, 'identificador'));

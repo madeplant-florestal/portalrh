@@ -118,7 +118,8 @@ class CartaPropostaService
             'beneficios_texto' => $beneficiosTexto,
             'local_trabalho' => $localTrabalho !== '' ? $localTrabalho : null,
             'previsao_inicio' => null,
-            'validade_proposta' => (new DateTimeImmutable('today'))->modify('+7 days')->format('Y-m-d'),
+            // Data CIVIL de Campo Grande (não a do fuso do servidor): +7 dias a partir de hoje no dia local do RH.
+            'validade_proposta' => DateHelper::hojeCivilLocal()->modify('+7 days')->format('Y-m-d'),
             'observacoes' => null,
         ];
     }
@@ -162,7 +163,7 @@ class CartaPropostaService
         }
 
         $nomeArmazenado = CartaPropostaPdfService::gerar($carta);
-        $agora = (new DateTimeImmutable('now'))->format('Y-m-d H:i:s');
+        $agora = DateHelper::agoraUtcSql();
         $gravou = $this->repository->marcarGerada($id, $nomeArmazenado, $agora);
         if (!$gravou) {
             return ['ok' => false, 'error' => 'Falha ao registrar a emissão (talvez já tenha sido emitida por outra aba/sessão).'];
@@ -188,7 +189,7 @@ class CartaPropostaService
         if (empty($carta['token_hash'])) {
             $tokenBruto = bin2hex(random_bytes(32));
             $tokenHash = hash('sha256', $tokenBruto);
-            $expira = (new DateTimeImmutable('now'))->modify('+' . self::PRAZO_DIAS_TOKEN . ' days')->format('Y-m-d H:i:s');
+            $expira = DateHelper::agoraUtc()->modify('+' . self::PRAZO_DIAS_TOKEN . ' days')->format('Y-m-d H:i:s');
             $link = rtrim((string)(Config::app()['base_url'] ?? ''), '/') . '/carta-proposta/' . $tokenBruto;
 
             $render = ComunicacaoService::prepararDeTemplate(
@@ -221,7 +222,7 @@ class CartaPropostaService
             return ['ok' => false, 'error' => 'Prepare a mensagem antes de confirmar o envio.'];
         }
 
-        $agora = (new DateTimeImmutable('now'))->format('Y-m-d H:i:s');
+        $agora = DateHelper::agoraUtcSql();
         $gravou = $this->repository->confirmarEnvio($id, $usuarioId, $agora);
         if (!$gravou) {
             return ['ok' => false, 'error' => 'Falha ao confirmar o envio.'];
@@ -278,7 +279,7 @@ class CartaPropostaService
 
         // status === 'enviada', ainda não decidida: só falta o prazo TÉCNICO do token (independente
         // da validade de negócio, já checada acima).
-        if ($carta['token_expira_em'] !== null && new DateTimeImmutable($carta['token_expira_em']) < $agora) {
+        if ($carta['token_expira_em'] !== null && new DateTimeImmutable($carta['token_expira_em'], new DateTimeZone('UTC')) < $agora) {
             return ['estado' => 'indisponivel', 'carta' => null, 'decisao' => null];
         }
         return ['estado' => 'formulario', 'carta' => $carta, 'decisao' => null];
@@ -320,7 +321,7 @@ class CartaPropostaService
         $gravou = $this->repository->registrarDecisao(
             (int)$carta['id'],
             $decisao,
-            $agora->format('Y-m-d H:i:s'),
+            DateHelper::paraUtcSql($agora),
             $ip,
             $userAgent !== null ? substr($userAgent, 0, 255) : null,
             $decisao === 'recusada' ? $motivoRecusa : null
@@ -353,7 +354,7 @@ class CartaPropostaService
             }
             $identificador = strtoupper(bin2hex(random_bytes(6)));
             $nomeArmazenado = CartaPropostaPdfService::gerarComprovante($cartaAtual, $identificador);
-            $agora = (new DateTimeImmutable('now'))->format('Y-m-d H:i:s');
+            $agora = DateHelper::agoraUtcSql();
             $this->repository->registrarComprovante($cartaId, $nomeArmazenado, $identificador, $agora);
         } catch (\Throwable $e) {
             Logger::error('Falha ao gerar a via com comprovante de aceite da Carta Proposta', [

@@ -9,8 +9,11 @@
 $fmtData = static function (?string $d): string {
     return ($d !== null && $d !== '' && strtotime($d) !== false) ? date('d/m/Y', strtotime($d)) : '—';
 };
+// Evidência do aceite: horário LOCAL com identificação do fuso + equivalente em UTC (decisao_em é um instante
+// gravado pelo relógio do PHP em UTC). Só vale para comprovantes gerados daqui em diante; os já emitidos não são reescritos.
 $fmtDataHora = static function (?string $d): string {
-    return ($d !== null && $d !== '' && strtotime($d) !== false) ? date('d/m/Y \à\s H:i', strtotime($d)) : '—';
+    $local = DateHelper::formatLocalComFuso($d, DateHelper::ORIGEM_PHP_LEGADO);
+    return $local === '' ? '—' : $local . ' — equivalente em ' . DateHelper::formatUtc($d, DateHelper::ORIGEM_PHP_LEGADO);
 };
 $fmtMoeda = static function ($v): string {
     return 'R$ ' . number_format((float)$v, 2, ',', '.');

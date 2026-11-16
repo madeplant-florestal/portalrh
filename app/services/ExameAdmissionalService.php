@@ -182,7 +182,7 @@ class ExameAdmissionalService
             return ['ok' => false, 'error' => (string)($comResult['error'] ?? 'Falha ao preparar a mensagem.')];
         }
 
-        $agora = (new DateTimeImmutable('now'))->format('Y-m-d H:i:s');
+        $agora = DateHelper::agoraUtcSql();
         $this->repository->marcarMensagemPreparada($id, (int)$comResult['id'], $agora);
         $this->repository->registrarEvento($id, 'mensagem_preparada', null, $vars, 'Mensagem preparada para envio ao candidato.', $usuarioId);
 
@@ -200,7 +200,7 @@ class ExameAdmissionalService
             return ['ok' => false, 'error' => 'Prepare a mensagem antes de confirmar o envio.'];
         }
 
-        $agora = (new DateTimeImmutable('now'))->format('Y-m-d H:i:s');
+        $agora = DateHelper::agoraUtcSql();
         $gravou = $this->repository->confirmarEnvio($id, $usuarioId, $agora);
         if (!$gravou) {
             return ['ok' => false, 'error' => 'Falha ao confirmar o envio.'];

@@ -3,7 +3,8 @@ require_once APP_PATH . '/views/partials/modulo-topo.php';
 $c = $carta;
 $cand = $candidatura;
 $fmtDataInput = static fn(?string $d): string => ($d !== null && $d !== '' && strtotime($d) !== false) ? date('Y-m-d', strtotime($d)) : '';
-$fmtDataHora = static fn(?string $d): string => ($d !== null && $d !== '' && strtotime($d) !== false) ? date('d/m/Y H:i', strtotime($d)) : '—';
+// gerada_em/enviada_em/decisao_em: instantes gravados pelo relógio do PHP (UTC) — exibidos em Campo Grande, valor gravado intacto.
+$fmtDataHora = static fn(?string $d): string => (DateHelper::formatLocal($d, 'd/m/Y H:i', DateHelper::ORIGEM_PHP_LEGADO) ?: '—') . ($d !== null && $d !== '' ? ' (Campo Grande)' : '');
 $fmtData = static fn(?string $d): string => ($d !== null && $d !== '' && strtotime($d) !== false) ? date('d/m/Y', strtotime($d)) : '—';
 $editavel = $c['status'] === 'rascunho';
 $rotulosStatus = [

@@ -3,7 +3,8 @@ require_once APP_PATH . '/views/partials/modulo-topo.php';
 $e = $exame;
 $cand = $candidatura;
 $fmtDataInput = static fn(?string $d): string => ($d !== null && $d !== '' && strtotime($d) !== false) ? date('Y-m-d', strtotime($d)) : '';
-$fmtDataHora = static fn(?string $d): string => ($d !== null && $d !== '' && strtotime($d) !== false) ? date('d/m/Y H:i', strtotime($d)) : '—';
+// enviado_em/created_at: instantes em UTC — exibidos em Campo Grande. (data_exame é data CIVIL de agendamento e não passa por aqui.)
+$fmtDataHora = static fn(?string $d): string => (DateHelper::formatLocal($d) ?: '—');
 $rotulosStatus = [
     'rascunho' => 'Rascunho', 'mensagem_preparada' => 'Mensagem preparada', 'enviado' => 'Envio confirmado pelo RH',
 ];

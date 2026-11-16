@@ -115,7 +115,7 @@ try {
             'nome_candidato' => "ZZCP CandidatoTemplateAusente {$suffix}", 'cargo' => 'ZZCP Cargo', 'setor' => null,
             'empresa_contratante' => 'ZZCP Empresa', 'salario_proposto' => 3000, 'jornada_trabalho' => '40h semanais',
             'escala_horario' => null, 'beneficios_texto' => null, 'local_trabalho' => null, 'previsao_inicio' => null,
-            'validade_proposta' => (new DateTimeImmutable('today'))->modify('+10 days')->format('Y-m-d'), 'observacoes' => null,
+            'validade_proposta' => DateHelper::hojeCivilLocal()->modify('+10 days')->format('Y-m-d'), 'observacoes' => null,
         ]);
         $service->emitir($idTemplateAusente);
         $cartaTemplateAusente = $repo->buscarPorId($idTemplateAusente);
@@ -228,7 +228,7 @@ try {
         'empresa_contratante' => '', // deixado vazio de propósito para testar a rejeição de emitir()
         'salario_proposto' => 3500.50, 'jornada_trabalho' => '44h semanais', 'escala_horario' => null,
         'beneficios_texto' => $cartaA1['beneficios_texto'], 'local_trabalho' => 'Matriz', 'previsao_inicio' => null,
-        'validade_proposta' => (new DateTimeImmutable('today'))->modify('+10 days')->format('Y-m-d'), 'observacoes' => null,
+        'validade_proposta' => DateHelper::hojeCivilLocal()->modify('+10 days')->format('Y-m-d'), 'observacoes' => null,
     ]);
 
     // ---- 4) emitir() rejeita dados incompletos ----------------------------------------------------
@@ -240,8 +240,8 @@ try {
         'nome_candidato' => $cartaA1['nome_candidato'], 'cargo' => 'Analista ZZCP', 'setor' => 'ZZCP Setor',
         'empresa_contratante' => 'ZZCP Empresa Contratante', 'salario_proposto' => 3500.50,
         'jornada_trabalho' => '44h semanais', 'escala_horario' => null, 'beneficios_texto' => $cartaA1['beneficios_texto'],
-        'local_trabalho' => 'Matriz', 'previsao_inicio' => (new DateTimeImmutable('today'))->modify('+15 days')->format('Y-m-d'),
-        'validade_proposta' => (new DateTimeImmutable('today'))->modify('+10 days')->format('Y-m-d'), 'observacoes' => null,
+        'local_trabalho' => 'Matriz', 'previsao_inicio' => DateHelper::hojeCivilLocal()->modify('+15 days')->format('Y-m-d'),
+        'validade_proposta' => DateHelper::hojeCivilLocal()->modify('+10 days')->format('Y-m-d'), 'observacoes' => null,
     ]);
     $emitiu = $service->emitir($idA1);
     $check($emitiu['ok'] ?? false, '(emitir) Com todos os campos preenchidos, a emissão é aceita');
@@ -334,7 +334,7 @@ try {
         'nome_candidato' => "ZZCP CandidatoB {$suffix}", 'cargo' => 'Analista ZZCP B', 'setor' => null,
         'empresa_contratante' => 'ZZCP Empresa B', 'salario_proposto' => 2800, 'jornada_trabalho' => '40h semanais',
         'escala_horario' => null, 'beneficios_texto' => null, 'local_trabalho' => null, 'previsao_inicio' => null,
-        'validade_proposta' => (new DateTimeImmutable('today'))->modify('+10 days')->format('Y-m-d'), 'observacoes' => null,
+        'validade_proposta' => DateHelper::hojeCivilLocal()->modify('+10 days')->format('Y-m-d'), 'observacoes' => null,
     ]);
     $service->emitir($idB1);
     $cartaB1 = $repo->buscarPorId($idB1);
@@ -365,7 +365,7 @@ try {
         'nome_candidato' => "ZZCP CandidatoB {$suffix}", 'cargo' => 'Analista ZZCP B', 'setor' => null,
         'empresa_contratante' => 'ZZCP Empresa B', 'salario_proposto' => 2800, 'jornada_trabalho' => '40h semanais',
         'escala_horario' => null, 'beneficios_texto' => null, 'local_trabalho' => null, 'previsao_inicio' => null,
-        'validade_proposta' => (new DateTimeImmutable('today'))->modify('-1 day')->format('Y-m-d'), // já vencida
+        'validade_proposta' => DateHelper::hojeCivilLocal()->modify('-1 day')->format('Y-m-d'), // já vencida
         'observacoes' => null,
     ]);
     $service->emitir($idC);
@@ -467,7 +467,7 @@ try {
     $check($acessoVencidaMesmoAceita['estado'] === 'proposta_vencida' && $acessoVencidaMesmoAceita['carta'] === null, '(validade) Depois que a validade da proposta passa, o link mostra "vencida" mesmo para uma proposta JÁ ACEITA — nunca mais "concluída"');
     // restaura para não afetar nenhuma checagem seguinte que ainda use $tokenA/$idA1.
     $pdo->prepare("UPDATE cartas_propostas SET validade_proposta = ? WHERE id = ?")
-        ->execute([(new DateTimeImmutable('today'))->modify('+10 days')->format('Y-m-d'), $idA1]);
+        ->execute([DateHelper::hojeCivilLocal()->modify('+10 days')->format('Y-m-d'), $idA1]);
 
     // ---- 17g) Fuso de NEGÓCIO (Campo Grande/MS) no corte de validade — independente do timezone
     // padrão do servidor PHP (correção de homologação 2026-11: ambiente roda em Europe/Berlin,

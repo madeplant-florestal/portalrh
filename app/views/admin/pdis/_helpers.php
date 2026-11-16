@@ -13,7 +13,7 @@ if (!function_exists('pdi_data_br')) {
 
     function pdi_data_hora_br(?string $data): string
     {
-        return ($data !== null && $data !== '' && strtotime($data) !== false) ? date('d/m/Y H:i', strtotime($data)) : '—';
+        return (DateHelper::formatLocal($data) ?: '—');
     }
 
     // Badges V2 (ui_badge): mesmo texto/estados do sistema, só o tom semântico muda (rascunho neutro, não iniciado primary,

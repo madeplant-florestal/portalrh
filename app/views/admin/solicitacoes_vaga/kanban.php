@@ -78,7 +78,7 @@ require_once APP_PATH . '/views/partials/modulo-topo.php';
                             <?php else: ?>
                             <span></span>
                             <?php endif; ?>
-                            <span class="text-xs text-text-muted"><?= Security::e(date('d/m', strtotime((string)$item['created_at']))) ?></span>
+                            <span class="text-xs text-text-muted"><?= Security::e(DateHelper::formatLocal((string)$item['created_at'], 'd/m')) ?></span>
                         </div>
                     </div>
                 <?php endforeach; ?>

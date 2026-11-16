@@ -21,7 +21,7 @@ $papeis = ['gestor' => 'Gestor', 'rh' => 'RH', 'colaborador' => 'Colaborador'];
         <p class="text-xs font-semibold uppercase tracking-wide text-text-secondary"><?= Security::e($rotulo) ?></p>
         <?php if ($c !== null): ?>
           <p class="mt-1 text-sm font-medium text-text-primary"><?= Security::e((string)$c['nome_snapshot']) ?></p>
-          <p class="text-xs text-text-secondary"><?= Security::e(date('d/m/Y H:i', strtotime((string)$c['registrado_em']))) ?></p>
+          <p class="text-xs text-text-secondary"><?= Security::e(DateHelper::formatLocal((string)$c['registrado_em'])) ?></p>
         <?php else: ?>
           <p class="mt-1 text-sm text-text-muted">Ciência ainda não registrada</p>
         <?php endif; ?>

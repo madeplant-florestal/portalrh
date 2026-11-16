@@ -10,7 +10,7 @@ $indicadores = $indicadores ?? null;
 $filtros = $filtros ?? [];
 $visao = (string)($painel['visao'] ?? 'elegiveis');
 $fmtData = static fn(?string $d): string => ($d !== null && $d !== '' && strtotime($d) !== false) ? date('d/m/Y', strtotime($d)) : '—';
-$fmtDataHora = static fn(?string $d): string => ($d !== null && $d !== '' && strtotime($d) !== false) ? date('d/m/Y H:i', strtotime($d)) : '—';
+$fmtDataHora = static fn(?string $d): string => (DateHelper::formatLocal($d) ?: '—');
 
 $abas = [
     'elegiveis' => ['Elegíveis', (int)($painel['elegiveis_total'] ?? 0)],

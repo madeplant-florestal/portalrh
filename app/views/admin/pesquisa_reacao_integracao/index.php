@@ -166,8 +166,8 @@ $agora = new DateTimeImmutable('now');
             <td class="p-3 text-text-primary"><?= Security::e((string)($c['empresa_nome_snapshot'] ?? $c['codigo_empresa'] ?? '—')) ?></td>
             <td class="p-3 text-text-primary"><?= Security::e((string)($c['setor_nome_snapshot'] ?? $c['codigo_setor'] ?? '—')) ?></td>
             <td class="p-3 text-text-secondary"><?= !empty($c['data_integracao']) ? Security::e(date('d/m/Y', strtotime((string)$c['data_integracao']))) : '—' ?></td>
-            <td class="p-3 text-text-secondary"><?= Security::e(date('d/m/Y H:i', strtotime((string)$c['created_at']))) ?></td>
-            <td class="p-3 text-text-secondary"><?= Security::e($expiraEm->format('d/m/Y H:i')) ?></td>
+            <td class="p-3 text-text-secondary"><?= Security::e(DateHelper::formatLocal((string)$c['created_at'])) ?></td>
+            <td class="p-3 text-text-secondary"><?= Security::e(DateHelper::formatLocal($expiraEm)) ?></td>
             <td class="p-3"><span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold <?= $statusClasses ?>"><?= $status ?></span></td>
             <td class="p-3 text-text-primary"><?= (int)$c['total_respostas'] ?></td>
             <td class="p-3">

@@ -200,7 +200,7 @@ $falhas = (int)($queue['failed'] ?? 0);
       </div>
     </div>
     <p class="text-xs text-text-secondary">
-      Último processamento com sucesso: <?= !empty($lastProcessedAt) ? date('d/m/Y H:i', strtotime((string)$lastProcessedAt)) : 'nenhum ainda' ?>
+      Último processamento com sucesso: <?= !empty($lastProcessedAt) ? DateHelper::formatLocal((string)$lastProcessedAt) : 'nenhum ainda' ?>
     </p>
   </section>
 
@@ -251,8 +251,8 @@ $falhas = (int)($queue['failed'] ?? 0);
               </td>
               <td class="p-3"><?= (int)($item['retry_count'] ?? 0) ?></td>
               <td class="p-3">
-                <div><?= !empty($item['processed_at']) ? date('d/m/Y H:i', strtotime((string)$item['processed_at'])) : '-' ?></div>
-                <div class="mt-1 text-xs text-text-secondary"><?= date('d/m/Y H:i', strtotime((string)$item['created_at'])) ?></div>
+                <div><?= !empty($item['processed_at']) ? DateHelper::formatLocal((string)$item['processed_at']) : '-' ?></div>
+                <div class="mt-1 text-xs text-text-secondary"><?= DateHelper::formatLocal((string)$item['created_at']) ?></div>
               </td>
               <td class="p-3">
                 <?php if ($podeOperar): ?>

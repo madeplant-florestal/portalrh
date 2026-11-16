@@ -7,7 +7,7 @@
 require_once APP_PATH . '/views/partials/modulo-topo.php';
 $e = $entrevista;
 $fmtData = static fn(?string $d): string => ($d !== null && $d !== '' && strtotime($d) !== false) ? date('d/m/Y', strtotime($d)) : '—';
-$fmtDataHora = static fn(?string $d): string => ($d !== null && $d !== '' && strtotime($d) !== false) ? date('d/m/Y H:i', strtotime($d)) : '—';
+$fmtDataHora = static fn(?string $d): string => (DateHelper::formatLocal($d) ?: '—');
 $escala = EntrevistaDesligamentoService::ESCALA_1_5;
 $respondida = $e['situacao'] === 'respondida';
 $motivoOficial = implode(' — ', array_filter([trim((string)($e['snap_motivo_codigo'] ?? '')), trim((string)($e['snap_motivo_descricao'] ?? ''))], static fn(string $p): bool => $p !== ''));

@@ -90,9 +90,7 @@ try {
             $ruins[] = str_replace('\\', '/', substr($arq->getPathname(), strlen(realpath(__DIR__ . '/../../app/views')) + 1));
         }
     }
-    // D1 cobre candidaturas/pipeline; os demais módulos são migrados nas entregas D2/D3 e removidos desta lista.
-    $pendentesPermitidos = $GLOBALS['pendentesPermitidos'] ?? null;
-    $check(!in_array('admin/candidaturas/index.php', $ruins, true) && !in_array('admin/candidaturas/show.php', $ruins, true) && !in_array('admin/pipeline/index.php', $ruins, true), 'views de candidaturas e pipeline não formatam hora crua');
+    $check($ruins === [], 'nenhuma view formata instante com date()+strtotime() (hora UTC crua)' . ($ruins !== [] ? ': ' . implode(', ', $ruins) : ''));
 } finally {
     if ($movs !== []) {
         $pdo->exec('DELETE FROM pipeline_movements WHERE id IN (' . implode(',', array_map('intval', $movs)) . ')');

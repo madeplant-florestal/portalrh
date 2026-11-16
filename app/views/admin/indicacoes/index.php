@@ -119,7 +119,7 @@ if ($indicador !== '') { $params['indicador'] = $indicador; }
           <td class="p-3 font-medium text-text-primary"><?= Security::e($item['nome']) ?></td>
           <td class="p-3 text-text-primary"><?= Security::e($item['indicacao_colaborador_nome'] ?? '-') ?></td>
           <td class="p-3 text-text-primary"><?= Security::e($item['vaga_titulo'] ?? '-') ?></td>
-          <td class="p-3 text-text-secondary"><?= !empty($item['created_at']) ? date('d/m/Y H:i', strtotime((string)$item['created_at'])) : '-' ?></td>
+          <td class="p-3 text-text-secondary"><?= !empty($item['created_at']) ? DateHelper::formatLocal((string)$item['created_at']) : '-' ?></td>
           <td class="p-3"><span class="whitespace-nowrap px-2 py-1 rounded-ds-sm text-xs font-semibold text-white" style="background-color: <?= Security::e($stageCor) ?>"><?= Security::e($item['stage_nome'] ?? 'Novo') ?></span></td>
           <td class="p-3 text-text-primary"><?= !empty($contratacao) ? date('d/m/Y', strtotime((string)$contratacao)) : '-' ?></td>
           <td class="p-3 text-text-primary"><?= $dias !== null ? $dias . ' dias' : '-' ?></td>

@@ -58,7 +58,7 @@ ui_script_pagina('integracao-qr.js');
       <p class="mt-2 text-sm text-text-primary">
         <span class="inline-flex rounded-full bg-primary-50 px-2.5 py-1 text-xs font-semibold text-primary-800">Aberta para respostas</span>
         Integração de <strong><?= Security::e(date('d/m/Y', strtotime((string)$sessaoAberta['data_integracao']))) ?></strong>
-        <span class="text-text-secondary">· aberta em <?= Security::e(date('d/m/Y H:i', strtotime((string)$sessaoAberta['created_at']))) ?></span>
+        <span class="text-text-secondary">· aberta em <?= Security::e(DateHelper::formatLocal((string)$sessaoAberta['created_at'])) ?></span>
       </p>
       <?php if (!empty($podeGerenciar)): ?>
         <form method="post" action="<?= $base ?>/admin/pesquisa-integracao-qr/sessao/<?= (int)$sessaoAberta['id'] ?>/encerrar" class="mt-3" data-confirm-message="Encerrar esta integração? O QR Code deixará de receber respostas.">
@@ -99,8 +99,8 @@ ui_script_pagina('integracao-qr.js');
             <tr class="border-b">
               <td class="p-3 text-text-primary"><?= Security::e(date('d/m/Y', strtotime((string)$s['data_integracao']))) ?></td>
               <td class="p-3"><span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold <?= (int)($s['aberta'] ?? 0) === 1 ? 'bg-primary-50 text-primary-800' : 'bg-surface-secondary text-text-muted' ?>"><?= (int)($s['aberta'] ?? 0) === 1 ? 'Aberta' : 'Encerrada' ?></span></td>
-              <td class="p-3 text-text-secondary"><?= Security::e(date('d/m/Y H:i', strtotime((string)$s['created_at']))) ?></td>
-              <td class="p-3 text-text-secondary"><?= !empty($s['encerrada_em']) ? Security::e(date('d/m/Y H:i', strtotime((string)$s['encerrada_em']))) : '—' ?></td>
+              <td class="p-3 text-text-secondary"><?= Security::e(DateHelper::formatLocal((string)$s['created_at'])) ?></td>
+              <td class="p-3 text-text-secondary"><?= !empty($s['encerrada_em']) ? Security::e(DateHelper::formatLocal((string)$s['encerrada_em'])) : '—' ?></td>
               <td class="p-3 text-text-primary"><?= (int)$s['respostas_qr'] ?></td>
             </tr>
           <?php endforeach; ?>

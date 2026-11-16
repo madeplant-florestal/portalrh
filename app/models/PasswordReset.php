@@ -1,22 +1,28 @@
 <?php
 class PasswordReset
 {
-    public static function create(int $userId, string $rawToken, int $ttlMinutes = 30): void
+    /**
+     * Instante de criação e expiração no MESMO referencial (UTC, via DateHelper) — a validação compara com o
+     * "agora" também em UTC (findValidByToken). Antes o `expires_at` vinha do relógio/fuso do PHP e era comparado
+     * com o NOW() do banco: um servidor PHP em outro fuso encurtava ou alongava a validade do token. A duração
+     * (TTL) não muda. `$agora` existe para teste.
+     */
+    public static function create(int $userId, string $rawToken, int $ttlMinutes = 30, ?DateTimeImmutable $agora = null): void
     {
         self::invalidateOpenTokens($userId);
         $tokenHash = hash('sha256', $rawToken);
-        $expiresAt = (new DateTimeImmutable('now +' . $ttlMinutes . ' minutes'))->format('Y-m-d H:i:s');
+        $expiresAt = DateHelper::paraUtcSql(($agora ?? DateHelper::agoraUtc())->modify('+' . $ttlMinutes . ' minutes'));
         $sql = 'INSERT INTO password_resets (usuario_id, token_hash, expires_at) VALUES (?, ?, ?)';
         $stmt = Database::conn()->prepare($sql);
         $stmt->execute([$userId, $tokenHash, $expiresAt]);
     }
 
-    public static function findValidByToken(string $rawToken): ?array
+    public static function findValidByToken(string $rawToken, ?DateTimeImmutable $agora = null): ?array
     {
         $tokenHash = hash('sha256', $rawToken);
-        $sql = 'SELECT * FROM password_resets WHERE token_hash = ? AND used_at IS NULL AND expires_at > NOW() ORDER BY created_at DESC LIMIT 1';
+        $sql = 'SELECT * FROM password_resets WHERE token_hash = ? AND used_at IS NULL AND expires_at > ? ORDER BY created_at DESC LIMIT 1';
         $stmt = Database::conn()->prepare($sql);
-        $stmt->execute([$tokenHash]);
+        $stmt->execute([$tokenHash, DateHelper::paraUtcSql($agora ?? DateHelper::agoraUtc())]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
         return $row ?: null;
     }

@@ -75,7 +75,7 @@ if ($status !== '') { $params['status'] = $status; }
           <td class="p-3">
             <?= ui_badge($isActive ? 'Ativo' : 'Inativo', $isActive ? 'success' : 'neutro') ?>
           </td>
-          <td class="p-3 text-text-secondary"><?= !empty($u['created_at']) ? date('d/m/Y H:i', strtotime((string)$u['created_at'])) : '-' ?></td>
+          <td class="p-3 text-text-secondary"><?= !empty($u['created_at']) ? DateHelper::formatLocal((string)$u['created_at']) : '-' ?></td>
           <td class="p-3">
             <a href="<?= $base ?>/admin/usuarios/<?= (int)$u['id'] ?>" class="text-primary-700 hover:text-primary-800 font-medium">Visualizar</a>
           </td>
@@ -102,7 +102,7 @@ if ($status !== '') { $params['status'] = $status; }
           <?php endif; ?>
           <?= ui_badge($isActive ? 'Ativo' : 'Inativo', $isActive ? 'success' : 'neutro') ?>
         </div>
-        <div class="mt-3 text-xs text-text-secondary">Cadastro: <?= !empty($u['created_at']) ? date('d/m/Y H:i', strtotime((string)$u['created_at'])) : '-' ?></div>
+        <div class="mt-3 text-xs text-text-secondary">Cadastro: <?= !empty($u['created_at']) ? DateHelper::formatLocal((string)$u['created_at']) : '-' ?></div>
         <div class="responsive-card-actions mt-4">
           <a href="<?= $base ?>/admin/usuarios/<?= (int)$u['id'] ?>" class="text-primary-700 hover:text-primary-800 font-medium">Visualizar</a>
         </div>

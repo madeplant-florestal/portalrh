@@ -160,7 +160,7 @@ $v = static fn(string $k): string => $criar ? '' : (string)($feedback[$k] ?? '')
       <p class="mt-1 text-xs text-text-secondary">Gostaria de compartilhar alguma percepção, dificuldade, sugestão ou necessidade de apoio? Preenchido de forma assistida — não altera as respostas do gestor.</p>
       <?php if (!empty($feedback['espaco_colaborador'])): ?>
         <div class="mt-2 rounded-lg bg-background p-3 text-sm text-text-primary"><?= nl2br(Security::e((string)$feedback['espaco_colaborador'])) ?></div>
-        <p class="mt-1 text-xs text-text-secondary">Registrado em <?= Security::e(date('d/m/Y H:i', strtotime((string)$feedback['espaco_colaborador_preenchido_em']))) ?></p>
+        <p class="mt-1 text-xs text-text-secondary">Registrado em <?= Security::e(DateHelper::formatLocal((string)$feedback['espaco_colaborador_preenchido_em'])) ?></p>
       <?php elseif ($podeAvaliar ?? true): ?>
         <form method="post" action="<?= $base ?>/admin/feedbacks/<?= (int)$feedback['id'] ?>/espaco-colaborador" class="mt-2 space-y-2">
           <input type="hidden" name="csrf" value="<?= Security::e(Security::csrfToken()) ?>">

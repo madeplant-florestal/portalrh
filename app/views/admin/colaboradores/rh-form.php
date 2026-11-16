@@ -225,7 +225,7 @@ $readonlyClass = 'mt-1 w-full rounded border bg-surface-secondary px-3 py-2 text
             Status:
             <span class="font-medium">
               <?= !empty($pesquisaIntegracao['respondida_em'])
-                ? 'Respondida em ' . Security::e(date('d/m/Y H:i', strtotime((string)$pesquisaIntegracao['respondida_em'])))
+                ? 'Respondida em ' . Security::e(DateHelper::formatLocal((string)$pesquisaIntegracao['respondida_em']))
                 : 'Aguardando resposta' ?>
             </span>
           </p>
@@ -259,7 +259,7 @@ $readonlyClass = 'mt-1 w-full rounded border bg-surface-secondary px-3 py-2 text
         <p class="mt-1 text-sm text-text-secondary">
           Contrato ativo no METADADOS: <strong><?= $edAtivoMetadados ? 'Sim' : ('Não — rescindido em ' . Security::e($dataDemissao)) ?></strong>
           <?php if ($edLiberacao !== null): ?>
-            · Entrevista liberada manualmente no Portal em <strong><?= Security::e(date('d/m/Y H:i', strtotime((string)$edLiberacao['liberada_em']))) ?></strong>
+            · Entrevista liberada manualmente no Portal em <strong><?= Security::e(DateHelper::formatLocal((string)$edLiberacao['liberada_em'])) ?></strong>
           <?php endif; ?>
         </p>
 

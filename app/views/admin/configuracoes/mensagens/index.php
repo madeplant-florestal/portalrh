@@ -36,7 +36,7 @@ require_once APP_PATH . '/views/partials/modulo-topo.php';
                 <?= (int)($m['ativo'] ?? 0) === 1 ? 'Ativa' : 'Inativa' ?>
               </span>
             </td>
-            <td class="p-3 text-text-secondary"><?= !empty($m['updated_at']) ? date('d/m/Y H:i', strtotime((string)$m['updated_at'])) : '-' ?></td>
+            <td class="p-3 text-text-secondary"><?= !empty($m['updated_at']) ? DateHelper::formatLocal((string)$m['updated_at']) : '-' ?></td>
             <td class="p-3">
               <?php if (!empty($podeEditar)): ?>
                 <a href="<?= $base ?>/admin/configuracoes/mensagens/editar/<?= (int)$m['id'] ?>" class="text-primary-700 hover:text-primary-700">Editar</a>
@@ -62,7 +62,7 @@ require_once APP_PATH . '/views/partials/modulo-topo.php';
         <div class="mt-1"><code class="rounded bg-surface-secondary px-2 py-1 text-xs text-text-primary"><?= Security::e((string)$m['codigo']) ?></code></div>
         <div class="mt-2 text-xs font-medium text-text-secondary">
           <?= (int)($m['ativo'] ?? 0) === 1 ? 'Ativa' : 'Inativa' ?>
-          · atualizado em <?= !empty($m['updated_at']) ? date('d/m/Y H:i', strtotime((string)$m['updated_at'])) : '-' ?>
+          · atualizado em <?= !empty($m['updated_at']) ? DateHelper::formatLocal((string)$m['updated_at']) : '-' ?>
         </div>
         <?php if (!empty($podeEditar)): ?>
         <div class="responsive-card-actions mt-4">

@@ -76,11 +76,11 @@ $podeAlterarPerfil = !empty($podeAlterarPerfil);
     </div>
     <div>
       <div class="text-text-secondary">Data de cadastro</div>
-      <div class="font-medium text-text-primary"><?= !empty($user->created_at) ? date('d/m/Y H:i', strtotime((string)$user->created_at)) : '-' ?></div>
+      <div class="font-medium text-text-primary"><?= !empty($user->created_at) ? DateHelper::formatLocal((string)$user->created_at) : '-' ?></div>
     </div>
     <div>
       <div class="text-text-secondary">Último reset de senha</div>
-      <div class="font-medium text-text-primary"><?= !empty($user->last_password_reset_at) ? date('d/m/Y H:i', strtotime((string)$user->last_password_reset_at)) : '-' ?></div>
+      <div class="font-medium text-text-primary"><?= !empty($user->last_password_reset_at) ? DateHelper::formatLocal((string)$user->last_password_reset_at) : '-' ?></div>
     </div>
   </div>
   </section>

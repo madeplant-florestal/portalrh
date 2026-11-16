@@ -70,7 +70,7 @@ $descricaoCampanha = implode(' · ', array_filter([
           <div class="rounded-ds-md bg-background p-3">
             <p class="text-xs font-semibold text-text-secondary">
               <?= Security::e((string)($resposta['nome'] ?? '') !== '' ? (string)$resposta['nome'] : 'Anônimo') ?>
-              · <?= Security::e(date('d/m/Y H:i', strtotime((string)$resposta['respondida_em']))) ?>
+              · <?= Security::e(DateHelper::formatLocal((string)$resposta['respondida_em'])) ?>
             </p>
             <?php if (!empty($resposta['mais_gostou'])): ?>
               <p class="mt-1 text-sm text-text-primary"><span class="font-medium">O que mais gostou:</span> <?= Security::e((string)$resposta['mais_gostou']) ?></p>

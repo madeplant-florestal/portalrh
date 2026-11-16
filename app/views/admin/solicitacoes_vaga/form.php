@@ -508,7 +508,7 @@ $payload = [
         <div class="rounded-xl border bg-white p-4 shadow-sm">
           <div class="text-xs font-semibold uppercase tracking-wide text-text-secondary">Status do fluxo</div>
           <div class="mt-2 text-lg font-semibold text-text-primary"><?= Security::e($statusLabels[$record['status_fluxo']] ?? $record['status_fluxo']) ?></div>
-          <div class="mt-2 text-sm text-text-secondary">Enviado em <?= Security::e(date('d/m/Y H:i', strtotime((string)$record['created_at']))) ?></div>
+          <div class="mt-2 text-sm text-text-secondary">Enviado em <?= Security::e(DateHelper::formatLocal((string)$record['created_at'])) ?></div>
         </div>
         <div class="rounded-xl border bg-white p-4 shadow-sm">
           <div class="text-xs font-semibold uppercase tracking-wide text-text-secondary">Área / Cargo</div>
@@ -632,7 +632,7 @@ $payload = [
             <div class="text-sm font-semibold text-text-primary">Líder imediato</div>
             <div class="mt-2 text-sm text-text-secondary">Destinatário: <?= Security::e($leaderApproval['destinatario_nome'] ?? $record['lider_nome'] ?? 'Não configurado') ?></div>
             <div class="mt-1 text-sm text-text-secondary">Status: <?= Security::e(ucfirst((string)($leaderApproval['status'] ?? 'pendente'))) ?></div>
-            <div class="mt-1 text-sm text-text-secondary">Data: <?= !empty($leaderApproval['aprovado_em']) ? Security::e(date('d/m/Y H:i', strtotime((string)$leaderApproval['aprovado_em']))) : 'Pendente' ?></div>
+            <div class="mt-1 text-sm text-text-secondary">Data: <?= !empty($leaderApproval['aprovado_em']) ? Security::e(DateHelper::formatLocal((string)$leaderApproval['aprovado_em'])) : 'Pendente' ?></div>
             <?php if (!empty($leaderApproval['aprovador_nome'])): ?><div class="mt-1 text-sm text-text-secondary">Aprovador: <?= Security::e($leaderApproval['aprovador_nome']) ?></div><?php endif; ?>
             <?php if ($canApproveLeader): ?>
               <form action="<?= $base ?>/admin/solicitacoes-vaga/<?= (int)$record['id'] ?>/aprovar-lider" method="post" class="mt-4 space-y-3">
@@ -649,7 +649,7 @@ $payload = [
           <div class="rounded-lg border p-4">
             <div class="text-sm font-semibold text-text-primary">Recursos Humanos</div>
             <div class="mt-2 text-sm text-text-secondary">Status: <?= Security::e(ucfirst((string)($rhApproval['status'] ?? 'pendente'))) ?></div>
-            <div class="mt-1 text-sm text-text-secondary">Data: <?= !empty($rhApproval['aprovado_em']) ? Security::e(date('d/m/Y H:i', strtotime((string)$rhApproval['aprovado_em']))) : 'Pendente' ?></div>
+            <div class="mt-1 text-sm text-text-secondary">Data: <?= !empty($rhApproval['aprovado_em']) ? Security::e(DateHelper::formatLocal((string)$rhApproval['aprovado_em'])) : 'Pendente' ?></div>
             <?php if (!empty($rhApproval['aprovador_nome'])): ?><div class="mt-1 text-sm text-text-secondary">Aprovador: <?= Security::e($rhApproval['aprovador_nome']) ?></div><?php endif; ?>
             <?php if ($canApproveRh): ?>
               <form action="<?= $base ?>/admin/solicitacoes-vaga/<?= (int)$record['id'] ?>/aprovar-rh" method="post" class="mt-4 space-y-3">
@@ -752,7 +752,7 @@ $payload = [
             <?php $isNotaAvulsa = ($evento['situacao_anterior'] ?? null) === ($evento['situacao_nova'] ?? null); ?>
             <div class="rounded-lg border border-border bg-surface-secondary p-3 text-sm">
               <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-text-secondary">
-                <span><?= Security::e(date('d/m/Y H:i', strtotime((string)$evento['created_at']))) ?> — <?= Security::e($evento['usuario_nome'] ?? 'Sistema') ?></span>
+                <span><?= Security::e(DateHelper::formatLocal((string)$evento['created_at'])) ?> — <?= Security::e($evento['usuario_nome'] ?? 'Sistema') ?></span>
                 <span class="font-medium <?= $isNotaAvulsa ? 'text-text-primary' : 'text-primary-700' ?>">
                   <?= $isNotaAvulsa ? 'Anotação' : 'Movimentação: ' . Security::e((string)($evento['situacao_anterior'] ?? '—')) . ' → ' . Security::e((string)$evento['situacao_nova']) ?>
                 </span>
@@ -782,7 +782,7 @@ $payload = [
             <tbody>
               <?php foreach (($record['auditoria'] ?? []) as $audit): ?>
                 <tr class="border-b">
-                  <td class="p-3"><?= Security::e(date('d/m/Y H:i', strtotime((string)$audit['created_at']))) ?></td>
+                  <td class="p-3"><?= Security::e(DateHelper::formatLocal((string)$audit['created_at'])) ?></td>
                   <td class="p-3"><?= Security::e($audit['actor_nome'] ?? 'Sistema') ?></td>
                   <td class="p-3"><?= Security::e($audit['event_type']) ?></td>
                   <td class="p-3"><?= Security::e($audit['field_name'] ?? '-') ?></td>

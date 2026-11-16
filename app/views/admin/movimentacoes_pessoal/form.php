@@ -356,12 +356,12 @@ $payload = [
         <div class="rounded-ds-md border bg-surface p-4">
           <div class="text-sm font-semibold text-text-primary">Gestor imediato</div>
           <div class="mt-2 text-sm text-text-secondary">Assinatura: <?= !empty($record['gestor_assinado_em']) ? 'Registrada' : 'Pendente' ?></div>
-          <div class="mt-1 text-sm text-text-secondary">Data: <?= !empty($record['gestor_assinado_em']) ? Security::e(date('d/m/Y H:i', strtotime((string)$record['gestor_assinado_em']))) : 'Pendente' ?></div>
+          <div class="mt-1 text-sm text-text-secondary">Data: <?= !empty($record['gestor_assinado_em']) ? Security::e(DateHelper::formatLocal((string)$record['gestor_assinado_em'])) : 'Pendente' ?></div>
         </div>
         <div class="rounded-ds-md border bg-surface p-4">
           <div class="text-sm font-semibold text-text-primary">RH</div>
           <div class="mt-2 text-sm text-text-secondary">Assinatura: <?= !empty($record['rh_assinado_em']) ? 'Registrada' : 'Pendente' ?></div>
-          <div class="mt-1 text-sm text-text-secondary">Data: <?= !empty($record['rh_assinado_em']) ? Security::e(date('d/m/Y H:i', strtotime((string)$record['rh_assinado_em']))) : 'Pendente' ?></div>
+          <div class="mt-1 text-sm text-text-secondary">Data: <?= !empty($record['rh_assinado_em']) ? Security::e(DateHelper::formatLocal((string)$record['rh_assinado_em'])) : 'Pendente' ?></div>
         </div>
         <div class="rounded-ds-md border bg-surface p-4">
           <div class="text-sm font-semibold text-text-primary">Data da decisão</div>
@@ -411,7 +411,7 @@ $payload = [
           <tbody>
             <?php foreach (($record['auditoria'] ?? []) as $audit): ?>
               <tr class="border-b">
-                <td class="p-3"><?= Security::e(date('d/m/Y H:i', strtotime((string)$audit['created_at']))) ?></td>
+                <td class="p-3"><?= Security::e(DateHelper::formatLocal((string)$audit['created_at'])) ?></td>
                 <td class="p-3"><?= Security::e($audit['actor_nome'] ?? 'Sistema') ?></td>
                 <td class="p-3"><?= Security::e($audit['event_type']) ?></td>
                 <td class="p-3"><?= Security::e($audit['field_name'] ?? '-') ?></td>

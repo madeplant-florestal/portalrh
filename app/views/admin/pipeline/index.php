@@ -93,7 +93,7 @@ require_once APP_PATH . '/views/partials/modulo-topo.php';
                         
                         <div class="mt-3 flex items-center justify-between gap-3">
                             <a href="<?= $base ?>/admin/candidaturas/<?= $c['id'] ?>" class="text-xs font-medium text-primary-700 hover:text-primary-800 hover:underline">Ver detalhes</a>
-                            <span class="text-xs text-text-muted"><?= date('d/m', strtotime($c['created_at'])) ?></span>
+                            <span class="text-xs text-text-muted"><?= DateHelper::formatLocal($c['created_at'], 'd/m') ?></span>
                         </div>
                     </div>
                 <?php endforeach; ?>

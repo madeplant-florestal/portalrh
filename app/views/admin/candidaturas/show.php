@@ -223,7 +223,7 @@ require_once APP_PATH . '/views/partials/modulo-topo.php';
             $ehImagem = in_array($doc['mime'], ['image/png', 'image/jpeg'], true);
             $tamanhoBytes = $doc['tamanho_bytes'];
             $tamanhoKb = $tamanhoBytes !== null ? Security::e(number_format(((int)$tamanhoBytes) / 1024, 0, ',', '.')) : '—';
-            $dataEnvio = !empty($doc['criado_em']) ? Security::e(date('d/m/Y H:i', strtotime($doc['criado_em']))) : '—';
+            $dataEnvio = !empty($doc['criado_em']) ? Security::e(DateHelper::formatLocal($doc['criado_em'])) : '—';
             $responsavel = Security::e($doc['enviado_por_nome'] ?? 'Sistema');
           ?>
           <div class="flex flex-col overflow-hidden rounded-ds-md border border-border bg-white" title="<?= Security::e($doc['nome_original']) ?> — enviado em <?= $dataEnvio ?> por <?= $responsavel ?> — <?= $tamanhoKb ?> KB">
@@ -293,7 +293,7 @@ require_once APP_PATH . '/views/partials/modulo-topo.php';
                   <?php endif; ?>
                 </div>
                 <div class="text-sm text-text-secondary sm:text-right">
-                  <time datetime="<?= $h['created_at'] ?>"><?= date('d/m/Y H:i', strtotime($h['created_at'])) ?></time>
+                  <time datetime="<?= Security::e((string)DateHelper::iso8601Utc($h['created_at'])) ?>"><?= DateHelper::formatLocal($h['created_at']) ?></time>
                   <div class="text-xs">por <?= Security::e($h['usuario_nome'] ?? 'Sistema') ?></div>
                 </div>
               </div>
@@ -353,7 +353,7 @@ require_once APP_PATH . '/views/partials/modulo-topo.php';
                   <?php endif; ?>
                 </div>
                 <div class="text-sm text-text-secondary sm:text-right">
-                  <time datetime="<?= $com['created_at'] ?>"><?= date('d/m/Y H:i', strtotime((string)$com['created_at'])) ?></time>
+                  <time datetime="<?= Security::e((string)DateHelper::iso8601Utc((string)$com['created_at'])) ?>"><?= DateHelper::formatLocal((string)$com['created_at']) ?></time>
                 </div>
               </div>
             </div>
@@ -373,7 +373,7 @@ require_once APP_PATH . '/views/partials/modulo-topo.php';
     <?php if (empty($pesquisa) || empty($pesquisa['respondida_em'])): ?>
       <p class="text-sm text-text-secondary">O candidato ainda não respondeu à pesquisa de experiência.</p>
     <?php else: ?>
-      <p class="text-xs text-text-secondary mb-3">Respondida em <?= date('d/m/Y H:i', strtotime((string)$pesquisa['respondida_em'])) ?></p>
+      <p class="text-xs text-text-secondary mb-3">Respondida em <?= DateHelper::formatLocal((string)$pesquisa['respondida_em']) ?></p>
       <div class="grid gap-3 sm:grid-cols-3">
         <div class="rounded border border-border bg-white p-3">
           <div class="text-xs text-text-secondary">Clareza das informações</div>

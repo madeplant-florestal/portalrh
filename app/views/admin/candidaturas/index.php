@@ -78,7 +78,7 @@ require_once APP_PATH . '/views/partials/modulo-topo.php';
                     <?= Security::e($stageName) ?>
                 </span>
             </td>
-            <td class="p-3 text-text-secondary"><?= date('d/m/Y H:i', strtotime($c['created_at'])) ?></td>
+            <td class="p-3 text-text-secondary"><?= DateHelper::formatLocal($c['created_at']) ?></td>
             <td class="p-3">
               <div class="responsive-card-actions">
                 <a href="<?= $base ?>/admin/candidaturas/<?= (int)$c['id'] ?>" class="text-primary-700 hover:text-primary-800 font-medium">Detalhes</a>
@@ -126,7 +126,7 @@ require_once APP_PATH . '/views/partials/modulo-topo.php';
             </span>
           </div>
           <div class="responsive-card-row mt-3">
-            <div class="text-xs text-text-secondary"><?= date('d/m/Y H:i', strtotime($c['created_at'])) ?></div>
+            <div class="text-xs text-text-secondary"><?= DateHelper::formatLocal($c['created_at']) ?></div>
             <div class="responsive-card-actions text-xs">
               <a href="<?= $base ?>/admin/candidaturas/<?= (int)$c['id'] ?>" class="text-primary-700 font-medium">Detalhes</a>
               <a href="<?= $base ?>/admin/candidaturas/<?= (int)$c['id'] ?>/download" class="text-text-secondary">PDF</a>

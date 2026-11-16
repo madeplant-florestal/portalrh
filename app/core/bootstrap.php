@@ -12,6 +12,12 @@ if (!defined('STORAGE_PATH')) {
     define('STORAGE_PATH', BASE_PATH . DIRECTORY_SEPARATOR . 'storage');
 }
 
+// Fuso padrão do PHP FIXO em UTC (Frente D, 2026-11-15): instantes são persistidos em UTC e apresentados em
+// America/Campo_Grande por conversão explícita (DateHelper). Em produção o PHP já operava em UTC (diagnóstico de
+// 2026-11-15: desvio 0 min contra o banco) — nenhuma mudança de comportamento ali; no desenvolvimento (Europe/Berlin)
+// e em qualquer servidor o resultado passa a ser o mesmo. Não depende de php.ini nem do fuso do servidor.
+date_default_timezone_set('UTC');
+
 // Dependência escopada via Composer só para geração de PDF (Dompdf) — ver CLAUDE.md §4/§21.
 // O restante do projeto continua com autoload manual via glob() abaixo, sem Composer.
 $vendorAutoload = BASE_PATH . DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR . 'autoload.php';

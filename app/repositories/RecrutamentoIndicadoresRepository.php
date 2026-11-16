@@ -47,7 +47,7 @@ class RecrutamentoIndicadoresRepository
         ?int $vagaId
     ): array {
         $where = ['c.created_at >= ?', 'c.created_at <= ?'];
-        $params = [$inicio->format('Y-m-d 00:00:00'), $fim->format('Y-m-d 23:59:59')];
+        $params = $this->limitesPeriodoUtc($inicio, $fim);
 
         if ($empresaId !== null) {
             $where[] = 'v.empresa_id = ?';
@@ -226,12 +226,26 @@ class RecrutamentoIndicadoresRepository
         ];
     }
 
+    /**
+     * Limites do período, EM UTC, para colunas de INSTANTE (created_at, fechada_em, respondida_em): o dia é o dia civil de
+     * Campo Grande (00:00:00 do início até 23:59:59 do fim, no fuso local), convertido para UTC — uma candidatura às 22h
+     * locais do último dia (02h UTC do dia seguinte) continua dentro do período em que o RH a viu.
+     *
+     * @return array{0:string,1:string}
+     */
+    private function limitesPeriodoUtc(DateTimeImmutable $inicio, DateTimeImmutable $fim): array
+    {
+        $limiteInicio = DateHelper::limitesDiaLocalEmUtc($inicio->format('Y-m-d'));
+        $limiteFim = DateHelper::limitesDiaLocalEmUtc($fim->format('Y-m-d'));
+        return [$limiteInicio[0] ?? $inicio->format('Y-m-d 00:00:00'), $limiteFim[1] ?? $fim->format('Y-m-d 23:59:59')];
+    }
+
     /** Solicitações fechadas no período (situação = 'fechada', recorte por `fechada_em`). */
     public function contarSolicitacoesFechadas(DateTimeImmutable $inicio, DateTimeImmutable $fim, ?int $empresaId): array
     {
         $where = ["st.slug = 'fechada'", 'sv.fechada_em >= ?', 'sv.fechada_em <= ?',
             ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusaoProcesso(SolicitacaoVaga::COLUNAS_COLABORADOR_PROCESSO)];
-        $params = [$inicio->format('Y-m-d 00:00:00'), $fim->format('Y-m-d 23:59:59')];
+        $params = $this->limitesPeriodoUtc($inicio, $fim);
         if ($empresaId !== null) {
             $where[] = 'se.empresa_id = ?';
             $params[] = $empresaId;
@@ -260,7 +274,7 @@ class RecrutamentoIndicadoresRepository
         ?int $vagaId
     ): array {
         $where = ['pe.respondida_em IS NOT NULL', 'pe.respondida_em >= ?', 'pe.respondida_em <= ?'];
-        $params = [$inicio->format('Y-m-d 00:00:00'), $fim->format('Y-m-d 23:59:59')];
+        $params = $this->limitesPeriodoUtc($inicio, $fim);
         if ($empresaId !== null) {
             $where[] = 'v.empresa_id = ?';
             $params[] = $empresaId;

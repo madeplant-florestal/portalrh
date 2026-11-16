@@ -101,7 +101,7 @@ $payload = [
       <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         <div>
           <label class="block text-sm font-medium text-text-primary">Data da solicitação *</label>
-          <input type="text" name="data_solicitacao" value="<?= Security::e($form['data_solicitacao_br'] ?? $form['data_solicitacao'] ?? date('d/m/Y')) ?>" class="mt-1 w-full rounded border px-3 py-2" placeholder="DD/MM/AAAA" data-mask-date="1" <?= $canEditDraft ? '' : 'disabled' ?>>
+          <input type="text" name="data_solicitacao" value="<?= Security::e($form['data_solicitacao_br'] ?? $form['data_solicitacao'] ?? DateHelper::hojeOperacional()->format('d/m/Y')) ?>" class="mt-1 w-full rounded border px-3 py-2" placeholder="DD/MM/AAAA" data-mask-date="1" <?= $canEditDraft ? '' : 'disabled' ?>>
         </div>
         <div>
           <label class="block text-sm font-medium text-text-primary">Gestor solicitante *</label>

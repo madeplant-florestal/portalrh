@@ -67,7 +67,7 @@ class AdminDashboardRecrutamentoController extends Controller
     /** @return array{0:DateTimeImmutable,1:DateTimeImmutable} */
     private function resolverPeriodo(string $periodo): array
     {
-        $hoje = new DateTimeImmutable('today');
+        $hoje = DateHelper::hojeOperacional();
         switch ($periodo) {
             case '6m':
                 return [$hoje->modify('first day of this month')->modify('-5 months'), $hoje];

@@ -73,7 +73,7 @@ ui_script_pagina('integracao-qr.js');
           <input type="hidden" name="csrf" value="<?= Security::e(Security::csrfToken()) ?>">
           <div>
             <label for="campo-data-integracao" class="block text-xs font-semibold uppercase tracking-wide text-text-secondary">Data da Integração</label>
-            <input id="campo-data-integracao" type="date" name="data_integracao" required value="<?= Security::e(date('Y-m-d')) ?>" class="mt-1 rounded-ds-md border border-border px-3 py-2 text-sm text-text-primary">
+            <input id="campo-data-integracao" type="date" name="data_integracao" required value="<?= Security::e(DateHelper::hojeOperacionalSql()) ?>" class="mt-1 rounded-ds-md border border-border px-3 py-2 text-sm text-text-primary">
           </div>
           <button type="submit" class="<?= ui_btn('primario') ?>">Abrir integração</button>
         </form>

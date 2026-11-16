@@ -93,7 +93,7 @@ class TurnoverDashboardService
     /** @param array $filtros Chaves: codigo_empresa, codigo_cargo. */
     public function montarPainel(array $filtros, int $ano, ?DateTimeImmutable $hoje = null): array
     {
-        $hoje = $hoje ?? new DateTimeImmutable('today');
+        $hoje = $hoje ?? DateHelper::hojeOperacional();
         $contratos = $this->repository->buscarContratos($filtros);
         $codigosCargo = [];
         foreach ($contratos as $contrato) {

@@ -35,7 +35,7 @@ class AdminPesquisaIntegracaoResultadosController extends Controller
         Auth::requireRole(['admin', 'rh', 'viewer']);
         Authorization::requirePermissao('integracao_colaborador.visualizar');
 
-        $hoje = new DateTimeImmutable('today');
+        $hoje = DateHelper::hojeOperacional();
         $service = new DashboardIntegracaoService();
         $erro = null;
         $painel = null;

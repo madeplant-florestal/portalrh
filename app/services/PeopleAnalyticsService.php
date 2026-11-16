@@ -280,7 +280,7 @@ class PeopleAnalyticsService
         // passado). Registro de origem de uma transferência contínua já é `ausente_na_origem=1`,
         // então já sai daqui pelo filtro existente — nenhuma duplicidade possível neste card.
         // Turnover Geral/Voluntário/Involuntário acima continuam intocados.
-        $hoje = new DateTimeImmutable('today');
+        $hoje = DateHelper::hojeOperacional();
         $fimEhHoje = $fim->format('Y-m-d') === $hoje->format('Y-m-d');
         $contratosParaHeadcountAtual = $contratosHeadcount;
         $headcountAtualVigente = $headcountFim;
@@ -1038,7 +1038,7 @@ class PeopleAnalyticsService
         ?string $codigoEmpresa,
         ?string $codigoSetor
     ): array {
-        $hoje = new DateTimeImmutable('today');
+        $hoje = DateHelper::hojeOperacional();
         $r = $this->avaliacoesRepository;
 
         $coberturaExperiencia = $r->coberturaExperiencia($inicio, $fim, $codigoEmpresa, $codigoSetor);
@@ -1332,7 +1332,7 @@ class PeopleAnalyticsService
             }
         }
 
-        $hoje = new DateTimeImmutable('today');
+        $hoje = DateHelper::hojeOperacional();
 
         return array_map(function (array $linha) use ($origensTransferencia, $hoje): array {
             $ativo = (int)($linha['ativo'] ?? 0) === 1;

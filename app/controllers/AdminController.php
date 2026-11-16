@@ -300,7 +300,7 @@ class AdminController extends Controller
      */
     private function resolverPeriodo(string $periodo, array $params = []): array
     {
-        $hoje = new DateTimeImmutable('today');
+        $hoje = DateHelper::hojeOperacional();
         $padrao = static fn(): array => [$hoje->modify('first day of this month')->modify('-11 months'), $hoje];
 
         switch ($periodo) {
@@ -347,7 +347,7 @@ class AdminController extends Controller
             return $fallback;
         }
         $ano = (int)$valor;
-        $anoAtual = (int)(new DateTimeImmutable('today'))->format('Y');
+        $anoAtual = (int)(DateHelper::hojeOperacional())->format('Y');
         return ($ano >= 2015 && $ano <= $anoAtual) ? $ano : $fallback;
     }
 

@@ -100,7 +100,7 @@ $fmtData = static fn(DateTimeImmutable $d): string => $d->format('d/m/Y');
             </select>
           </label>
           <label class="text-[11px] text-text-secondary">Ano<br>
-            <input type="number" name="ano" min="2015" max="2100" value="<?= Security::e($periodoParams['ano'] !== '' ? $periodoParams['ano'] : date('Y')) ?>" class="w-20 rounded-ds-md border border-border bg-surface px-2 py-1 text-sm">
+            <input type="number" name="ano" min="2015" max="2100" value="<?= Security::e($periodoParams['ano'] !== '' ? $periodoParams['ano'] : DateHelper::hojeOperacional()->format('Y')) ?>" class="w-20 rounded-ds-md border border-border bg-surface px-2 py-1 text-sm">
           </label>
           <button type="submit" class="rounded-ds-md bg-primary-600 px-2.5 py-1 text-xs font-semibold text-white">Aplicar mês</button>
         </form>
@@ -112,7 +112,7 @@ $fmtData = static fn(DateTimeImmutable $d): string => $d->format('d/m/Y');
           <input type="hidden" name="gestor" value="<?= Security::e($filtrosSelecionados['gestor']) ?>">
           <input type="hidden" name="comparativo" value="<?= Security::e($comparativoSelecionado) ?>">
           <label class="text-[11px] text-text-secondary">Ano específico<br>
-            <input type="number" name="ano" min="2015" max="2100" value="<?= Security::e($periodoParams['ano'] !== '' ? $periodoParams['ano'] : date('Y')) ?>" class="w-24 rounded-ds-md border border-border bg-surface px-2 py-1 text-sm">
+            <input type="number" name="ano" min="2015" max="2100" value="<?= Security::e($periodoParams['ano'] !== '' ? $periodoParams['ano'] : DateHelper::hojeOperacional()->format('Y')) ?>" class="w-24 rounded-ds-md border border-border bg-surface px-2 py-1 text-sm">
           </label>
           <button type="submit" class="rounded-ds-md bg-primary-600 px-2.5 py-1 text-xs font-semibold text-white">Aplicar ano</button>
         </form>

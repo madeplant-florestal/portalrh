@@ -402,12 +402,13 @@ class MovimentacaoPessoal
         }
 
         $stmt = Database::conn()->prepare("UPDATE movimentacoes_pessoal
-                                           SET status_fluxo = ?, rh_assinatura_hash = ?, rh_assinado_em = NOW(), rh_assinado_por_usuario_id = ?, data_decisao = CURDATE()
+                                           SET status_fluxo = ?, rh_assinatura_hash = ?, rh_assinado_em = NOW(), rh_assinado_por_usuario_id = ?, data_decisao = ?
                                            WHERE id = ?");
         $stmt->execute([
             self::STATUS_APROVADA,
             self::signatureHash($id, 'rh', $actorUserId),
             $actorUserId,
+            DateHelper::hojeOperacionalSql(),
             $id,
         ]);
 
@@ -473,7 +474,7 @@ class MovimentacaoPessoal
         $currentAccess = $dependencies['current_access'] ?? null;
 
         $tipoMovimentacao = self::nullableEnum($input['tipo_movimentacao'] ?? '', ['merito', 'promocao', 'transferencia', 'alteracao_funcao']) ?? 'merito';
-        $dataSolicitacao = DateHelper::toDatabaseDate($input['data_solicitacao'] ?? '') ?? date('Y-m-d');
+        $dataSolicitacao = DateHelper::toDatabaseDate($input['data_solicitacao'] ?? '') ?? DateHelper::hojeOperacionalSql();
 
         $gestorUsuarioId = self::nullableInt($input['gestor_solicitante_usuario_id'] ?? null)
             ?: (($currentAccess['usuario_id'] ?? null) ? (int)$currentAccess['usuario_id'] : $actorUserId);
@@ -582,7 +583,7 @@ class MovimentacaoPessoal
         if (!$dataPrevista) {
             throw new InvalidArgumentException('Informe a data prevista da mudança no formato DD/MM/AAAA.');
         }
-        if ($dataPrevista <= date('Y-m-d')) {
+        if ($dataPrevista <= DateHelper::hojeOperacionalSql()) {
             throw new InvalidArgumentException('A data prevista da mudança deve ser futura.');
         }
 
@@ -887,7 +888,7 @@ class MovimentacaoPessoal
         }
         try {
             $start = new DateTimeImmutable($date);
-            $now = new DateTimeImmutable('today');
+            $now = DateHelper::hojeOperacional();
         } catch (Throwable $e) {
             return 0;
         }

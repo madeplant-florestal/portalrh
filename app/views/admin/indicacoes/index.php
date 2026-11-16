@@ -105,7 +105,7 @@ if ($indicador !== '') { $params['indicador'] = $indicador; }
         $dias = isset($item['dias_desde_contratacao']) ? (int)$item['dias_desde_contratacao'] : null;
         $expStatus = 'Não contratado';
         if (!empty($contratacao)) {
-            $expStatus = (!empty($fimExp) && strtotime(date('Y-m-d')) > strtotime((string)$fimExp)) ? 'Experiência concluída' : 'Em experiência';
+            $expStatus = (!empty($fimExp) && strtotime(DateHelper::hojeOperacionalSql()) > strtotime((string)$fimExp)) ? 'Experiência concluída' : 'Em experiência';
         }
         $pago = (int)($item['indicacao_pagamento_realizado'] ?? 0) === 1;
         $signal = $sinalV2($item['payment_signal'] ?? ['dot' => 'bg-text-muted', 'text' => 'text-text-primary']);
@@ -167,7 +167,7 @@ if ($indicador !== '') { $params['indicador'] = $indicador; }
       $dias = isset($item['dias_desde_contratacao']) ? (int)$item['dias_desde_contratacao'] : null;
       $expStatus = 'Não contratado';
       if (!empty($contratacao)) {
-          $expStatus = (!empty($fimExp) && strtotime(date('Y-m-d')) > strtotime((string)$fimExp)) ? 'Experiência concluída' : 'Em experiência';
+          $expStatus = (!empty($fimExp) && strtotime(DateHelper::hojeOperacionalSql()) > strtotime((string)$fimExp)) ? 'Experiência concluída' : 'Em experiência';
       }
       $pago = (int)($item['indicacao_pagamento_realizado'] ?? 0) === 1;
       $signal = $sinalV2($item['payment_signal'] ?? ['dot' => 'bg-text-muted', 'text' => 'text-text-primary']);

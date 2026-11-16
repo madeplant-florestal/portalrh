@@ -397,8 +397,8 @@ class Candidatura
         }
         $stageName = (string)($candidatura['stage_nome'] ?? '');
         if (self::isAdmissionStageName($stageName)) {
-            $stmt = $pdo->prepare('UPDATE candidaturas SET indicacao_data_contratacao = COALESCE(indicacao_data_contratacao, NOW()), indicacao_data_fim_experiencia = COALESCE(indicacao_data_fim_experiencia, DATE_ADD(CURDATE(), INTERVAL 90 DAY)) WHERE id = ?');
-            $stmt->execute([$id]);
+            $stmt = $pdo->prepare('UPDATE candidaturas SET indicacao_data_contratacao = COALESCE(indicacao_data_contratacao, NOW()), indicacao_data_fim_experiencia = COALESCE(indicacao_data_fim_experiencia, DATE_ADD(?, INTERVAL 90 DAY)) WHERE id = ?');
+            $stmt->execute([DateHelper::hojeOperacionalSql(), $id]);
         }
         return true;
     }
@@ -497,9 +497,11 @@ class Candidatura
 
         $exp = trim((string)($filters['experiencia'] ?? ''));
         if ($exp === 'em_experiencia') {
-            $where[] = 'c.indicacao_data_contratacao IS NOT NULL AND CURDATE() <= c.indicacao_data_fim_experiencia';
+            $where[] = 'c.indicacao_data_contratacao IS NOT NULL AND ? <= c.indicacao_data_fim_experiencia';
+            $params[] = DateHelper::hojeOperacionalSql();
         } elseif ($exp === 'concluida') {
-            $where[] = 'c.indicacao_data_contratacao IS NOT NULL AND CURDATE() > c.indicacao_data_fim_experiencia';
+            $where[] = 'c.indicacao_data_contratacao IS NOT NULL AND ? > c.indicacao_data_fim_experiencia';
+            $params[] = DateHelper::hojeOperacionalSql();
         } elseif ($exp === 'nao_contratado') {
             $where[] = 'c.indicacao_data_contratacao IS NULL';
         }
@@ -532,11 +534,11 @@ class Candidatura
             $offset = ($page - 1) * $perPage;
         }
 
-        $sql = 'SELECT c.*, v.titulo AS vaga_titulo, s.nome AS stage_nome, s.cor AS stage_cor, CASE WHEN c.indicacao_data_contratacao IS NOT NULL THEN DATEDIFF(CURDATE(), DATE(c.indicacao_data_contratacao)) ELSE NULL END AS dias_desde_contratacao FROM candidaturas c LEFT JOIN vagas v ON v.id = c.vaga_id LEFT JOIN pipeline_stages s ON s.id = c.stage_id'
+        $sql = 'SELECT c.*, v.titulo AS vaga_titulo, s.nome AS stage_nome, s.cor AS stage_cor, CASE WHEN c.indicacao_data_contratacao IS NOT NULL THEN DATEDIFF(?, DATE(c.indicacao_data_contratacao)) ELSE NULL END AS dias_desde_contratacao FROM candidaturas c LEFT JOIN vagas v ON v.id = c.vaga_id LEFT JOIN pipeline_stages s ON s.id = c.stage_id'
             . $whereSql
             . ' ORDER BY c.created_at DESC LIMIT ? OFFSET ?';
         $stmt = Database::conn()->prepare($sql);
-        $queryParams = $params;
+        $queryParams = array_merge([DateHelper::hojeOperacionalSql()], $params);
         $queryParams[] = $perPage;
         $queryParams[] = $offset;
         $stmt->execute($queryParams);
@@ -595,9 +597,11 @@ class Candidatura
 
         $exp = trim((string)($filters['experiencia'] ?? ''));
         if ($exp === 'em_experiencia') {
-            $where[] = 'c.indicacao_data_contratacao IS NOT NULL AND CURDATE() <= c.indicacao_data_fim_experiencia';
+            $where[] = 'c.indicacao_data_contratacao IS NOT NULL AND ? <= c.indicacao_data_fim_experiencia';
+            $params[] = DateHelper::hojeOperacionalSql();
         } elseif ($exp === 'concluida') {
-            $where[] = 'c.indicacao_data_contratacao IS NOT NULL AND CURDATE() > c.indicacao_data_fim_experiencia';
+            $where[] = 'c.indicacao_data_contratacao IS NOT NULL AND ? > c.indicacao_data_fim_experiencia';
+            $params[] = DateHelper::hojeOperacionalSql();
         } elseif ($exp === 'nao_contratado') {
             $where[] = 'c.indicacao_data_contratacao IS NULL';
         }
@@ -714,7 +718,7 @@ class Candidatura
 
     public static function paymentSignal(array $cand, ?DateTimeImmutable $today = null): array
     {
-        $todayObj = $today ?? new DateTimeImmutable('today');
+        $todayObj = $today ?? DateHelper::hojeOperacional();
         $pago = (int)($cand['indicacao_pagamento_realizado'] ?? 0) === 1;
         if ($pago) {
             return ['color' => 'ctgreen', 'label' => 'Pago', 'dot' => 'bg-ctgreen', 'text' => 'text-ctgreen'];
@@ -818,7 +822,7 @@ class Candidatura
 
     private static function validatePaymentDate(string $isoDate, array $cand): array
     {
-        $today = date('Y-m-d');
+        $today = DateHelper::hojeOperacionalSql();
         if ($isoDate > $today) {
             return ['ok' => false, 'error' => 'A data de pagamento não pode ser futura.'];
         }

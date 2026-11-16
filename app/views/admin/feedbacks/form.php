@@ -81,7 +81,7 @@ $v = static fn(string $k): string => $criar ? '' : (string)($feedback[$k] ?? '')
         <?php endif; ?>
         <div>
           <label for="data_feedback" class="<?= $rotulo ?>">Data do Feedback <span class="text-danger" aria-hidden="true">*</span></label>
-          <input id="data_feedback" type="date" name="data_feedback" value="<?= Security::e($criar ? date('Y-m-d') : $v('data_feedback')) ?>" <?= $disabled ?> required class="<?= $campo ?>">
+          <input id="data_feedback" type="date" name="data_feedback" value="<?= Security::e($criar ? DateHelper::hojeOperacionalSql() : $v('data_feedback')) ?>" <?= $disabled ?> required class="<?= $campo ?>">
         </div>
         <div>
           <label for="tipo" class="<?= $rotulo ?>">Tipo de Feedback <span class="text-danger" aria-hidden="true">*</span></label>

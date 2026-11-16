@@ -18,7 +18,7 @@ class AdminPdisController extends Controller
         Authorization::requirePermissao('pdi.visualizar');
 
         $ator = PdiService::atorDaSessao();
-        $hoje = new DateTimeImmutable('today');
+        $hoje = DateHelper::hojeOperacional();
         $erro = null;
         $lista = ['itens' => [], 'filtros' => [], 'opcoes' => ['empresas' => [], 'unidades' => [], 'cargos' => [], 'gestores' => []]];
         try {
@@ -45,7 +45,7 @@ class AdminPdisController extends Controller
         Authorization::requirePermissao('pdi.gerenciar');
 
         $ator = PdiService::atorDaSessao();
-        $hoje = new DateTimeImmutable('today');
+        $hoje = DateHelper::hojeOperacional();
         $service = new PdiService();
         $contratoId = ctype_digit((string)($_GET['contrato'] ?? '')) ? (int)$_GET['contrato'] : 0;
         if ($contratoId > 0) {
@@ -84,7 +84,7 @@ class AdminPdisController extends Controller
         $resultado = $service->criar($_POST, $ator, $agora, Security::clientIp());
         if (!($resultado['ok'] ?? false)) {
             $contratoId = ctype_digit((string)($_POST['metadados_id'] ?? '')) ? (int)$_POST['metadados_id'] : 0;
-            $contrato = $contratoId > 0 ? $service->contratoParaCriacao($contratoId, $ator, new DateTimeImmutable('today')) : null;
+            $contrato = $contratoId > 0 ? $service->contratoParaCriacao($contratoId, $ator, DateHelper::hojeOperacional()) : null;
             if ($contrato === null) {
                 redirect('/admin/pdis/novo?erro=' . urlencode((string)$resultado['error']));
             }
@@ -99,7 +99,7 @@ class AdminPdisController extends Controller
         $this->exigirLogin();
         Authorization::requirePermissao('pdi.visualizar');
 
-        $detalhe = (new PdiService())->detalhe((int)$id, PdiService::atorDaSessao(), new DateTimeImmutable('today'));
+        $detalhe = (new PdiService())->detalhe((int)$id, PdiService::atorDaSessao(), DateHelper::hojeOperacional());
         if ($detalhe === null) {
             http_response_code(404);
             echo 'PDI não encontrado.';
@@ -107,7 +107,7 @@ class AdminPdisController extends Controller
         }
         $this->view->render('admin/pdis/show', [
             'd' => $detalhe,
-            'hoje' => new DateTimeImmutable('today'),
+            'hoje' => DateHelper::hojeOperacional(),
             'linksOrigem' => $this->linksOrigem($detalhe['origens']),
             'flashOk' => Security::sanitizeString($_GET['ok'] ?? ''),
             'flashErro' => Security::sanitizeString($_GET['erro'] ?? ''),
@@ -149,7 +149,7 @@ class AdminPdisController extends Controller
         Authorization::requirePermissao('pdi.gerenciar');
 
         $ator = PdiService::atorDaSessao();
-        $detalhe = (new PdiService())->detalhe((int)$id, $ator, new DateTimeImmutable('today'));
+        $detalhe = (new PdiService())->detalhe((int)$id, $ator, DateHelper::hojeOperacional());
         if ($detalhe === null) {
             http_response_code(404);
             echo 'PDI não encontrado.';
@@ -169,7 +169,7 @@ class AdminPdisController extends Controller
         }
         $resultado = $service->atualizarEstrutura((int)$id, $_POST, $ator, new DateTimeImmutable('now'), Security::clientIp());
         if (!($resultado['ok'] ?? false)) {
-            $detalhe = $service->detalhe((int)$id, $ator, new DateTimeImmutable('today'));
+            $detalhe = $service->detalhe((int)$id, $ator, DateHelper::hojeOperacional());
             if ($detalhe === null) {
                 http_response_code(404);
                 echo 'PDI não encontrado.';

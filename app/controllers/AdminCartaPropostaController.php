@@ -183,7 +183,7 @@ class AdminCartaPropostaController extends Controller
             'beneficios_texto' => trim((string)($_POST['beneficios_texto'] ?? '')) ?: null,
             'local_trabalho' => Security::sanitizeString($_POST['local_trabalho'] ?? '') ?: null,
             'previsao_inicio' => $this->dataOuNull($_POST['previsao_inicio'] ?? ''),
-            'validade_proposta' => $this->dataOuNull($_POST['validade_proposta'] ?? '') ?? (new DateTimeImmutable('today'))->modify('+7 days')->format('Y-m-d'),
+            'validade_proposta' => $this->dataOuNull($_POST['validade_proposta'] ?? '') ?? (DateHelper::hojeOperacional())->modify('+7 days')->format('Y-m-d'),
             'observacoes' => trim((string)($_POST['observacoes'] ?? '')) ?: null,
         ];
     }

@@ -64,7 +64,7 @@ class PesquisaIntegracaoQrService
             if ($data === false || ($erros !== false && ($erros['warning_count'] > 0 || $erros['error_count'] > 0))) {
                 continue;
             }
-            if ($data > new DateTimeImmutable('today') || (int)$data->format('Y') < 1900) {
+            if ($data > DateHelper::hojeOperacional() || (int)$data->format('Y') < 1900) {
                 return null;
             }
             return $data->format('Y-m-d');

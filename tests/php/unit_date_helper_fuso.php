@@ -68,8 +68,8 @@ foreach (['UTC', 'Europe/Berlin', 'America/Campo_Grande', 'Asia/Tokyo'] as $tzSe
 
     // agoraUtc independe do fuso do PHP
     $check(DateHelper::agoraUtc()->getTimezone()->getName() === 'UTC' && abs(strtotime(DateHelper::agoraUtcSql() . ' UTC') - time()) <= 2, "[{$tzServidor}] agoraUtcSql() é o instante atual em UTC");
-    $hoje = DateHelper::hojeCivilLocal();
-    $check($hoje->format('H:i:s') === '00:00:00' && $hoje->getTimezone()->getName() === 'America/Campo_Grande', "[{$tzServidor}] 'hoje' civil é de Campo Grande");
+    $hoje = DateHelper::hojeOperacional();
+    $check($hoje->format('H:i:s') === '00:00:00' && $hoje->format('Y-m-d') === (new DateTimeImmutable('now', $cgTz = new DateTimeZone('America/Campo_Grande')))->format('Y-m-d'), "[{$tzServidor}] 'hoje' operacional é a data civil de Campo Grande (meia-noite, fuso padrão do PHP)");
 }
 
 if ($falhas !== []) {

@@ -281,7 +281,7 @@ class Colaborador
         if ($dataInicioCargo < $dataAdmissao) {
             return ['ok' => false, 'error' => 'A data de início no cargo não pode ser anterior à data de admissão.'];
         }
-        if ($dataNascimento !== null && $dataNascimento > date('Y-m-d')) {
+        if ($dataNascimento !== null && $dataNascimento > DateHelper::hojeOperacionalSql()) {
             return ['ok' => false, 'error' => 'A data de nascimento não pode ser futura.'];
         }
         if ($dataDemissao !== null && $dataDemissao < $dataAdmissao) {
@@ -496,7 +496,7 @@ class Colaborador
         }
         try {
             $start = new DateTimeImmutable($date);
-            $now = new DateTimeImmutable('today');
+            $now = DateHelper::hojeOperacional();
         } catch (Throwable $e) {
             return 0;
         }

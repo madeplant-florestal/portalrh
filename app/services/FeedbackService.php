@@ -168,7 +168,7 @@ class FeedbackService
 
     public function buscarContratos(string $busca): array
     {
-        return $this->repository->buscarContratos($busca, (new DateTimeImmutable('today'))->format('Y-m-d'));
+        return $this->repository->buscarContratos($busca, (DateHelper::hojeOperacional())->format('Y-m-d'));
     }
 
     public function usuariosParaEscolha(array $ator): array

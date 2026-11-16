@@ -22,7 +22,7 @@ class AdminAvaliacoesDesenvolvimentoController
         }
 
         $ator = AvaliacaoExperienciaService::atorDaSessao();
-        $hoje = new DateTimeImmutable('today');
+        $hoje = DateHelper::hojeOperacional();
         $temExperiencia = Authorization::temPermissao('avaliacao_experiencia.visualizar');
         $temFeedback = Authorization::temPermissao('feedback.visualizar');
         $temPdi = Authorization::temPermissao('pdi.visualizar');

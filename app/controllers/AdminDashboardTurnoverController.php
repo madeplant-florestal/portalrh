@@ -12,7 +12,7 @@ class AdminDashboardTurnoverController extends Controller
         Auth::requireRole(['admin', 'rh', 'viewer']);
         Authorization::requirePermissao('dashboard_turnover.visualizar');
 
-        $hoje = new DateTimeImmutable('today');
+        $hoje = DateHelper::hojeOperacional();
         $service = new TurnoverDashboardService();
 
         $erro = null;

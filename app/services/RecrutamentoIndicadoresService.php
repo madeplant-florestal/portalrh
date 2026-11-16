@@ -231,7 +231,7 @@ class RecrutamentoIndicadoresService
     private function montarEfetivacaoEDesligamento(DateTimeImmutable $inicio, DateTimeImmutable $fim): array
     {
         $contratos = $this->rhRepository->buscarContratos([]);
-        $hoje = new DateTimeImmutable('today');
+        $hoje = DateHelper::hojeOperacional();
         $limiteDias = RhIndicadoresService::LIMITE_TURNOVER_PRECOCE_DIAS;
 
         $elegiveis = 0;

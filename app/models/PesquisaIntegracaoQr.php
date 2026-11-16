@@ -27,7 +27,7 @@ class PesquisaIntegracaoQr
 
     private const SELECT_CONTRATO = "SELECT " . self::CAMPOS_CONTRATO . "
         FROM colaboradores_metadados cm
-        WHERE cm.ativo = 1 AND (cm.demissao IS NULL OR cm.demissao >= CURDATE())";
+        WHERE cm.ativo = 1 AND (cm.demissao IS NULL OR cm.demissao >= ?)";
 
     /**
      * Respostas ORIGINADAS PELO QR: linhas criadas por inserirResposta() — `colaborador_id` e
@@ -50,7 +50,7 @@ class PesquisaIntegracaoQr
             self::SELECT_CONTRATO . ' AND ' . ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusao('cm.id')
             . ' AND cm.cpf = ? AND cm.nascimento = ? ORDER BY cm.admissao DESC, cm.id DESC'
         );
-        $stmt->execute([$cpfDigitos, $nascimentoYmd]);
+        $stmt->execute([DateHelper::hojeOperacionalSql(), $cpfDigitos, $nascimentoYmd]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
@@ -60,7 +60,7 @@ class PesquisaIntegracaoQr
         $stmt = Database::conn()->prepare(
             self::SELECT_CONTRATO . ' AND ' . ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusao('cm.id') . ' AND cm.id = ? LIMIT 1'
         );
-        $stmt->execute([$metadadosId]);
+        $stmt->execute([DateHelper::hojeOperacionalSql(), $metadadosId]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
         return $row ?: null;
     }

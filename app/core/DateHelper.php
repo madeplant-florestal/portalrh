@@ -92,10 +92,18 @@ class DateHelper
     public const ORIGEM_CIVIL = 'civil';
     private const FUSO_PHP_LEGADO = 'UTC';
 
+    /** Relógio controlado — SOMENTE para testes (produção nunca chama). null = relógio real. */
+    private static ?DateTimeImmutable $relogioFixo = null;
+
+    public static function fixarRelogioParaTeste(?DateTimeInterface $instante): void
+    {
+        self::$relogioFixo = $instante === null ? null : DateTimeImmutable::createFromInterface($instante)->setTimezone(new DateTimeZone('UTC'));
+    }
+
     /** Instante atual, com fuso UTC explícito (independe do fuso padrão do PHP). */
     public static function agoraUtc(): DateTimeImmutable
     {
-        return new DateTimeImmutable('now', new DateTimeZone('UTC'));
+        return self::$relogioFixo ?? new DateTimeImmutable('now', new DateTimeZone('UTC'));
     }
 
     /** "Y-m-d H:i:s" do instante atual em UTC — para gravar em DATETIME que representa um instante. */
@@ -110,10 +118,37 @@ class DateHelper
         return DateTimeImmutable::createFromInterface($instante)->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
     }
 
-    /** Data civil de HOJE em Campo Grande ("Y-m-d"), independente do fuso do PHP/servidor. */
+    /**
+     * DIA OPERACIONAL de um instante: a data civil em Campo Grande, como DateTimeImmutable à meia-noite no fuso PADRÃO
+     * do PHP (mesma convenção de `new DateTimeImmutable('2026-11-15')`), para comparar com outras datas civis sem
+     * deslocamento. Só para INSTANTES — nunca passe uma data civil já pronta (seria convertida de novo).
+     */
+    public static function diaOperacionalDe(DateTimeInterface $instante): DateTimeImmutable
+    {
+        $dia = DateTimeImmutable::createFromInterface($instante)->setTimezone(new DateTimeZone(self::TZ_APRESENTACAO))->format('Y-m-d');
+        return new DateTimeImmutable($dia . ' 00:00:00');
+    }
+
+    /**
+     * "Hoje" da OPERAÇÃO: a data civil atual em America/Campo_Grande (entre 20h e 23h59 locais o UTC já está no dia
+     * seguinte, por isso `new DateTimeImmutable('today')`/`date('Y-m-d')`/CURDATE() NÃO servem para regra de negócio).
+     * Use para períodos de dashboard, vigência de contratos, vencimentos e qualquer comparação com datas civis.
+     */
+    public static function hojeOperacional(): DateTimeImmutable
+    {
+        return self::diaOperacionalDe(self::agoraUtc());
+    }
+
+    /** "Y-m-d" do dia operacional — para parâmetros SQL no lugar de CURDATE(). */
+    public static function hojeOperacionalSql(): string
+    {
+        return self::hojeOperacional()->format('Y-m-d');
+    }
+
+    /** Compatibilidade (Frente D2): mesmo que hojeOperacional(). */
     public static function hojeCivilLocal(): DateTimeImmutable
     {
-        return (new DateTimeImmutable('now', new DateTimeZone(self::TZ_APRESENTACAO)))->setTime(0, 0, 0);
+        return self::hojeOperacional();
     }
 
     /**

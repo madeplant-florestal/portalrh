@@ -390,7 +390,7 @@ class CollaboratorSpreadsheetImportService
         if ($record['data_nascimento'] === null) {
             $issues[] = 'NASC. obrigatoria invalida ou ausente';
         }
-        if ($record['data_nascimento'] !== null && $record['data_nascimento'] > date('Y-m-d')) {
+        if ($record['data_nascimento'] !== null && $record['data_nascimento'] > DateHelper::hojeOperacionalSql()) {
             $issues[] = 'Data de nascimento futura';
         }
         if ($record['data_admissao'] !== null && $record['data_nascimento'] !== null && $record['data_nascimento'] > $record['data_admissao']) {

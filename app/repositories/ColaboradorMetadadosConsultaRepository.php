@@ -41,7 +41,7 @@ class ColaboradorMetadadosConsultaRepository
 
     public function summary(?array $codigosSetorPermitidos = null, ?DateTimeImmutable $referencia = null): array
     {
-        $dataRef = $referencia ?? new DateTimeImmutable('today');
+        $dataRef = $referencia ?? DateHelper::hojeOperacional();
         [$vigenteSql, $vigenteParams] = ColaboradorMetadadosElegibilidadeService::clausulaSqlVigente('', $dataRef);
         [$desligadoSql, $desligadoParams] = ColaboradorMetadadosElegibilidadeService::clausulaSqlDesligado('', $dataRef);
         // `ativos` representa a população vigente AGORA: um contrato marcado `ausente_na_origem
@@ -370,12 +370,12 @@ class ColaboradorMetadadosConsultaRepository
         $situacao = (string)($filtros['situacao'] ?? '');
         if ($situacao === 'ativos') {
             // Vigência contratual (predicado central, igual ao card Headcount Atual e a summary()).
-            [$vigenteSql, $vigenteParams] = ColaboradorMetadadosElegibilidadeService::clausulaSqlVigente('m', new DateTimeImmutable('today'));
+            [$vigenteSql, $vigenteParams] = ColaboradorMetadadosElegibilidadeService::clausulaSqlVigente('m', DateHelper::hojeOperacional());
             $where[] = $vigenteSql;
             array_push($params, ...$vigenteParams);
         } elseif ($situacao === 'desligados') {
             // Desligamento EFETIVO (demissão anterior a hoje). Não depende da flag `ativo`.
-            [$desligadoSql, $desligadoParams] = ColaboradorMetadadosElegibilidadeService::clausulaSqlDesligado('m', new DateTimeImmutable('today'));
+            [$desligadoSql, $desligadoParams] = ColaboradorMetadadosElegibilidadeService::clausulaSqlDesligado('m', DateHelper::hojeOperacional());
             $where[] = $desligadoSql;
             array_push($params, ...$desligadoParams);
         }

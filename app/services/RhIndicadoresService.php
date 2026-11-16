@@ -103,7 +103,7 @@ class RhIndicadoresService
             $contratos,
             static fn(array $c): bool => (int)($c['ausente_na_origem'] ?? 0) === 0
         ));
-        $hoje = new DateTimeImmutable('today');
+        $hoje = DateHelper::hojeOperacional();
         $fimEhHoje = $fim->format('Y-m-d') === $hoje->format('Y-m-d');
         $headcountAtualVigente = $fimEhHoje ? self::headcountEm($contratosSemAusentes, $fim) : $headcountFim;
 
@@ -358,7 +358,7 @@ class RhIndicadoresService
      */
     public static function distribuicao(array $contratos, string $campo): array
     {
-        $hoje = new DateTimeImmutable('today');
+        $hoje = DateHelper::hojeOperacional();
         $ativos = array_filter($contratos, static fn(array $c): bool => self::contratoAtivoEm($c, $hoje));
 
         $contagem = [];

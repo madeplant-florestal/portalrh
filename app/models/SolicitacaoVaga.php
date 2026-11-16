@@ -1226,7 +1226,7 @@ class SolicitacaoVaga
         if ($dataLimiteFechamento && $dataLimiteFechamento <= $dataPrevistaInicio) {
             throw new InvalidArgumentException('A data limite desejada para fechamento deve ser posterior à data prevista para início.');
         }
-        if ($dataPrevistaInicio <= date('Y-m-d')) {
+        if ($dataPrevistaInicio <= DateHelper::hojeOperacionalSql()) {
             throw new InvalidArgumentException('A data prevista para início deve ser futura.');
         }
 

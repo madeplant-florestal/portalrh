@@ -13,7 +13,7 @@ class AdminDashboardEntrevistaDesligamentoController extends Controller
         Auth::requireRole(['admin', 'rh', 'viewer']);
         Authorization::requirePermissao('dashboard_entrevista_desligamento.visualizar');
 
-        $hoje = new DateTimeImmutable('today');
+        $hoje = DateHelper::hojeOperacional();
         $service = new DashboardEntrevistaDesligamentoService();
 
         $erro = null;

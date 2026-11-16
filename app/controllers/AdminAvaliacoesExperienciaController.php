@@ -27,7 +27,7 @@ class AdminAvaliacoesExperienciaController
         Authorization::requirePermissao('avaliacao_experiencia.visualizar');
 
         $ator = AvaliacaoExperienciaService::atorDaSessao();
-        $hoje = new DateTimeImmutable('today');
+        $hoje = DateHelper::hojeOperacional();
         $service = new AvaliacaoExperienciaService();
         $filtros = [
             'status' => Security::sanitizeString($_GET['status'] ?? ''),

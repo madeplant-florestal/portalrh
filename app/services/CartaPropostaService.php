@@ -396,7 +396,7 @@ class CartaPropostaService
             return; // já está em Admissão ou além — idempotente, nunca move para trás
         }
 
-        $dataAdmissao = !empty($carta['previsao_inicio']) ? (string)$carta['previsao_inicio'] : (new DateTimeImmutable('today'))->format('Y-m-d');
+        $dataAdmissao = !empty($carta['previsao_inicio']) ? (string)$carta['previsao_inicio'] : (DateHelper::hojeOperacional())->format('Y-m-d');
         $resultado = Candidatura::updateStage($candidaturaId, (int)$etapaAdmissao['id'], null, [
             'admission_date' => $dataAdmissao,
             'admission_notes' => 'Admissão confirmada automaticamente após aceite da Carta Proposta (versão ' . (int)($carta['versao'] ?? 0) . ').',

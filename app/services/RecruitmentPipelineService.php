@@ -113,10 +113,10 @@ class RecruitmentPipelineService
                 $stmt = $pdo->prepare(
                     'UPDATE candidaturas
                      SET indicacao_data_contratacao = COALESCE(indicacao_data_contratacao, NOW()),
-                         indicacao_data_fim_experiencia = COALESCE(indicacao_data_fim_experiencia, DATE_ADD(CURDATE(), INTERVAL 90 DAY))
+                         indicacao_data_fim_experiencia = COALESCE(indicacao_data_fim_experiencia, DATE_ADD(?, INTERVAL 90 DAY))
                      WHERE id = ?'
                 );
-                $stmt->execute([$candidateId]);
+                $stmt->execute([DateHelper::hojeOperacionalSql(), $candidateId]);
             }
 
             $observacoesTrimmed = trim((string)$observacoes);

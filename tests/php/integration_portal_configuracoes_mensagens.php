@@ -148,8 +148,10 @@ try {
     $svc = new PortalNavegacaoService();
     $cardSoWeb = array_values(array_filter($svc->modulos(), static fn(array $m): bool => $m['chave'] === 'configuracoes'))[0] ?? null;
     $abasSoWeb = array_column($svc->abas('configuracoes'), 'chave');
-    $check($cardSoWeb !== null && $cardSoWeb['href'] === '/admin/configuracoes/integracoes', '(13) Usuário só com recruitment_webhooks.visualizar: card Configurações aparece, entrada em Integrações');
-    $check(in_array('integracoes', $abasSoWeb, true) && !in_array('mensagens', $abasSoWeb, true), '(13) Esse usuário vê a aba Integrações mas NÃO a aba Mensagens — as duas áreas são independentes');
+    // Etapa 2B: recruitment_webhooks.* é INCOMPATÍVEL com viewer (configuração administrativa de integrações) — a permissão gravada
+    // não concede mais acesso, então o viewer não vê Integrações; a de Mensagens (pendente de decisão, já gravada) segue efetiva.
+    $check($cardSoWeb === null && !in_array('integracoes', $abasSoWeb, true), '(13) Viewer só com recruitment_webhooks.visualizar (permissão incompatível, legado): sem card e sem aba Integrações — a permissão gravada não concede acesso (Etapa 2B)');
+    $check(!in_array('mensagens', $abasSoWeb, true), '(13) e continua sem a aba Mensagens — as duas áreas são independentes');
 
     // ---- usuário sem nenhuma das duas permissões: sem card Configurações ----------------------------
     $comoUsuario($semNada);

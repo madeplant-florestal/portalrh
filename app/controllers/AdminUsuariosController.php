@@ -212,6 +212,7 @@ class AdminUsuariosController extends Controller
             'isAdminAtor' => $this->isAdminAtor(),
             'podeAlterarPerfil' => $this->isAdminOuRhAtor() && $rolesAtribuiveis !== [],
             'rolesAtribuiveis' => $rolesAtribuiveis,
+            'diagnosticoPermissoes' => PermissaoPerfilPolicy::diagnosticoLegado((string)$user->role, Authorization::codigosGravados((int)$user->id)),
             'alvoSupervisorGeral' => Autoridade::ehSupervisorGeral($user),
             'alvoInconsistente' => Autoridade::privilegioInconsistente($user),
             'podeAlterarSupervisorGeral' => Autoridade::podeAlterarSupervisorGeral($atorAutoridade) && (int)$user->id !== (int)($atorAutoridade->id ?? 0),
@@ -488,9 +489,17 @@ class AdminUsuariosController extends Controller
             static fn ($v): int => (int)$v,
             (array)($_POST['permissao_ids'] ?? [])
         );
+        $back = '/admin/usuarios/' . (int)$id;
+        // Etapa 2B: a SELEÇÃO FINAL é validada pela política central ANTES de qualquer gravação — id inexistente/inativo e permissão
+        // incompatível com o perfil recusam o salvamento inteiro (nada parcial, nada descartado em silêncio; o que estava gravado
+        // permanece como estava).
+        $validacao = PermissaoPerfilPolicy::validarSelecao((string)$target->role, $idsRecebidos, Authorization::idsAtribuidos((int)$id));
+        if (!$validacao['ok']) {
+            AuditLog::log($actor?->id, (int)$id, 'blocked_permissoes_update', 'Seleção recusada: ' . implode(', ', array_merge($validacao['incompativeis'], $validacao['inativas'])), Security::clientIp());
+            redirect($back . '?erro=' . urlencode($validacao['mensagem']));
+        }
         $result = Authorization::sincronizar((int)$id, $idsRecebidos);
 
-        $back = '/admin/usuarios/' . (int)$id;
         if (!($result['ok'] ?? false)) {
             redirect($back . '?erro=' . urlencode((string)($result['error'] ?? 'Falha ao salvar as permissões de acesso.')));
         }

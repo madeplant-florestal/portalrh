@@ -107,6 +107,11 @@ class Authorization
         if (self::usuarioEhAdmin($usuarioId) || self::usuarioEhRh($usuarioId)) {
             return true;
         }
+        // Etapa 2B: a permissão GRAVADA só concede acesso se for efetiva para o PERFIL (PermissaoPerfilPolicy). Uma permissão legada
+        // incompatível (ex.: candidaturas.* em viewer) continua armazenada, mas não concede nada. Perfil desconhecido: nega.
+        if (!PermissaoPerfilPolicy::permissaoEfetiva(self::roleDoUsuario($usuarioId), $codigo)) {
+            return false;
+        }
         $concedidas = self::permissoesConcedidas($usuarioId);
         return in_array($codigo, $concedidas, true);
     }
@@ -132,13 +137,18 @@ class Authorization
 
     private static function usuarioTemRole(int $usuarioId, string $role): bool
     {
+        return self::roleDoUsuario($usuarioId) === $role;
+    }
+
+    /** Perfil (role) do usuário: da sessão se for o ator atual, senão do banco. */
+    private static function roleDoUsuario(int $usuarioId): string
+    {
         if ($usuarioId === (int)($_SESSION['user_id'] ?? 0)) {
-            $atual = strtolower(trim((string)(Auth::role() ?? '')));
-            return $atual === $role;
+            return strtolower(trim((string)(Auth::role() ?? '')));
         }
         $stmt = Database::conn()->prepare('SELECT role FROM usuarios WHERE id = ?');
         $stmt->execute([$usuarioId]);
-        return strtolower(trim((string)$stmt->fetchColumn())) === $role;
+        return strtolower(trim((string)$stmt->fetchColumn()));
     }
 
     /** Códigos de permissão ATIVA concedidos ao usuário — cacheado por request. */
@@ -157,6 +167,12 @@ class Authorization
         $codigos = $stmt->fetchAll(PDO::FETCH_COLUMN);
         self::$permissoesPorUsuario[$usuarioId] = $codigos;
         return $codigos;
+    }
+
+    /** Códigos de permissão ATIVA gravados para o usuário (sem filtro de perfil) — insumo da PermissaoPerfilPolicy e do diagnóstico legado. */
+    public static function codigosGravados(int $usuarioId): array
+    {
+        return array_values(self::permissoesConcedidas($usuarioId));
     }
 
     /** Catálogo completo de permissões ativas, agrupado por módulo — para a Tela de Usuários. */

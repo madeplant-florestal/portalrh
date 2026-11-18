@@ -371,6 +371,7 @@ $podeAlterarPerfil = !empty($podeAlterarPerfil);
   <?php
     $catalogoPermissoes = $catalogoPermissoes ?? [];
     $permissoesAtribuidas = $permissoesAtribuidas ?? [];
+    $diagnosticoPermissoes = $diagnosticoPermissoes ?? ['incompativeis' => [], 'pendentes' => [], 'transitorias' => []];
     $rotuloModulo = [
       'solicitacao_vaga' => 'Solicitação de Vagas',
       'kanban_vagas' => 'Kanban de Vagas',
@@ -387,6 +388,16 @@ $podeAlterarPerfil = !empty($podeAlterarPerfil);
       dele. Administradores e RH possuem acesso total; para os demais, só o que estiver marcado aqui.
     </p>
 
+    <?php if ($diagnosticoPermissoes['incompativeis'] !== []): ?>
+      <div class="mt-3 rounded border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">
+        Permissões gravadas incompatíveis com o perfil <?= Security::e(strtoupper((string)$user->role)) ?> (não concedem acesso; para salvar a seleção de permissões, desmarque-as): <?= Security::e(implode(', ', $diagnosticoPermissoes['incompativeis'])) ?>
+      </div>
+    <?php endif; ?>
+    <?php if ($diagnosticoPermissoes['pendentes'] !== []): ?>
+      <div class="mt-3 rounded border border-border bg-surface px-3 py-2 text-xs text-text-secondary">
+        Mantidas por dependência operacional ainda não decidida (novas atribuições são recusadas): <?= Security::e(implode(', ', $diagnosticoPermissoes['pendentes'])) ?>
+      </div>
+    <?php endif; ?>
     <form action="<?= $base ?>/admin/usuarios/<?= (int)$user->id ?>/permissoes" method="post" class="mt-4 space-y-5">
       <input type="hidden" name="csrf" value="<?= Security::e($csrf) ?>">
 

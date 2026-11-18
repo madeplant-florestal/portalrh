@@ -80,3 +80,31 @@ Identificados na auditoria arquitetural de 2026-07-09, documentados aqui para n�
      recuperação é por SQL/instalador, fora da aplicação (decisão consciente: nenhuma rota web pode criar autoridade máxima do nada).
    - **Cobertura:** `integration_autoridade_supervisor_geral.php` (90 verificações, HTTP em processos separados, concorrência),
      `unit_autoridade_cobertura.php` (varredura estática). Diagnóstico de produção: `database/diagnosticos/2026-11-19-supervisor-geral-inconsistencias.sql`.
+
+8. **Política central de permissões por perfil (Etapa 2B, 2026-11) — IMPLEMENTADA, com pendências de decisão.**
+   - **Fonte única:** `PermissaoPerfilPolicy` (`app/services`) define, por código real de `permissoes`, o nível de cada permissão para o perfil:
+     `permitida` | `transitoria_gestor` (módulo com escopo por Setor Gerenciado no backend — o "viewer gestor" de hoje, migra ao perfil Gestor)
+     | `pendente_decisao` (sem escopo setorial, uso por viewer não comprovado: o já gravado segue efetivo, NOVA atribuição é recusada)
+     | `incompativel` (nunca concede acesso; continua gravada). Código fora das listas = incompatível; o teste de cobertura falha se o
+     catálogo ganhar código sem decisão explícita. Admin/RH: global (sem exigir linhas). Gestor: FUTURO (`PERFIL_GESTOR_ATIVO = false`, ENUM intacto).
+   - **Viewer permitido (dashboards auditados):** `dashboard.visualizar`, `indicadores_rh.visualizar`, `dashboard_turnover.visualizar`,
+     `dashboard_recrutamento.visualizar`, `dashboard_entrevista_desligamento.visualizar`. **Modelo recomendado automático: só
+     `dashboard_recrutamento.visualizar`** — os demais NÃO têm tamanho mínimo de amostra e permitem reidentificar indivíduos por
+     combinação de filtros (People Analytics: empresa × setor × sexo × motivo × mês, e a lista de opções expõe nomes de usuários
+     gestores; Indicadores de RH: cargo/setor/centro de custo; Turnover: cargo com 1 ocupante; Entrevista de Desligamento: grupo com 1
+     respondente expõe a resposta de uma pessoa). Continuam PERMITIDOS (não se retira acesso existente) até haver limite mínimo de
+     amostra; só então entram no modelo.
+   - **Integração:** `Authorization::usuarioTemPermissao` (único ponto de consulta de todos os módulos) só considera a permissão gravada
+     se `PermissaoPerfilPolicy::permissaoEfetiva(role, codigo)`; `updatePermissoes` valida a seleção FINAL (existe, ativa, compatível)
+     antes de gravar — recusa por inteiro, sem alteração parcial, com mensagem e auditoria `blocked_permissoes_update`. A tela do usuário
+     avisa o legado incompatível/pendente. `Autoridade` continua prevalecendo (Administrador não altera permissões do Supervisor Geral).
+   - **Efeito operacional conhecido:** viewer com `recruitment_webhooks.*` deixa de abrir Integrações; `candidaturas.*`, `pipeline.*`,
+     `indicacoes.*`, catálogos (`empresas`, `setores`, `cargos`, `beneficios`, `avaliacoes`, `vagas`), `movimentacao_pessoal.*`,
+     `comunicacoes`, `pesquisa_experiencia`, `manual` e `colaboradores.editar` não concedem nada ao viewer (já sem rota aberta a ele,
+     exceto webhooks). Nada foi apagado de `usuario_permissoes`.
+   - **PENDENTE DE DECISÃO (dependência não verificada):** `entrevista_desligamento.*`, `mensagens.*` e `pesquisa_reacao_integracao.*`
+     — o backend NÃO filtra por setor (lista nominal de desligados / resultados individuais / configuração), então um viewer que as
+     possua vê dado global. Não foram retiradas por falta de evidência sobre uso operacional legítimo. Rodar
+     `database/diagnosticos/2026-11-20-permissoes-perfil-impacto.sql` (BLOCO 3) e decidir: migrar para RH/Gestor ou retirar.
+   - **Cobertura:** `integration_permissao_perfil_politica.php` (61 verificações, HTTP em processos separados) e
+     `unit_permissao_perfil_cobertura.php` (catálogo completo, listas disjuntas, gates dos dashboards, ordem validar→gravar).

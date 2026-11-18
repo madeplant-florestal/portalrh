@@ -31,6 +31,10 @@ class User
 
     public static function create(string $nome, string $email, string $senha_hash, string $role = 'viewer'): int
     {
+        // Etapa 2C.1: nunca grava 'gestor' num ENUM que ainda não o suporta (em modo SQL permissivo viraria role vazia).
+        if (strtolower(trim($role)) === 'gestor' && !Autoridade::gestorDisponivel()) {
+            throw new InvalidArgumentException("O perfil 'gestor' ainda não está disponível neste ambiente (migration pendente).");
+        }
         $sql = 'INSERT INTO usuarios (nome, email, senha_hash, role) VALUES (?,?,?,?)';
         $stmt = Database::conn()->prepare($sql);
         $stmt->execute([$nome, $email, $senha_hash, $role]);
@@ -89,7 +93,7 @@ class User
         }
 
         $role = strtolower(trim((string)($filters['role'] ?? '')));
-        if (in_array($role, ['admin', 'rh', 'viewer'], true)) {
+        if (in_array($role, Autoridade::ROLES_CONHECIDAS, true)) {
             $where[] = 'u.role = ?';
             $params[] = $role;
         }

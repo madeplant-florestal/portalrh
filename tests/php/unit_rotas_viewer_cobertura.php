@@ -44,6 +44,10 @@ $somenteAdminRh = [
     'AdminAvaliacoesController::index', 'AdminController::exportarColaboradores',
 ];
 
+// Etapa 2C.1: ações que aceitam o perfil Gestor no gate de role (módulos com escopo setorial comprovado). A Avaliação de Experiência
+// não usa requireRole — só permissão efetiva (que a PermissaoPerfilPolicy limita ao Gestor).
+$gestorAutorizado = ['AdminCentralController::index', 'AdminColaboradoresController::index'];
+
 $rotas = (string)file_get_contents($raiz . '/index.php');
 preg_match_all('/\$router->(?:get|post)\(\s*[\'"][^\'"]+[\'"]\s*,\s*\[\s*(\w+)::class\s*,\s*[\'"](\w+)[\'"]\s*\]/', $rotas, $m, PREG_SET_ORDER);
 $acoes = [];
@@ -89,6 +93,16 @@ foreach ($acoes as $chave => [$classe, $metodo]) {
     }
     if (in_array($chave, $somenteAdminRh, true) && $abreViewer) {
         $falhas[] = "rota com dado nominal/financeiro aberta a viewer: {$chave}";
+    }
+    // Etapa 2C.1: o perfil Gestor só entra em gates de módulos com escopo setorial comprovado (acesso só ao explicitamente autorizado)
+    if (preg_match('/Auth::requireRole\(\s*\[[^\]]*[\'"]gestor[\'"]/', $limpo) && !in_array($chave, $gestorAutorizado, true)) {
+        $falhas[] = "rota aceita o perfil gestor sem estar na lista autorizada da Etapa 2C.1: {$chave}";
+    }
+}
+foreach ($gestorAutorizado as $chave) {
+    $corpo = isset($acoes[$chave]) ? $corpoDe(...$acoes[$chave]) : null;
+    if ($corpo === null || !preg_match('/Auth::requireRole\(\s*\[[^\]]*[\'"]gestor[\'"]/', $corpo)) {
+        $falhas[] = "rota da lista do Gestor não aceita mais gestor (ou sumiu): {$chave}";
     }
 }
 foreach (array_keys($achadas) as $chave) {

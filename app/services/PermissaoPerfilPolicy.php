@@ -36,8 +36,27 @@ final class PermissaoPerfilPolicy
     public const PENDENTE_DECISAO = 'pendente_decisao';
     public const INCOMPATIVEL = 'incompativel';
 
-    /** O perfil `gestor` ainda NÃO existe (ENUM `usuarios.role`). Ativar só na etapa própria, com migration e testes. */
-    public const PERFIL_GESTOR_ATIVO = false;
+    /**
+     * O código reconhece o perfil `gestor` (Etapa 2C.1). Ele só fica ATIVO quando o ENUM `usuarios.role` do banco também o suporta
+     * (`Autoridade::gestorDisponivel()`): código publicado antes da migration segue só com admin/rh/viewer.
+     */
+    public const PERFIL_GESTOR_HABILITADO = true;
+
+    public static function gestorAtivo(): bool
+    {
+        return self::PERFIL_GESTOR_HABILITADO && Autoridade::gestorDisponivel();
+    }
+
+    /**
+     * GESTOR (Etapa 2C.1): SOMENTE permissões de módulos com escopo setorial COMPROVADO (`usuario_setores_gerenciados`) e fluxo revisado.
+     * `avaliacao_experiencia.avaliar` ficou DE FORA (evidência: as ações de escrita de AdminAvaliacoesExperienciaController ignoram o
+     * retorno de Security::csrfCheck — ver riscos-conhecidos.md); entra na Etapa 2C.2 junto com a correção aprovada. Os demais módulos
+     * (Desempenho, Feedback, PDI, Solicitação de Vaga, Kanban, Integração) seguem indisponíveis ao Gestor até a 2C.2.
+     */
+    private const GESTOR_PERMITIDAS = [
+        'colaboradores.visualizar',
+        'avaliacao_experiencia.visualizar',
+    ];
 
     /** Perfis com acesso global pelo próprio papel (Authorization já os libera sem linhas em usuario_permissoes). */
     private const PERFIS_GLOBAIS = ['admin', 'rh'];
@@ -123,7 +142,7 @@ final class PermissaoPerfilPolicy
     /** Perfis que a política conhece e que hoje existem de fato. */
     public static function perfisAtivos(): array
     {
-        return self::PERFIL_GESTOR_ATIVO ? ['admin', 'rh', 'gestor', 'viewer'] : ['admin', 'rh', 'viewer'];
+        return self::gestorAtivo() ? ['admin', 'rh', 'gestor', 'viewer'] : ['admin', 'rh', 'viewer'];
     }
 
     public static function classificar(string $role, string $codigo): string
@@ -133,8 +152,8 @@ final class PermissaoPerfilPolicy
             return self::PERMITIDA;
         }
         if ($role === 'gestor') {
-            // FUTURO: só quando ativado. As permissões do Gestor serão as de módulos com escopo setorial.
-            return self::PERFIL_GESTOR_ATIVO && in_array($codigo, self::TRANSITORIAS_GESTOR, true) ? self::PERMITIDA : self::INCOMPATIVEL;
+            // Negação por padrão: só as permissões de módulos com escopo setorial comprovado, e só com o perfil ativo.
+            return self::gestorAtivo() && in_array($codigo, self::GESTOR_PERMITIDAS, true) ? self::PERMITIDA : self::INCOMPATIVEL;
         }
         if ($role !== 'viewer') {
             return self::INCOMPATIVEL; // role desconhecida: negação por padrão
@@ -167,13 +186,13 @@ final class PermissaoPerfilPolicy
         if ($role === 'viewer') {
             return array_values(array_merge(self::VIEWER_PERMITIDAS, self::TRANSITORIAS_GESTOR));
         }
-        if ($role === 'gestor' && self::PERFIL_GESTOR_ATIVO) {
-            return self::TRANSITORIAS_GESTOR;
+        if ($role === 'gestor' && self::gestorAtivo()) {
+            return self::GESTOR_PERMITIDAS;
         }
         return [];
     }
 
-    /** Modelo aplicado automaticamente no cadastro. Admin/RH: vazio (o acesso vem do perfil, sem dezenas de linhas). */
+    /** Modelo aplicado automaticamente no cadastro. Admin/RH: vazio (o acesso vem do perfil). Gestor: vazio nesta etapa (nada é aplicado automaticamente). */
     public static function modeloRecomendado(string $role): array
     {
         return self::normalizarRole($role) === 'viewer' ? self::VIEWER_RECOMENDADAS : [];

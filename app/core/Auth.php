@@ -27,6 +27,17 @@ class Auth
                 'user' => $user
             ];
         }
+        // Etapa 2C.1: valor de role desconhecido é RECUSADO (nunca convertido em viewer). Role vazia (legado) segue o tratamento antigo.
+        $roleCadastrada = strtolower(trim((string)($user->role ?? '')));
+        if (!self::roleAceitaNoLogin($roleCadastrada)) {
+            Logger::warning('Login recusado: perfil desconhecido', ['usuario_id' => (int)$user->id, 'role' => $roleCadastrada]);
+            return [
+                'ok' => false,
+                'reason' => 'invalid_role',
+                'message' => 'Perfil de acesso inválido. Procure um administrador.',
+                'user' => $user
+            ];
+        }
         self::establishSession($user);
         return [
             'ok' => true,
@@ -34,6 +45,13 @@ class Auth
             'message' => 'Login realizado com sucesso.',
             'user' => $user
         ];
+    }
+
+    /** Role vazia (legado) segue o tratamento antigo; qualquer valor preenchido precisa ser um perfil conhecido (admin/rh/gestor/viewer). */
+    public static function roleAceitaNoLogin(?string $role): bool
+    {
+        $r = strtolower(trim((string)$role));
+        return $r === '' || Autoridade::roleConhecida($r);
     }
 
     public static function login(string $email, string $password): bool
@@ -115,7 +133,7 @@ class Auth
             return true;
         }
         $role = strtolower(trim((string)(self::role() ?? '')));
-        return in_array($role, ['admin', 'rh', 'viewer'], true);
+        return in_array($role, ['admin', 'rh', 'gestor', 'viewer'], true);
     }
 
     public static function requireRole(array $roles): void

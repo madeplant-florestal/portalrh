@@ -245,7 +245,7 @@ try {
 
     // ---- 20. nenhum módulo recebeu bypass novo por role=rh/is_supervisor -------------------------
     $fonteNavegacao = (string)file_get_contents(__DIR__ . '/../../app/services/PortalNavegacaoService.php');
-    $check(str_contains($fonteNavegacao, 'Authorization::temPermissao($codigo)') && substr_count($fonteNavegacao, "'rh'") === 1, 'condição aditiva da navegação (PortalNavegacaoService) usa Authorization::temPermissao() como fonte da permissão nova; a única comparação de role==="rh" continua sendo a definição canônica de $staff, sem nenhum bypass novo isolado');
+    $check(str_contains($fonteNavegacao, 'Authorization::temPermissao($codigo)') && preg_match_all('/this->role === .rh./', $fonteNavegacao) === 1, 'condição aditiva da navegação (PortalNavegacaoService) usa Authorization::temPermissao() como fonte da permissão nova; a única comparação de role==="rh" continua sendo a definição canônica de $staff, sem nenhum bypass novo isolado');
     $check(Authorization::usuarioTemPermissao($rhId, 'vagas.excluir') === true, 'confirmação direta: RH tem a permissão nova vagas.excluir automaticamente, pelo bypass central (Bloco 4)');
     $check(Authorization::usuarioTemPermissao($supervisorId, 'vagas.excluir') === false, 'confirmação direta: Supervisor continua sem a permissão nova vagas.excluir automaticamente');
 

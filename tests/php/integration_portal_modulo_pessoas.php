@@ -219,7 +219,7 @@ try {
         // index() ganhou o escopo gerencial de 2026-11 (viewer + colaboradores.visualizar + Setor
         // Gerenciado, nunca salário) — ver integration_colaboradores_escopo_gestor.php. As demais
         // linhas desta lista (edição, acesso, Usuários) continuam exatamente como antes.
-        [AdminColaboradoresController::class, 'index', "Auth::requireRole(['admin', 'rh', 'viewer'])"],
+        [AdminColaboradoresController::class, 'index', "Auth::requireRole(['admin', 'rh', 'gestor', 'viewer'])"], // Etapa 2C.1: + gestor (escopo setorial pelo resolvedor central)
         [AdminColaboradoresController::class, 'editRh', "Auth::requireRole(['admin', 'rh'])"],
         [AdminColaboradoresController::class, 'acesso', "Auth::requireRole(['admin', 'rh'])"],
         [AdminUsuariosController::class, 'index', "Auth::requireRole(['admin'])"],

@@ -60,7 +60,11 @@ class AdminUsuariosController extends Controller
         $senha = $_POST['senha'] ?? '';
         $role = Security::sanitizeString($_POST['role'] ?? 'viewer');
         $supervisorEmail = Config::app()['security']['supervisor_email'] ?? '';
-        if (!in_array($role, ['admin','rh','viewer'], true)) { $role = 'viewer'; }
+        // Etapa 2C.1: whitelist dinâmica (inclui 'gestor' só se o schema suportar); perfil desconhecido é recusado, não vira viewer.
+        if (!in_array($role, Autoridade::rolesAtribuiveis(), true)) {
+            $this->renderCreateComErro('Perfil inválido.', null);
+            return;
+        }
         // Gestor Imediato (opcional): validado no servidor ANTES de criar o usuário — nunca confia no <select>.
         $gestorId = ctype_digit((string)($_POST['gestor_usuario_id'] ?? '')) ? (int)$_POST['gestor_usuario_id'] : null;
         $gestorService = new UsuarioGestorService();
@@ -126,7 +130,7 @@ class AdminUsuariosController extends Controller
         }
         // Etapa 2A-bis: perfil fora da whitelist é RECUSADO (antes virava 'viewer' em silêncio — um rebaixamento por valor forjado).
         $role = Security::sanitizeString($_POST['role'] ?? '');
-        if (!in_array($role, Autoridade::ROLES_ATRIBUIVEIS, true)) {
+        if (!in_array($role, Autoridade::rolesAtribuiveis(), true)) {
             http_response_code(400);
             echo 'Perfil inválido.';
             return;
@@ -187,7 +191,7 @@ class AdminUsuariosController extends Controller
         // Perfis que o ator PODE atribuir a este usuário (a UI só mostra o que Autoridade já permite; o backend revalida).
         $atorAutoridade = Autoridade::atorDaSessao();
         $rolesAtribuiveis = [];
-        foreach (['admin' => 'Admin', 'rh' => 'RH', 'viewer' => 'Viewer'] as $valorPerfil => $rotuloPerfil) {
+        foreach (['admin' => 'Admin', 'rh' => 'RH', 'gestor' => 'Gestor', 'viewer' => 'Viewer'] as $valorPerfil => $rotuloPerfil) {
             if (Autoridade::podeAtribuirRole($atorAutoridade, $user, $valorPerfil)) {
                 $rolesAtribuiveis[$valorPerfil] = $rotuloPerfil;
             }

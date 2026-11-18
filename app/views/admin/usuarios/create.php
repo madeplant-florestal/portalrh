@@ -39,6 +39,7 @@ $base = Config::app()['base_url'] ?? '';
       <select name="role" class="mt-1 w-full border rounded px-3 py-2">
         <option value="viewer">Leitor</option>
         <option value="rh">RH</option>
+        <?php if (Autoridade::gestorDisponivel()): ?><option value="gestor">Gestor</option><?php endif; ?>
         <option value="admin">Admin</option>
       </select>
     </div>

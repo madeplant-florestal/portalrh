@@ -129,7 +129,7 @@ class PortalNavegacaoService
                     // Entrada única: a landing decide o que mostrar por permissão (nunca pula direto para um submódulo — Etapa 5).
                     // 'aberto' porque Avaliação de Desempenho (legada, /admin/avaliacoes) já é 'aberto' hoje em Cadastros — o hub
                     // não pode esconder algo que o usuário já enxerga por outro caminho.
-                    ['href' => '/admin/avaliacoes-desenvolvimento', 'regra' => 'aberto'],
+                    ['href' => '/admin/avaliacoes-desenvolvimento', 'regra' => 'aberto_ou_perm:avaliacao_experiencia.visualizar,feedback.visualizar,pdi.visualizar,avaliacao_desempenho.visualizar'],
                 ]],
             ['chave' => 'integracao', 'titulo' => 'Integração', 'icone' => 'integracao',
                 'descricao' => 'Pesquisas de reação e de integração de novos colaboradores.',
@@ -226,7 +226,7 @@ class PortalNavegacaoService
             // colaboradores_metadados) — o legado /admin/avaliacoes (model AvaliacaoDesempenho sobre o Colaborador
             // antigo) permanece só em Cadastros, sem relação de código com este módulo.
             'avaliacoes-desenvolvimento' => ['titulo' => 'Avaliações e Desenvolvimento', 'abas' => [
-                ['chave' => 'resumo', 'label' => 'Resumo', 'href' => '/admin/avaliacoes-desenvolvimento', 'regra' => 'aberto'],
+                ['chave' => 'resumo', 'label' => 'Resumo', 'href' => '/admin/avaliacoes-desenvolvimento', 'regra' => 'aberto_ou_perm:avaliacao_experiencia.visualizar,feedback.visualizar,pdi.visualizar,avaliacao_desempenho.visualizar'],
                 ['chave' => 'avaliacao-experiencia', 'label' => 'Avaliação de Experiência', 'href' => '/admin/avaliacoes-experiencia', 'regra' => 'perm:avaliacao_experiencia.visualizar'],
                 ['chave' => 'avaliacao-desempenho', 'label' => 'Avaliação de Desempenho', 'href' => '/admin/avaliacoes-desempenho', 'regra' => 'perm:avaliacao_desempenho.visualizar'],
                 ['chave' => 'feedback', 'label' => 'Feedback', 'href' => '/admin/feedbacks', 'regra' => 'perm:feedback.visualizar'],
@@ -311,8 +311,23 @@ class PortalNavegacaoService
         $staff = $adminOuSupervisor || $this->role === 'rh';
         $perm = fn(string $codigo): bool => (bool)($this->temPermissao)($codigo);
 
+        // Etapa 2C.1: 'aberto' = rotas que só exigem a ROLE admin/rh/viewer; o Gestor NÃO entra nelas (acesso só ao explicitamente
+        // autorizado) — mostrar o destino levaria a 403. Role desconhecida também não vê nada 'aberto'.
         if ($regra === 'aberto') {
-            return true;
+            return $adminOuSupervisor || in_array($this->role, ['admin', 'rh', 'viewer'], true);
+        }
+        // Etapa 2C.1: 'aberto' para admin/RH/viewer (como sempre) OU qualquer permissão da lista (o Gestor entra só por permissão efetiva).
+        // Uso: o hub Avaliações e Desenvolvimento, cuja landing só exige login e mostra cada seção conforme a permissão.
+        if (str_starts_with($regra, 'aberto_ou_perm:')) {
+            if ($adminOuSupervisor || in_array($this->role, ['admin', 'rh', 'viewer'], true)) {
+                return true;
+            }
+            foreach (explode(',', substr($regra, 15)) as $codigo) {
+                if ($perm(trim($codigo))) {
+                    return true;
+                }
+            }
+            return false;
         }
         if ($regra === 'admin_supervisor') {
             return $adminOuSupervisor;
@@ -321,6 +336,9 @@ class PortalNavegacaoService
             return $staff;
         }
         if ($regra === 'pedidos_vaga') {
+            if ($this->role === 'gestor') {
+                return false; // Solicitação de Vaga/Kanban: módulos da Etapa 2C.2 — o backend nega ao Gestor
+            }
             // 2026-10: usuarios.pode_solicitar_vaga precisa abrir o menu — é o mesmo flag que já
             // libera o backend (canCreate()). `vagas.criar` (outro módulo) deliberadamente NÃO
             // entra aqui.

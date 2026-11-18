@@ -539,7 +539,7 @@ try {
         if ($aba['href'] === '/admin/pdis') { $regraAbaPdi = $aba['regra']; }
     }
     $check(
-        $regraNavPdiCard === 'aberto' && $regraAbaPdi === 'perm:pdi.visualizar'
+        str_starts_with((string)$regraNavPdiCard, 'aberto_ou_perm:') && str_contains((string)$regraNavPdiCard, 'pdi.visualizar') && $regraAbaPdi === 'perm:pdi.visualizar'
             && str_contains($fonteIndex, "\$router->get('/admin/pdis/novo', [AdminPdisController::class, 'novo'])")
             && strpos($fonteIndex, "'/admin/pdis/novo'") < strpos($fonteIndex, "'/admin/pdis/{id}'"),
         '(rota/menu) PDI é submódulo de "Avaliações e Desenvolvimento" (card \'aberto\', aba do PDI sob perm:pdi.visualizar — mesma permissão de sempre, só mudou de lugar); /novo registrada antes de /{id}'

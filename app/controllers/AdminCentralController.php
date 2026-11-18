@@ -12,7 +12,7 @@ class AdminCentralController extends Controller
 {
     public function index(): void
     {
-        Auth::requireRole(['admin', 'rh', 'viewer']);
+        Auth::requireRole(['admin', 'rh', 'gestor', 'viewer']); // Central: só navegação; os cards respeitam as permissões
         $this->view->render('admin/central', [
             'tituloPagina' => 'Central do Portal RH',
             'modulos' => (new PortalNavegacaoService())->modulos(),

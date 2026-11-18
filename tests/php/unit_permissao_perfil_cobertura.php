@@ -101,12 +101,13 @@ foreach ($it as $arq) {
 }
 
 // 5. Gestor futuro e estrutura
-if (PermissaoPerfilPolicy::PERFIL_GESTOR_ATIVO !== false) {
-    $falhas[] = 'PERFIL_GESTOR_ATIVO deve permanecer false até a etapa própria do perfil Gestor';
+// Etapa 2C.1: o Gestor passa a existir; a política só o ativa quando o schema suporta o valor (gestorAtivo()).
+if (PermissaoPerfilPolicy::PERFIL_GESTOR_HABILITADO !== true || !method_exists('PermissaoPerfilPolicy', 'gestorAtivo')) {
+    $falhas[] = 'a política deve habilitar o Gestor condicionado ao schema (PERFIL_GESTOR_HABILITADO + gestorAtivo())';
 }
 $schema = (string)file_get_contents($raiz . '/database/schema.sql');
-if (!preg_match("/role ENUM\('admin','rh','viewer'\)/", $schema)) {
-    $falhas[] = "o ENUM de roles em database/schema.sql foi alterado (Gestor não pode existir no banco nesta etapa)";
+if (!preg_match("/role ENUM\('admin','rh','viewer','gestor'\) NOT NULL DEFAULT 'viewer'/", $schema)) {
+    $falhas[] = "o ENUM de roles em database/schema.sql deve ser enum(admin,rh,viewer,gestor) NOT NULL DEFAULT 'viewer' (migration 2026-11-22; instalações novas)";
 }
 
 echo 'Códigos classificados: ' . count($todos) . ' · catálogo: ' . count($catalogo) . "\n";

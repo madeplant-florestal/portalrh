@@ -262,7 +262,8 @@ try {
     $htmlRh = $renderizar(static fn() => (new AdminUsuariosController())->show((string)$liderado));
     $check(str_contains($htmlRh, 'Gestor imediato') && !str_contains($htmlRh, '/gestor"') && str_contains($htmlRh, 'gerenciado por um administrador'), '(edição) RH vê o gestor em somente leitura, sem formulário');
     $listagem = (string)file_get_contents(BASE_PATH . '/app/views/admin/usuarios/index.php');
-    $check(!str_contains($listagem, 'gestor'), '(listagem) A tabela de usuários não ganhou coluna nova');
+    // Etapa 2C.1: o filtro de perfil ganhou a opção "Gestor" (role); isso não é coluna nem Gestor Imediato.
+    $check(!str_contains(preg_replace('/<option value="gestor".*?<\/option>/s', '', $listagem), 'gestor'), '(listagem) A tabela de usuários não ganhou coluna nova');
 
     // ---- sem legado ------------------------------------------------------------------------------------------------------
     $fontes = $semComentarios(BASE_PATH . '/app/services/UsuarioGestorService.php') . $semComentarios(BASE_PATH . '/app/repositories/UsuarioGestorRepository.php');

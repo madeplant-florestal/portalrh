@@ -255,7 +255,7 @@ class Authorization
         // os módulos que o usuário pode acessar. Por isso o destino deixou de depender de permissão individual: o que antes
         // exigia escolher entre dashboard.visualizar, dashboard_recrutamento, solicitações ou candidaturas agora é decidido
         // pelos cards (PortalNavegacaoService). O Dashboard (People Analytics) mudou para `/admin/dashboard` e mantém o gate.
-        if (!empty($_SESSION['user_is_supervisor']) || in_array(Auth::role(), ['admin', 'rh', 'viewer'], true)) {
+        if (!empty($_SESSION['user_is_supervisor']) || in_array(Auth::role(), ['admin', 'rh', 'gestor', 'viewer'], true)) {
             return '/admin';
         }
 

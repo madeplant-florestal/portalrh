@@ -9,25 +9,25 @@ class AdminColaboradoresController extends Controller
         // Setor Gerenciado em `usuario_setores_gerenciados`) pode CONSULTAR, só dentro do próprio
         // escopo, sem salário. Mesmo padrão já usado em AvaliacaoExperienciaService::escopoTotal()/
         // escopoSetores() — nenhum mecanismo paralelo, nenhum perfil novo armazenado.
-        Auth::requireRole(['admin', 'rh', 'viewer']);
+        Auth::requireRole(['admin', 'rh', 'gestor', 'viewer']);
 
         $usuarioId = (int)($_SESSION['user_id'] ?? 0);
-        // is_supervisor sempre teve bypass total em requireRole() (ver Auth::requireRole) — mantém
-        // exatamente o mesmo acesso global que supervisores já tinham antes desta correção.
-        $ehGlobal = in_array(Auth::role(), ['admin', 'rh'], true) || !empty($_SESSION['user_is_supervisor']);
+        // Etapa 2C.1: o escopo vem do RESOLVEDOR CENTRAL (EscopoSetorial) — global (admin/RH/Supervisor Geral), restrito aos
+        // Setores Gerenciados (gestor) ou nenhum. Conjunto vazio de setores NUNCA vira "sem restrição".
+        $escopo = EscopoSetorial::resolver(['id' => $usuarioId, 'role' => Auth::role()]);
+        $ehGlobal = $escopo->ehGlobal();
 
         if (!$ehGlobal) {
-            if (!Authorization::usuarioTemPermissao($usuarioId, 'colaboradores.visualizar')) {
+            if ($escopo->semAutorizacao() || !Authorization::usuarioTemPermissao($usuarioId, 'colaboradores.visualizar')) {
                 http_response_code(403);
                 echo 'Acesso negado';
                 return;
             }
         }
 
-        // null = sem restrição (admin/RH/supervisor, escopo total, como já era). Array = só os
-        // Setores Gerenciados do ator; [] quando ele não gerencia nenhum (nunca "sem restrição").
+        // null = sem restrição (escopo global). Array = só os Setores Gerenciados do ator; [] quando ele não gerencia nenhum.
         $setoresGerenciados = $ehGlobal ? null : (new UsuarioSetoresGerenciadosService())->setoresDoUsuario($usuarioId);
-        $codigosSetorPermitidos = $ehGlobal ? null : array_column($setoresGerenciados, 'codigo');
+        $codigosSetorPermitidos = $escopo->codigosOuNull();
         $podeVerSalario = $ehGlobal;
         $podeGerenciar = $ehGlobal;
 

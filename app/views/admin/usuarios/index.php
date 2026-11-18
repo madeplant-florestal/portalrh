@@ -27,6 +27,7 @@ if ($status !== '') { $params['status'] = $status; }
         <option value="">Todas</option>
         <option value="admin" <?= $role === 'admin' ? 'selected' : '' ?>>Admin</option>
         <option value="rh" <?= $role === 'rh' ? 'selected' : '' ?>>RH</option>
+        <option value="gestor" <?= $role === 'gestor' ? 'selected' : '' ?>>Gestor</option>
         <option value="viewer" <?= $role === 'viewer' ? 'selected' : '' ?>>Leitor</option>
       </select>
     </div>

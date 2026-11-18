@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS usuarios (
   nome VARCHAR(100) NOT NULL,
   email VARCHAR(120) NOT NULL UNIQUE,
   senha_hash VARCHAR(255) NOT NULL,
-  role ENUM('admin','rh','viewer') NOT NULL DEFAULT 'viewer',
+  role ENUM('admin','rh','viewer','gestor') NOT NULL DEFAULT 'viewer',
   is_supervisor TINYINT(1) NOT NULL DEFAULT 0,
   email_verified_at DATETIME DEFAULT NULL,
   last_password_reset_at DATETIME DEFAULT NULL,

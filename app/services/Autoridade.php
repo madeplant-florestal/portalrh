@@ -9,7 +9,8 @@
  *   1. Supervisor Geral  = role `admin` E `is_supervisor = 1`  (as DUAS condições; o flag sozinho não concede nada)
  *   2. Administrador     = role `admin`, `is_supervisor = 0`
  *   3. RH                = role `rh`
- *   4. Gestor            = (perfil futuro — hoje cai em "viewer"/desconhecido; não é tratado como privilegiado)
+ *   4. Gestor            = role `gestor` (Etapa 2C.1). Sem poder administrativo algum; dados só dentro do escopo setorial de
+ *                          `usuario_setores_gerenciados` (ver EscopoSetorial). Só existe quando o schema suporta o valor.
  *   5. Visualizador      = role `viewer`
  * Um `is_supervisor = 1` em conta que NÃO é admin é CONFIGURAÇÃO INCONSISTENTE: a conta vale pela própria role, sem
  * privilégio algum, e é apenas sinalizada (`privilegioInconsistente()`); nunca é corrigida automaticamente.
@@ -20,7 +21,7 @@
  *   - RH: apenas contas rh/viewer (nunca admin nem Supervisor Geral).
  *   - Gestor/Viewer: nenhuma.
  * Perfil (`podeAtribuirRole`): ninguém altera o próprio perfil; Supervisor Geral e Administrador atribuem admin/rh/viewer;
- * RH atribui somente rh/viewer, e só a contas rh/viewer (nunca promove a admin, nunca rebaixa um admin).
+ * RH atribui somente rh/gestor/viewer, e só a contas rh/gestor/viewer (nunca promove a admin, nunca rebaixa um admin).
  * O FLAG `is_supervisor` só muda por operação explícita e auditada de um Supervisor Geral (`podeAlterarSupervisorGeral`).
  *
  * Os parâmetros aceitam um `User`, um array com `id`/`role`/`is_supervisor` ou null.
@@ -34,8 +35,59 @@ final class Autoridade
     public const VIEWER = 'viewer';
     public const DESCONHECIDO = 'desconhecido';
 
-    /** Perfis que o formulário pode pedir (whitelist de `role`). */
+    /** Perfis-base que sempre existem. Use `rolesAtribuiveis()` (inclui 'gestor' só se o schema suportar). */
     public const ROLES_ATRIBUIVEIS = ['admin', 'rh', 'viewer'];
+
+    /** Perfis que a aplicação conhece (qualquer outro valor de `usuarios.role` é recusado no login). */
+    public const ROLES_CONHECIDAS = ['admin', 'rh', 'gestor', 'viewer'];
+
+    /** O código reconhece o perfil Gestor; ele só é OFERECIDO/ATRIBUÍDO quando o ENUM do banco também o suporta. */
+    private const GESTOR_HABILITADO_NO_CODIGO = true;
+
+    private static ?bool $schemaSuportaGestor = null;
+
+    /** Somente testes: força o resultado da verificação do schema (null = consulta o banco). */
+    public static function forcarSchemaGestorParaTeste(?bool $valor): void
+    {
+        self::$schemaSuportaGestor = $valor;
+    }
+
+    /**
+     * O ENUM `usuarios.role` suporta 'gestor'? Verificação explícita do schema (Etapa 2C.1): o código publicado ANTES da migration
+     * continua funcionando com admin/rh/viewer e nunca tenta gravar 'gestor' num ENUM antigo (que, em modo SQL permissivo, viraria
+     * role vazio). Falha na consulta = não suporta (seguro). Cacheado por requisição.
+     */
+    public static function schemaSuportaGestor(): bool
+    {
+        if (self::$schemaSuportaGestor !== null) {
+            return self::$schemaSuportaGestor;
+        }
+        try {
+            $tipo = (string)Database::conn()->query(
+                "SELECT COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'usuarios' AND COLUMN_NAME = 'role'"
+            )->fetchColumn();
+            self::$schemaSuportaGestor = str_contains(strtolower($tipo), "'gestor'");
+        } catch (\Throwable) {
+            self::$schemaSuportaGestor = false;
+        }
+        return self::$schemaSuportaGestor;
+    }
+
+    public static function gestorDisponivel(): bool
+    {
+        return self::GESTOR_HABILITADO_NO_CODIGO && self::schemaSuportaGestor();
+    }
+
+    /** Perfis que podem ser ATRIBUÍDOS agora (whitelist de `role` de cadastro/edição). */
+    public static function rolesAtribuiveis(): array
+    {
+        return self::gestorDisponivel() ? ['admin', 'rh', 'gestor', 'viewer'] : self::ROLES_ATRIBUIVEIS;
+    }
+
+    public static function roleConhecida(mixed $role): bool
+    {
+        return in_array(strtolower(trim((string)$role)), self::ROLES_CONHECIDAS, true);
+    }
 
     /** @return array{id:int,role:string,flag:int}|null */
     private static function normalizar(mixed $u): ?array
@@ -131,7 +183,7 @@ final class Autoridade
         $a = self::normalizar($ator);
         $t = self::normalizar($alvo);
         $novaRole = strtolower(trim($novaRole));
-        if ($a === null || $t === null || !in_array($novaRole, self::ROLES_ATRIBUIVEIS, true)) {
+        if ($a === null || $t === null || !in_array($novaRole, self::rolesAtribuiveis(), true)) {
             return false;
         }
         if ($a['id'] > 0 && $a['id'] === $t['id']) {
@@ -145,7 +197,7 @@ final class Autoridade
         }
         return match (self::nivel($ator)) {
             self::SUPERVISOR_GERAL, self::ADMIN => true,
-            self::RH => in_array($novaRole, ['rh', 'viewer'], true) && in_array($t['role'], ['rh', 'viewer'], true),
+            self::RH => in_array($novaRole, ['rh', 'gestor', 'viewer'], true) && in_array($t['role'], ['rh', 'gestor', 'viewer'], true),
             default => false,
         };
     }

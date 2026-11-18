@@ -119,3 +119,22 @@ Identificados na auditoria arquitetural de 2026-07-09, documentados aqui para n�
    privilégio global automático. Cobertura: `integration_modulos_pendentes_viewer.php` (119 verificações). Ver também o item 8.
    **Achado:** o item 8 descrevia as permissões "transitórias" como filtradas por Setor Gerenciado — isso só vale para Colaboradores e
    Avaliação de Experiência; os demais módulos usam outro critério (ver roadmap-tecnico.md, "Preparação do perfil Gestor").
+
+10. **Perfil Gestor — estrutura (Etapa 2C.1, 2026-11) — IMPLEMENTADA; módulos operacionais ficam para a Etapa 2C.2.**
+   - **Estrutura:** migration `2026-11-22-usuarios-role-gestor.sql` (+ rollback BLOQUEADO se existir conta `gestor`; nunca converte contas) inclui `gestor`
+     no ENUM `usuarios.role`, preservando `NOT NULL DEFAULT 'viewer'`, charset e collation. **Ordem segura:** o código consulta o schema
+     (`Autoridade::schemaSuportaGestor()`); antes da migration o Portal segue só com admin/rh/viewer e nada tenta gravar `gestor`.
+   - **Resolvedor central de escopo:** `EscopoSetorial` — GLOBAL (admin/RH/Supervisor Geral), SETORES (gestor; conjunto vazio ≠ global) ou
+     NENHUM; única fonte = `usuario_setores_gerenciados` (nunca `gestor_usuario_id`, `is_gestor` legado ou `usuario_setores`). Já usado por
+     Colaboradores e Avaliação de Experiência. Viewer: escopo restrito só em TRANSIÇÃO (`VIEWER_LEGADO_TRANSITORIO`), para não retirar o
+     acesso dos viewers-gestores atuais; na arquitetura definitiva = NENHUM (decisão da etapa de migração).
+   - **Gestor hoje:** perfil conhecido, sem poder administrativo, sem privilégio por `is_supervisor`, rotas só da Central, Colaboradores
+     (escopo setorial, sem salário) e Avaliação de Experiência (visualizar). Gates `requireRole` NÃO receberam `gestor` em massa (teste estático).
+   - **ACHADO — CSRF não imposto em ações de escrita (pré-existente, NÃO corrigido; requer aprovação, ver item 7 do CLAUDE.md):**
+     `AdminAvaliacoesExperienciaController` (salvar/concluir/ciencia/reabrir), `AdminAvaliacoesDesempenhoController`, `AdminFeedbacksController`
+     (e, a verificar, PDI) chamam `Security::csrfCheck(...)` SEM usar o retorno — a requisição é processada mesmo com token inválido/ausente.
+     Por isso `avaliacao_experiencia.avaliar` (e os demais módulos de escrita) NÃO foi liberado ao Gestor; entra na 2C.2 junto com a correção
+     (trocar por `if (!Security::csrfCheck(...)) { 400 }`).
+   - **Pendências da 2C.2:** Desempenho, Feedback, PDI, Solicitação de Vaga, Kanban e Integração do Colaborador (escopo ainda não setorial);
+     relatório de reclassificação: `database/diagnosticos/2026-11-21-gestor-reclassificacao-relatorio.sql`. Cobertura:
+     `integration_perfil_gestor_estrutura.php`, `integration_migration_role_gestor.php` (schema isolado), `unit_rotas_viewer_cobertura.php`.

@@ -88,7 +88,8 @@ class AvaliacaoExperienciaService
 
     public static function escopoTotal(array $ator): bool
     {
-        return in_array((string)($ator['role'] ?? ''), ['admin', 'rh'], true);
+        // Etapa 2C.1: decisão do resolvedor central (global = admin/RH/Supervisor Geral).
+        return EscopoSetorial::resolver($ator)->ehGlobal();
     }
 
     /**
@@ -102,14 +103,8 @@ class AvaliacaoExperienciaService
      */
     public static function escopoSetores(array $ator): ?array
     {
-        if (self::escopoTotal($ator)) {
-            return null;
-        }
-        $usuarioId = (int)($ator['id'] ?? 0);
-        if ($usuarioId <= 0) {
-            return [];
-        }
-        return (new UsuarioSetoresGerenciadosService())->codigosSetorGerenciadosPor($usuarioId);
+        // Resolvedor central: null = global; [] = sem setor/sem autorização (nunca "sem restrição"); lista = setores gerenciados.
+        return EscopoSetorial::resolver($ator)->codigosOuNull();
     }
 
     public static function papelDoAtor(array $ator): string

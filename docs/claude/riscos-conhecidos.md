@@ -108,3 +108,14 @@ Identificados na auditoria arquitetural de 2026-07-09, documentados aqui para n�
      `database/diagnosticos/2026-11-20-permissoes-perfil-impacto.sql` (BLOCO 3) e decidir: migrar para RH/Gestor ou retirar.
    - **Cobertura:** `integration_permissao_perfil_politica.php` (61 verificações, HTTP em processos separados) e
      `unit_permissao_perfil_cobertura.php` (catálogo completo, listas disjuntas, gates dos dashboards, ordem validar→gravar).
+
+9. **Módulos pendentes fechados ao viewer (Etapa 2B complementar, 2026-11) — CORRIGIDO.** `entrevista_desligamento.*`,
+   `pesquisa_reacao_integracao.*` e `mensagens.*` passaram de "pendente de decisão" a **incompatíveis com o viewer**
+   (`PermissaoPerfilPolicy`): o backend nega por `Authorization::usuarioTemPermissao` em todas as ações (lista, gerar, regenerar,
+   cancelar, resultado individual por ID, campanhas, resultados de pesquisa, mensagens) mesmo com a permissão gravada. O dashboard
+   AGREGADO da Entrevista de Desligamento tem permissão própria e segue aberto ao viewer autorizado. Registros em `usuario_permissoes`
+   e dados dos módulos NÃO foram tocados. Impacto: viewers que operavam entrevistas, pesquisas de reação ou mensagens perdem esse acesso;
+   quem precisar deve ser reclassificado (Admin/RH hoje; Gestor com escopo setorial no futuro) por decisão administrativa — nunca por
+   privilégio global automático. Cobertura: `integration_modulos_pendentes_viewer.php` (119 verificações). Ver também o item 8.
+   **Achado:** o item 8 descrevia as permissões "transitórias" como filtradas por Setor Gerenciado — isso só vale para Colaboradores e
+   Avaliação de Experiência; os demais módulos usam outro critério (ver roadmap-tecnico.md, "Preparação do perfil Gestor").

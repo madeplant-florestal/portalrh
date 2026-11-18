@@ -121,7 +121,7 @@ try {
     $check($tem($comPermId) === true, '(permissão) Usuário com a permissão individual acessa');
     // Bloco 4 (2026-10, pedido do RH): bypass central de RH em Authorization::usuarioTemPermissao().
     $check($tem($rhSemId) === true, '(permissão) RH acessa pelo bypass central (Bloco 4), mesmo sem a permissão individual');
-    $check($tem($soResultadosId) === false && Authorization::usuarioTemPermissao($soResultadosId, 'entrevista_desligamento.resultados') === true, '(permissão) `entrevista_desligamento.resultados` NÃO substitui a permissão do dashboard (recurso próprio)');
+    $check($tem($soResultadosId) === false && Authorization::usuarioTemPermissao($soResultadosId, 'entrevista_desligamento.resultados') === false, '(permissão) `entrevista_desligamento.resultados` (Etapa 2B compl.: incompatível com viewer, não concede acesso) NÃO substitui a permissão do dashboard (recurso próprio)');
     $concedidosFora = (int)$pdo->query(
         "SELECT COUNT(*) FROM usuario_permissoes up INNER JOIN permissoes p ON p.id = up.permissao_id
          WHERE p.codigo = 'dashboard_entrevista_desligamento.visualizar' AND up.usuario_id NOT IN (" . implode(',', array_map('intval', $criados['usuarios'])) . ')'

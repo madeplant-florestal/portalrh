@@ -676,3 +676,29 @@ METADADOS é a fonte oficial de contratos; `usuarios` guarda a identidade e as r
   (`usuarios.colaborador_metadados_id`) apenas como **sugestão pré-selecionada** (só gestor ativo, só a relação nova, nunca
   o aprovador). Nada é persistido antes do envio, o campo segue obrigatório e editável, e `PdiService`/escopo não mudaram.
 - **Testes**: `unit_usuario_gestor_service.php` (regras puras) e `integration_usuario_gestor_imediato.php`.
+
+## Preparação do perfil Gestor (Etapa 2B complementar, 2026-11) — SEM ENUM, SEM IMPLEMENTAÇÃO
+
+Levantamento do escopo REAL de cada módulo operacional hoje usado por viewers delegados (o "viewer gestor"), para orientar o perfil
+`gestor` (futuro; escopo exclusivo em `usuario_setores_gerenciados`, nunca `gestor_usuario_id`, sem atalho de acesso global).
+
+**A — prontos para escopo setorial (já usam `usuario_setores_gerenciados` para ator não admin/RH):**
+- Colaboradores (`colaboradores.visualizar`): `AdminColaboradoresController::index`, lista vazia se o ator não gerencia setor.
+- Avaliação de Experiência (`avaliacao_experiencia.*`): `AvaliacaoExperienciaService`/repositório filtram por setores gerenciados.
+
+**B — precisam implementar o escopo setorial** (hoje restringem por outro critério, que NÃO serve ao Gestor definitivo):
+- Avaliação de Desempenho, Feedback, PDI (`avaliacao_desempenho.*`, `feedback.*`, `pdi.*`): escopo por **gestor imediato/avaliador**
+  (`gestor_usuario_id`) via `escopoGestor` — exatamente o mecanismo que a política proíbe como fonte de escopo setorial.
+- Solicitação de Vaga e Kanban de Vagas (`solicitacao_vaga.*`, `kanban_vagas.*`): escopo por **solicitante/aprovador** (objeto), não por setor.
+- Movimentação de Pessoal: por solicitante e `is_gestor` legado (`usuario_colaboradores`).
+- Integração do Colaborador (`integracao_colaborador.*`: QR, resultados, dashboard de Integração): **sem filtro por ator** (resultados e
+  dashboard globais; o "gestor" do dashboard é só um filtro opcional).
+
+**C — exclusivos de Admin/RH (nunca viewer, nem Gestor sem decisão nova):** Entrevista de Desligamento operacional
+(`entrevista_desligamento.*`: lista nominal de desligados, resultados individuais), Pesquisa de Reação (`pesquisa_reacao_integracao.*`),
+configuração de Mensagens (`mensagens.*`), Candidaturas/Pipeline/Indicações, Integrações (webhooks), catálogos (empresas, setores, cargos,
+benefícios, vagas, avaliações legado) e exportações nominais.
+
+Pré-requisitos do Gestor: ENUM `role` + migration com rollback; `PermissaoPerfilPolicy::PERFIL_GESTOR_ATIVO`; resolvedor único de
+escopo setorial (hoje duplicado por módulo); migrar os módulos B para ele; relatório de reclassificação:
+`database/diagnosticos/2026-11-21-gestor-reclassificacao-relatorio.sql` (somente IDs e contagens).

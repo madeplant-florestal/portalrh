@@ -97,9 +97,9 @@ try {
 
     $check(Authorization::usuarioTemPermissao($adminId, 'pesquisa_reacao_integracao.visualizar') === true, '(11a) Admin acessa .visualizar via bypass central, sem permissão individual concedida');
     $check(Authorization::usuarioTemPermissao($adminId, 'pesquisa_reacao_integracao.gerenciar') === true, '(11a) Admin acessa .gerenciar via bypass central');
-    $check(Authorization::usuarioTemPermissao($userSoVisualizarId, 'pesquisa_reacao_integracao.visualizar') === true, '(14) Usuário com .visualizar acessa a listagem/resultados');
+    $check(Authorization::usuarioTemPermissao($userSoVisualizarId, 'pesquisa_reacao_integracao.visualizar') === false, '(14) Viewer com .visualizar gravada NÃO acessa (incompatível com viewer — Etapa 2B compl.)');
     $check(Authorization::usuarioTemPermissao($userSoVisualizarId, 'pesquisa_reacao_integracao.gerenciar') === false, '(14) Usuário só com .visualizar NÃO consegue gerar/desativar');
-    $check(Authorization::usuarioTemPermissao($userGerenciarId, 'pesquisa_reacao_integracao.gerenciar') === true, '(15) Usuário com .gerenciar consegue gerar/desativar');
+    $check(Authorization::usuarioTemPermissao($userGerenciarId, 'pesquisa_reacao_integracao.gerenciar') === false, '(15) Viewer com .gerenciar gravada NÃO gera/desativa (incompatível com viewer)');
     $check(Authorization::usuarioTemPermissao($userSemPermissaoId, 'pesquisa_reacao_integracao.visualizar') === false, '(16) Usuário viewer sem nenhuma das duas permissões não acessa nem a listagem');
     $check(Authorization::usuarioTemPermissao($userSemPermissaoId, 'pesquisa_reacao_integracao.gerenciar') === false, '(16) ...nem a capacidade de gerenciar');
 

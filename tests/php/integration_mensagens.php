@@ -269,8 +269,8 @@ try {
 
     $sync = Authorization::sincronizar($gestorId, [$idVisualizar, $idCriar]);
     $check(($sync['ok'] ?? false) === true && (int)($sync['total'] ?? 0) === 2, 'Authorization::sincronizar() concede mensagens.visualizar + mensagens.criar ao Gestor');
-    $check(Authorization::usuarioTemPermissao($gestorId, 'mensagens.visualizar') === true, 'após sincronizar(), Gestor passa a acessar a listagem');
-    $check(Authorization::usuarioTemPermissao($gestorId, 'mensagens.criar') === true, 'após sincronizar(), Gestor passa a poder cadastrar');
+    $check(Authorization::usuarioTemPermissao($gestorId, 'mensagens.visualizar') === false, 'após sincronizar(), o usuário viewer NÃO acessa a listagem — mensagens.* é incompatível com viewer (Etapa 2B compl.); a permissão continua gravada');
+    $check(Authorization::usuarioTemPermissao($gestorId, 'mensagens.criar') === false, 'após sincronizar(), o usuário viewer NÃO pode cadastrar (incompatível com viewer)');
     $check(Authorization::usuarioTemPermissao($gestorId, 'mensagens.editar') === false, 'sincronizar() não concede mensagens.editar (não estava na lista enviada) — sem contaminação entre permissões');
 
     $catalogo = Authorization::catalogoPorModulo();

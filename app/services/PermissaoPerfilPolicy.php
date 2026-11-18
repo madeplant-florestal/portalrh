@@ -12,13 +12,14 @@
  *
  * NÍVEIS de uma permissão para um perfil (`classificar`):
  *   permitida          — pode ser recebida e concede acesso efetivo.
- *   transitoria_gestor — módulo cujo backend JÁ filtra por Setor Gerenciado (`usuario_setores_gerenciados`) quando o ator não
- *                        é admin/RH: é o uso de fato do "viewer gestor" de hoje. Continua válida e atribuível ATÉ existir o
- *                        perfil Gestor, quando migra para ele. Não entra no modelo recomendado.
- *   pendente_decisao   — o backend NÃO filtra por setor (dado global/nominal) mas há possibilidade de uso operacional legítimo
- *                        por viewer delegado. Dependência NÃO comprovada nem refutada: por segurança operacional a atribuição
- *                        JÁ GRAVADA continua efetiva (não se retira acesso sem evidência), mas NOVAS atribuições são recusadas
- *                        até a decisão. Reportada ao administrador.
+ *   transitoria_gestor — uso de fato do "viewer gestor" de hoje. Continua válida e atribuível ATÉ existir o perfil Gestor, quando
+ *                        migra para ele. Não entra no modelo recomendado. ATENÇÃO: o escopo REAL varia por módulo (ver
+ *                        docs/claude/roadmap-tecnico.md, "Preparação do perfil Gestor"): só Colaboradores e Avaliação de Experiência
+ *                        usam `usuario_setores_gerenciados`; Avaliação de Desempenho, Feedback e PDI filtram pelo gestor
+ *                        IMEDIATO/avaliador (`gestor_usuario_id`); Solicitação de Vaga e Kanban de Vagas pelo solicitante/aprovador;
+ *                        Integração do Colaborador NÃO filtra por ator (resultados/dashboard globais) — precisa de decisão (B).
+ *   pendente_decisao   — mecanismo de transição para uma permissão cuja decisão depende de evidência: a atribuição JÁ GRAVADA segue
+ *                        efetiva, NOVAS são recusadas. Hoje vazio (as antigas pendentes foram decididas como incompatíveis).
  *   incompativel       — nominal/financeira/administrativa/de escrita sem escopo: nunca concede acesso a esse perfil, mesmo
  *                        gravada em `usuario_permissoes`; bloqueia o salvamento de seleções que a contenham.
  * Código fora das listas = `incompativel` (negação por padrão); `unit_permissao_perfil_cobertura.php` falha se o catálogo ganhar
@@ -65,12 +66,12 @@ final class PermissaoPerfilPolicy
         'kanban_vagas.visualizar', 'kanban_vagas.detalhes', 'kanban_vagas.editar', 'kanban_vagas.movimentar',
     ];
 
-    /** Sem escopo setorial no backend; uso operacional por viewer delegado NÃO comprovado — grandfathering (ver cabeçalho). */
-    private const PENDENTES_DECISAO = [
-        'entrevista_desligamento.visualizar', 'entrevista_desligamento.gerenciar', 'entrevista_desligamento.resultados',
-        'mensagens.visualizar', 'mensagens.criar', 'mensagens.editar',
-        'pesquisa_reacao_integracao.visualizar', 'pesquisa_reacao_integracao.gerenciar',
-    ];
+    /**
+     * Vazia por decisão de segurança (Etapa 2B complementar): Entrevista de Desligamento, Pesquisa de Reação e Mensagens eram "pendentes"
+     * e foram DECIDIDAS como incompatíveis com o viewer (dado global/nominal ou configuração corporativa, sem escopo setorial). O nível
+     * continua existindo para futuras permissões cuja decisão ainda dependa de evidência (grandfathering, ver cabeçalho).
+     */
+    private const PENDENTES_DECISAO = [];
 
     /** Explícitas (e não só "o resto") para o teste de cobertura detectar códigos novos sem classificação. */
     private const VIEWER_INCOMPATIVEIS = [
@@ -86,6 +87,11 @@ final class PermissaoPerfilPolicy
         'vagas.visualizar', 'vagas.criar', 'vagas.editar', 'vagas.excluir', 'vagas.publicar',
         'movimentacao_pessoal.visualizar', 'movimentacao_pessoal.criar', 'movimentacao_pessoal.editar', 'movimentacao_pessoal.assinar',
         'manual.visualizar', 'comunicacoes.visualizar', 'pesquisa_experiencia.visualizar',
+        // Etapa 2B complementar — decididos como NÃO-viewer: entrevistas individuais, respostas identificáveis, gerenciamento
+        // operacional, pesquisas de reação e configuração corporativa de mensagens são de Admin/RH (e, no futuro, de Gestor com escopo).
+        'entrevista_desligamento.visualizar', 'entrevista_desligamento.gerenciar', 'entrevista_desligamento.resultados',
+        'pesquisa_reacao_integracao.visualizar', 'pesquisa_reacao_integracao.gerenciar',
+        'mensagens.visualizar', 'mensagens.criar', 'mensagens.editar',
         'colaboradores.editar', // edição do cadastro (editRh) é admin/RH por role; sem uso para viewer
     ];
 

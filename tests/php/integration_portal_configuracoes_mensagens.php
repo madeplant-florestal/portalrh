@@ -139,9 +139,9 @@ try {
     $svc = new PortalNavegacaoService();
     $cardSoMsg = array_values(array_filter($svc->modulos(), static fn(array $m): bool => $m['chave'] === 'configuracoes'))[0] ?? null;
     $abasSoMsg = array_column($svc->abas('configuracoes'), 'chave');
-    $check($cardSoMsg !== null && $cardSoMsg['href'] === '/admin/configuracoes/mensagens', '(12) Usuário só com mensagens.visualizar: card Configurações aparece, entrada em Mensagens');
-    $check(in_array('mensagens', $abasSoMsg, true) && !in_array('integracoes', $abasSoMsg, true), '(12) Esse usuário vê a aba Mensagens mas NÃO a aba Integrações — acesso cruzado não é exigido');
-    $check($backendPermite('/admin/configuracoes/mensagens', $soMensagens), '(12) O backend realmente abre /admin/configuracoes/mensagens para esse usuário');
+    $check($cardSoMsg === null, '(12) Viewer só com mensagens.visualizar (Etapa 2B compl.: incompatível com viewer): sem card Configurações');
+    $check(!in_array('mensagens', $abasSoMsg, true) && !in_array('integracoes', $abasSoMsg, true), '(12) e sem as abas Mensagens/Integrações — a permissão gravada não concede acesso');
+    $check(!$backendPermite('/admin/configuracoes/mensagens', $soMensagens), '(12) O backend nega /admin/configuracoes/mensagens ao viewer (coerente com a navegação)');
 
     // ---- (13) usuário só com recruitment_webhooks.visualizar: entra em Configurações/Integrações, sem Mensagens
     $comoUsuario($soWeb);

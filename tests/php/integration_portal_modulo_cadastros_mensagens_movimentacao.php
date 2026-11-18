@@ -91,7 +91,7 @@ try {
     $def = PortalNavegacaoService::definicaoAbas()['cadastros'];
     // Bloco 1 (2026-10): Jornadas de Trabalho entrou como sexta aba irmã (mesmo gate `aberto`,
     // mesmo AdminCatalogosController::renderIndex() de Empresas/Cargos).
-    $check(array_column($def['abas'], 'chave') === ['empresas', 'setores', 'cargos', 'jornadas-trabalho', 'beneficios', 'avaliacoes'] && array_unique(array_column($def['abas'], 'regra')) === ['aberto'], '(abas) Empresas | Setores | Cargos | Jornadas de Trabalho | Benefícios | Avaliações — todas `aberto`, como a Central e o gate de leitura dos controllers (sem Unidades: não existe tela própria)');
+    $check(array_column($def['abas'], 'chave') === ['empresas', 'setores', 'cargos', 'jornadas-trabalho', 'beneficios', 'avaliacoes'] && array_column($def['abas'], 'regra') === ['aberto', 'aberto', 'aberto', 'aberto', 'aberto', 'staff'], '(abas) Empresas | Setores | Cargos | Jornadas de Trabalho | Benefícios | Avaliações — todas `aberto`, como a Central e o gate de leitura dos controllers (sem Unidades: não existe tela própria)');
     $central = array_values(array_filter(PortalNavegacaoService::definicao(), static fn(array $m): bool => $m['chave'] === 'cadastros'));
     $check(array_column($central[0]['itens'], 'href') === array_column($def['abas'], 'href'), '(Central) O card Cadastros e as abas apontam para os mesmos seis destinos');
     $gates = [
@@ -106,7 +106,9 @@ try {
     foreach ($gates as $href => $corpo) {
         preg_match("#Auth::requireRole\\(\\[([^\\]]*)\\]\\)#", $corpo, $r);
         $roles = array_map(static fn(string $x): string => trim($x, " '\""), explode(',', $r[1] ?? ''));
-        if ($roles !== ['admin', 'rh', 'viewer'] || str_contains($corpo, 'requirePermissao')) {
+        // Etapa 2A: Avaliações (legado, nominal) é só admin/RH; os demais cadastros seguem abertos a viewer.
+        $esperado = $href === '/admin/avaliacoes' ? ['admin', 'rh'] : ['admin', 'rh', 'viewer'];
+        if ($roles !== $esperado || str_contains($corpo, 'requirePermissao')) {
             $problemas[] = $href;
         }
     }
@@ -114,7 +116,8 @@ try {
     foreach ($perfis as $rotulo => $u) {
         $comoUsuario($u);
         $abas = array_column((new PortalNavegacaoService())->abas('cadastros'), 'chave');
-        $check($abas === ['empresas', 'setores', 'cargos', 'jornadas-trabalho', 'beneficios', 'avaliacoes'], "(abas) {$rotulo} vê as seis abas (todos os roles do gate abrem a listagem)");
+        $esperadas = in_array($u['role'], ['admin', 'rh'], true) ? ['empresas', 'setores', 'cargos', 'jornadas-trabalho', 'beneficios', 'avaliacoes'] : ['empresas', 'setores', 'cargos', 'jornadas-trabalho', 'beneficios'];
+        $check($abas === $esperadas, "(abas) {$rotulo} vê só as abas que o backend abre (Avaliações legado é admin/RH; viewer e viewer com is_supervisor veem cinco)");
     }
     $check((int)$pdo->query('SELECT COUNT(*) FROM permissoes')->fetchColumn() === $permissoesAntes, '(permissões) Nenhuma permissão nova foi criada');
 

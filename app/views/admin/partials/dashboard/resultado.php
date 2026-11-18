@@ -854,6 +854,7 @@ $opcoesFiltro = $opcoesFiltro ?? ['empresas' => [], 'setores' => []];
     </section>
   <?php endif; ?>
 
+  <?php if (is_array($listagem ?? null)): /* Lista nominal: só admin/RH (o controller não a consulta para viewer) */ ?>
   <!-- Colaboradores — listagem operacional, agora CONTEXTUAL (Etapa 2, §16/§17): a população
        muda conforme o contexto de interação (Ativos/Admitidos no período/Desligados no período),
        sempre respeitando os filtros interativos acumulados (empresa/setor/sexo/motivo). -->
@@ -982,6 +983,7 @@ $opcoesFiltro = $opcoesFiltro ?? ['empresas' => [], 'setores' => []];
       <?php endif; ?>
     <?php endif; ?>
   </section>
+  <?php endif; ?>
 
   <!-- Dados ainda não integrados — rodapé discreto, sem protagonismo visual -->
   <section class="rounded-ds-md border border-dashed border-border/70 bg-surface-secondary/40 px-3.5 py-2.5">

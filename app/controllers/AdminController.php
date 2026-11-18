@@ -75,7 +75,8 @@ class AdminController extends Controller
         try {
             $painel = $service->montarPainel($filtros, $inicio, $fim, $compInicio, $compFim);
             $opcoesFiltro = $service->opcoesFiltro();
-            $listagem = $service->listarColaboradores($filtrosListagem, $inicio, $fim, $pagina, $porPagina);
+            // Lista nominal só para admin/RH; viewer recebe só os agregados (a lista nem é consultada).
+            $listagem = $this->podeVerListaNominal() ? $service->listarColaboradores($filtrosListagem, $inicio, $fim, $pagina, $porPagina) : null;
         } catch (Throwable $e) {
             Logger::exception($e, 'ERROR', ['controller' => 'AdminController']);
             $erro = 'Não foi possível carregar o painel de People Analytics agora. Tente novamente em instantes.';
@@ -175,7 +176,7 @@ class AdminController extends Controller
         try {
             $service = new PeopleAnalyticsService();
             $painel = $service->montarPainel($filtros, $inicio, $fim, $compInicio, $compFim);
-            $listagem = $service->listarColaboradores($filtrosListagem, $inicio, $fim, $pagina, $porPagina);
+            $listagem = $this->podeVerListaNominal() ? $service->listarColaboradores($filtrosListagem, $inicio, $fim, $pagina, $porPagina) : null;
             $opcoesFiltro = $service->opcoesFiltro();
 
             $html = $this->view->renderPartial('admin/partials/dashboard/resultado', [
@@ -202,6 +203,15 @@ class AdminController extends Controller
             http_response_code(500);
             echo json_encode(['ok' => false, 'mensagem' => 'Não foi possível atualizar o painel agora. Tente novamente em instantes.'], JSON_UNESCAPED_UNICODE);
         }
+    }
+
+    /**
+     * Dados NOMINAIS de colaboradores (lista e CSV) só para admin/RH (Etapa 2A, 2026-11). Viewer com `dashboard.visualizar`
+     * vê apenas o painel agregado. A decisão é de BACKEND: o HTML/JSON de viewer nem contém a lista.
+     */
+    private function podeVerListaNominal(): bool
+    {
+        return in_array(strtolower(trim((string)(Auth::role() ?? ''))), ['admin', 'rh'], true);
     }
 
     /**
@@ -249,7 +259,8 @@ class AdminController extends Controller
      */
     public function exportarColaboradores(): void
     {
-        Auth::requireRole(['admin', 'rh', 'viewer']);
+        // Exporta NOMES: só admin/RH (Etapa 2A). Viewer, mesmo com dashboard.visualizar, recebe 403 antes de qualquer consulta.
+        Auth::requireRole(['admin', 'rh']);
         Authorization::requirePermissao('dashboard.visualizar');
 
         $periodoSelecionado = Security::sanitizeString($_GET['periodo'] ?? '12m');

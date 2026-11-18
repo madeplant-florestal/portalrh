@@ -5,7 +5,7 @@ class AdminIndicacoesController extends Controller
     {
         // Entrada da tela: role admin/rh (como sempre) OU a permissão individual indicacoes.visualizar. Exportar e registrar/editar
         // pagamento seguem admin/rh (regras próprias, inalteradas).
-        Authorization::requireRoleOuPermissao(['admin', 'rh'], 'indicacoes.visualizar');
+        Auth::requireRole(['admin', 'rh']); // lista nominal com dados de pagamento (Etapa 2A): indicacoes.visualizar não abre mais a tela para viewer
         $filters = [
             'q' => Security::sanitizeString($_GET['q'] ?? ''),
             'pagamento' => Security::sanitizeString($_GET['pagamento'] ?? ''),
@@ -96,7 +96,7 @@ class AdminIndicacoesController extends Controller
 
     public function statusApi(string $id): void
     {
-        Auth::requireRole(['admin', 'rh', 'viewer']);
+        Auth::requireRole(['admin', 'rh']); // dados nominais e financeiros (Etapa 2A)
         $cand = Candidatura::find((int)$id);
         if (!$cand || (int)($cand['indicacao_colaborador'] ?? 0) !== 1) {
             http_response_code(404);
@@ -119,7 +119,7 @@ class AdminIndicacoesController extends Controller
 
     public function contasReceberApi(): void
     {
-        Auth::requireRole(['admin', 'rh', 'viewer']);
+        Auth::requireRole(['admin', 'rh']); // dados nominais e financeiros (Etapa 2A)
         header('Content-Type: application/json; charset=UTF-8');
         $rows = Candidatura::financialIndicacoesDataset(['pagamento' => Security::sanitizeString($_GET['pagamento'] ?? '')]);
         echo json_encode(['ok' => true, 'module' => 'contas_receber', 'items' => $rows], JSON_UNESCAPED_UNICODE);
@@ -127,7 +127,7 @@ class AdminIndicacoesController extends Controller
 
     public function conciliacaoApi(): void
     {
-        Auth::requireRole(['admin', 'rh', 'viewer']);
+        Auth::requireRole(['admin', 'rh']); // dados nominais e financeiros (Etapa 2A)
         header('Content-Type: application/json; charset=UTF-8');
         $rows = Candidatura::financialIndicacoesDataset(['pagamento' => Security::sanitizeString($_GET['pagamento'] ?? '')]);
         echo json_encode(['ok' => true, 'module' => 'conciliacao_bancaria', 'items' => $rows], JSON_UNESCAPED_UNICODE);
@@ -135,7 +135,7 @@ class AdminIndicacoesController extends Controller
 
     public function relatoriosFinanceirosApi(): void
     {
-        Auth::requireRole(['admin', 'rh', 'viewer']);
+        Auth::requireRole(['admin', 'rh']); // dados nominais e financeiros (Etapa 2A)
         header('Content-Type: application/json; charset=UTF-8');
         $rows = Candidatura::financialIndicacoesDataset(['pagamento' => Security::sanitizeString($_GET['pagamento'] ?? '')]);
         $totais = [

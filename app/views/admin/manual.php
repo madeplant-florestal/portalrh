@@ -347,7 +347,7 @@ $secoes = [
                     ['nome' => 'Alterar senha', 'explicacao' => 'Abre um modal para definir uma nova senha para o usuário (o administrador não vê a senha atual).'],
                     ['nome' => 'Vincular ao METADADOS', 'explicacao' => 'Busca um contrato oficial pelo nome e associa a este usuário.'],
                 ],
-                'atencoes' => ['`is_supervisor` sempre libera as telas que dependem de role, mesmo que o perfil (role) do usuário seja `viewer` — nunca use isso para tentar restringir um supervisor.'],
+                'atencoes' => ['`is_supervisor` só vale junto com o perfil admin; sozinho, em um usuário RH ou viewer, não libera nada — o perfil (role) define as capacidades, a permissão define as operações e o escopo define os dados.'],
                 'faq' => [
                     ['p' => 'Qual a diferença entre Gestor Imediato e Aprovador de Solicitação de Vaga?', 'r' => 'São dois campos diferentes no cadastro do usuário. O Gestor Imediato é uma relação hierárquica geral, usada como sugestão em telas como o PDI. O Aprovador de Solicitação de Vaga é quem especificamente aprova os pedidos de vaga daquele usuário. Um não substitui o outro, e alterar um não muda o outro.'],
                     ['p' => 'Qual a diferença entre usuário e colaborador?', 'r' => 'Usuário é uma conta de acesso ao Portal. Colaborador é um contrato oficial sincronizado do METADADOS. Um usuário pode estar vinculado a um colaborador (para saber quem ele é na estrutura oficial), mas nem todo colaborador tem uma conta de usuário, e a edição de cada um fica em telas diferentes.'],
@@ -593,7 +593,7 @@ $secoes = [
                 'oQue' => 'Cada usuário tem um perfil (admin, RH ou viewer) e, além dele, pode ter permissões individuais específicas (por exemplo, `pdi.gerenciar` ou `mensagens.criar`).',
                 'paraQue' => 'O perfil libera o básico de cada área; as permissões individuais liberam ações específicas dentro dela, sem alterar o perfil.',
                 'quem' => 'Só um administrador concede permissões, em `Usuários e Acessos`.',
-                'atencoes' => ['`is_supervisor` sempre libera o que o perfil admin/RH libera, mesmo que o perfil cadastrado seja `viewer` — nunca é usado para restringir alguém.', 'A Central e os menus só mostram o que cada usuário já pode abrir; nenhum card leva a uma tela bloqueada.'],
+                'atencoes' => ['`is_supervisor` só vale junto com o perfil admin; em um usuário RH ou viewer ele é ignorado (o acesso vem do perfil e das permissões).', 'A Central e os menus só mostram o que cada usuário já pode abrir; nenhum card leva a uma tela bloqueada.'],
                 'faq' => [
                     ['p' => 'Por que não consigo editar um registro mesmo vendo a tela?', 'r' => 'Visualizar e editar costumam ser permissões separadas. É possível ver uma lista sem ter permissão para criar ou alterar os registros dela.'],
                     ['p' => 'Por que determinado botão não aparece para mim?', 'r' => 'Botões de ação só aparecem para quem tem a permissão correspondente — não é um problema visual, é o mesmo controle de acesso que protege a ação no servidor.'],

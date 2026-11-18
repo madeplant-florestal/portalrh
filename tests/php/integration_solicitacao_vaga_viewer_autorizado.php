@@ -182,12 +182,9 @@ try {
     $check(!in_array('dashboard', $abasRecrutamento, true), '(3) Viewer autorizado NÃO vê a aba Dashboard de Recrutamento (sem dashboard_recrutamento.visualizar) — autorização não vazou');
     $check(!in_array('pipeline', $abasRecrutamento, true), '(4) Viewer autorizado NÃO vê a aba Pipeline (sem pipeline.visualizar) — autorização não vazou');
 
-    // ---- (5, nota honesta) "Candidaturas" É visível — mas isso é PRÉ-EXISTENTE e INDEPENDENTE
-    // desta correção: /admin/candidaturas já era `regra => 'aberto'` e AdminCandidaturasController::
-    // index() já aceita ['admin','rh','viewer'] SEM gate adicional, para qualquer viewer autenticado
-    // — nunca foi gateado por pode_solicitar_vaga nem por nenhuma permissão de recrutamento. Não é
-    // vazamento desta correção; não alterado aqui (fora do escopo, exigiria aprovação separada).
-    $check(in_array('candidaturas', $abasRecrutamento, true), '(5, documentado) "Candidaturas" aparece — comportamento PRÉ-EXISTENTE e INDEPENDENTE (regra "aberto" já antes desta correção), não uma permissão nova vazando');
+    // ---- (5) Etapa 2A (2026-11): a exposição de Candidaturas a viewer (que aqui era documentada como pré-existente) foi CORRIGIDA —
+    // /admin/candidaturas passou a ser admin/RH (nome/CPF de candidatos), então a aba não aparece para o viewer autorizado.
+    $check(!in_array('candidaturas', $abasRecrutamento, true), '(5) Viewer autorizado NÃO vê a aba Candidaturas — dados nominais de candidatos são só de admin/RH (Etapa 2A)');
 
     // ---- (7) Card/menu e backend usam a MESMA fonte (mesmo método estático) -------------------
     $check(

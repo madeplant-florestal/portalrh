@@ -63,6 +63,9 @@ class PortalNavegacaoService
     {
         $this->temPermissao = $temPermissao ?? static fn(string $codigo): bool => Authorization::temPermissao($codigo);
         $this->role = $role ?? Auth::role();
+        if ($supervisor === null) {
+            Auth::normalizarSupervisorDaSessao(); // is_supervisor só vale com role admin (Etapa 2A)
+        }
         $this->supervisor = $supervisor ?? !empty($_SESSION['user_is_supervisor']);
         $this->podeSolicitarVaga = $podeSolicitarVaga ?? self::resolverPodeSolicitarVagaDaSessao();
         $this->temSetorGerenciado = $temSetorGerenciado ?? static function (): bool {
@@ -98,16 +101,16 @@ class PortalNavegacaoService
                 'descricao' => 'Dashboard de People Analytics e indicadores gerenciais de pessoas.',
                 'itens' => [
                     ['href' => '/admin/dashboard', 'regra' => 'perm:dashboard.visualizar'], // People Analytics (antigo /admin)
-                    ['href' => '/admin/indicadores-rh', 'regra' => 'aberto'],
+                    ['href' => '/admin/indicadores-rh', 'regra' => 'perm:indicadores_rh.visualizar'],
                 ]],
             ['chave' => 'recrutamento', 'titulo' => 'Recrutamento e Seleção', 'icone' => 'recrutamento',
                 'descricao' => 'Dashboard, candidaturas, pipeline, vagas e indicações.',
                 'itens' => [
                     ['href' => '/admin/dashboard-recrutamento', 'regra' => 'perm:dashboard_recrutamento.visualizar'],
-                    ['href' => '/admin/candidaturas', 'regra' => 'aberto'],
-                    ['href' => '/admin/pipeline', 'regra' => 'staff_ou:pipeline.visualizar'],
+                    ['href' => '/admin/candidaturas', 'regra' => 'staff'],
+                    ['href' => '/admin/pipeline', 'regra' => 'staff'],
                     ['href' => '/admin/vagas', 'regra' => 'aberto'],
-                    ['href' => '/admin/indicacoes', 'regra' => 'staff_ou:indicacoes.visualizar'],
+                    ['href' => '/admin/indicacoes', 'regra' => 'staff'],
                 ]],
             ['chave' => 'solicitacoes-vaga', 'titulo' => 'Solicitações de Vaga', 'icone' => 'vagas',
                 'descricao' => 'Abra e acompanhe solicitações de vaga.',
@@ -149,7 +152,7 @@ class PortalNavegacaoService
                     ['href' => '/admin/cargos', 'regra' => 'aberto'],
                     ['href' => '/admin/jornadas-trabalho', 'regra' => 'aberto'],
                     ['href' => '/admin/beneficios', 'regra' => 'aberto'],
-                    ['href' => '/admin/avaliacoes', 'regra' => 'aberto'],
+                    ['href' => '/admin/avaliacoes', 'regra' => 'staff'],
                 ]],
             ['chave' => 'usuarios', 'titulo' => 'Usuários e Acessos', 'icone' => 'usuarios',
                 'descricao' => 'Usuários do Portal, perfis e permissões.',
@@ -188,7 +191,7 @@ class PortalNavegacaoService
             // People Analytics é o antigo Dashboard principal (/admin/dashboard, gate dashboard.visualizar); Indicadores de RH é aberto a admin/rh/viewer.
             'indicadores' => ['titulo' => 'Indicadores de RH', 'trilha_modulo' => false, 'abas' => [
                 ['chave' => 'people-analytics', 'label' => 'People Analytics', 'href' => '/admin/dashboard', 'regra' => 'perm:dashboard.visualizar'],
-                ['chave' => 'indicadores-rh', 'label' => 'Indicadores de RH', 'href' => '/admin/indicadores-rh', 'regra' => 'aberto'],
+                ['chave' => 'indicadores-rh', 'label' => 'Indicadores de RH', 'href' => '/admin/indicadores-rh', 'regra' => 'perm:indicadores_rh.visualizar'],
             ]],
             // Bloco G — Cadastros: seis áreas irmãs reais (mesmo agrupamento do card da Central; Jornadas de
             // Trabalho entrou no Bloco 1, 2026-10). Todas abertas às roles admin/rh/viewer no backend
@@ -199,7 +202,7 @@ class PortalNavegacaoService
                 ['chave' => 'cargos', 'label' => 'Cargos', 'href' => '/admin/cargos', 'regra' => 'aberto'],
                 ['chave' => 'jornadas-trabalho', 'label' => 'Jornadas de Trabalho', 'href' => '/admin/jornadas-trabalho', 'regra' => 'aberto'],
                 ['chave' => 'beneficios', 'label' => 'Benefícios', 'href' => '/admin/beneficios', 'regra' => 'aberto'],
-                ['chave' => 'avaliacoes', 'label' => 'Avaliações', 'href' => '/admin/avaliacoes', 'regra' => 'aberto'],
+                ['chave' => 'avaliacoes', 'label' => 'Avaliações', 'href' => '/admin/avaliacoes', 'regra' => 'staff'],
             ]],
             // Bloco E — Integração e Turnover/Desligamento: dois agrupamentos pequenos e reais (os mesmos cards da Central). Sem "megabarra":
             // as pesquisas públicas e as telas de detalhe (resultados) ficam sob a aba de origem.
@@ -233,9 +236,9 @@ class PortalNavegacaoService
                 ['chave' => 'dashboard', 'label' => 'Dashboard', 'href' => '/admin/dashboard-recrutamento', 'regra' => 'perm:dashboard_recrutamento.visualizar'],
                 ['chave' => 'solicitacoes', 'label' => 'Solicitações de Vaga', 'href' => '/admin/solicitacoes-vaga', 'regra' => 'pedidos_vaga'],
                 ['chave' => 'vagas', 'label' => 'Vagas', 'href' => '/admin/vagas', 'regra' => 'aberto'],
-                ['chave' => 'candidaturas', 'label' => 'Candidaturas', 'href' => '/admin/candidaturas', 'regra' => 'aberto'],
-                ['chave' => 'pipeline', 'label' => 'Pipeline Kanban', 'href' => '/admin/pipeline', 'regra' => 'staff_ou:pipeline.visualizar'],
-                ['chave' => 'indicacoes', 'label' => 'Indicações', 'href' => '/admin/indicacoes', 'regra' => 'staff_ou:indicacoes.visualizar'],
+                ['chave' => 'candidaturas', 'label' => 'Candidaturas', 'href' => '/admin/candidaturas', 'regra' => 'staff'],
+                ['chave' => 'pipeline', 'label' => 'Pipeline Kanban', 'href' => '/admin/pipeline', 'regra' => 'staff'],
+                ['chave' => 'indicacoes', 'label' => 'Indicações', 'href' => '/admin/indicacoes', 'regra' => 'staff'],
             ]],
             // Configurações → Integrações (2026-10): ver o comentário equivalente em definicao().
             'configuracoes' => ['titulo' => 'Configurações', 'abas' => [

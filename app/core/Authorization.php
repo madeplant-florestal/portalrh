@@ -48,6 +48,7 @@ class Authorization
      */
     public static function temAcessoPorRoleOuPermissao(array $roles, string $codigo): bool
     {
+        Auth::normalizarSupervisorDaSessao();
         if (!empty($_SESSION['user_is_supervisor'])) {
             return true;
         }
@@ -70,6 +71,7 @@ class Authorization
      */
     public static function requireRoleOuPermissao(array $roles, string $codigo): void
     {
+        Auth::normalizarSupervisorDaSessao();
         if (empty($_SESSION['user_is_supervisor']) && !Auth::check()) {
             redirect('/login');
         }
@@ -231,6 +233,7 @@ class Authorization
      */
     public static function primeiraRotaAcessivel(): string
     {
+        Auth::normalizarSupervisorDaSessao();
         // Nova UI: a entrada do Portal é a CENTRAL (`/admin`, AdminCentralController) — não tem permissão própria, é aberta a
         // qualquer sessão autenticada com role admin/rh/viewer (ou supervisor, que passa por Auth::requireRole) e mostra só
         // os módulos que o usuário pode acessar. Por isso o destino deixou de depender de permissão individual: o que antes

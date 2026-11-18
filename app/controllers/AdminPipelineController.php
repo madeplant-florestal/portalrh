@@ -3,8 +3,8 @@ class AdminPipelineController extends Controller
 {
     public function index(): void
     {
-        // Entrada da tela: role admin/rh (como sempre) OU a permissão individual pipeline.visualizar. Mover cards (move()) segue admin/rh.
-        Authorization::requireRoleOuPermissao(['admin', 'rh'], 'pipeline.visualizar');
+        // Kanban de CANDIDATOS (nome/CPF/etapa): só admin/RH (Etapa 2A); pipeline.visualizar não abre mais a tela para viewer.
+        Auth::requireRole(['admin', 'rh']);
 
         $vagaId = isset($_GET['vaga_id']) ? (int)$_GET['vaga_id'] : null;
         $setorIdRaw = trim((string)($_GET['setor_id'] ?? ''));

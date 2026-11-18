@@ -18,6 +18,8 @@ class AdminRhIndicadoresController extends Controller
     public function index(): void
     {
         Auth::requireRole(['admin', 'rh', 'viewer']);
+        // Viewer precisa da permissão explícita (admin/RH passam pelo bypass central de Authorization). Etapa 2A.
+        Authorization::requirePermissao('indicadores_rh.visualizar');
 
         $periodoSelecionado = Security::sanitizeString($_GET['periodo'] ?? '12m');
         if (!array_key_exists($periodoSelecionado, self::PERIODOS)) {

@@ -107,13 +107,14 @@ try {
     $admin = $novoUsuario('Admin', 'admin');
     $rh = $novoUsuario('RH', 'rh');
     $viewer = $novoUsuario('Viewer', 'viewer');
-    $supervisor = $novoUsuario('Supervisor', 'viewer', [], true);
+    $supervisor = $novoUsuario('Supervisor', 'admin', [], true);                 // supervisor legítimo = admin com is_supervisor=1
+    $viewerSupervisor = $novoUsuario('Viewer Supervisor', 'viewer', [], true);   // Etapa 2A: o flag em um viewer NÃO é bypass
     $viewerColab = $novoUsuario('Viewer Colab', 'viewer', ['colaboradores.visualizar']);
     $gestor = $novoUsuario('Gestor Teste', 'viewer');
     $subordinado = $novoUsuario('Subordinado Teste', 'viewer');
     $svcGestor = new UsuarioGestorService();
     $svcGestor->definirGestor($subordinado['id'], $gestor['id'], $admin['id'], '127.0.0.1');
-    $perfis = ['Admin' => $admin, 'RH' => $rh, 'viewer' => $viewer, 'supervisor' => $supervisor, 'viewer+colaboradores.visualizar' => $viewerColab];
+    $perfis = ['Admin' => $admin, 'RH' => $rh, 'viewer' => $viewer, 'supervisor' => $supervisor, 'viewer com is_supervisor' => $viewerSupervisor, 'viewer+colaboradores.visualizar' => $viewerColab];
 
     // ---- abas ----------------------------------------------------------------------------------------------------------------
     $def = PortalNavegacaoService::definicaoAbas()['pessoas'];
@@ -131,7 +132,7 @@ try {
         }
     }
     $check($problemas === [], '(regra de ouro) Toda aba visível leva a um destino que o controller realmente aceita, para ' . count($perfis) . ' perfis' . ($problemas === [] ? '' : ': ' . implode(' | ', $problemas)));
-    $check($visiveis['Admin'] === ['colaboradores', 'usuarios'] && $visiveis['supervisor'] === ['colaboradores', 'usuarios'] && $visiveis['RH'] === ['colaboradores'] && $visiveis['viewer'] === [], '(abas) Admin/supervisor veem as duas; RH só Colaboradores (lista de usuários é admin); viewer nenhuma');
+    $check($visiveis['Admin'] === ['colaboradores', 'usuarios'] && $visiveis['supervisor'] === ['colaboradores', 'usuarios'] && $visiveis['RH'] === ['colaboradores'] && $visiveis['viewer'] === [] && $visiveis['viewer com is_supervisor'] === [], '(abas) Admin/supervisor (admin) veem as duas; RH só Colaboradores (lista de usuários é admin); viewer — com ou sem is_supervisor — nenhuma');
     // Correção de 2026-11 (escopo gerencial de Colaboradores, caso Odair Pedro Tonin): a regra da
     // aba mudou de `staff` para `staff_ou_setor_gerenciado:colaboradores.visualizar` (espelha o
     // gate real de AdminColaboradoresController::index()). `$viewerColab` tem a permissão mas

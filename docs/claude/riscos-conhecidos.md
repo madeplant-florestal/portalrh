@@ -31,3 +31,26 @@ Identificados na auditoria arquitetural de 2026-07-09, documentados aqui para n�
    movimentações…) ficam preservados no banco, invisíveis para o RH; antes de aplicar a regra em um
    ambiente, rodar `database/diagnosticos/2026-11-11-dependencias-exclusao-analitica.sql` para saber
    se existem.
+
+6. **Autorização do perfil `viewer` e `is_supervisor` (Etapa 2A, 2026-11) — CORRIGIDO, com regras permanentes e pendências.**
+   - **Política:** o *perfil* (`usuarios.role`: admin/rh/viewer) define as capacidades gerais, a *permissão individual* define as
+     operações e o *escopo setorial* (`usuario_setores_gerenciados`) define os dados. `viewer` = só dashboards/indicadores
+     agregados autorizados: sem lista nominal, sem exportação nominal, sem dado financeiro detalhado, sem ação operacional.
+   - **Corrigido (backend, não só UI):** People Analytics (`/admin/dashboard`, `/dados`) não consulta nem renderiza a lista nominal
+     para viewer, e `/admin/dashboard/colaboradores/exportar` é admin/RH; Candidaturas (lista/detalhe), Pipeline, Indicações
+     (tela + 4 APIs financeiras) e Avaliações legado (`/admin/avaliacoes`) são admin/RH — `candidaturas|pipeline|indicacoes.visualizar`
+     gravadas em `usuario_permissoes` **não** concedem mais acesso (o registro continua armazenado); Indicadores de RH exige
+     `indicadores_rh.visualizar` para viewer.
+   - **`is_supervisor` não é bypass:** só vale junto com `role = admin` (`Auth::normalizarSupervisorDaSessao()`, chamado por
+     `requireRole`, `temAcessoPorRoleOuPermissao`, `requireRoleOuPermissao`, `canAccessAdmin` e `primeiraRotaAcessivel`; sessões
+     antigas são normalizadas na próxima requisição). Continua valendo como PROTEÇÃO em `User::isProtectedSupervisor/canManageUser`.
+   - **Pendências conscientes (não alteradas):** (a) `SolicitacaoVaga`, `MovimentacaoPessoal` e `User` ainda leem `is_supervisor`
+     direto do BANCO (≈10 pontos) para tratá-lo como RH/admin; com role rh/viewer isso ainda concede poder nesses fluxos —
+     tratar na Etapa 2C junto com o perfil Gestor; (b) módulos com role+permissão (Entrevista de Desligamento operacional, PDI,
+     Mensagens, Pesquisas, Avaliações de Experiência/Desempenho, Feedback, Colaboradores) continuam acessíveis a viewer **com a
+     permissão**, cada um com escopo próprio — é o embrião do Gestor e não foi mexido; (c) filtros acumulados do People
+     Analytics (sexo × setor × motivo) podem isolar células de 1 pessoa mesmo no agregado (reidentificação) — avaliar limite
+     mínimo de amostra; (d) a lista `$excecoes` de `tests/php/unit_rotas_viewer_cobertura.php` é a dívida explícita.
+   - **Cobertura:** `integration_autorizacao_etapa2a.php` (por endpoint × ator, processos separados) e
+     `unit_rotas_viewer_cobertura.php` (varredura estática das rotas). Diagnóstico de produção, somente leitura:
+     `database/diagnosticos/2026-11-18-autorizacao-etapa2a-impacto.sql` — rodar o BLOCO 7 ANTES do deploy.

@@ -50,8 +50,9 @@ $corpoDe = static function (string $classe, string $metodo): string {
     return implode('', array_slice($linhas, $r->getStartLine() - 1, $r->getEndLine() - $r->getStartLine() + 1));
 };
 $permDashboard = (int)$pdo->query("SELECT id FROM permissoes WHERE codigo = 'dashboard.visualizar'")->fetchColumn();
+$permIndicadoresRh = (int)$pdo->query("SELECT id FROM permissoes WHERE codigo = 'indicadores_rh.visualizar'")->fetchColumn(); // Etapa 2A: viewer precisa dela
 $permissoesAntes = (int)$pdo->query('SELECT COUNT(*) FROM permissoes')->fetchColumn();
-$novoUsuario = static function (string $rotulo, string $role, bool $comDashboard = false, bool $supervisor = false) use ($pdo, &$criados, $senha, $suffix, $permDashboard): array {
+$novoUsuario = static function (string $rotulo, string $role, bool $comDashboard = false, bool $supervisor = false) use ($pdo, &$criados, $senha, $suffix, $permDashboard, $permIndicadoresRh): array {
     $id = User::create('ZZPIN ' . $rotulo, strtolower(preg_replace('/[^a-z0-9]+/i', '.', $rotulo)) . '.zzpin.' . $suffix . '@teste.local', $senha, $role);
     User::setActiveStatus($id, true);
     if ($supervisor) {
@@ -59,7 +60,7 @@ $novoUsuario = static function (string $rotulo, string $role, bool $comDashboard
     }
     $criados[] = $id;
     if ($comDashboard) {
-        Authorization::sincronizar($id, [$permDashboard]);
+        Authorization::sincronizar($id, [$permDashboard, $permIndicadoresRh]);
     }
     return ['id' => $id, 'role' => $role, 'supervisor' => $supervisor];
 };
@@ -132,8 +133,10 @@ try {
     // individuais, incluindo dashboard.visualizar — diferente de viewer/supervisor, que continuam
     // exigindo a permissão explícita (supervisor não ganha escopo extra na Authorization).
     $check($visiveis['RH sem permissão'] === ['people-analytics', 'indicadores-rh'], '(abas) RH vê as duas abas mesmo sem dashboard.visualizar concedida — bypass central de Authorization (Bloco 4)');
-    $check($visiveis['viewer sem permissão'] === ['indicadores-rh'] && $visiveis['supervisor sem permissão'] === ['indicadores-rh'], '(abas) viewer e supervisor SEM dashboard.visualizar veem só Indicadores de RH — nenhuma dessas roles dispensa a permissão do People Analytics (supervisor não ganha escopo extra)');
-    $check($cards['Admin'] === '/admin/dashboard' && $cards['viewer com dashboard'] === '/admin/dashboard' && $cards['viewer sem permissão'] === '/admin/indicadores-rh' && $cards['supervisor sem permissão'] === '/admin/indicadores-rh', '(Central) O card Indicadores de RH segue apontando para o primeiro destino acessível (dashboard.visualizar → People Analytics; senão → Indicadores de RH)');
+    // Etapa 2A: Indicadores de RH também exige permissão explícita para viewer — sem nenhuma permissão (inclusive o viewer com
+    // is_supervisor=1, que não é mais bypass) não há aba acessível.
+    $check($visiveis['viewer sem permissão'] === [] && $visiveis['supervisor sem permissão'] === [], '(abas) viewer e viewer com is_supervisor SEM permissões não veem nenhuma aba — nem a role nem o flag dispensam as permissões');
+    $check($cards['Admin'] === '/admin/dashboard' && $cards['viewer com dashboard'] === '/admin/dashboard' && !isset($cards['viewer sem permissão']) && !isset($cards['supervisor sem permissão']), '(Central) O card Indicadores de RH aponta para o primeiro destino acessível (dashboard.visualizar → People Analytics) e some para quem não tem nenhuma das permissões');
     $check((int)$pdo->query('SELECT COUNT(*) FROM permissoes')->fetchColumn() === $permissoesAntes, '(permissões) Nenhuma permissão nova foi criada');
 
     // ---- páginas ---------------------------------------------------------------------------------------------------------------------
@@ -172,7 +175,7 @@ try {
         $c = $fonte("app/controllers/{$ctl}.php");
         $check(!str_contains($c, "'layouts/admin'") && str_contains($c, "'layouts/app-shell'") && str_contains($c, 'Auth::requireRole([\'admin\', \'rh\', \'viewer\'])'), "(controller) {$ctl}: só trocou o layout; gate de role preservado");
     }
-    $check(str_contains($fonte('app/controllers/AdminController.php'), "Authorization::requirePermissao('dashboard.visualizar')") && !str_contains($fonte('app/controllers/AdminRhIndicadoresController.php'), 'requirePermissao'), '(autorização) People Analytics segue com dashboard.visualizar; Indicadores de RH segue SEM permissão individual (só o gate de role) — nada foi ampliado nem restringido');
+    $check(str_contains($fonte('app/controllers/AdminController.php'), "Authorization::requirePermissao('dashboard.visualizar')") && str_contains($fonte('app/controllers/AdminRhIndicadoresController.php'), "Authorization::requirePermissao('indicadores_rh.visualizar')"), '(autorização) People Analytics segue com dashboard.visualizar; Indicadores de RH passa a exigir indicadores_rh.visualizar (Etapa 2A) — admin/RH pelo bypass central');
     $check((new ReflectionClassConstant('PeopleAnalyticsService', 'CODIGOS_VOLUNTARIO'))->getValue() === ['003', '006'] && (new ReflectionClassConstant('PeopleAnalyticsService', 'CODIGOS_INVOLUNTARIO'))->getValue() === ['001', '002', '007'] && TurnoverDashboardService::MAPA_MOTIVOS['Involuntário'] === ['002', '007'], '(People Analytics) Mapa de motivos próprio (Voluntário 003/006; Involuntário 001/002/007) — distinto do Dashboard de Turnover (Involuntário 002/007; 001 = Justa Causa), sem reaproveitamento');
     $pa = $fonte('app/services/PeopleAnalyticsService.php');
     $check(str_contains($pa, 'não são') && str_contains($pa, 'deduplicados por codigo_pessoa') && !str_contains($pa, 'app-shell') && !preg_match('/\bui_[a-z_]+\(/', $pa) && !preg_match('/\bui_[a-z_]+\(/', $fonte('app/services/RhIndicadoresService.php')), '(semântica) People Analytics segue por CONTRATO (sem deduplicar por pessoa); services sem dependência de UI — cálculo intacto');

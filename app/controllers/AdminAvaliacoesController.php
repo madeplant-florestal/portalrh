@@ -3,7 +3,8 @@ class AdminAvaliacoesController extends Controller
 {
     public function index(): void
     {
-        Auth::requireRole(['admin', 'rh', 'viewer']);
+        // Avaliações NOMINAIS de colaboradores (legado, sem permissão própria): só admin/RH (Etapa 2A).
+        Auth::requireRole(['admin', 'rh']);
         $filters = [
             'q' => Security::sanitizeString($_GET['q'] ?? ''),
             'colaborador_id' => ctype_digit((string)($_GET['colaborador_id'] ?? '')) ? (int)$_GET['colaborador_id'] : null,

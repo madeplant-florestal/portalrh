@@ -147,10 +147,10 @@ try {
     // ---- variante aditiva real (item 6 provado de ponta a ponta): pipeline.visualizar NÃO é role admin/rh, então concedê-la
     //      ao Gestor precisa liberar a aba sem que ele tenha ganhado a role nem is_supervisor.
     $idsPermissao2 = $pdo->query('SELECT id, codigo FROM permissoes')->fetchAll(PDO::FETCH_KEY_PAIR);
-    $idPipeline = (int)array_search('pipeline.visualizar', $idsPermissao2, true);
+    $idPipeline = (int)array_search('dashboard_recrutamento.visualizar', $idsPermissao2, true); // Etapa 2A: pipeline agora é só admin/RH; o exemplo aditivo usa o dashboard de Recrutamento (agregado)
     Authorization::sincronizar($gestorId, [$idPipeline]);
     $comoUsuario($gestorId, 'viewer', false);
-    $check(in_array('pipeline', array_column((new PortalNavegacaoService())->abas('recrutamento'), 'chave'), true), '(6) Gestor COM pipeline.visualizar passa a ver a aba "Pipeline Kanban" mesmo sem role admin/rh nem is_supervisor');
+    $check(in_array('dashboard', array_column((new PortalNavegacaoService())->abas('recrutamento'), 'chave'), true), '(6) Gestor COM dashboard_recrutamento.visualizar passa a ver a aba "Dashboard" mesmo sem role admin/rh nem is_supervisor');
     Authorization::sincronizar($gestorId, []); // devolve o Gestor ao estado sem permissões extras
 
     $comoUsuario($adminId, 'admin', false);

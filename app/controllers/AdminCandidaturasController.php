@@ -3,7 +3,8 @@ class AdminCandidaturasController extends Controller
 {
     public function index(): void
     {
-        Auth::requireRole(['admin', 'rh', 'viewer']);
+        // Nome/e-mail/CPF de candidatos: só admin/RH (Etapa 2A); viewer recebe 403 mesmo com candidaturas.visualizar.
+        Auth::requireRole(['admin', 'rh']);
         $filters = [
             'vaga_id' => isset($_GET['vaga_id']) ? (int)$_GET['vaga_id'] : null,
             'stage_id' => isset($_GET['stage_id']) ? (int)$_GET['stage_id'] : null,
@@ -24,7 +25,7 @@ class AdminCandidaturasController extends Controller
 
     public function show(string $id): void
     {
-        Auth::requireRole(['admin', 'rh', 'viewer']);
+        Auth::requireRole(['admin', 'rh']);
         $c = Candidatura::find((int)$id);
         if (!$c) { http_response_code(404); echo 'Candidatura não encontrada'; return; }
         $historico = Candidatura::getHistorico((int)$id);

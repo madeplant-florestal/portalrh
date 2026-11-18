@@ -63,7 +63,12 @@ class Auth
         $_SESSION['user_id'] = $user->id;
         $_SESSION['user_role'] = $role;
         $_SESSION['user_name'] = $user->nome;
-        $_SESSION['user_is_supervisor'] = $isSupervisor;
+        // is_supervisor NÃO é bypass por si só (Etapa 2A): só tem efeito junto com role admin. Supervisor com role rh/viewer fica
+        // com a capacidade da própria role — ver normalizarSupervisorDaSessao().
+        if ($isSupervisor && $role !== 'admin') {
+            Logger::warning('Usuário is_supervisor=1 sem role admin: o flag foi ignorado', ['usuario_id' => (int)$user->id, 'role' => $role]);
+        }
+        $_SESSION['user_is_supervisor'] = $isSupervisor && $role === 'admin';
         session_regenerate_id(true);
     }
 
@@ -87,8 +92,22 @@ class Auth
         return $_SESSION['user_role'] ?? null;
     }
 
+    /**
+     * `usuarios.is_supervisor` só vale como supervisor quando a role é admin (Etapa 2A, 2026-11): a role determina as
+     * capacidades gerais, a permissão as operações e o escopo setorial os dados — o flag, sozinho, nunca eleva uma role
+     * rh/viewer. Também normaliza sessões abertas ANTES desta regra (o flag na sessão é reescrito aqui, e todos os
+     * leitores de `$_SESSION['user_is_supervisor']` passam a ver o valor corrigido na mesma requisição).
+     */
+    public static function normalizarSupervisorDaSessao(): void
+    {
+        if (!empty($_SESSION['user_is_supervisor']) && strtolower(trim((string)($_SESSION['user_role'] ?? ''))) !== 'admin') {
+            $_SESSION['user_is_supervisor'] = false;
+        }
+    }
+
     public static function canAccessAdmin(): bool
     {
+        self::normalizarSupervisorDaSessao();
         if (!self::check()) {
             return false;
         }
@@ -101,6 +120,7 @@ class Auth
 
     public static function requireRole(array $roles): void
     {
+        self::normalizarSupervisorDaSessao();
         if (!empty($_SESSION['user_is_supervisor'])) {
             return;
         }

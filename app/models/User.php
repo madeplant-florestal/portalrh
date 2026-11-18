@@ -45,17 +45,21 @@ class User
         return (int)Database::conn()->lastInsertId();
     }
 
+    /**
+     * Garante o Supervisor Geral CONFIGURADO (security.supervisor_email). Etapa 2A-bis: NUNCA redefine a senha de uma conta
+     * existente (antes, qualquer administrador podia usá-la para trocar a senha do supervisor pela do arquivo de
+     * configuração). Conta existente: só restaura role admin + flag + verificação de e-mail. Conta nova: criada com a
+     * senha configurada. Quem pode chamar é decidido no controller (somente Supervisor Geral).
+     */
     public static function ensureSupervisor(string $nome, string $email, string $password): int
     {
         $existing = self::findByEmail($email);
-        $hash = password_hash($password, PASSWORD_BCRYPT);
         if ($existing) {
-            $sql = 'UPDATE usuarios SET role = ?, is_supervisor = 1, senha_hash = ?, email_verified_at = COALESCE(email_verified_at, NOW()) WHERE id = ?';
-            $stmt = Database::conn()->prepare($sql);
-            $stmt->execute(['admin', $hash, $existing->id]);
+            $sql = 'UPDATE usuarios SET role = ?, is_supervisor = 1, email_verified_at = COALESCE(email_verified_at, NOW()) WHERE id = ?';
+            Database::conn()->prepare($sql)->execute(['admin', $existing->id]);
             return $existing->id;
         }
-        return self::createSupervisor($nome, $email, $hash);
+        return self::createSupervisor($nome, $email, password_hash($password, PASSWORD_BCRYPT));
     }
 
     public static function findById(int $id): ?self
@@ -139,13 +143,18 @@ class User
         if (!$actor) {
             return ['ok' => false, 'status' => 401, 'error' => 'Usuário autenticado não encontrado.'];
         }
-        $actorIsAdmin = strtolower(trim((string)($actor->role ?? ''))) === 'admin' || (int)($actor->is_supervisor ?? 0) === 1;
-        if (!$actorIsAdmin) {
+        // Etapa 2A-bis: a autoridade vem de Autoridade (admin ou Supervisor Geral de fato — o flag sozinho não conta) e a conta
+        // de destino também é verificada: Administrador não redefine a senha de Supervisor Geral; RH nunca redefine senhas.
+        if (!Autoridade::ehAdministrativo($actor)) {
             return ['ok' => false, 'status' => 403, 'error' => 'Apenas administradores podem alterar senhas de outros usuários.'];
         }
         $target = self::findById($targetId);
         if (!$target) {
             return ['ok' => false, 'status' => 404, 'error' => 'Usuário alvo não encontrado.'];
+        }
+        if (!Autoridade::podeGerenciar($actor, $target)) {
+            AuditLog::log($actor->id, $target->id, 'blocked_password_change', 'Tentativa bloqueada de redefinir senha de conta de nível superior', $ip);
+            return ['ok' => false, 'status' => 403, 'error' => 'Operação não permitida para esta conta.'];
         }
         if ($actor->id === $target->id) {
             return ['ok' => false, 'status' => 400, 'error' => 'Use a recuperação de senha para alterar a sua própria senha.'];
@@ -193,50 +202,198 @@ class User
         return $stmt->execute([$id]);
     }
 
+    /** @deprecated usar Autoridade::ehSupervisorGeral() — mantido por compatibilidade (agora exige role admin + flag). */
     public static function isProtectedSupervisor(self $user): bool
     {
-        return (int)($user->is_supervisor ?? 0) === 1;
+        return Autoridade::ehSupervisorGeral($user);
     }
 
+    /** @deprecated usar Autoridade::podeGerenciar() — mantido por compatibilidade. */
     public static function canManageUser(?self $actor, self $target): bool
     {
-        if (!self::isProtectedSupervisor($target)) {
-            return true;
+        return Autoridade::podeGerenciar($actor, $target);
+    }
+
+    /** Motivo da última recusa de uma operação administrativa: negado | nao_encontrado | autoexclusao | ultimo_supervisor | ... */
+    public static ?string $ultimoMotivo = null;
+
+    /**
+     * Executa `$mutacao` (que REDUZ a autoridade do alvo: excluir, desativar, revogar o flag) sob trava dos Supervisores
+     * Gerais ativos. O SELECT ... FOR UPDATE serializa operações concorrentes: duas requisições que tentariam remover, ao
+     * mesmo tempo, os dois últimos supervisores não passam juntas — a segunda lê o estado já commitado e é recusada.
+     * Recusa (motivo `ultimo_supervisor`) se o alvo é um Supervisor Geral ativo e é o único.
+     */
+    private static function protegendoUltimoSupervisor(int $alvoId, callable $mutacao): bool
+    {
+        $pdo = Database::conn();
+        $pdo->beginTransaction();
+        try {
+            $ids = array_map('intval', $pdo->query(
+                "SELECT id FROM usuarios WHERE role = 'admin' AND is_supervisor = 1 AND email_verified_at IS NOT NULL ORDER BY id FOR UPDATE"
+            )->fetchAll(PDO::FETCH_COLUMN));
+            if (in_array($alvoId, $ids, true) && count($ids) <= 1) {
+                $pdo->rollBack();
+                self::$ultimoMotivo = 'ultimo_supervisor';
+                return false;
+            }
+            $ok = (bool)$mutacao($pdo);
+            $ok ? $pdo->commit() : $pdo->rollBack();
+            return $ok;
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $e;
         }
-        if (!$actor) {
-            return false;
-        }
-        return (int)($actor->is_supervisor ?? 0) === 1;
     }
 
     public static function attemptRoleUpdate(int $targetId, string $newRole, ?self $actor, ?string $ip): bool
     {
+        self::$ultimoMotivo = null;
         $target = self::findById($targetId);
         if (!$target) {
+            self::$ultimoMotivo = 'nao_encontrado';
             return false;
         }
-        if (!self::canManageUser($actor, $target)) {
-            AuditLog::log($actor?->id, $targetId, 'blocked_role_change', 'Tentativa de alterar permissão de supervisor', $ip);
+        if (!Autoridade::podeAtribuirRole($actor, $target, $newRole)) {
+            self::$ultimoMotivo = 'negado';
+            AuditLog::log($actor?->id, $targetId, 'blocked_role_change', 'Tentativa bloqueada de alterar perfil: ' . $target->role . ' -> ' . $newRole, $ip);
             return false;
         }
-        $sql = 'UPDATE usuarios SET role = ? WHERE id = ?';
-        $stmt = Database::conn()->prepare($sql);
-        return $stmt->execute([$newRole, $targetId]);
+        $ok = Database::conn()->prepare('UPDATE usuarios SET role = ? WHERE id = ?')->execute([$newRole, $targetId]);
+        if ($ok) {
+            AuditLog::log($actor?->id, $targetId, 'role_change', 'Perfil alterado: ' . $target->role . ' -> ' . $newRole, $ip);
+        }
+        return $ok;
     }
 
     public static function attemptDelete(int $targetId, ?self $actor, ?string $ip): bool
     {
+        self::$ultimoMotivo = null;
         $target = self::findById($targetId);
         if (!$target) {
+            self::$ultimoMotivo = 'nao_encontrado';
             return false;
         }
-        if (!self::canManageUser($actor, $target)) {
-            AuditLog::log($actor?->id, $targetId, 'blocked_user_delete', 'Tentativa de excluir supervisor', $ip);
+        if ($actor && $actor->id === $target->id) {
+            self::$ultimoMotivo = 'autoexclusao';
+            AuditLog::log($actor->id, $targetId, 'blocked_user_delete', 'Tentativa bloqueada de autoexclusão', $ip);
             return false;
         }
-        $sql = 'DELETE FROM usuarios WHERE id = ?';
-        $stmt = Database::conn()->prepare($sql);
-        return $stmt->execute([$targetId]);
+        if (!Autoridade::podeGerenciar($actor, $target)) {
+            self::$ultimoMotivo = 'negado';
+            AuditLog::log($actor?->id, $targetId, 'blocked_user_delete', 'Tentativa bloqueada de excluir conta de nível superior', $ip);
+            return false;
+        }
+        $excluir = static fn(PDO $pdo): bool => $pdo->prepare('DELETE FROM usuarios WHERE id = ?')->execute([$targetId]);
+        $ok = Autoridade::ehSupervisorGeral($target) ? self::protegendoUltimoSupervisor($targetId, $excluir) : $excluir(Database::conn());
+        if ($ok) {
+            // alvo NULL de propósito: a linha do alvo já não existe (FK); o id fica no texto.
+            AuditLog::log($actor?->id, null, 'user_delete', 'Conta #' . $targetId . ' excluída (perfil ' . $target->role . ')', $ip);
+        } elseif (self::$ultimoMotivo === 'ultimo_supervisor') {
+            AuditLog::log($actor?->id, $targetId, 'blocked_user_delete', 'Tentativa bloqueada de excluir o último Supervisor Geral ativo', $ip);
+        }
+        return $ok;
+    }
+
+    /** Ativa/desativa uma conta pela via administrativa: ninguém desativa a própria conta; o último Supervisor Geral ativo não é desativado. */
+    public static function attemptSetActive(int $targetId, bool $active, ?self $actor, ?string $ip): bool
+    {
+        self::$ultimoMotivo = null;
+        $target = self::findById($targetId);
+        if (!$target) {
+            self::$ultimoMotivo = 'nao_encontrado';
+            return false;
+        }
+        if ($actor && $actor->id === $target->id) {
+            self::$ultimoMotivo = 'autoalteracao';
+            AuditLog::log($actor->id, $targetId, 'blocked_status_change', 'Tentativa bloqueada de alterar o próprio status', $ip);
+            return false;
+        }
+        if (!Autoridade::podeGerenciar($actor, $target)) {
+            self::$ultimoMotivo = 'negado';
+            AuditLog::log($actor?->id, $targetId, 'blocked_status_change', 'Tentativa bloqueada de alterar o status de conta de nível superior', $ip);
+            return false;
+        }
+        $mutacao = static function (PDO $pdo) use ($targetId, $active): bool {
+            $sql = $active
+                ? 'UPDATE usuarios SET email_verified_at = COALESCE(email_verified_at, NOW()) WHERE id = ?'
+                : 'UPDATE usuarios SET email_verified_at = NULL WHERE id = ?';
+            return $pdo->prepare($sql)->execute([$targetId]);
+        };
+        $ok = (!$active && Autoridade::ehSupervisorGeral($target)) ? self::protegendoUltimoSupervisor($targetId, $mutacao) : $mutacao(Database::conn());
+        if ($ok) {
+            AuditLog::log($actor?->id, $targetId, 'user_status_change', $active ? 'Conta ativada' : 'Conta desativada', $ip);
+        } elseif (self::$ultimoMotivo === 'ultimo_supervisor') {
+            AuditLog::log($actor?->id, $targetId, 'blocked_status_change', 'Tentativa bloqueada de desativar o último Supervisor Geral ativo', $ip);
+        }
+        return $ok;
+    }
+
+    /**
+     * Concede o flag de Supervisor Geral. Única via de escrita do flag (além do `ensureSupervisor` do supervisor configurado):
+     * somente um Supervisor Geral, sobre uma conta de role admin (o flag em outra role seria inconsistente — nunca se muda a
+     * role por baixo), auditada.
+     */
+    public static function concederSupervisorGeral(int $targetId, ?self $actor, ?string $ip): bool
+    {
+        self::$ultimoMotivo = null;
+        $target = self::findById($targetId);
+        if (!$target) {
+            self::$ultimoMotivo = 'nao_encontrado';
+            return false;
+        }
+        if (!Autoridade::podeAlterarSupervisorGeral($actor)) {
+            self::$ultimoMotivo = 'negado';
+            AuditLog::log($actor?->id, $targetId, 'blocked_supervisor_grant', 'Tentativa bloqueada de conceder Supervisor Geral', $ip);
+            return false;
+        }
+        if (strtolower(trim($target->role)) !== 'admin') {
+            self::$ultimoMotivo = 'alvo_nao_admin';
+            return false;
+        }
+        if ((int)$target->is_supervisor === 1) {
+            self::$ultimoMotivo = 'ja_supervisor';
+            return false;
+        }
+        $ok = Database::conn()->prepare('UPDATE usuarios SET is_supervisor = 1 WHERE id = ? AND role = ?')->execute([$targetId, 'admin']);
+        if ($ok) {
+            AuditLog::log($actor?->id, $targetId, 'supervisor_grant', 'Supervisor Geral concedido', $ip);
+        }
+        return $ok;
+    }
+
+    /** Remove o flag de Supervisor Geral: nunca o próprio, nunca o último ativo; somente por um Supervisor Geral; auditada. */
+    public static function revogarSupervisorGeral(int $targetId, ?self $actor, ?string $ip): bool
+    {
+        self::$ultimoMotivo = null;
+        $target = self::findById($targetId);
+        if (!$target) {
+            self::$ultimoMotivo = 'nao_encontrado';
+            return false;
+        }
+        if (!Autoridade::podeAlterarSupervisorGeral($actor)) {
+            self::$ultimoMotivo = 'negado';
+            AuditLog::log($actor?->id, $targetId, 'blocked_supervisor_revoke', 'Tentativa bloqueada de remover Supervisor Geral', $ip);
+            return false;
+        }
+        if ($actor && $actor->id === $target->id) {
+            self::$ultimoMotivo = 'autoalteracao';
+            AuditLog::log($actor->id, $targetId, 'blocked_supervisor_revoke', 'Tentativa bloqueada de remover o próprio privilégio', $ip);
+            return false;
+        }
+        if ((int)$target->is_supervisor !== 1) {
+            self::$ultimoMotivo = 'nao_supervisor';
+            return false;
+        }
+        $mutacao = static fn(PDO $pdo): bool => $pdo->prepare('UPDATE usuarios SET is_supervisor = 0 WHERE id = ?')->execute([$targetId]);
+        $ok = self::protegendoUltimoSupervisor($targetId, $mutacao);
+        if ($ok) {
+            AuditLog::log($actor?->id, $targetId, 'supervisor_revoke', 'Supervisor Geral removido', $ip);
+        } elseif (self::$ultimoMotivo === 'ultimo_supervisor') {
+            AuditLog::log($actor?->id, $targetId, 'blocked_supervisor_revoke', 'Tentativa bloqueada de remover o último Supervisor Geral ativo', $ip);
+        }
+        return $ok;
     }
 
     /**
@@ -266,7 +423,7 @@ class User
         $stmt = Database::conn()->query(
             "SELECT id, nome, email, role FROM usuarios
              WHERE email_verified_at IS NOT NULL
-               AND (pode_solicitar_vaga = 1 OR role IN ('admin', 'rh') OR is_supervisor = 1)
+               AND (pode_solicitar_vaga = 1 OR role IN ('admin', 'rh'))
              ORDER BY nome ASC"
         );
         return $stmt->fetchAll(PDO::FETCH_ASSOC);

@@ -124,14 +124,17 @@ class AdminUsuariosController extends Controller
             echo 'Não é possível alterar o próprio perfil.';
             return;
         }
-        $role = Security::sanitizeString($_POST['role'] ?? 'viewer');
-        if (!in_array($role, ['admin', 'rh', 'viewer'], true)) {
-            $role = 'viewer';
+        // Etapa 2A-bis: perfil fora da whitelist é RECUSADO (antes virava 'viewer' em silêncio — um rebaixamento por valor forjado).
+        $role = Security::sanitizeString($_POST['role'] ?? '');
+        if (!in_array($role, Autoridade::ROLES_ATRIBUIVEIS, true)) {
+            http_response_code(400);
+            echo 'Perfil inválido.';
+            return;
         }
         $actor = User::findById($atorId);
         $ok = User::attemptRoleUpdate((int)$id, $role, $actor, Security::clientIp());
         if (!$ok) {
-            http_response_code(403);
+            http_response_code(User::$ultimoMotivo === 'nao_encontrado' ? 404 : 403);
             echo 'Operação não permitida.';
             return;
         }
@@ -150,8 +153,9 @@ class AdminUsuariosController extends Controller
         $actor = User::findById((int)($_SESSION['user_id'] ?? 0));
         $ok = User::attemptDelete((int)$id, $actor, Security::clientIp());
         if (!$ok) {
-            http_response_code(403);
-            echo 'Operação não permitida.';
+            $motivo = User::$ultimoMotivo;
+            http_response_code($motivo === 'ultimo_supervisor' ? 409 : ($motivo === 'nao_encontrado' ? 404 : 403));
+            echo $motivo === 'ultimo_supervisor' ? 'Não é possível excluir o último Supervisor Geral ativo.' : 'Operação não permitida.';
             return;
         }
         redirect('/admin/usuarios');
@@ -180,6 +184,15 @@ class AdminUsuariosController extends Controller
             $vinculoMetadados = (new ColaboradorMetadadosConsultaRepository())->findById((int)$user->colaborador_metadados_id);
         }
 
+        // Perfis que o ator PODE atribuir a este usuário (a UI só mostra o que Autoridade já permite; o backend revalida).
+        $atorAutoridade = Autoridade::atorDaSessao();
+        $rolesAtribuiveis = [];
+        foreach (['admin' => 'Admin', 'rh' => 'RH', 'viewer' => 'Viewer'] as $valorPerfil => $rotuloPerfil) {
+            if (Autoridade::podeAtribuirRole($atorAutoridade, $user, $valorPerfil)) {
+                $rolesAtribuiveis[$valorPerfil] = $rotuloPerfil;
+            }
+        }
+
         $contextoService = new UsuarioContextoOrganizacionalService();
         // Gestor Imediato (relação própria do Portal, independente do aprovador acima).
         $gestorService = new UsuarioGestorService();
@@ -197,7 +210,11 @@ class AdminUsuariosController extends Controller
             'cargosOficiais' => (new CatalogoMetadadosRepository('cargos'))->listarOficiais(),
             'setoresOficiais' => (new CatalogoMetadadosRepository('setores'))->listarOficiais(),
             'isAdminAtor' => $this->isAdminAtor(),
-            'podeAlterarPerfil' => $this->isAdminOuRhAtor() && (int)$user->id !== (int)($_SESSION['user_id'] ?? 0),
+            'podeAlterarPerfil' => $this->isAdminOuRhAtor() && $rolesAtribuiveis !== [],
+            'rolesAtribuiveis' => $rolesAtribuiveis,
+            'alvoSupervisorGeral' => Autoridade::ehSupervisorGeral($user),
+            'alvoInconsistente' => Autoridade::privilegioInconsistente($user),
+            'podeAlterarSupervisorGeral' => Autoridade::podeAlterarSupervisorGeral($atorAutoridade) && (int)$user->id !== (int)($atorAutoridade->id ?? 0),
             'podeAlterarSetoresGerenciados' => $this->isAdminOuRhAtor(),
             'setoresGerenciados' => (new UsuarioSetoresGerenciadosService())->setoresDoUsuario((int)$user->id),
             'catalogoPermissoes' => Authorization::catalogoPorModulo(),
@@ -244,7 +261,7 @@ class AdminUsuariosController extends Controller
             return;
         }
         $actor = User::findById((int)($_SESSION['user_id'] ?? 0));
-        if (!User::canManageUser($actor, $target)) {
+        if (!Autoridade::podeGerenciar($actor, $target)) {
             http_response_code(403);
             echo 'Operação não permitida.';
             return;
@@ -280,7 +297,7 @@ class AdminUsuariosController extends Controller
             return;
         }
         $actor = User::findById((int)($_SESSION['user_id'] ?? 0));
-        if (!User::canManageUser($actor, $target)) {
+        if (!Autoridade::podeGerenciar($actor, $target)) {
             http_response_code(403);
             echo 'Operação não permitida.';
             return;
@@ -316,7 +333,7 @@ class AdminUsuariosController extends Controller
             return;
         }
         $actor = User::findById((int)($_SESSION['user_id'] ?? 0));
-        if (!User::canManageUser($actor, $target)) {
+        if (!Autoridade::podeGerenciarContexto($actor, $target)) {
             http_response_code(403);
             echo 'Operação não permitida.';
             return;
@@ -367,7 +384,7 @@ class AdminUsuariosController extends Controller
             return;
         }
         $actor = User::findById((int)($_SESSION['user_id'] ?? 0));
-        if (!User::canManageUser($actor, $target)) {
+        if (!Autoridade::podeGerenciarContexto($actor, $target)) {
             http_response_code(403);
             echo 'Operação não permitida.';
             return;
@@ -418,7 +435,7 @@ class AdminUsuariosController extends Controller
             return;
         }
         $actor = User::findById((int)($_SESSION['user_id'] ?? 0));
-        if (!User::canManageUser($actor, $target)) {
+        if (!Autoridade::podeGerenciarContexto($actor, $target)) {
             http_response_code(403);
             echo 'Operação não permitida.';
             return;
@@ -461,7 +478,7 @@ class AdminUsuariosController extends Controller
             return;
         }
         $actor = User::findById((int)($_SESSION['user_id'] ?? 0));
-        if (!User::canManageUser($actor, $target)) {
+        if (!Autoridade::podeGerenciar($actor, $target)) {
             http_response_code(403);
             echo 'Operação não permitida.';
             return;
@@ -513,6 +530,49 @@ class AdminUsuariosController extends Controller
         echo json_encode(['ok' => true, 'items' => $items], JSON_UNESCAPED_UNICODE);
     }
 
+    /**
+     * Concede ou remove o flag de Supervisor Geral — a ÚNICA rota que escreve `is_supervisor` (fora o `garantir` do supervisor
+     * configurado). Somente um Supervisor Geral (admin + flag) a executa; a decisão e as proteções (nunca o próprio, nunca o
+     * último ativo, alvo admin) ficam em User/Autoridade; tudo é auditado.
+     */
+    public function alterarSupervisorGeral(string $id): void
+    {
+        Auth::requireRole(['admin']);
+        if (!Security::csrfCheck($_POST['csrf'] ?? '')) {
+            http_response_code(400);
+            echo 'Falha na verificação de segurança (CSRF).';
+            return;
+        }
+        $actor = Autoridade::atorDaSessao();
+        $acao = (string)($_POST['acao'] ?? '');
+        $back = '/admin/usuarios/' . (int)$id;
+        if (!in_array($acao, ['conceder', 'revogar'], true)) {
+            http_response_code(400);
+            echo 'Ação inválida.';
+            return;
+        }
+        $ok = $acao === 'conceder'
+            ? User::concederSupervisorGeral((int)$id, $actor, Security::clientIp())
+            : User::revogarSupervisorGeral((int)$id, $actor, Security::clientIp());
+        if (!$ok) {
+            $motivo = User::$ultimoMotivo;
+            if ($motivo === 'negado' || $motivo === 'nao_encontrado') {
+                http_response_code($motivo === 'nao_encontrado' ? 404 : 403);
+                echo 'Operação não permitida.';
+                return;
+            }
+            $mensagens = [
+                'ultimo_supervisor' => 'Não é possível remover o último Supervisor Geral ativo.',
+                'autoalteracao' => 'Você não pode remover o seu próprio privilégio.',
+                'alvo_nao_admin' => 'O Supervisor Geral exige perfil Admin. Altere o perfil antes, de forma explícita.',
+                'ja_supervisor' => 'A conta já é Supervisor Geral.',
+                'nao_supervisor' => 'A conta não é Supervisor Geral.',
+            ];
+            redirect($back . '?erro=' . urlencode($mensagens[$motivo] ?? 'Operação não realizada.'));
+        }
+        redirect($back . '?ok=' . urlencode($acao === 'conceder' ? 'Supervisor Geral concedido.' : 'Supervisor Geral removido.'));
+    }
+
     public function updateStatus(string $id): void
     {
         Auth::requireRole(['admin']);
@@ -529,12 +589,12 @@ class AdminUsuariosController extends Controller
             return;
         }
         $actor = User::findById((int)($_SESSION['user_id'] ?? 0));
-        if (!User::canManageUser($actor, $target)) {
-            http_response_code(403);
-            echo 'Operação não permitida.';
+        if (!User::attemptSetActive((int)$id, $active, $actor, Security::clientIp())) {
+            $motivo = User::$ultimoMotivo;
+            http_response_code($motivo === 'ultimo_supervisor' ? 409 : 403);
+            echo $motivo === 'ultimo_supervisor' ? 'Não é possível desativar o último Supervisor Geral ativo.' : 'Operação não permitida.';
             return;
         }
-        User::setActiveStatus((int)$id, $active);
         redirect('/admin/usuarios');
     }
 
@@ -557,8 +617,7 @@ class AdminUsuariosController extends Controller
             echo json_encode(['ok' => false, 'error' => 'Usuário autenticado não encontrado.'], JSON_UNESCAPED_UNICODE);
             return;
         }
-        $actorIsAdmin = strtolower(trim((string)($actor->role ?? ''))) === 'admin' || (int)($actor->is_supervisor ?? 0) === 1;
-        if (!$actorIsAdmin) {
+        if (!Autoridade::ehAdministrativo($actor)) { // role admin (Supervisor Geral incluso); o flag isolado não conta
             http_response_code(403);
             echo json_encode(['ok' => false, 'error' => 'Apenas administradores podem executar esta ação.'], JSON_UNESCAPED_UNICODE);
             return;

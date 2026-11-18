@@ -54,3 +54,29 @@ Identificados na auditoria arquitetural de 2026-07-09, documentados aqui para n�
    - **Cobertura:** `integration_autorizacao_etapa2a.php` (por endpoint × ator, processos separados) e
      `unit_rotas_viewer_cobertura.php` (varredura estática das rotas). Diagnóstico de produção, somente leitura:
      `database/diagnosticos/2026-11-18-autorizacao-etapa2a-impacto.sql` — rodar o BLOCO 7 ANTES do deploy.
+
+7. **Hierarquia de autoridade e Supervisor Geral (Etapa 2A-bis, 2026-11) — CORRIGIDO, com regras permanentes.**
+   - **Hierarquia:** Supervisor Geral (`role = admin` E `is_supervisor = 1`) > Administrador > RH > (Gestor, futuro) > Viewer. O flag
+     isolado não concede nada; `is_supervisor = 1` fora de admin é **configuração inconsistente** (sem privilégio, só sinalizada,
+     nunca corrigida automaticamente). Toda decisão de quem gerencia quem vive em **`Autoridade`** (`app/services/Autoridade.php`):
+     `nivel`, `ehSupervisorGeral`, `podeGerenciar`, `podeGerenciarContexto`, `podeAtribuirRole`, `podeAlterarSupervisorGeral`,
+     `flagEfetivo`. Nunca escrever `role === 'admin' || is_supervisor` em controller/model/view.
+   - **Regras:** Supervisor Geral gerencia todos (inclusive outros Supervisores Gerais); Administrador gerencia todos exceto
+     Supervisor Geral e não mexe no flag; RH só altera perfis rh<->viewer de contas rh/viewer (não promove a admin, não toca em
+     admin/Supervisor Geral, não redefine senha); ninguém altera o próprio perfil; o perfil de um Supervisor Geral só muda depois
+     de revogar o flag (operação explícita); perfil fora da whitelist é recusado (400), não vira viewer em silêncio.
+   - **Corrigido:** (1) `adminChangePassword`/API de senha e Colaboradores → Acesso (senha temporária) não verificavam a conta de
+     destino — Administrador podia assumir o Supervisor Geral; (2) RH promovia qualquer usuário a admin; (3) `supervisor/garantir`
+     (qualquer admin) redefinia a senha do supervisor para a do arquivo de configuração — agora só Supervisor Geral e **nunca
+     redefine senha de conta existente**; (4) `canManageUser` aceitava o flag de qualquer role; (5) exclusão/desativação sem proteção
+     do último Supervisor Geral e sem bloqueio de autoexclusão; (6) leituras diretas do flag em `SolicitacaoVaga`/`MovimentacaoPessoal`/
+     `candidatosSolicitante`.
+   - **Proteções:** último Supervisor Geral ativo não é excluído, desativado nem tem o flag removido — verificação sob
+     `SELECT ... FOR UPDATE` dos supervisores ativos (testada com dois processos concorrentes; sem a trava ambos venciam); ninguém
+     exclui/desativa a própria conta pela via administrativa nem remove o próprio privilégio; o flag só muda por
+     `/admin/usuarios/{id}/supervisor-geral` (Supervisor Geral, alvo admin, auditado) ou `garantir`; auditoria em `auditoria_usuarios`
+     (`role_change`, `supervisor_grant/revoke`, `user_status_change`, `user_delete`, `admin_password_change` e os `blocked_*`).
+   - **Recuperação:** se não restar nenhum Supervisor Geral ativo, a rota `garantir` (só Supervisor Geral) não pode ser usada — a
+     recuperação é por SQL/instalador, fora da aplicação (decisão consciente: nenhuma rota web pode criar autoridade máxima do nada).
+   - **Cobertura:** `integration_autoridade_supervisor_geral.php` (90 verificações, HTTP em processos separados, concorrência),
+     `unit_autoridade_cobertura.php` (varredura estática). Diagnóstico de produção: `database/diagnosticos/2026-11-19-supervisor-geral-inconsistencias.sql`.

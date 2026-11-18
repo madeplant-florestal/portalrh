@@ -83,8 +83,8 @@ $check(
 $corpoSenha = $corpoDoMetodo($source, 'adminChangePasswordApi');
 $check($corpoSenha !== '', 'método adminChangePasswordApi encontrado em AdminUsuariosController');
 $check(
-    (bool)preg_match('/role.*===\s*\'admin\'.*is_supervisor/s', $corpoSenha) || (bool)preg_match("/=== 'admin'/", $corpoSenha),
-    'adminChangePasswordApi: guarda manual de admin/supervisor preservada (RH não passa)'
+    str_contains($corpoSenha, 'Autoridade::ehAdministrativo'),
+    'adminChangePasswordApi: guarda de autoridade (Autoridade::ehAdministrativo) preservada — RH, viewer e flag isolado não passam'
 );
 $check(strpos($corpoSenha, "'rh'") === false, 'adminChangePasswordApi: "rh" não aparece na checagem de autorização');
 

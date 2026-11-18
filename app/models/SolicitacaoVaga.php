@@ -1842,7 +1842,8 @@ class SolicitacaoVaga
         return [
             'usuario_id' => (int)$row['id'],
             'role' => (string)$row['role'],
-            'is_supervisor' => (int)$row['is_supervisor'],
+            // Etapa 2A-bis: valor EFETIVO (1 só para admin + flag). O flag isolado em viewer/RH não concede nada.
+            'is_supervisor' => Autoridade::flagEfetivo($row),
             'pode_solicitar_vaga' => (int)$row['pode_solicitar_vaga'],
             'aprovador_usuario_id' => $row['aprovador_usuario_id'] !== null ? (int)$row['aprovador_usuario_id'] : null,
             'colaborador_metadados_id' => $row['colaborador_metadados_id'] !== null ? (int)$row['colaborador_metadados_id'] : null,
@@ -2157,13 +2158,13 @@ class SolicitacaoVaga
 
     private static function isRhOrAdmin(int $userId): bool
     {
-        $stmt = Database::conn()->prepare("SELECT role, is_supervisor FROM usuarios WHERE id = ? LIMIT 1");
+        $stmt = Database::conn()->prepare("SELECT role FROM usuarios WHERE id = ? LIMIT 1");
         $stmt->execute([$userId]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
         if (!$row) {
             return false;
         }
-        return (int)($row['is_supervisor'] ?? 0) === 1 || in_array(strtolower((string)$row['role']), ['admin', 'rh'], true);
+        return in_array(strtolower((string)$row['role']), ['admin', 'rh'], true); // o Supervisor Geral é admin; o flag isolado não conta (Etapa 2A-bis)
     }
 
     private static function bestMatchingColaborador(string $userName, array $colaboradores): ?array

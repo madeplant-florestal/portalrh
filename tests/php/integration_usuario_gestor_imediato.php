@@ -238,7 +238,7 @@ try {
         $check($ok, "(autorização) AdminUsuariosController::{$m} exige admin" . ($m === 'create' ? '' : ' + CSRF'));
     }
     $check(str_contains($corpoDe(AdminUsuariosController::class, 'show'), "Auth::requireRole(['admin', 'rh'])"), '(autorização) show continua admin/RH (RH só lê o gestor)');
-    $check(str_contains($corpoDe(AdminUsuariosController::class, 'updateGestor'), 'User::canManageUser') && !str_contains($corpoDe(AdminUsuariosController::class, 'updateGestor'), "'rh'"), '(autorização) updateGestor respeita canManageUser e não abre para RH');
+    $check(str_contains($corpoDe(AdminUsuariosController::class, 'updateGestor'), 'Autoridade::podeGerenciar') && !str_contains($corpoDe(AdminUsuariosController::class, 'updateGestor'), "'rh'"), '(autorização) updateGestor respeita canManageUser e não abre para RH');
     $check(!str_contains($semComentarios(BASE_PATH . '/app/services/UsuarioGestorService.php'), 'Authorization::') && !str_contains($semComentarios(BASE_PATH . '/app/services/UsuarioGestorService.php'), 'permiss'), '(autorização) Nenhuma permissão nova: o serviço não decide autorização');
     $rotas = (string)file_get_contents(BASE_PATH . '/index.php');
     $check(str_contains($rotas, "\$router->post('/admin/usuarios/{id}/gestor', [AdminUsuariosController::class, 'updateGestor']);"), '(rota) POST /admin/usuarios/{id}/gestor registrada');

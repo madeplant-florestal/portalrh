@@ -518,9 +518,20 @@ class AdminColaboradoresController extends Controller
                     echo 'Apenas administradores podem redefinir senhas.';
                     return;
                 }
+                // Etapa 2A-bis: a conta vinculada só tem a senha redefinida (e é reativada) por quem a pode gerenciar pela hierarquia —
+                // Administrador não toca em Supervisor Geral; RH nunca chega aqui; viewer/gestor nunca.
+                $atorSenha = Autoridade::atorDaSessao();
+                $alvoSenha = User::findById((int)$vinculo['usuario_id']);
+                if (!$alvoSenha || !Autoridade::ehAdministrativo($atorSenha) || !Autoridade::podeGerenciar($atorSenha, $alvoSenha)) {
+                    AuditLog::log($atorSenha?->id, $alvoSenha?->id, 'blocked_password_change', 'Tentativa bloqueada de redefinir senha (Colaboradores → Acesso)', Security::clientIp());
+                    http_response_code(403);
+                    echo 'Operação não permitida para esta conta.';
+                    return;
+                }
                 $senhaTemp = self::senhaTemporaria();
                 User::definirSenhaHash((int)$vinculo['usuario_id'], password_hash($senhaTemp, PASSWORD_BCRYPT));
                 User::setActiveStatus((int)$vinculo['usuario_id'], true);
+                AuditLog::log($atorSenha?->id, (int)$vinculo['usuario_id'], 'admin_password_change', 'Senha temporária gerada (Colaboradores → Acesso)', Security::clientIp());
                 $_SESSION['flash_acesso_senha_temp'] = $senhaTemp;
                 Logger::info('Senha de acesso de líder redefinida', ['colaborador_id' => $colaboradorId, 'usuario_id' => (int)$vinculo['usuario_id'], 'ator' => (int)($_SESSION['user_id'] ?? 0)]);
                 redirect($back . '?ok=' . urlencode('Nova senha temporária gerada. Copie e entregue ao líder.'));

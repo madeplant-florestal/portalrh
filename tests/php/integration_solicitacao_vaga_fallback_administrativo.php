@@ -135,7 +135,7 @@ try {
     $check($cargoGravadoRh === $cargoOficialB, '6 RH: Setor sem matriz aceita Cargo oficial via fallback administrativo');
 
     // ---- 7: MANUTENÇÃO (sem matriz) + supervisor master -> aceita Cargo oficial qualquer -------
-    $supervisor = $novoUsuario('supervisor', 'viewer', true);
+    $supervisor = $novoUsuario('supervisor', 'admin', true); // Etapa 2A-bis: Supervisor Geral = admin + is_supervisor=1
     $contextoService->definirContextoManual($supervisor, null, $setorSemMatriz, []);
     $idSupervisor = SolicitacaoVaga::create(array_merge($payloadBase, ['setor_id' => $setorSemMatriz, 'cargo_id' => $cargoOficialA]), $supervisor, '127.0.0.1');
     $criados['solicitacoes'][] = $idSupervisor;

@@ -60,7 +60,7 @@ $podeAlterarPerfil = !empty($podeAlterarPerfil);
         <form action="<?= $base ?>/admin/usuarios/<?= (int)$user->id ?>/role" method="post" class="mt-1 flex items-center gap-2">
           <input type="hidden" name="csrf" value="<?= Security::e($csrf) ?>">
           <select name="role" class="rounded border border-border px-2 py-1 text-sm">
-            <?php foreach (['admin' => 'Admin', 'rh' => 'RH', 'viewer' => 'Viewer'] as $valorPerfil => $rotuloPerfil): ?>
+            <?php foreach (($rolesAtribuiveis ?? ['admin' => 'Admin', 'rh' => 'RH', 'viewer' => 'Viewer']) as $valorPerfil => $rotuloPerfil): ?>
               <option value="<?= $valorPerfil ?>" <?= $user->role === $valorPerfil ? 'selected' : '' ?>><?= $rotuloPerfil ?></option>
             <?php endforeach; ?>
           </select>
@@ -68,6 +68,18 @@ $podeAlterarPerfil = !empty($podeAlterarPerfil);
         </form>
       <?php else: ?>
         <div class="font-medium text-text-primary"><?= Security::e(strtoupper($user->role)) ?></div>
+      <?php endif; ?>
+      <?php if (!empty($alvoSupervisorGeral)): ?>
+        <div class="mt-1"><?= ui_badge('Supervisor Geral', 'success') ?></div>
+      <?php elseif (!empty($alvoInconsistente)): ?>
+        <div class="mt-1 text-xs text-warning">Configuração inconsistente: is_supervisor=1 em conta sem perfil Admin. O flag não concede nenhum privilégio; a regularização é uma decisão administrativa.</div>
+      <?php endif; ?>
+      <?php if (!empty($podeAlterarSupervisorGeral)): ?>
+        <form action="<?= $base ?>/admin/usuarios/<?= (int)$user->id ?>/supervisor-geral" method="post" class="mt-2">
+          <input type="hidden" name="csrf" value="<?= Security::e($csrf) ?>">
+          <input type="hidden" name="acao" value="<?= (int)$user->is_supervisor === 1 ? 'revogar' : 'conceder' ?>">
+          <button class="<?= ui_btn('secundario') ?> h-8 px-3 text-xs"><?= (int)$user->is_supervisor === 1 ? 'Remover Supervisor Geral' : 'Conceder Supervisor Geral' ?></button>
+        </form>
       <?php endif; ?>
     </div>
     <div>

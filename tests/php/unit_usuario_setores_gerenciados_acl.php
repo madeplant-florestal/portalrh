@@ -42,7 +42,7 @@ $check(
     "updateSetoresGerenciados: Auth::requireRole(['admin','rh']) — admin e RH podem alterar, igual ao Contexto Organizacional"
 );
 $check(str_contains($corpo, 'Security::csrfCheck'), 'updateSetoresGerenciados: valida CSRF');
-$check(str_contains($corpo, 'User::canManageUser'), 'updateSetoresGerenciados: respeita a proteção de supervisor (canManageUser), mesmo padrão das demais ações de usuário');
+$check(str_contains($corpo, 'Autoridade::podeGerenciarContexto'), 'updateSetoresGerenciados: respeita a proteção de Supervisor Geral (Autoridade::podeGerenciarContexto), mesmo padrão das demais ações de usuário');
 $check(str_contains($corpo, 'UsuarioSetoresGerenciadosService'), 'updateSetoresGerenciados: delega a escrita ao serviço dedicado (nenhum INSERT/UPDATE direto no controller)');
 
 if ($falhas !== []) {

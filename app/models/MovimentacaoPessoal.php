@@ -986,6 +986,6 @@ class MovimentacaoPessoal
         if (!$user) {
             return false;
         }
-        return (int)($user['is_supervisor'] ?? 0) === 1 || in_array(strtolower((string)$user['role']), ['admin', 'rh'], true);
+        return in_array(strtolower((string)$user['role']), ['admin', 'rh'], true); // o Supervisor Geral é admin; o flag isolado não conta (Etapa 2A-bis)
     }
 }

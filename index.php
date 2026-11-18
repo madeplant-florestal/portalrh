@@ -363,6 +363,7 @@ try {
     $router->get('/admin/usuarios/{id}', [AdminUsuariosController::class, 'show']);
     $router->post('/admin/usuarios/novo', [AdminUsuariosController::class, 'store']);
     $router->post('/admin/usuarios/supervisor/garantir', [AdminSupervisorController::class, 'ensure']);
+    $router->post('/admin/usuarios/{id}/supervisor-geral', [AdminUsuariosController::class, 'alterarSupervisorGeral']);
     $router->post('/admin/usuarios/{id}/role', [AdminUsuariosController::class, 'updateRole']);
     $router->post('/admin/usuarios/{id}/status', [AdminUsuariosController::class, 'updateStatus']);
     $router->post('/admin/usuarios/{id}/vaga-acesso', [AdminUsuariosController::class, 'updateVagaAcesso']);

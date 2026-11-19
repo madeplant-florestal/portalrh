@@ -46,10 +46,21 @@ class Config
                 'session_absolute_lifetime_seconds' => 86400,
                 'webhook_allow_private_targets' => false
             ],
+            // E-mail (Mailer, PHPMailer/SMTP). NADA é enviado até `enabled` ser ligado em local.php com as credenciais; a senha SÓ em local.php.
             'mail' => [
                 'enabled' => false,
+                'driver' => 'smtp',
                 'from' => '',
-                'to_hr' => ''
+                'from_name' => 'Portal RH Madeplant',
+                'reply_to' => '',
+                'to_hr' => '',
+                'smtp_host' => '',
+                'smtp_port' => 465,
+                'smtp_secure' => 'ssl',
+                'smtp_user' => '',
+                'smtp_pass' => '',
+                'smtp_timeout' => 10,
+                'smtp_cafile' => ''
             ],
             'logging' => [
                 'level' => 'INFO',

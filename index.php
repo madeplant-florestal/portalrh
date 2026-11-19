@@ -368,6 +368,9 @@ try {
     $router->post('/admin/usuarios/supervisor/garantir', [AdminSupervisorController::class, 'ensure']);
     // Diagnóstico somente leitura da sessão no servidor web (Supervisor Geral) — prova na hospedagem que o prazo configurado é cumprido.
     $router->get('/admin/usuarios/supervisor/sessao', [AdminSupervisorController::class, 'sessao']);
+    // Diagnóstico de envio de e-mail (SMTP) — exclusivo do Supervisor Geral; o POST exige CSRF e é limitado.
+    $router->get('/admin/usuarios/supervisor/email', [AdminSupervisorController::class, 'emailDiagnostico']);
+    $router->post('/admin/usuarios/supervisor/email/testar', [AdminSupervisorController::class, 'emailTestar']);
     $router->post('/admin/usuarios/{id}/supervisor-geral', [AdminUsuariosController::class, 'alterarSupervisorGeral']);
     $router->post('/admin/usuarios/{id}/role', [AdminUsuariosController::class, 'updateRole']);
     $router->post('/admin/usuarios/{id}/status', [AdminUsuariosController::class, 'updateStatus']);

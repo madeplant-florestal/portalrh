@@ -217,3 +217,17 @@ Identificados na auditoria arquitetural de 2026-07-09, documentados aqui para n�
      PHP-FPM não recicla sessões por outro meio. Prova: logado como Supervisor Geral, abrir `/admin/usuarios/supervisor/sessao` (JSON somente leitura) e conferir
      `prazo_garantido: true` e `session.gc_maxlifetime` = 90000; se `false`, a hospedagem bloqueou o `ini_set` — ajustar `session.gc_maxlifetime` (>= 90000) no hPanel (PHP Configuration)
      ou em `.user.ini`. A aplicação registra um aviso no log (1x por sessão) quando o servidor não aceita o valor. Cobertura: `integration_sessao_politica.php`.
+15. **E-mail (SMTP/PHPMailer) e dependências Composer (2026-11) — IMPLEMENTADO; envio DESLIGADO por padrão.**
+   - **Causa do não recebimento da recuperação de senha:** o `Mailer` usava `@mail()` (sem SMTP, erro suprimido, resultado ignorado, sem log) com remetente de exemplo
+     (`no-reply@seu-dominio.com.br`): a hospedagem recusava/descartava e a tela sempre dizia "enviado". Agora: PHPMailer 6.12 + SMTP autenticado (TLS implícito 465 ou STARTTLS 587),
+     certificado SEMPRE validado (sem opção para desligar; só CA adicional `smtp_cafile`), resultado por ETAPA (config/conexão/TLS/autenticação/remetente/destinatário/envio) e log seguro.
+   - **Configuração (`mail.*`, app/config/local.php — a senha SÓ aí):** enabled, driver, from, from_name, reply_to, smtp_host, smtp_port, smtp_secure, smtp_user, smtp_pass, smtp_timeout, smtp_cafile.
+     Os arquivos versionados vêm com `enabled = false` e SEM senha. Nada é enviado até ligar e testar.
+   - **Recuperação de senha:** token de 32 bytes, só o SHA-256 no banco, uso único, 30 min, tokens anteriores invalidados — inalterados. NOVO: limite de 3 por conta e 10 por IP em 15 min
+     (conta existente OU não, com a MESMA resposta; chaves só em hash). O limite por IP usa `Security::clientIp()` (aceita X-Forwarded-For como o login): atrás de proxy não confiável ele é contornável;
+     o limite por conta continua valendo.
+   - **Diagnóstico (Supervisor Geral):** `/admin/usuarios/supervisor/email` (configuração efetiva sem senha) e envio de teste (CSRF, 1 destinatário, texto fixo, 5/hora, auditado). "Aceito pelo SMTP" NÃO prova entrega:
+     spam, SPF/DKIM do domínio e política do destinatário continuam valendo.
+   - **Dompdf 3.1.5 → 3.1.6 (+ masterminds/html5 2.12.0, sabberworm/php-css-parser 9.5.0; thecodingmachine/safe removido):** corrige os 6 avisos (CVE-2026-59943/59942/59941/56722/55555/55554); `composer audit` limpo.
+     O `CartaPropostaPdfService` passou a usar `chroot` próprio (vazio), sem PHP/JavaScript embutidos, além de `isRemoteEnabled=false`; o template não usa imagem nem arquivo local e escapa todo dado. PDFs gerados antes e depois: mesmas páginas, mesmo texto, mesmo tamanho.
+   - **Residuais:** aceite pelo SMTP ≠ entrega; o limite por IP depende da confiabilidade do IP do cliente; a senha SMTP em `local.php` é um segredo de servidor (permissões do arquivo); contas sem e-mail válido nunca recebem avisos.

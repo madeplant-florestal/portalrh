@@ -9,7 +9,11 @@
 
 require __DIR__ . '/../../app/core/bootstrap.php';
 
-[, $userId, $role, $supervisor, $controller, $metodo, $get, $args, $post] = $argv + array_fill(0, 9, '');
+[, $userId, $role, $supervisor, $controller, $metodo, $get, $args, $post, $servidor] = $argv + array_fill(0, 10, '');
+// 10º argumento (opcional): JSON com valores de $_SERVER (ex.: REMOTE_ADDR) — usado pelos testes de limite por IP.
+foreach (json_decode($servidor !== '' ? $servidor : '[]', true) ?: [] as $k => $v) {
+    $_SERVER[$k] = $v;
+}
 
 $_SESSION['user'] = true;
 $_SESSION['user_id'] = (int)$userId;

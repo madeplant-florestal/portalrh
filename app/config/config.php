@@ -54,10 +54,22 @@ return [
         'allowed_document_mime' => ['application/pdf', 'image/png', 'image/jpeg'],
         'max_document_bytes' => 5 * 1024 * 1024
     ],
+    // E-mail (Mailer + PHPMailer/SMTP autenticado). Envio DESLIGADO por padrão: ligue `enabled` em app/config/local.php (fora do Git) junto das credenciais.
+    // Hostinger: smtp.hostinger.com, porta 465 + 'ssl' (TLS implícito) ou 587 + 'tls' (STARTTLS). A senha vai SOMENTE no local.php.
     'mail' => [
-        'enabled' => true,
-        'from' => 'no-reply@seu-dominio.com.br',
+        'enabled' => false,
+        'driver' => 'smtp',
+        'from' => 'no-reply@appmadeplant.com',
+        'from_name' => 'Portal RH Madeplant',
+        'reply_to' => '',
         'to_hr' => 'rh@seu-dominio.com.br',
+        'smtp_host' => 'smtp.hostinger.com',
+        'smtp_port' => 465,
+        'smtp_secure' => 'ssl',
+        'smtp_user' => 'no-reply@appmadeplant.com',
+        'smtp_pass' => '', // NUNCA versionar: definir apenas no local.php do servidor
+        'smtp_timeout' => 10,
+        'smtp_cafile' => '',
         'subject_new_application' => 'Nova candidatura recebida',
         'subject_password_recovery' => 'Recuperação de senha',
         'subject_password_changed' => 'Senha redefinida',

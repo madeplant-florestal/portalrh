@@ -19,7 +19,17 @@ class PasswordRecoveryController extends Controller
         }
 
         $email = Security::sanitizeString($_POST['email'] ?? '');
-        $user = $email ? User::findByEmail($email) : null;
+
+        // Limite de solicitações (anti-abuso do formulário como disparador de e-mail): 3 por CONTA e 10 por IP em 15 minutos. Toda solicitação CONTA —
+        // inclusive e-mail inexistente — e a resposta é SEMPRE a mesma: o limite não vira um oráculo de "esta conta existe".
+        $ip = Security::clientIp();
+        $contaOk = $email === '' || Security::rateLimitConsume('pwd_reset_conta', strtolower($email), 3, 900);
+        $ipOk = Security::rateLimitConsume('pwd_reset_ip', $ip, 10, 900);
+        $permitido = $contaOk && $ipOk;
+        if (!$permitido) {
+            Logger::warning('Recuperação de senha: limite de solicitações atingido', ['ip' => $ip, 'limite' => !$ipOk ? 'ip' : 'conta']); // sem e-mail
+        }
+        $user = ($email && $permitido) ? User::findByEmail($email) : null;
 
         if ($user) {
             $rawToken = bin2hex(random_bytes(32));
@@ -28,7 +38,11 @@ class PasswordRecoveryController extends Controller
             $link = $base . '/admin/reset-password/' . urlencode($rawToken);
             $subject = Config::app()['mail']['subject_password_recovery'] ?? 'Recuperação de senha';
             $message = "Olá {$user->nome},\n\nRecebemos uma solicitação para redefinição de senha.\nAcesse o link abaixo (válido por 30 minutos):\n{$link}\n\nSe você não solicitou, ignore este e-mail.";
-            Mailer::sendTo($user->email, $subject, $message);
+            $envio = Mailer::enviar($user->email, $subject, $message);
+            if (!$envio['ok']) {
+                // A falha já foi registrada pelo Mailer (etapa/servidor, sem senha, corpo, token nem link). Aqui só o contexto; a tela NÃO muda.
+                Logger::warning('Recuperação de senha: e-mail não enviado', ['usuario_id' => (int)$user->id, 'etapa' => $envio['etapa']]);
+            }
         }
 
         $this->view->render('admin/password_recovery_request', [

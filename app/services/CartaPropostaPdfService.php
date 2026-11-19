@@ -18,10 +18,7 @@ class CartaPropostaPdfService
 
         $html = self::renderizarHtml($proposta);
 
-        $dompdf = new \Dompdf\Dompdf([
-            'isRemoteEnabled' => false, // nunca busca recurso externo (CSS/imagem) — só o que é embutido inline
-            'isHtml5ParserEnabled' => true,
-        ]);
+        $dompdf = self::novoDompdf();
         $dompdf->setPaper('A4', 'portrait');
         $dompdf->loadHtml($html, 'UTF-8');
         $dompdf->render();
@@ -52,10 +49,7 @@ class CartaPropostaPdfService
 
         $html = self::renderizarHtmlComprovante($proposta + ['comprovante_identificador' => $identificador]);
 
-        $dompdf = new \Dompdf\Dompdf([
-            'isRemoteEnabled' => false,
-            'isHtml5ParserEnabled' => true,
-        ]);
+        $dompdf = self::novoDompdf();
         $dompdf->setPaper('A4', 'portrait');
         $dompdf->loadHtml($html, 'UTF-8');
         $dompdf->render();
@@ -70,6 +64,27 @@ class CartaPropostaPdfService
             throw new \RuntimeException('Não foi possível salvar a via com comprovante de aceite da Carta Proposta.');
         }
         return $nomeArmazenado;
+    }
+
+    /**
+     * Dompdf com a configuração ENDURECIDA (única fonte): sem recurso remoto, sem PHP/JavaScript embutidos no HTML, e `chroot` restrito a uma
+     * pasta própria e vazia — o padrão do Dompdf permite ler arquivos locais da própria biblioteca. O template não usa imagens nem arquivos
+     * locais e todo texto vindo de dados é escapado (Security::e), então nada disso altera o PDF; só fecha as superfícies dos avisos de
+     * segurança do Dompdf (SVG/data-URI, font-face, chroot) caso um dia entre conteúdo não confiável.
+     */
+    private static function novoDompdf(): \Dompdf\Dompdf
+    {
+        $chroot = STORAGE_PATH . DIRECTORY_SEPARATOR . 'cartas_propostas' . DIRECTORY_SEPARATOR . '.chroot';
+        if (!is_dir($chroot)) {
+            @mkdir($chroot, 0775, true);
+        }
+        return new \Dompdf\Dompdf([
+            'isRemoteEnabled' => false,
+            'isPhpEnabled' => false,
+            'isJavascriptEnabled' => false,
+            'isHtml5ParserEnabled' => true,
+            'chroot' => is_dir($chroot) ? realpath($chroot) : STORAGE_PATH,
+        ]);
     }
 
     private static function renderizarHtmlComprovante(array $proposta): string

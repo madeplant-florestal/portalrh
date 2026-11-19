@@ -223,6 +223,30 @@ class Security
         ];
     }
 
+    /**
+     * Limite simples "no máximo $max solicitações em $janela segundos" (janela deslizante), com bloqueio de arquivo (sem corrida entre requisições
+     * simultâneas). Toda chamada CONTA a tentativa. Devolve true se ainda estava dentro do limite. A chave é gravada só como hash (nunca o e-mail/IP em claro).
+     */
+    public static function rateLimitConsume(string $scope, string $key, int $max, int $janela): bool
+    {
+        $arquivo = self::rateLimitFile($scope, $key);
+        $fp = @fopen($arquivo, 'c+');
+        if ($fp === false) {
+            return true; // sem como medir: não bloqueia (o login/endpoint segue disponível); o erro de disco aparece nos logs do servidor
+        }
+        flock($fp, LOCK_EX);
+        $agora = time();
+        $dados = json_decode((string)stream_get_contents($fp), true);
+        $tentativas = array_values(array_filter(is_array($dados['tentativas'] ?? null) ? $dados['tentativas'] : [], static fn($t): bool => ($agora - (int)$t) < $janela));
+        $dentro = count($tentativas) < $max;
+        $tentativas[] = $agora;
+        ftruncate($fp, 0);
+        rewind($fp);
+        fwrite($fp, json_encode(['tentativas' => $tentativas], JSON_UNESCAPED_SLASHES));
+        flock($fp, LOCK_UN);
+        fclose($fp);
+        return $dentro;
+    }
     public static function rateLimitReset(string $scope, string $key): void
     {
         $file = self::rateLimitFile($scope, $key);

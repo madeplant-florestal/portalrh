@@ -54,8 +54,11 @@ significativamente a arquitetura, framework de frontend (React/Vue/Angular) ou b
 
 **Exceções pontuais já aprovadas** (escopadas a uma necessidade concreta, não abrem precedente
 geral):
-- **Composer**, estritamente para `dompdf/dompdf` (Carta Proposta). `vendor/` é versionado no Git
-  (produção não roda `composer install`).
+- **Composer**, estritamente para `dompdf/dompdf` (Carta Proposta) e `phpmailer/phpmailer` (SMTP
+  autenticado — `Mailer`). `vendor/` é versionado no Git (produção não roda `composer install`).
+  Atualizar dependências SEMPRE com `composer audit` limpo e SEM desligar a trava de segurança do
+  Composer (`--no-security-blocking`/`audit.block-insecure=false` não são autorizados); incluir
+  `composer.json`, `composer.lock` e o `vendor/` correspondente no mesmo commit.
 - **Extensão PHP `pdo_sqlsrv`**, só para a sincronização com o METADADOS (SQL Server) — nunca em
   request normal do Portal (ver `docs/claude/roadmap-tecnico.md`).
 

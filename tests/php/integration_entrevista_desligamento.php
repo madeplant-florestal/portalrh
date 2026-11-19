@@ -123,16 +123,18 @@ try {
         return $id;
     };
     $adminId = $novoUsuario('Admin', 'admin', []);
-    $visId = $novoUsuario('So Visualiza', 'viewer', ['visualizar']);
-    $gerId = $novoUsuario('Gerencia', 'viewer', ['visualizar', 'gerenciar']);
-    $resId = $novoUsuario('Resultados', 'viewer', ['visualizar', 'resultados']);
+    // Etapa 2B complementar: entrevista_desligamento.* é INCOMPATÍVEL com o viewer (dado nominal/global) — as telas/serviços são exercitados com RH
+    // (acesso global). A prova de que o viewer NÃO recebe nada, mesmo com as permissões gravadas, está logo abaixo ('Viewer Gravado').
+    $visId = $novoUsuario('So Visualiza', 'rh', ['visualizar']);
+    $gerId = $novoUsuario('Gerencia', 'rh', ['visualizar', 'gerenciar']);
+    $resId = $novoUsuario('Resultados', 'rh', ['visualizar', 'resultados']);
+    $viewerGravadoId = $novoUsuario('Viewer Gravado', 'viewer', ['visualizar', 'gerenciar', 'resultados']);
     $rhSemId = $novoUsuario('RH Sem Permissao', 'rh', []);
 
     $tem = static fn(int $u, string $acao): bool => Authorization::usuarioTemPermissao($u, 'entrevista_desligamento.' . $acao);
     $check($tem($adminId, 'visualizar') && $tem($adminId, 'gerenciar') && $tem($adminId, 'resultados'), '(permissão) Admin acessa tudo pelo bypass central');
-    $check($tem($visId, 'visualizar') && !$tem($visId, 'gerenciar') && !$tem($visId, 'resultados'), '(permissão) visualizar NÃO dá gerenciar nem resultados (não lê respostas)');
-    $check($tem($gerId, 'gerenciar') && !$tem($gerId, 'resultados'), '(permissão) gerenciar NÃO dá resultados');
-    $check($tem($resId, 'resultados') && !$tem($resId, 'gerenciar'), '(permissão) resultados NÃO dá gerenciar');
+    $check(!$tem($viewerGravadoId, 'visualizar') && !$tem($viewerGravadoId, 'gerenciar') && !$tem($viewerGravadoId, 'resultados'), '(permissão) [2B compl.] Viewer com visualizar/gerenciar/resultados GRAVADAS não recebe nenhuma (a independência entre elas só existe para perfis globais, que têm bypass)');
+    $check($tem($visId, 'visualizar') && $tem($gerId, 'gerenciar') && $tem($resId, 'resultados'), '(permissão) RH tem as três pelo bypass central');
     // Bloco 4 (2026-10, pedido do RH): bypass central de RH em Authorization::usuarioTemPermissao().
     $check($tem($rhSemId, 'visualizar') && $tem($rhSemId, 'gerenciar') && $tem($rhSemId, 'resultados'), '(permissão) RH acessa tudo pelo bypass central (Bloco 4), mesmo sem nenhuma permissão individual');
     $concedidos = (int)$pdo->query(
@@ -204,7 +206,7 @@ try {
     sort($idsElegiveis);
     $check($idsElegiveis === [$c1, $c5, $c6, $c7, $c8, $c9], '(elegíveis) Só desligamentos efetivados sem Falecimento: exclui 020, futuro e ativo; inclui justa causa, acordo e término');
     $check($repo->contarElegiveis($criterios, ['busca' => $busca]) === 6, '(elegíveis) A contagem confere com a lista');
-    $check(array_keys($elegiveis[0]) === ['metadados_id', 'nome', 'codigo_empresa', 'empresa', 'codigo_unidade', 'unidade', 'codigo_cargo', 'cargo', 'admissao', 'demissao', 'motivo_rescisao_codigo', 'motivo_rescisao_descricao'], '(elegíveis) Só colunas oficiais necessárias — sem CPF, nascimento ou salário');
+    $check(array_keys($elegiveis[0]) === ['metadados_id', 'nome', 'codigo_empresa', 'empresa', 'codigo_unidade', 'unidade', 'codigo_cargo', 'cargo', 'admissao', 'demissao', 'motivo_rescisao_codigo', 'motivo_rescisao_descricao', 'liberada_em', 'liberada_por_usuario_id', 'liberacao_cancelada_em', 'liberacao_ativa'], '(elegíveis) Só colunas oficiais necessárias (+ estado da liberação do RH, acrescentado depois deste teste) — sem CPF, nascimento ou salário');
     $check($elegiveis[0]['cargo'] === 'ZZED Cargo Texto', '(cargo) Sem catálogo para o código, o texto oficial do espelho é usado');
     $primeiroPorData = array_map(static fn(array $r): string => (string)$r['demissao'], $elegiveis);
     $ordenado = $primeiroPorData;
@@ -412,35 +414,36 @@ try {
     // ---- resultado individual --------------------------------------------------------------------------------------------------------------
     $ri = $service->resultadoIndividual((int)$estado($c1)['id'], $agora);
     $check($ri['situacao'] === 'respondida' && $ri['enps_classificacao'] === 'Promotor' && $ri['fatores'] === ['clima', 'remuneracao'] && $ri['tempo_empresa'] === EntrevistaDesligamentoService::tempoDeEmpresa($adm1, $dem1), '(resultado) Situação, eNPS classificado pelo sistema (9 = Promotor), fatores e tempo de empresa');
-    $comoUsuario($resId, 'viewer');
+    $comoUsuario($resId, 'rh');
     $htmlRes = $renderizar(static fn() => (new AdminEntrevistaDesligamentoController())->resultado((string)$estado($c1)['id']));
     $check(!preg_match('/Warning:|Notice:|Deprecated:|Fatal error/i', $htmlRes) && str_contains($htmlRes, "ZZED Fulano da Silva {$suffix}") && str_contains($htmlRes, 'Motivo OFICIAL do desligamento') && str_contains($htmlRes, '003 — ZZED motivo 003') && str_contains($htmlRes, 'Motivo declarado pelo ex-colaborador') && str_contains($htmlRes, 'Relacionamento com liderança'), '(resultado) Mostra snapshot, motivo oficial e motivo declarado — separados');
     $check(substr_count($htmlRes, '— Satisfeito') === 7 && substr_count($htmlRes, '/ 5') === 14, '(escala) No resultado, o rótulo de satisfação só aparece em Experiência (7 itens); as demais seções mostram N / 5');
     $check(str_contains($htmlRes, 'Promotor') && str_contains($htmlRes, 'Descrição do motivo') && str_contains($htmlRes, 'Obrigado') && str_contains($htmlRes, 'Clima organizacional') && !str_contains($htmlRes, $cpfSecreto) && !str_contains($htmlRes, '987.654.321-00'), '(resultado) eNPS + classificação, fatores, textos abertos; sem CPF');
-    $comoUsuario($resId, 'viewer');
+    $comoUsuario($resId, 'rh');
     $htmlAusente = $renderizar(static fn() => (new AdminEntrevistaDesligamentoController())->resultado('2147483000'));
     $check(str_contains($htmlAusente, 'não encontrada'), '(resultado) Entrevista inexistente → 404 neutro');
 
     // ---- administração (HTML) ---------------------------------------------------------------------------------------------------------------------
-    $comoUsuario($visId, 'viewer');
+    $comoUsuario($visId, 'rh');
     $_GET = ['visao' => 'pendente', 'busca' => $busca];
     $htmlVis = $renderizar(static fn() => (new AdminEntrevistaDesligamentoController())->index());
     $check(!preg_match('/Warning:|Notice:|Deprecated:|Fatal error/i', $htmlVis) && str_contains($htmlVis, 'Entrevistas de Desligamento') && str_contains($htmlVis, 'Pendente'), '(admin) Renderiza sem Warning/Notice/Fatal');
-    $check(!str_contains($htmlVis, 'Regenerar link') && !str_contains($htmlVis, 'Confirmar cancelamento') && !str_contains($htmlVis, '/resultado') && !str_contains($htmlVis, 'eNPS'), '(admin) Só visualizar: sem botões de gerenciar, sem link de resultado e sem eNPS');
+    // Etapa 2B complementar: o recorte granular (só visualizar / sem resultados) só existia para viewer, hoje incompatível; Admin/RH têm bypass e veem todos os controles.
+    $check(str_contains($htmlVis, 'Regenerar link') || str_contains($htmlVis, 'Confirmar cancelamento') || str_contains($htmlVis, '/resultado') || str_contains($htmlVis, 'eNPS'), '(admin) RH (bypass central) enxerga os controles de gerenciar/resultados na lista — o recorte "só visualizar" deixou de existir para perfis não globais');
     $check(str_contains($htmlVis, 'Divergência com o METADADOS'), '(admin) Divergências com o METADADOS são sinalizadas na lista');
     $check(!preg_match('/\son[a-z]+\s*=/i', $htmlVis) && !str_contains($htmlVis, $cpfSecreto), '(admin) Sem handlers inline (CSP) e sem CPF');
     $_GET = ['visao' => 'respondida', 'busca' => $busca];
     $htmlVisResp = $renderizar(static fn() => (new AdminEntrevistaDesligamentoController())->index());
-    $check(!str_contains($htmlVisResp, 'Ver resultado') && !str_contains($htmlVisResp, 'Descrição do motivo') && !str_contains($htmlVisResp, 'Obrigado'), '(admin) Respondidas sem a permissão de resultados: nem link nem conteúdo das respostas');
+    $check(str_contains($htmlVisResp, 'Ver resultado') || str_contains($htmlVisResp, 'Descrição do motivo') || str_contains($htmlVisResp, 'Obrigado'), '(admin) RH vê o link de resultado das respondidas (bypass central); o viewer não chega a esta tela (fechado na Etapa 2B complementar)');
 
-    $comoUsuario($resId, 'viewer');
+    $comoUsuario($resId, 'rh');
     $htmlResLista = $renderizar(static fn() => (new AdminEntrevistaDesligamentoController())->index());
     $check(str_contains($htmlResLista, 'Ver resultado') && str_contains($htmlResLista, 'eNPS') && !str_contains($htmlResLista, 'Regenerar link') && !str_contains($htmlResLista, 'Descrição do motivo'), '(admin) Com resultados: link de resultado e eNPS; sem gerenciar e sem expor as respostas na lista');
 
-    $comoUsuario($gerId, 'viewer');
+    $comoUsuario($gerId, 'rh');
     $_GET = ['visao' => 'pendente', 'busca' => $busca];
     $htmlGer = $renderizar(static fn() => (new AdminEntrevistaDesligamentoController())->index());
-    $check(str_contains($htmlGer, 'Regenerar link') && str_contains($htmlGer, 'Confirmar cancelamento') && str_contains($htmlGer, 'name="csrf"') && !str_contains($htmlGer, 'eNPS') && !str_contains($htmlGer, 'Ver resultado'), '(admin) Gerenciar: regenerar e cancelar (com CSRF); ainda sem eNPS nem resultado');
+    $check(str_contains($htmlGer, 'Regenerar link') && str_contains($htmlGer, 'Confirmar cancelamento') && str_contains($htmlGer, 'name="csrf"'), '(admin) Gerenciar: regenerar e cancelar (com CSRF)');
     $check(!preg_match('#/entrevista-desligamento/[0-9a-f]{64}#', $htmlGer) && !str_contains($htmlGer, (string)$reg6b['token']) && !str_contains($htmlGer, (string)$reg7['token']), '(link) Nenhum link/token aparece numa listagem — só na resposta imediata da geração');
 
     // gerar via controller: link exibido uma única vez
@@ -457,7 +460,7 @@ try {
     $htmlDepois = $renderizar(static fn() => (new AdminEntrevistaDesligamentoController())->index());
     $check(!str_contains($htmlDepois, $m[1] ?? 'x'), '(link) Recarregar a lista não mostra mais o link (não é recuperável)');
 
-    $comoUsuario($gerId, 'viewer');
+    $comoUsuario($gerId, 'rh');
     $_GET = ['visao' => 'elegiveis', 'busca' => 'ZZED', 'dias' => '0'];
     $htmlEleg = $renderizar(static fn() => (new AdminEntrevistaDesligamentoController())->index());
     $check(!str_contains($htmlEleg, 'ZZED Falecido') && !str_contains($htmlEleg, 'ZZED Futuro') && !str_contains($htmlEleg, 'ZZED Ativo'), '(admin) A lista de elegíveis não mostra Falecimento, futuro nem ativos');

@@ -191,13 +191,12 @@ try {
     $check(!str_contains($htmlAdmin, 'COMENTARIO-INDIVIDUAL') && !str_contains($htmlAdmin, $cpfFixture) && !str_contains($htmlAdmin, '1975'), '(10) Central não expõe comentários, CPF ou nascimento');
 
     // permissões independentes
+    // Etapa 2B complementar / 2C.2B: pesquisa_reacao_integracao.* e integracao_colaborador.* são INCOMPATÍVEIS com o viewer (resultados globais).
+    // O recorte granular (só Reação / só Integração) só existia para viewer; Admin/RH têm bypass. A prova passa a ser o FECHAMENTO:
     $comoUsuario($soReacaoId, 'viewer');
-    $htmlSoReacao = $renderizar(static fn() => (new AdminPesquisaReacaoIntegracaoController())->index());
-    $check(str_contains($htmlSoReacao, 'id="bloco-reacao"') && !str_contains($htmlSoReacao, 'Respostas via QR Code') && !str_contains($htmlSoReacao, '05/03/2001'), '(11) Usuário só com a permissão da Reação vê as campanhas e NÃO vê dados QR');
+    $check(!Authorization::usuarioTemPermissao($soReacaoId, 'pesquisa_reacao_integracao.visualizar') && !Authorization::usuarioTemPermissao($soReacaoId, 'integracao_colaborador.visualizar'), '(11) Viewer com a permissão da Reação GRAVADA não acessa a central nem os dados QR');
     $comoUsuario($soIntegracaoId, 'viewer');
-    $htmlSoIntegracao = $renderizar(static fn() => (new AdminPesquisaReacaoIntegracaoController())->index());
-    $check(str_contains($htmlSoIntegracao, 'Respostas via QR Code') && str_contains($htmlSoIntegracao, '05/03/2001'), '(12) Usuário só com integracao_colaborador.visualizar vê os resultados QR');
-    $check(!str_contains($htmlSoIntegracao, 'id="bloco-reacao"') && !str_contains($htmlSoIntegracao, 'Gerar link') && !str_contains($htmlSoIntegracao, 'Desativar') && !str_contains($htmlSoIntegracao, '/admin/pesquisas-reacao-integracao/' . (int)$campanha['id'] . '/resultados'), '(12) ...mas NÃO recebe o bloco, os dados nem as ações administrativas das campanhas da Reação');
+    $check(!Authorization::usuarioTemPermissao($soIntegracaoId, 'integracao_colaborador.visualizar') && !Authorization::usuarioTemPermissao($soIntegracaoId, 'pesquisa_reacao_integracao.visualizar'), '(12) Viewer com integracao_colaborador.visualizar GRAVADA não vê os resultados QR (fechado na 2C.2B)');
     $check(!Authorization::usuarioTemPermissao($soIntegracaoId, 'pesquisa_reacao_integracao.visualizar') && !Authorization::usuarioTemPermissao($soIntegracaoId, 'pesquisa_reacao_integracao.gerenciar'), '(12) Permissão da Integração não concede nenhuma capability da Reação');
     $check(!Authorization::usuarioTemPermissao($soReacaoId, 'integracao_colaborador.visualizar'), '(11) Permissão da Reação não concede a da Integração');
     $check(!Authorization::usuarioTemPermissao($nadaId, 'pesquisa_reacao_integracao.visualizar') && !Authorization::usuarioTemPermissao($nadaId, 'integracao_colaborador.visualizar'), '(13) Sem nenhuma das duas permissões a central não é acessível (index() cai em requirePermissao -> 403)');
@@ -216,7 +215,7 @@ try {
     $check(str_contains($corpoIndex, "Authorization::requirePermissao('pesquisa_reacao_integracao.visualizar')") && str_contains($corpoIndex, "Auth::requireRole(['admin', 'rh', 'viewer'])"), '(13) index() continua travado por Auth::requireRole + requirePermissao quando não há nenhuma capability');
 
     // detalhamento
-    $comoUsuario($soIntegracaoId, 'viewer');
+    $comoUsuario($adminId, 'admin'); // detalhamento QR: Admin/RH (o viewer foi fechado na 2C.2B)
     $htmlDetalhe = $renderizar(static fn() => (new AdminPesquisaIntegracaoResultadosController())->resultados($D1));
     $check(!preg_match('/Warning:|Notice:|Deprecated:|Fatal error/i', $htmlDetalhe), '(14) Detalhamento renderiza sem Warning/Notice/Fatal');
     $check(str_contains($htmlDetalhe, 'Resultados — Pesquisa de Integração') && str_contains($htmlDetalhe, 'Data da Integração:') && str_contains($htmlDetalhe, '05/03/2001'), '(14) Cabeçalho com "Resultados — Pesquisa de Integração" e a data');

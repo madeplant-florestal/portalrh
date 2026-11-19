@@ -64,7 +64,7 @@ foreach (PortalNavegacaoService::definicao() as $m) {
         }
     }
 }
-foreach (['solicitacao_vaga.visualizar', 'solicitacao_vaga.criar', 'kanban_vagas.visualizar', 'colaboradores.visualizar'] as $c) {
+foreach (['solicitacao_vaga.visualizar', 'solicitacao_vaga.criar', 'kanban_vagas.visualizar', 'colaboradores.visualizar', 'pipeline.visualizar'] as $c) { // pipeline: não é mais regra de navegação (staff, Etapa 2A), mas segue nos casos
     $codigos[$c] = true;
 }
 $codigos = array_keys($codigos);
@@ -130,8 +130,9 @@ try {
     // ---- viewer sem permissão ----------------------------------------------------------------------------------------------
     $comoUsuario($viewer);
     $cV = $cards();
-    $check(array_keys($cV) === ['indicadores', 'recrutamento', 'colaboradores', 'avaliacoes-desenvolvimento', 'cadastros'], '(viewer sem permissão) Só os módulos abertos a qualquer autenticado: ' . implode(', ', array_keys($cV)));
-    $check($cV['recrutamento'] === '/admin/candidaturas' && $cV['colaboradores'] === '/admin/movimentacoes-pessoal' && $cV['indicadores'] === '/admin/indicadores-rh' && $cV['cadastros'] === '/admin/empresas', '(viewer sem permissão) Entradas caem no primeiro destino aberto de cada área');
+    // Etapa 2A: Indicadores de RH passou a exigir indicadores_rh.visualizar e Candidaturas deixou de ser aberta ao viewer.
+    $check(array_keys($cV) === ['recrutamento', 'colaboradores', 'avaliacoes-desenvolvimento', 'cadastros'], '(viewer sem permissão) Só os módulos abertos a qualquer autenticado: ' . implode(', ', array_keys($cV)));
+    $check($cV['recrutamento'] === '/admin/vagas' && $cV['colaboradores'] === '/admin/movimentacoes-pessoal' && $cV['cadastros'] === '/admin/empresas', '(viewer sem permissão) Entradas caem no primeiro destino aberto de cada área');
     $check($cV['avaliacoes-desenvolvimento'] === '/admin/avaliacoes-desenvolvimento', '(viewer sem permissão) "Avaliações e Desenvolvimento" é \'aberto\' (Avaliação de Desempenho legada já é aberta hoje em Cadastros) — o card aparece mesmo sem pdi/avaliacao_experiencia/feedback.visualizar; a landing é quem filtra o que mostrar por permissão');
     foreach (['usuarios', 'solicitacoes-vaga', 'integracao', 'desligamento', 'configuracoes'] as $ausente) {
         $check(!isset($cV[$ausente]), "(viewer sem permissão) Sem permissão, o card \"{$ausente}\" não é renderizado");
@@ -161,6 +162,11 @@ try {
         $u = $usuariosPorPerm[$perm] ??= $novoUsuario('P ' . $perm, 'viewer', [$perm]);
         $comoUsuario($u);
         $c = $cards();
+        // Etapas 2B/2C.2B: permissão INCOMPATÍVEL com o viewer (ex.: mensagens, pesquisas de reação/integração, entrevista de desligamento) não abre card algum.
+        if (PermissaoPerfilPolicy::classificar('viewer', $perm) === PermissaoPerfilPolicy::INCOMPATIVEL && !in_array($chave, ['recrutamento', 'colaboradores'], true)) {
+            $check(!isset($c[$chave]), "(permissão) {$perm} é incompatível com o viewer → o card \"{$chave}\" NÃO aparece (permissão gravada não vale)");
+            continue;
+        }
         $check(isset($c[$chave]), "(permissão) {$perm} → card \"{$chave}\" aparece");
         if (!in_array($chave, ['recrutamento', 'colaboradores'], true)) {
             $check($c[$chave] === $entrada, "(permissão) {$perm} → entrada {$entrada}");
@@ -169,7 +175,7 @@ try {
     $comoUsuario($usuariosPorPerm['dashboard_recrutamento.visualizar']);
     $check($cards()['recrutamento'] === '/admin/dashboard-recrutamento', '(entrada) Com o dashboard liberado, a entrada de Recrutamento passa a ser o dashboard (primeiro destino visível)');
     $comoUsuario($usuariosPorPerm['pipeline.visualizar']);
-    $check($cards()['recrutamento'] === '/admin/candidaturas', '(entrada) Com só o pipeline liberado, a entrada continua em Candidaturas (ordem de preferência)');
+    $check($cards()['recrutamento'] === '/admin/vagas', '(entrada) [2A/2B] Pipeline é incompatível com o viewer: a permissão gravada não vale e a entrada de Recrutamento é o primeiro destino aberto (Vagas)');
     $comoUsuario($usuariosPorPerm['dashboard_entrevista_desligamento.visualizar']);
     $check(count(array_diff(array_keys($cards()), ['indicadores', 'recrutamento', 'colaboradores', 'avaliacoes-desenvolvimento', 'cadastros', 'desligamento'])) === 0, '(permissão) Uma permissão libera só o módulo dela — nenhum outro card extra (avaliacoes-desenvolvimento é \'aberto\', sempre presente)');
 
@@ -182,7 +188,7 @@ try {
     );
     $comoUsuario($supervisor);
     $cSup = $cards();
-    $check(isset($cSup['usuarios']) && isset($cSup['solicitacoes-vaga']) && isset($cSup['avaliacoes-desenvolvimento']), '(supervisor) Vê Usuários e Solicitações como na sidebar; Avaliações e Desenvolvimento é \'aberto\'');
+    $check(!isset($cSup['usuarios']) && !isset($cSup['solicitacoes-vaga']) && isset($cSup['avaliacoes-desenvolvimento']), '(supervisor) [2A] viewer com is_supervisor=1 NÃO é Supervisor Geral: o flag isolado não abre Usuários nem Solicitações; Avaliações e Desenvolvimento é \'aberto\'');
 
     // ---- o card não concede acesso -----------------------------------------------------------------------------------------
     $comoUsuario($viewer);
@@ -313,7 +319,7 @@ try {
     $check($semRota === [], '(rotas) Todo destino de card é uma rota GET registrada' . ($semRota === [] ? '' : ': faltam ' . implode(', ', $semRota)));
 
     // ---- autenticação e rota -------------------------------------------------------------------------------------------------
-    $check(str_contains($corpoDe(AdminCentralController::class, 'index'), "Auth::requireRole(['admin', 'rh', 'viewer'])") && !str_contains($corpoDe(AdminCentralController::class, 'index'), 'requirePermissao'), '(auth) A Central exige sessão autenticada (mesmo gate do Manual) e nenhuma permissão própria');
+    $check(str_contains($corpoDe(AdminCentralController::class, 'index'), "Auth::requireRole(['admin', 'rh', 'gestor', 'viewer'])") && !str_contains($corpoDe(AdminCentralController::class, 'index'), 'requirePermissao'), '(auth) [2C.1: inclui o perfil gestor] A Central exige sessão autenticada (mesmo gate do Manual) e nenhuma permissão própria');
     $check(str_contains($rotas, "\$router->get('/admin', [AdminCentralController::class, 'index']);") && str_contains($rotas, "\$router->get('/admin/dashboard', [AdminController::class, 'index']);"), '(rota) GET /admin = Central (AdminCentralController) e GET /admin/dashboard = Dashboard atual (AdminController, sem reescrita)');
     $check(str_contains($rotas, "\$router->get('/admin/central', static fn() => redirect('/admin'));") && substr_count($rotas, '/admin/central') === 1, '(rota) /admin/central só redireciona (302) para /admin: uma URL canônica, sem lógica duplicada');
     $check(str_contains($rotas, "\$isAdminPath && !\$isAdminAuthRoute && !Auth::check()") && preg_match('#redirect\(\'/login\'\)#', $rotas) === 1, '(auth) O gate global de /admin* (sem sessão → /login) cobre a rota nova');
@@ -323,7 +329,7 @@ try {
     $html = $renderizar(static fn() => (new AdminCentralController())->index());
     $check(!preg_match('/Warning:|Notice:|Deprecated:|Fatal error/i', $html) && str_contains($html, 'data-app-shell-v2="1"') && str_contains($html, 'Central do Portal RH') && str_contains($html, 'Escolha um módulo para continuar') && str_contains($html, '<title>Central do Portal RH — Portal RH</title>'), '(página) Renderiza no AppShell V2 com o título e a descrição da Central');
     $check(!str_contains($html, 'data-admin-sidebar') && !str_contains($html, 'class="sidebar') && !str_contains($html, 'app-header"') && !str_contains($html, '<nav aria-label="Trilha'), '(página) Sem sidebar/header antigos e sem breadcrumb redundante na raiz');
-    $check(substr_count($html, '<li class="min-w-0"><a href=') === 5 && str_contains($html, 'href="' . $baseUrl . '/admin/candidaturas"') && str_contains($html, 'href="' . $baseUrl . '/admin/avaliacoes-desenvolvimento"') && !str_contains($html, '/admin/pdis') && !str_contains($html, '/admin/usuarios'), '(página) O viewer sem permissão recebe 5 cards (agora com "Avaliações e Desenvolvimento", \'aberto\') e nenhum link para módulos sem acesso');
+    $check(substr_count($html, '<li class="min-w-0"><a href=') === 4 && str_contains($html, 'href="' . $baseUrl . '/admin/vagas"') && str_contains($html, 'href="' . $baseUrl . '/admin/avaliacoes-desenvolvimento"') && !str_contains($html, '/admin/pdis') && !str_contains($html, '/admin/usuarios'), '(página) [2A] O viewer sem permissão recebe 4 cards (Recrutamento→Vagas, Colaboradores, Avaliações e Desenvolvimento, Cadastros) e nenhum link para módulos sem acesso');
     $check(str_contains($html, 'grid-cols-[repeat(auto-fill,minmax(230px,1fr))]') && str_contains($html, 'gap-[18px]') && !str_contains($html, '<script>'), '(página) ModuleGrid elástico (auto-fill/230px/18px), sem JavaScript próprio');
     $comoUsuario($admin);
     $htmlAdmin = $renderizar(static fn() => (new AdminCentralController())->index());
@@ -345,7 +351,7 @@ try {
     $check(Authorization::primeiraRotaAcessivel() === '/admin' && str_contains($rotas, "\$router->get('/admin', [AdminCentralController::class, 'index']);") && !str_contains($corpoDe(AdminCentralController::class, 'index'), 'redirect('), '(pós-login) /admin não redireciona (nenhum loop): renderiza a Central diretamente');
     $check(str_contains($corpoDe(AdminController::class, 'index'), "Authorization::requirePermissao('dashboard.visualizar')") && str_contains($corpoDe(AdminController::class, 'index'), "Auth::requireRole(['admin', 'rh', 'viewer'])"), '(/admin/dashboard) O Dashboard atual mantém EXATAMENTE seus gates (role + dashboard.visualizar) — só mudou de URL');
     $comoUsuario($viewer);
-    $check(!(new PortalNavegacaoService())->visivel('perm:dashboard.visualizar') && $cards()['indicadores'] === '/admin/indicadores-rh', '(dashboard) Sem dashboard.visualizar a Central funciona, o card Indicadores cai em /admin/indicadores-rh e o Dashboard não é oferecido');
+    $check(!(new PortalNavegacaoService())->visivel('perm:dashboard.visualizar') && !isset($cards()['indicadores']), '(dashboard) [2A] Sem dashboard.visualizar nem indicadores_rh.visualizar a Central funciona e nenhum card de Indicadores é oferecido ao viewer');
     $comoUsuario($admin);
     $check(str_contains($corpoDe(AdminCentralController::class, 'index'), "'layouts/app-shell'") && str_contains((string)file_get_contents(APP_PATH . '/views/admin/central.php'), 'ui_module_grid') && glob(APP_PATH . '/views/admin/central*.php') === [APP_PATH . '/views/admin/central.php'], '(central) /admin reutiliza a única view da Central (admin/central), no AppShell V2 — sem segunda implementação');
     $referenciasCentral = [];

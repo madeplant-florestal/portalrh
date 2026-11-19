@@ -71,7 +71,8 @@ try {
     $permVis = (int)$pdo->query("SELECT id FROM permissoes WHERE codigo = 'integracao_colaborador.visualizar'")->fetchColumn();
     $check($permVis > 0, '(0) Permissão integracao_colaborador.visualizar existe no catálogo');
 
-    $comPerm = User::create('ZZDI Com Permissao', 'zzdi.compermissao.' . $suffix . '@teste.local', $senha, 'viewer');
+    // Etapa 2C.2B: a Integração é FECHADA ao Viewer (resultados globais, sem amostra mínima) — o render é provado com RH (acesso global preservado).
+    $comPerm = User::create('ZZDI Com Permissao', 'zzdi.compermissao.' . $suffix . '@teste.local', $senha, 'rh');
     User::setActiveStatus($comPerm, true);
     Authorization::sincronizar($comPerm, [$permVis]);
     $criados['usuarios'][] = $comPerm;
@@ -165,6 +166,11 @@ try {
     // ---- 5) Taxa de resposta — SÓ fluxo individual -------------------------------------------------
     $check($painelJan['fluxo_individual']['geradas'] === 0 && $painelJan['fluxo_individual']['taxa_resposta'] === null, '(16) Sem pesquisa individual gerada no período: taxa de resposta = null (nunca 0% nem 100% inventados)');
 
+    // Isolamento: o total de maio inclui respostas que já existam no banco (dados compartilhados) — mede-se o ACRÉSCIMO das 2 do teste.
+    $painelMaioAntes = $svc->montarPainel(DashboardIntegracaoService::normalizarFiltros(['ano' => '2026', 'mes' => '5'], $hoje, $opcoes));
+    $totalMaioAntes = $painelMaioAntes['total_respostas'];
+    $gerAntes = $painelMaioAntes['fluxo_individual']['geradas'];
+    $respAntes = $painelMaioAntes['fluxo_individual']['respondidas'];
     $colInd1 = $mkColaboradorLegado('ZZDI Individual 1');
     $colInd2 = $mkColaboradorLegado('ZZDI Individual 2');
     $colInd3 = $mkColaboradorLegado('ZZDI Individual 3');
@@ -179,13 +185,13 @@ try {
 
     $filtrosMaio = DashboardIntegracaoService::normalizarFiltros(['ano' => '2026', 'mes' => '5'], $hoje, $opcoes);
     $painelMaio = $svc->montarPainel($filtrosMaio);
-    $check($painelMaio['fluxo_individual']['geradas'] === 3 && $painelMaio['fluxo_individual']['respondidas'] === 2, '(17) Fluxo individual de maio: 3 geradas, 2 respondidas');
-    $check($painelMaio['fluxo_individual']['taxa_resposta'] === round(2 / 3 * 100, 1), '(18) Taxa de resposta = 2/3 = 66,7% — denominador claro (geradas), nunca confundido com o total QR');
-    $check($painelMaio['total_respostas'] === 2, '(19) As 2 respostas individuais entram no total geral de respostas (mesma contagem do fluxo QR)');
+    $check($painelMaio['fluxo_individual']['geradas'] === $gerAntes + 3 && $painelMaio['fluxo_individual']['respondidas'] === $respAntes + 2, '(17) Fluxo individual de maio: +3 geradas, +2 respondidas (acréscimo sobre o que já existia no banco)');
+    $check($painelMaio['fluxo_individual']['taxa_resposta'] === round(($respAntes + 2) / ($gerAntes + 3) * 100, 1), '(18) Taxa de resposta = respondidas ÷ geradas (66,7% num banco sem outras pesquisas de maio) — denominador claro (geradas), nunca confundido com o total QR');
+    $check($painelMaio['total_respostas'] === $totalMaioAntes + 2, '(19) As 2 respostas individuais entram no total geral de respostas (mesma contagem do fluxo QR)');
 
     // ---- 6) Render HTTP — com e sem permissão ------------------------------------------------------
     $_SESSION['user_id'] = $comPerm;
-    $_SESSION['user_role'] = 'viewer';
+    $_SESSION['user_role'] = 'rh';
     $_SESSION['user_is_supervisor'] = 0;
     $_GET = ['ano' => '2026', 'mes' => '1'];
     ob_start();

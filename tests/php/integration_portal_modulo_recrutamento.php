@@ -135,10 +135,12 @@ try {
     // Bloco 4 (2026-10, pedido do RH): role='rh' tem bypass central de todas as permissões
     // individuais, incluindo dashboard_recrutamento.visualizar.
     $check($visiveis['RH'] === ['dashboard', 'solicitacoes', 'vagas', 'candidaturas', 'pipeline', 'indicacoes'], '(RH) Vê as 6 abas, incluindo o Dashboard — bypass central de Authorization (Bloco 4)');
-    $check($visiveis['viewer'] === ['vagas', 'candidaturas'], '(viewer sem permissão) Só Vagas e Candidaturas, abertas por role');
-    $check($visiveis['gestor de vaga'] === ['solicitacoes', 'vagas', 'candidaturas'], '(gestor) Solicitações + as abertas');
-    $check($visiveis['viewer+dashboard'] === ['dashboard', 'vagas', 'candidaturas'], '(viewer+dashboard) O Dashboard aparece com a permissão individual');
-    $check($visiveis['viewer+pipeline/indicações'] === ['vagas', 'candidaturas', 'pipeline', 'indicacoes'] && $visiveis['supervisor'] === ['solicitacoes', 'vagas', 'candidaturas', 'pipeline', 'indicacoes'], '(correção) viewer com as permissões pipeline/indicações agora RECEBE as 2 abas (a permissão individual libera a entrada); supervisor também');
+    // Etapas 2A/2B/2C: Candidaturas, Pipeline e Indicações são Admin/RH (permissão gravada em viewer não vale); o viewer só tem Vagas, e o Dashboard de Recrutamento
+    // (agregado) continua liberável por permissão.
+    $check($visiveis['viewer'] === ['vagas'], '(viewer sem permissão) [2A] Só Vagas (Candidaturas é Admin/RH)');
+    $check($visiveis['gestor de vaga'] === ['solicitacoes', 'vagas'], '(gestor de vaga) Solicitações (permissão) + Vagas');
+    $check($visiveis['viewer+dashboard'] === ['dashboard', 'vagas'], '(viewer+dashboard) O Dashboard (agregado) aparece com a permissão individual');
+    $check($visiveis['viewer+pipeline/indicações'] === ['vagas'] && $visiveis['supervisor'] === ['vagas'], '(correção) [2B] viewer com pipeline/indicações GRAVADAS NÃO recebe as abas (incompatíveis); viewer com is_supervisor=1 também não — só Vagas');
 
     // ---- gates de entrada: viewer com permissão abre; sem permissão é bloqueado; Admin pelo bypass -----------------------------
     $soPipe = $novoUsuario('So Pipeline', 'viewer', ['pipeline.visualizar']);
@@ -146,7 +148,7 @@ try {
     $entradas = ['/admin/pipeline' => [$soPipe, 'pipeline'], '/admin/indicacoes' => [$soInd, 'indicacoes']];
     foreach ($entradas as $rota => [$comPerm, $chaveAba]) {
         $comoUsuario($comPerm);
-        $check($backendPermite($rota, $comPerm) && in_array($chaveAba, array_column((new PortalNavegacaoService())->abas('recrutamento'), 'chave'), true), "(entrada) viewer com a permissão de {$chaveAba}: vê a aba e o backend abre {$rota} (200)");
+        $check(!$backendPermite($rota, $comPerm) && !in_array($chaveAba, array_column((new PortalNavegacaoService())->abas('recrutamento'), 'chave'), true), "(entrada) [2B] viewer com a permissão de {$chaveAba} GRAVADA: sem aba e o backend bloqueia {$rota} (403)");
         foreach ($entradas as $outraRota => [, $outraChave]) {
             if ($outraRota === $rota) {
                 continue;
@@ -159,7 +161,7 @@ try {
         $check($backendPermite($rota, $admin), "(entrada) Admin entra em {$rota} (role + bypass central preservados)");
     }
     $comoUsuario($soPipe);
-    $check(Authorization::temAcessoPorRoleOuPermissao(['admin', 'rh'], 'pipeline.visualizar') && !Authorization::temAcessoPorRoleOuPermissao(['admin', 'rh'], 'indicacoes.visualizar'), '(gate) Authorization::temAcessoPorRoleOuPermissao: a permissão certa libera, a errada não');
+    $check(!Authorization::temAcessoPorRoleOuPermissao(['admin', 'rh'], 'pipeline.visualizar') && !Authorization::temAcessoPorRoleOuPermissao(['admin', 'rh'], 'indicacoes.visualizar'), '(gate) [2B] Authorization::temAcessoPorRoleOuPermissao: para o viewer, nem a permissão certa nem a errada liberam (incompatíveis)');
     $comoUsuario($rh);
     $check(Authorization::temAcessoPorRoleOuPermissao(['admin', 'rh'], 'pipeline.visualizar') && $backendPermite('/admin/pipeline', $rh) && $backendPermite('/admin/indicacoes', $rh), '(compatibilidade) RH continua entrando pela role, SEM precisar da permissão (o modelo é aditivo: nenhum acesso existente foi removido)');
 
@@ -183,13 +185,8 @@ try {
 
     // ---- telas em modo leitura para quem entrou só pela permissão -----------------------------------------------------------------
     $_GET = [];
-    $comoUsuario($viewerPipe);
-    ui_titulo_pagina(null, true);
-    $htmlPipe = $renderizar(static fn() => (new AdminPipelineController())->index());
-    ui_titulo_pagina(null, true);
-    $htmlInd = $renderizar(static fn() => (new AdminIndicacoesController())->index());
-    $check(str_contains($htmlPipe, 'data-kanban-readonly="1"') && str_contains($htmlPipe, 'Somente visualização') && !str_contains($htmlPipe, 'draggable="true"') && str_contains($htmlPipe, 'draggable="false"'), '(leitura) Pipeline para viewer com permissão: quadro em somente visualização (o JS não habilita arrastar)');
-    $check(!str_contains($htmlInd, 'Exportar Excel') && !str_contains($htmlInd, 'data-pagamento-open') && !str_contains($htmlInd, 'data-pagamento-edit-open') && str_contains($htmlInd, 'Programa de Indicações'), '(leitura) Indicações para viewer com permissão: lista e filtros, sem exportar nem registrar/editar pagamento');
+    // O "modo leitura" do viewer (Pipeline/Indicações) deixou de ser alcançável (Etapa 2B): chamar o controller aqui encerraria o processo com exit (403).
+    $check(!$backendPermite('/admin/pipeline', $viewerPipe) && !$backendPermite('/admin/indicacoes', $viewerPipe), '(leitura) [2B] o viewer, mesmo com as permissões gravadas, não abre Pipeline nem Indicações (bloqueio no backend)');
     $comoUsuario($rh);
     ui_titulo_pagina(null, true);
     $htmlPipeRh = $renderizar(static fn() => (new AdminPipelineController())->index());
@@ -212,7 +209,7 @@ try {
     $check($card !== null && $card['href'] === '/admin/dashboard-recrutamento', '(Central) O card Recrutamento continua apontando para a primeira entrada válida (Dashboard, se permitido)');
     $comoUsuario($viewer);
     $card = array_values(array_filter((new PortalNavegacaoService())->modulos(), static fn(array $m): bool => $m['chave'] === 'recrutamento'))[0] ?? null;
-    $check($card !== null && $card['href'] === '/admin/candidaturas', '(Central) Sem o Dashboard, o card cai em Candidaturas (destino aberto)');
+    $check($card !== null && $card['href'] === '/admin/vagas', '(Central) [2A] Sem o Dashboard, o card cai em Vagas (único destino aberto ao viewer)');
 
     // ---- helper de topo -----------------------------------------------------------------------------------------------------------
     $comoUsuario($rh);
@@ -254,7 +251,7 @@ try {
         $todosOk = $todosOk && !str_contains($fonte, "'layouts/admin'") && str_contains($fonte, "'layouts/app-shell'") && str_contains($fonte, 'Auth::requireRole');
     }
     $check($todosOk, '(controllers) Os 7 controllers do módulo só trocaram o layout para app-shell e mantêm todos os seus gates requireRole/requirePermissao');
-    $check(str_contains($corpoDe(AdminPipelineController::class, 'index'), "Authorization::requireRoleOuPermissao(['admin', 'rh'], 'pipeline.visualizar')") && str_contains($corpoDe(AdminIndicacoesController::class, 'index'), "Authorization::requireRoleOuPermissao(['admin', 'rh'], 'indicacoes.visualizar')") && str_contains($corpoDe(AdminDashboardRecrutamentoController::class, 'index'), "Authorization::requirePermissao('dashboard_recrutamento.visualizar')"), '(controllers) Entradas de Pipeline e Indicações: role admin/rh OU a permissão individual <módulo>.visualizar (permissões já existentes); Dashboard segue exigindo a sua permissão');
+    $check(str_contains($corpoDe(AdminPipelineController::class, 'index'), "Auth::requireRole(['admin', 'rh'])") && str_contains($corpoDe(AdminIndicacoesController::class, 'index'), "Auth::requireRole(['admin', 'rh'])") && str_contains($corpoDe(AdminDashboardRecrutamentoController::class, 'index'), "Authorization::requirePermissao('dashboard_recrutamento.visualizar')"), '(controllers) [2A] Pipeline e Indicações: só role admin/rh (a permissão <módulo>.visualizar não abre mais a tela ao viewer); o Dashboard (agregado) segue exigindo a sua permissão');
     $check(str_contains($corpoDe(AdminPipelineController::class, 'move'), "Auth::requireRole(['admin', 'rh'])") && str_contains($corpoDe(AdminIndicacoesController::class, 'markPago'), "Auth::requireRole(['admin', 'rh'])") && str_contains($corpoDe(AdminIndicacoesController::class, 'export'), "Auth::requireRole(['admin', 'rh'])"), '(controllers) Mover, pagar e exportar mantêm os gates de escrita/operação de antes');
     $check((int)$pdo->query("SELECT COUNT(*) FROM permissoes")->fetchColumn() === $permissoesAntes, '(permissões) Nenhuma permissão nova: só as já existentes (pipeline/indicacoes.visualizar) passaram a valer no backend');
 } finally {

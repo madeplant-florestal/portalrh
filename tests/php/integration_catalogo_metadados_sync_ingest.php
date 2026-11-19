@@ -58,8 +58,16 @@ try {
         $repo = new CatalogoMetadadosRepository($dim, $pdo);
 
         // Códigos com zero à esquerda e outros formatos opacos.
+        // Isolamento: os códigos derivados do relógio colidiam com códigos REAIS já sincronizados no banco (ex.: 0045) e o ingest passava a
+        // ATUALIZAR em vez de inserir — falha intermitente. Escolhe-se um código ainda NÃO usado, mantendo o formato (zeros à esquerda).
         $codOpaco = '0' . substr($sfx, 0, 3);      // ex.: 0123
+        for ($t = 0; $t < 2000 && $repo->findByCodigo($codOpaco) !== null; $t++) {
+            $codOpaco = '0' . str_pad((string)random_int(0, 999), 3, '0', STR_PAD_LEFT);
+        }
         $codOpaco2 = '00' . substr($sfx, 3, 2);    // ex.: 0045
+        for ($t = 0; $t < 2000 && ($repo->findByCodigo($codOpaco2) !== null || $codOpaco2 === $codOpaco); $t++) {
+            $codOpaco2 = '00' . str_pad((string)random_int(0, 99), 2, '0', STR_PAD_LEFT);
+        }
 
         $lote = [
             'versao' => '1', 'origem_metadados' => 'RHMADEPLANT',

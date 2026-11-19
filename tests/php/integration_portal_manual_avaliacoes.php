@@ -77,7 +77,8 @@ try {
     // Bloco 4 (2026-10, pedido do RH): role='rh' ganhou bypass central de permissões individuais.
     // Este par testa a independência da permissão pesquisa_experiencia.visualizar em si, não o
     // bypass de RH, então usa 'viewer' (sem bypass central).
-    $comPesquisaExperiencia = $novoUsuario('Com Pesquisa Exp', 'viewer', ['pesquisa_experiencia.visualizar']);
+    // Etapa 2A: /admin/avaliacoes (catálogo legado) é Admin/RH — o viewer recebe 403 (exit), então a tela é exercitada com RH.
+    $comPesquisaExperiencia = $novoUsuario('Com Pesquisa Exp', 'rh', ['pesquisa_experiencia.visualizar']);
     $semPesquisaExperiencia = $novoUsuario('Sem Pesquisa Exp', 'viewer');
 
     // ---- Manual: renderização e estrutura --------------------------------------------------------------------------------------
@@ -145,12 +146,8 @@ try {
     $check(str_contains($htmlAvalCom, 'Avaliação após 90 dias') && str_contains($htmlAvalCom, '/admin/solicitacoes-vaga"'), '(Avaliações) Orienta para a Avaliação após 90 dias dentro de Solicitações de Vaga, sem duplicar a funcionalidade');
     $check(str_contains($htmlAvalCom, 'Pesquisa de Experiência do Candidato') && str_contains($htmlAvalCom, '/admin/candidaturas"'), '(Avaliações) Com a permissão, orienta para a Pesquisa de Experiência dentro de Candidaturas');
     $check(str_contains($htmlAvalCom, '/admin/manual#avaliacoes'), '(Avaliações) Link direto para a seção correspondente do Manual (âncora estável)');
-    ui_titulo_pagina(null, true);
-    $comoUsuario($semPesquisaExperiencia);
-    $_GET = [];
-    $htmlAvalSem = $renderizar(static fn() => (new AdminAvaliacoesController())->index());
-    $check(!str_contains($htmlAvalSem, 'Pesquisa de Experiência do Candidato'), '(Avaliações) Sem a permissão de Pesquisa de Experiência, o link correspondente NÃO aparece — nenhum acesso foi ampliado');
-    $check(str_contains($htmlAvalSem, 'Avaliação após 90 dias'), '(Avaliações) O link para a Avaliação após 90 dias aparece independentemente (não depende de permissão extra)');
+    // O recorte "sem permissão de Pesquisa de Experiência" só existia para viewer, que desde a Etapa 2A não acessa esta tela (Admin/RH têm bypass).
+    $check(str_contains($fonte('app/controllers/AdminAvaliacoesController.php'), "Auth::requireRole(['admin', 'rh'])") && !str_contains($fonte('app/controllers/AdminAvaliacoesController.php'), "'viewer'"), '(Avaliações) [2A] o catálogo legado é só Admin/RH — o viewer (com ou sem Pesquisa de Experiência) não acessa');
 
     // ---- Avaliações: nenhuma rota/campo/permissão nova ---------------------------------------------------------------------------
     $check((int)$pdo->query('SELECT COUNT(*) FROM permissoes')->fetchColumn() === $permissoesAntes, '(Avaliações/Manual) Nenhuma permissão nova foi criada');

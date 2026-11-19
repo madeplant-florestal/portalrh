@@ -57,11 +57,12 @@ try {
     $comumId = User::create('ZZROLE Comum', 'comum.zzrole.' . $suffix . '@teste.local', $senha, 'viewer');
     $criados[] = $comumId;
 
-    $supervisorAlvoId = User::create('ZZROLE Supervisor Alvo', 'supalvo.zzrole.' . $suffix . '@teste.local', $senha, 'rh');
+    // Etapa 2A-bis: "Supervisor Geral" = role admin + is_supervisor=1 (o flag em RH/viewer não concede nada) — as fixtures refletem a hierarquia vigente.
+    $supervisorAlvoId = User::create('ZZROLE Supervisor Alvo', 'supalvo.zzrole.' . $suffix . '@teste.local', $senha, 'admin');
     $pdo->prepare('UPDATE usuarios SET is_supervisor = 1 WHERE id = ?')->execute([$supervisorAlvoId]);
     $criados[] = $supervisorAlvoId;
 
-    $supervisorAtorId = User::create('ZZROLE Supervisor Ator', 'supator.zzrole.' . $suffix . '@teste.local', $senha, 'viewer');
+    $supervisorAtorId = User::create('ZZROLE Supervisor Ator', 'supator.zzrole.' . $suffix . '@teste.local', $senha, 'admin');
     $pdo->prepare('UPDATE usuarios SET is_supervisor = 1 WHERE id = ?')->execute([$supervisorAtorId]);
     $criados[] = $supervisorAtorId;
     $supervisorAtor = User::findById($supervisorAtorId);
@@ -85,9 +86,10 @@ try {
     $check(count($logs2) === 1 && (int)$logs2[0]['actor_usuario_id'] === $adminAtorId, '(auditoria) blocked_role_change registrado com o ator correto em auditoria_usuarios');
 
     // ---- 3) Ator supervisor PODE alterar o perfil de outro supervisor ------------------------------
-    $check(User::canManageUser($supervisorAtor, User::findById($supervisorAlvoId)) === true, '(supervisor-sobre-supervisor) canManageUser() permite quando o ator também é supervisor');
+    // Etapa 2A-bis: a hierarquia mudou — o perfil de um Supervisor Geral NÃO muda sem antes revogar o flag (e só um Supervisor Geral revoga), então
+    // mesmo entre supervisores o rebaixamento direto de perfil é recusado (cobertura completa em integration_autoridade_supervisor_geral.php).
     $ok3 = User::attemptRoleUpdate($supervisorAlvoId, 'viewer', $supervisorAtor, $ip);
-    $check($ok3 === true && $roleDe($supervisorAlvoId) === 'viewer', '(supervisor-sobre-supervisor) attemptRoleUpdate() grava a alteração quando o ator é supervisor');
+    $check($ok3 === false && $roleDe($supervisorAlvoId) === 'admin', '(supervisor-sobre-supervisor) [2A-bis] o perfil de um Supervisor Geral não é rebaixado diretamente, nem por outro Supervisor Geral — é preciso revogar o flag antes');
 
     // ---- 4) Whitelist de perfil e gate de ACL são responsabilidade do controller (updateRole) ------
     $corpoController = (string)file_get_contents(APP_PATH . '/controllers/AdminUsuariosController.php');
@@ -97,8 +99,8 @@ try {
         return implode('', array_slice($linhas, $r->getStartLine() - 1, $r->getEndLine() - $r->getStartLine() + 1));
     })($corpoController);
     $check(
-        (bool)preg_match("/in_array\(\\\$role,\s*\['admin',\s*'rh',\s*'viewer'\],\s*true\)/", $corpoUpdateRole),
-        '(whitelist) AdminUsuariosController::updateRole() restringe o valor recebido a admin/rh/viewer antes de chamar attemptRoleUpdate()'
+        str_contains($corpoUpdateRole, 'Autoridade::rolesAtribuiveis'),
+        '(whitelist) [2C.1] AdminUsuariosController::updateRole() restringe o valor recebido ao conjunto de Autoridade::rolesAtribuiveis() (admin/rh/gestor/viewer conforme o ator e o schema) antes de chamar attemptRoleUpdate()'
     );
     $check(
         (bool)preg_match("/Auth::requireRole\(\['admin',\s*'rh'\]\)/", $corpoUpdateRole),

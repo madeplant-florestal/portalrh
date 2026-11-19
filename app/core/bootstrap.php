@@ -130,9 +130,14 @@ set_exception_handler(function (\Throwable $e) use ($debug): void {
     if ($debug) {
         echo "Erro 500\n\n";
         echo $e;
-        return;
+    } else {
+        echo 'Erro interno do servidor.';
     }
-    echo 'Erro interno do servidor.';
+    // CLI (testes, scripts, cron): uma exceção não tratada NÃO pode terminar com código 0 — com um tratador instalado o PHP sai com 0.
+    // Na web nada muda (a resposta 500 já foi enviada acima).
+    if (PHP_SAPI === 'cli') {
+        exit(255);
+    }
 });
 
 set_error_handler(function (int $severity, string $message, string $file, int $line): bool {

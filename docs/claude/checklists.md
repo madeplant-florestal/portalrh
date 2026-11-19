@@ -115,8 +115,25 @@
 - [ ] **PHP** (`tests/php/*.php`): scripts standalone, sem framework. Rodam contra banco real via
       `require bootstrap.php`. Convenção de nome: `unit_*.php` (lógica pura, sem banco) e
       `integration_*.php` (toca banco/models/services). Devem imprimir `OK <nome>` e `exit(0)`, ou
-      `fwrite(STDERR, ...)` + `exit(1)` em falha. Execute individualmente via
-      `php tests/php/nome_do_teste.php` — não há runner agregador hoje.
+      `fwrite(STDERR, ...)` + `exit(1)` em falha. **Execução agregada: `php tests/php/run_all.php`**
+      (ver abaixo) — o código de saída do PHP sozinho NÃO prova sucesso.
+- [ ] **Executor (`tests/php/run_all.php`, Etapa de confiabilidade 2026-11):** roda cada teste num processo
+      e classifica pelo código de saída **e** pelo conteúdo: `PASSOU` / `FALHOU` / `ERRO_EXECUCAO` /
+      `ERRO_AMBIENTE` / `INCOMPLETO` / `IGNORADO`. Sai com 0 só se tudo passou/ignorado (1 = reprovação,
+      3 = só erro de ambiente, 2 = recusado fora do banco de desenvolvimento). **Contrato de um teste:**
+      linhas `[FALHOU]` para asserções reprovadas e, ao terminar íntegro, uma ÚLTIMA linha de conclusão
+      (`OK`, `*_OK`, `aprovado`...) ou `SKIP ...` com o motivo. Terminar de outro jeito (ex.: `Acesso negado`)
+      é `INCOMPLETO`. Causas históricas dos falsos sucessos: (1) o `set_exception_handler` do bootstrap
+      engolia exceções (agora sai com 255 no CLI); (2) controller chamado NO MESMO processo do teste que
+      responde 403/redirect com `exit;` encerra o teste com código 0 sem rodar o `finally` — para testar
+      403 use `tests/php/fixture_requisicao_http.php` (processo próprio), nunca o controller direto.
+      Testes do próprio executor: `unit_executor_testes.php`.
+- [ ] **Isolamento de dados de teste:** o executor varre o que cada teste deixa para trás e o remove
+      (`tests/php/lib/ResiduosTeste.php`), com prova de propriedade (usuário `ZZ*` + `@teste.local`;
+      contrato com origem `zz*-teste`; pesquisas órfãs de teste) e só em banco de desenvolvimento local.
+      `php tests/php/limpar_residuos_teste.php` (simulação) / `--executar`; `run_all.php --limpar-antes`.
+      Novos testes: nomes `ZZ...`, e-mail `@teste.local`, origem `zz...-teste`; nunca valores derivados do
+      relógio que possam colidir com dados reais (ex.: códigos de 2 dígitos).
 - [ ] **JS unitário** (`tests/unit/*.test.js`): scripts Node standalone, assertions manuais, sem
       Jest. Agregados nos scripts `test:unit` do `package.json`.
 - [ ] **Visual/E2E** (`tests/*.spec.js`): Playwright, `npm run test:visual`. Screenshots

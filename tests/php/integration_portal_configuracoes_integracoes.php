@@ -120,7 +120,8 @@ try {
     // ---- (2) card Configurações aparece para usuário autorizado; não aparece para quem não tem a permissão
     $comoUsuario($soWeb);
     $card = array_values(array_filter((new PortalNavegacaoService())->modulos(), static fn(array $m): bool => $m['chave'] === 'configuracoes'))[0] ?? null;
-    $check($card !== null && $card['href'] === '/admin/configuracoes/integracoes', '(Central) viewer com recruitment_webhooks.visualizar vê o card Configurações, apontando para Integrações');
+    // Etapa 2B: recruitment_webhooks.* é INCOMPATÍVEL com o viewer (configuração corporativa) — a permissão gravada não abre nada.
+    $check($card === null, '(Central) [2B] viewer com recruitment_webhooks.visualizar GRAVADA NÃO vê o card Configurações (permissão incompatível com o perfil)');
     $comoUsuario($viewer);
     $check(array_values(array_filter((new PortalNavegacaoService())->modulos(), static fn(array $m): bool => $m['chave'] === 'configuracoes')) === [], '(Central) viewer sem a permissão NÃO vê o card Configurações');
     $comoUsuario($rh);
@@ -139,21 +140,12 @@ try {
     $check(preg_match("#\\\$router->(get|post)\\('/admin/recruitment-webhooks/#", $rotas) === 0, '(compatibilidade) Nenhuma rota de ação antiga (/admin/recruitment-webhooks/...) foi mantida — sem uso externo conhecido além dos próprios formulários da tela, já atualizados');
 
     // ---- (6)/(7) permissão existente continua funcionando; modo leitura continua funcionando ------
-    $check($backendPermite('/admin/configuracoes/integracoes', $soWeb) && !$backendPermite('/admin/configuracoes/integracoes', $viewer), '(permissão) recruitment_webhooks.visualizar continua abrindo a tela; viewer sem ela é bloqueado');
+    $check(!$backendPermite('/admin/configuracoes/integracoes', $soWeb) && !$backendPermite('/admin/configuracoes/integracoes', $viewer), '(permissão) [2B] viewer é bloqueado MESMO com recruitment_webhooks.visualizar gravada (incompatível); RH/Admin abrem pela role');
     $check(str_contains($corpoDe(AdminIntegracoesController::class, 'index'), "Authorization::requireRoleOuPermissao(['admin', 'rh'], 'recruitment_webhooks.visualizar')"), '(permissão) O novo controller mantém o mesmo gate de entrada (role admin/rh OU a permissão já existente — débito técnico de nomenclatura documentado)');
     $check(str_contains($corpoDe(AdminIntegracoesController::class, 'saveSetting'), "Auth::requireRole(['admin'])") && str_contains($corpoDe(AdminIntegracoesController::class, 'regenerateSecret'), "Auth::requireRole(['admin'])") && str_contains($corpoDe(AdminIntegracoesController::class, 'testWebhook'), "Auth::requireRole(['admin', 'rh'])") && str_contains($corpoDe(AdminIntegracoesController::class, 'processPending'), "Auth::requireRole(['admin', 'rh'])") && str_contains($corpoDe(AdminIntegracoesController::class, 'retryEvent'), "Auth::requireRole(['admin', 'rh'])"), '(ações) Salvar/regenerar continuam só admin; testar/processar/reenviar continuam admin/rh');
 
-    $comoUsuario($soWeb);
-    $_GET = [];
-    ui_titulo_pagina(null, true);
-    $htmlLeitura = $renderizar(static fn() => (new AdminIntegracoesController())->index());
-    $check(
-        !preg_match('/Warning:|Notice:|Deprecated:|Fatal error/i', $htmlLeitura)
-        && !str_contains($htmlLeitura, 'webhook/salvar') && !str_contains($htmlLeitura, 'webhook/regenerar-segredo')
-        && !str_contains($htmlLeitura, 'webhook/testar') && !str_contains($htmlLeitura, 'webhook/processar-pendentes')
-        && !str_contains($htmlLeitura, 'webhook/reenviar') && str_contains($htmlLeitura, 'Somente visualização'),
-        '(leitura) viewer com só a permissão de visualizar: tela em modo leitura, sem nenhum formulário de ação'
-    );
+    // O "modo leitura" (viewer só com recruitment_webhooks.visualizar) deixou de ser alcançável na Etapa 2B: chamar o controller aqui terminaria o processo com exit (403).
+    // A prova passou a ser o bloqueio acima; o modo leitura do código segue coberto pela verificação estática do gate.
 
     $comoUsuario($rh);
     $_GET = [];

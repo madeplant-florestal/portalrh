@@ -39,6 +39,14 @@ if (!$linha || $linha['nome'] !== $NOME || $linha['codigo_cargo'] !== null) {
     echo "SKIP integration_reconciliar_cargos_locais_metadados (cargos.id {$ID} nao esta no estado esperado: CONTADOR sem codigo)\n";
     exit(0);
 }
+// Precondição adicional (dados reais): o código oficial '047' NÃO pode já estar atribuído a outro cargo — no banco de desenvolvimento, depois
+// de uma sincronização, ele já pertence a "CONTADOR  ( A )" e a procedure aborta de propósito. Estado de ambiente diferente do esperado = SKIP
+// explícito (reportado como IGNORADO pelo executor), nunca uma falha ou um erro 500.
+$codigoJaUsado = (int)$pdo->query("SELECT COUNT(*) FROM cargos WHERE codigo_cargo = " . $pdo->quote($COD) . " AND id <> {$ID}")->fetchColumn();
+if ($codigoJaUsado > 0) {
+    echo "SKIP integration_reconciliar_cargos_locais_metadados (codigo oficial {$COD} ja esta atribuido a outro cargo neste banco)\n";
+    exit(0);
+}
 $snapshot = $linha;
 
 $semComentarios = static fn (string $sql): string => preg_replace('/^\s*--.*$/m', '', $sql) ?? $sql;

@@ -85,6 +85,21 @@ $regraService = new IntegracaoRegraComunicacaoService($regraRepository);
 $eventos = IntegracaoRegraComunicacaoService::eventosDisponiveis();
 
 try {
+    // Precondição de AMBIENTE (banco compartilhado com uso manual real): o teste precisa de uma etapa do pipeline e do combo "candidatura criada +
+    // whatsapp" sem regra cadastrada, e nunca toca em regras reais. Sem isso, o cenário não é executável aqui: SKIP explícito (IGNORADO no
+    // executor), decidido ANTES de criar qualquer fixture — em vez de reprovar e acumular falhas em cascata (e um erro fatal).
+    $etapaLivrePre = false;
+    foreach (PipelineStage::all() as $etapaPre) {
+        if (!$regraRepository->existeConflito(RecruitmentEventDispatcher::EVENT_CANDIDATE_STAGE_CHANGED, (int)$etapaPre['id'], 'whatsapp')) {
+            $etapaLivrePre = true;
+            break;
+        }
+    }
+    if (!$etapaLivrePre || $regraRepository->existeConflito(RecruitmentEventDispatcher::EVENT_CANDIDATURA_CRIADA, null, 'whatsapp')) {
+        echo "SKIP integration_integracao_regras_comunicacao (o banco ja tem regras reais para todas as etapas / para 'candidatura criada + whatsapp': sem combinacao livre para o teste)\n";
+        exit(0);
+    }
+
     $admin = $novoUsuario('Admin', 'admin');
     $rh = $novoUsuario('RH', 'rh');
     $soWeb = $novoUsuario('So Integracoes', 'viewer', ['recruitment_webhooks.visualizar']);

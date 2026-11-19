@@ -33,17 +33,28 @@ class AdminUsuariosController extends Controller
             'csrf' => $csrf,
             'success' => $success,
             'gestorOptions' => (new UsuarioGestorService())->candidatos(null),
+            // Etapa 3: matriz de permissões; o perfil inicial ('viewer') já vem com o modelo recomendado pela política.
+            'matriz' => PermissaoMatrizService::construir('viewer', [], false, Autoridade::rolesAtribuiveis()),
+            'old' => [],
         ], 'layouts/app-shell');
     }
 
-    /** Re-renderiza o cadastro com erro (mantém a lista de Gestor Imediato e a seleção feita). */
-    private function renderCreateComErro(string $error, ?int $gestorSelecionado): void
+    /**
+     * Re-renderiza o cadastro com erro (mantém a lista de Gestor Imediato, os campos preenchidos — nunca a senha — e a seleção de
+     * permissões feita).
+     *
+     * @param array{nome?:string,email?:string,role?:string,ids?:int[]} $old
+     */
+    private function renderCreateComErro(string $error, ?int $gestorSelecionado, array $old = []): void
     {
+        $roleOld = in_array(($old['role'] ?? ''), Autoridade::rolesAtribuiveis(), true) ? (string)$old['role'] : 'viewer';
         $this->view->render('admin/usuarios/create', [
             'error' => $error,
             'csrf' => Security::csrfToken(),
             'gestorOptions' => (new UsuarioGestorService())->candidatos(null),
             'gestorSelecionado' => $gestorSelecionado,
+            'matriz' => PermissaoMatrizService::construir($roleOld, [], false, Autoridade::rolesAtribuiveis(), $old['ids'] ?? null),
+            'old' => ['nome' => (string)($old['nome'] ?? ''), 'email' => (string)($old['email'] ?? ''), 'role' => $roleOld],
         ], 'layouts/app-shell');
     }
 
@@ -59,43 +70,80 @@ class AdminUsuariosController extends Controller
         $email = Security::sanitizeString($_POST['email'] ?? '');
         $senha = $_POST['senha'] ?? '';
         $role = Security::sanitizeString($_POST['role'] ?? 'viewer');
+        $idsPermissoes = array_values(array_unique(array_map('intval', (array)($_POST['permissao_ids'] ?? []))));
+        $old = ['nome' => $nome, 'email' => $email, 'role' => $role, 'ids' => $idsPermissoes];
         $supervisorEmail = Config::app()['security']['supervisor_email'] ?? '';
         // Etapa 2C.1: whitelist dinâmica (inclui 'gestor' só se o schema suportar); perfil desconhecido é recusado, não vira viewer.
         if (!in_array($role, Autoridade::rolesAtribuiveis(), true)) {
-            $this->renderCreateComErro('Perfil inválido.', null);
+            $this->renderCreateComErro('Perfil inválido.', null, $old);
             return;
         }
         // Gestor Imediato (opcional): validado no servidor ANTES de criar o usuário — nunca confia no <select>.
         $gestorId = ctype_digit((string)($_POST['gestor_usuario_id'] ?? '')) ? (int)$_POST['gestor_usuario_id'] : null;
         $gestorService = new UsuarioGestorService();
         if (!$nome || !$email || !$senha) {
-            $this->renderCreateComErro('Preencha nome, e-mail e senha.', $gestorId);
+            $this->renderCreateComErro('Preencha nome, e-mail e senha.', $gestorId, $old);
             return;
         }
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            $this->renderCreateComErro('E-mail inválido.', $gestorId);
+            $this->renderCreateComErro('E-mail inválido.', $gestorId, $old);
             return;
         }
         if ($supervisorEmail !== '' && strcasecmp($email, $supervisorEmail) === 0) {
-            $this->renderCreateComErro('Este e-mail é reservado ao usuário Supervisor protegido.', $gestorId);
+            $this->renderCreateComErro('Este e-mail é reservado ao usuário Supervisor protegido.', $gestorId, $old);
             return;
         }
         $policy = PasswordPolicy::validate($senha);
         if (!$policy['valid']) {
-            $this->renderCreateComErro(implode(' ', $policy['errors']), $gestorId);
+            $this->renderCreateComErro(implode(' ', $policy['errors']), $gestorId, $old);
             return;
         }
         $erroGestor = $gestorService->validarGestorNovoUsuario($gestorId);
         if ($erroGestor !== null) {
-            $this->renderCreateComErro($erroGestor, $gestorId);
+            $this->renderCreateComErro($erroGestor, $gestorId, $old);
+            return;
+        }
+        // Etapa 3: a SELEÇÃO de permissões é validada pela política central ANTES de qualquer gravação (id inexistente/inativo e permissão
+        // incompatível com o perfil recusam o cadastro inteiro — nada é descartado em silêncio). Admin/RH têm acesso global pelo perfil:
+        // permissão individual no cadastro desses perfis é seleção forjada/inconsistente e também é recusada.
+        $ator = Autoridade::atorDaSessao();
+        if (!Autoridade::ehAdministrativo($ator)) {
+            http_response_code(403);
+            echo 'Operação não permitida.';
+            return;
+        }
+        if ($idsPermissoes !== [] && PermissaoPerfilPolicy::perfilGlobal($role)) {
+            $this->renderCreateComErro('Perfis Admin e RH têm acesso global pelo próprio perfil: não selecione permissões individuais no cadastro.', $gestorId, $old);
+            return;
+        }
+        $validacao = PermissaoPerfilPolicy::validarSelecao($role, $idsPermissoes, []);
+        if (!$validacao['ok']) {
+            AuditLog::log($ator?->id, null, 'blocked_permissoes_update', 'Cadastro recusado (permissões): ' . implode(', ', array_merge($validacao['incompativeis'], $validacao['inativas'])), Security::clientIp());
+            $this->renderCreateComErro($validacao['mensagem'], $gestorId, $old);
             return;
         }
         $senhaHash = password_hash($senha, PASSWORD_BCRYPT);
+        // Usuário + permissões numa transação única: qualquer falha desfaz tudo (nenhum usuário parcial, nenhuma permissão órfã).
+        $pdo = Database::conn();
+        $pdo->beginTransaction();
         try {
             $novoId = User::create($nome, $email, $senhaHash, $role);
+            if ($idsPermissoes !== []) {
+                $gravou = Authorization::sincronizar($novoId, $idsPermissoes);
+                if (!($gravou['ok'] ?? false)) {
+                    throw new \RuntimeException((string)($gravou['error'] ?? 'Falha ao gravar as permissões.'));
+                }
+            }
+            $pdo->commit();
         } catch (\Throwable $e) {
-            $this->renderCreateComErro('Falha ao criar usuário: ' . Security::e($e->getMessage()), $gestorId);
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            $this->renderCreateComErro('Falha ao criar usuário: ' . Security::e($e->getMessage()), $gestorId, $old);
             return;
+        }
+        if ($idsPermissoes !== []) {
+            AuditLog::log($ator?->id, $novoId, 'permissoes_update', 'cadastro: total=' . count($idsPermissoes), Security::clientIp());
         }
         if ($gestorId !== null) {
             $resultado = $gestorService->definirGestor($novoId, $gestorId, (int)($_SESSION['user_id'] ?? 0) ?: null, Security::clientIp());
@@ -222,8 +270,12 @@ class AdminUsuariosController extends Controller
             'podeAlterarSupervisorGeral' => Autoridade::podeAlterarSupervisorGeral($atorAutoridade) && (int)$user->id !== (int)($atorAutoridade->id ?? 0),
             'podeAlterarSetoresGerenciados' => $this->isAdminOuRhAtor(),
             'setoresGerenciados' => (new UsuarioSetoresGerenciadosService())->setoresDoUsuario((int)$user->id),
-            'catalogoPermissoes' => Authorization::catalogoPorModulo(),
-            'permissoesAtribuidas' => Authorization::idsAtribuidos((int)$user->id),
+            'matriz' => PermissaoMatrizService::construir(
+                (string)$user->role,
+                Authorization::idsAtribuidos((int)$user->id),
+                true,
+                array_values(array_unique(array_merge(array_keys($rolesAtribuiveis), [PermissaoPerfilPolicy::normalizarRole($user->role)])))
+            ),
             'flashError' => Security::sanitizeString($_GET['erro'] ?? ''),
             'flashSuccess' => Security::sanitizeString($_GET['ok'] ?? ''),
         ], 'layouts/app-shell');
@@ -494,21 +546,54 @@ class AdminUsuariosController extends Controller
             (array)($_POST['permissao_ids'] ?? [])
         );
         $back = '/admin/usuarios/' . (int)$id;
+
+        // Etapa 3: a matriz pode trazer o PERFIL junto (troca de perfil + permissões numa única gravação). Perfil ausente ou igual ao atual =
+        // só permissões (contrato anterior). Perfil diferente exige a MESMA autoridade de /role (whitelist, sem autoalteração, sem
+        // Supervisor Geral, hierarquia) e a seleção é validada contra o perfil NOVO.
+        $roleAtual = PermissaoPerfilPolicy::normalizarRole($target->role);
+        $roleRecebida = PermissaoPerfilPolicy::normalizarRole($_POST['role'] ?? '');
+        $mudaRole = $roleRecebida !== '' && $roleRecebida !== $roleAtual;
+        if ($mudaRole) {
+            if (!in_array($roleRecebida, Autoridade::rolesAtribuiveis(), true)) {
+                redirect($back . '?erro=' . urlencode('Perfil inválido.'));
+            }
+            if (!Autoridade::podeAtribuirRole($actor, $target, $roleRecebida)) {
+                AuditLog::log($actor?->id, (int)$id, 'blocked_role_change', 'Tentativa bloqueada de alterar perfil (matriz): ' . $target->role . ' -> ' . $roleRecebida, Security::clientIp());
+                http_response_code(403);
+                echo 'Operação não permitida.';
+                return;
+            }
+        }
+        $roleEfetivo = $mudaRole ? $roleRecebida : (string)$target->role;
         // Etapa 2B: a SELEÇÃO FINAL é validada pela política central ANTES de qualquer gravação — id inexistente/inativo e permissão
         // incompatível com o perfil recusam o salvamento inteiro (nada parcial, nada descartado em silêncio; o que estava gravado
         // permanece como estava).
-        $validacao = PermissaoPerfilPolicy::validarSelecao((string)$target->role, $idsRecebidos, Authorization::idsAtribuidos((int)$id));
+        $validacao = PermissaoPerfilPolicy::validarSelecao($roleEfetivo, $idsRecebidos, $mudaRole ? [] : Authorization::idsAtribuidos((int)$id));
         if (!$validacao['ok']) {
             AuditLog::log($actor?->id, (int)$id, 'blocked_permissoes_update', 'Seleção recusada: ' . implode(', ', array_merge($validacao['incompativeis'], $validacao['inativas'])), Security::clientIp());
             redirect($back . '?erro=' . urlencode($validacao['mensagem']));
         }
-        $result = Authorization::sincronizar((int)$id, $idsRecebidos);
 
-        if (!($result['ok'] ?? false)) {
-            redirect($back . '?erro=' . urlencode((string)($result['error'] ?? 'Falha ao salvar as permissões de acesso.')));
+        // Perfil + permissões na MESMA transação: ou grava tudo, ou nada muda.
+        $pdo = Database::conn();
+        $pdo->beginTransaction();
+        try {
+            if ($mudaRole && !User::attemptRoleUpdate((int)$id, $roleRecebida, $actor, Security::clientIp())) {
+                throw new \RuntimeException('Não foi possível alterar o perfil.');
+            }
+            $result = Authorization::sincronizar((int)$id, $idsRecebidos);
+            if (!($result['ok'] ?? false)) {
+                throw new \RuntimeException((string)($result['error'] ?? 'Falha ao salvar as permissões de acesso.'));
+            }
+            $pdo->commit();
+        } catch (\Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            redirect($back . '?erro=' . urlencode($e instanceof \RuntimeException ? $e->getMessage() : 'Falha ao salvar as permissões de acesso.'));
         }
-        AuditLog::log($actor?->id, (int)$id, 'permissoes_update', 'total=' . (int)($result['total'] ?? 0), Security::clientIp());
-        redirect($back . '?ok=' . urlencode('Permissões de acesso atualizadas.'));
+        AuditLog::log($actor?->id, (int)$id, 'permissoes_update', 'total=' . (int)($result['total'] ?? 0) . ($mudaRole ? ' perfil=' . $roleAtual . '->' . $roleRecebida : ''), Security::clientIp());
+        redirect($back . '?ok=' . urlencode($mudaRole ? 'Perfil e permissões de acesso atualizados.' : 'Permissões de acesso atualizadas.'));
     }
 
     /**

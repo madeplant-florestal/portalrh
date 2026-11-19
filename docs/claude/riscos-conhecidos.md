@@ -98,6 +98,15 @@ Identificados na auditoria arquitetural de 2026-07-09, documentados aqui para n�
      se `PermissaoPerfilPolicy::permissaoEfetiva(role, codigo)`; `updatePermissoes` valida a seleção FINAL (existe, ativa, compatível)
      antes de gravar — recusa por inteiro, sem alteração parcial, com mensagem e auditoria `blocked_permissoes_update`. A tela do usuário
      avisa o legado incompatível/pendente. `Autoridade` continua prevalecendo (Administrador não altera permissões do Supervisor Geral).
+   - **Matriz horizontal (Etapa 3):** cadastro (`create`/`store`) e edição (`show`/`updatePermissoes`) usam `PermissaoMatrizService`
+     (linha = prefixo REAL do código; coluna = ação real; área só de apresentação) + `partials/matriz-permissoes.php` +
+     `assets/matriz-permissoes.js` (sem lista de permissões: tudo vem de `data-perfis`, calculado pela política). `modeloRecomendado`:
+     Viewer = dashboard de recrutamento; Gestor = operacional setorial SEM `solicitacao_vaga.aprovar_lider` e
+     `dashboard_integracao_agregado.visualizar` (permitidas, mas só por concessão explícita); Admin/RH = vazio. Cadastro grava usuário +
+     permissões em UMA transação (`Authorization::sincronizar` respeita transação aberta); `updatePermissoes` aceita `role` opcional e
+     grava perfil + permissões atomicamente (mesma `Autoridade::podeAtribuirRole` de `/role`; seleção validada contra o perfil NOVO;
+     `is_supervisor` nunca é lido). Legado incompatível: aparece marcado "sem efeito", nunca é reativado nem apagado sem desmarcar e salvar.
+     Testes: `integration_matriz_permissoes.php` (PHP) e `tests/matriz-permissoes.spec.js` (Playwright, sem servidor).
    - **Efeito operacional conhecido:** viewer com `recruitment_webhooks.*` deixa de abrir Integrações; `candidaturas.*`, `pipeline.*`,
      `indicacoes.*`, catálogos (`empresas`, `setores`, `cargos`, `beneficios`, `avaliacoes`, `vagas`), `movimentacao_pessoal.*`,
      `comunicacoes`, `pesquisa_experiencia`, `manual` e `colaboradores.editar` não concedem nada ao viewer (já sem rota aberta a ele,

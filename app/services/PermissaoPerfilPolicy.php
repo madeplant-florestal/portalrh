@@ -72,6 +72,13 @@ final class PermissaoPerfilPolicy
         'solicitacao_vaga.aprovar_lider', 'dashboard_integracao_agregado.visualizar',
     ];
 
+    /**
+     * Modelo RECOMENDADO do Gestor (Etapa 3): as permissões OPERACIONAIS setoriais de GESTOR_PERMITIDAS. Ficam FORA do modelo (continuam
+     * permitidas, mas só por concessão explícita) a aprovação de líder e o dashboard agregado de Integração da 2C.2C: a primeira
+     * depende de designação formal e a segunda expõe indicador consolidado — não devem nascer marcadas.
+     */
+    private const GESTOR_FORA_DO_MODELO = ['solicitacao_vaga.aprovar_lider', 'dashboard_integracao_agregado.visualizar'];
+
     /** Perfis com acesso global pelo próprio papel (Authorization já os libera sem linhas em usuario_permissoes). */
     private const PERFIS_GLOBAIS = ['admin', 'rh'];
 
@@ -209,10 +216,20 @@ final class PermissaoPerfilPolicy
         return [];
     }
 
-    /** Modelo aplicado automaticamente no cadastro. Admin/RH: vazio (o acesso vem do perfil). Gestor: vazio nesta etapa (nada é aplicado automaticamente). */
+    /**
+     * Modelo sugerido pela matriz de permissões (cadastro e "Restaurar modelo"). Admin/RH: vazio (o acesso vem do perfil). Viewer: só
+     * o dashboard sem risco de reidentificação. Gestor (Etapa 3): permissões operacionais setoriais (ver GESTOR_FORA_DO_MODELO); só com
+     * o perfil ativo. Sempre ⊆ permissoesPermitidas().
+     *
+     * @return string[]
+     */
     public static function modeloRecomendado(string $role): array
     {
-        return self::normalizarRole($role) === 'viewer' ? self::VIEWER_RECOMENDADAS : [];
+        return match (self::normalizarRole($role)) {
+            'viewer' => self::VIEWER_RECOMENDADAS,
+            'gestor' => self::gestorAtivo() ? array_values(array_diff(self::GESTOR_PERMITIDAS, self::GESTOR_FORA_DO_MODELO)) : [],
+            default => [],
+        };
     }
 
     /**

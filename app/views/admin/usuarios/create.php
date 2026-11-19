@@ -1,5 +1,9 @@
 <?php
 require_once APP_PATH . '/views/partials/modulo-topo.php';
+require_once APP_PATH . '/views/partials/matriz-permissoes.php';
+ui_script_pagina('matriz-permissoes.js');
+$old = $old ?? [];
+$roleSel = (string)($old['role'] ?? 'viewer');
 $base = Config::app()['base_url'] ?? '';
 ?>
 <div class="space-y-4">
@@ -7,7 +11,7 @@ $base = Config::app()['base_url'] ?? '';
       'titulo' => 'Cadastrar novo usuário',
       'descricao' => 'Cria o usuário do Portal. Vínculo com o METADADOS e contexto organizacional são definidos no detalhe, depois da criação.',
   ], [['label' => 'Novo usuário', 'href' => null]]) ?>
-  <div class="responsive-panel max-w-2xl">
+  <div class="responsive-panel">
   <?php if (!empty($error)): ?>
     <div class="mt-3 p-3 bg-danger/10 text-danger border border-danger/30 rounded text-sm">
       <?= Security::e($error) ?>
@@ -19,15 +23,16 @@ $base = Config::app()['base_url'] ?? '';
     </div>
   <?php endif; ?>
   <form class="mt-4 space-y-4" method="post" action="<?= $base ?>/admin/usuarios/novo">
+    <div class="max-w-2xl space-y-4">
     <input type="hidden" name="csrf" value="<?= Security::e($csrf ?? '') ?>">
     <h3 class="border-b border-border pb-2 text-ds-h3 text-text-primary">Identidade e acesso</h3>
     <div>
       <label class="block text-sm text-text-primary">Nome</label>
-      <input type="text" name="nome" class="mt-1 w-full border rounded px-3 py-2" required>
+      <input type="text" name="nome" value="<?= Security::e((string)($old['nome'] ?? '')) ?>" class="mt-1 w-full border rounded px-3 py-2" required>
     </div>
     <div>
       <label class="block text-sm text-text-primary">E-mail</label>
-      <input type="email" name="email" class="mt-1 w-full border rounded px-3 py-2" required>
+      <input type="email" name="email" value="<?= Security::e((string)($old['email'] ?? '')) ?>" class="mt-1 w-full border rounded px-3 py-2" required>
     </div>
     <div>
       <label class="block text-sm text-text-primary">Senha</label>
@@ -35,13 +40,14 @@ $base = Config::app()['base_url'] ?? '';
       <p class="mt-1 text-xs text-text-secondary">Mínimo de 12 caracteres com maiúscula, minúscula, número e símbolo.</p>
     </div>
     <div>
-      <label class="block text-sm text-text-primary">Perfil</label>
-      <select name="role" class="mt-1 w-full border rounded px-3 py-2">
-        <option value="viewer">Leitor</option>
-        <option value="rh">RH</option>
-        <?php if (Autoridade::gestorDisponivel()): ?><option value="gestor">Gestor</option><?php endif; ?>
-        <option value="admin">Admin</option>
+      <label for="role" class="block text-sm text-text-primary">Perfil</label>
+      <select id="role" name="role" class="mt-1 w-full border rounded px-3 py-2">
+        <option value="viewer" <?= $roleSel === 'viewer' ? 'selected' : '' ?>>Leitor</option>
+        <option value="rh" <?= $roleSel === 'rh' ? 'selected' : '' ?>>RH</option>
+        <?php if (Autoridade::gestorDisponivel()): ?><option value="gestor" <?= $roleSel === 'gestor' ? 'selected' : '' ?>>Gestor</option><?php endif; ?>
+        <option value="admin" <?= $roleSel === 'admin' ? 'selected' : '' ?>>Admin</option>
       </select>
+      <p class="mt-1 text-xs text-text-secondary">Ao escolher o perfil, a matriz abaixo carrega o modelo recomendado. Você pode ajustar dentro do que o perfil permite.</p>
     </div>
     <h3 class="border-b border-border pb-2 pt-2 text-ds-h3 text-text-primary">Hierarquia</h3>
     <div>
@@ -56,8 +62,12 @@ $base = Config::app()['base_url'] ?? '';
     </div>
     <p class="text-xs text-text-secondary">
       Vínculo com o METADADOS e contexto organizacional (Cargo principal, Setores de atuação,
-      aprovador) são definidos na tela de detalhe do usuário, após a criação.
+      aprovador) são definidos na tela de detalhe do usuário, após a criação. Setores gerenciados do Gestor também: nenhum setor é atribuído
+      automaticamente.
     </p>
+    </div>
+    <h3 class="border-b border-border pb-2 pt-2 text-ds-h3 text-text-primary">Permissões de acesso</h3>
+    <?= ui_matriz_permissoes($matriz, 'role') ?>
     <div class="responsive-form-actions pt-2">
       <button type="submit" class="<?= ui_btn('primario') ?>">Criar usuário</button>
       <a href="<?= $base ?>/admin/usuarios" class="<?= ui_btn('ghost') ?>">Cancelar</a>

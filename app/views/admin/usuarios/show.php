@@ -369,59 +369,42 @@ $podeAlterarPerfil = !empty($podeAlterarPerfil);
 
   <?php if ($isAdminAtor): ?>
   <?php
-    $catalogoPermissoes = $catalogoPermissoes ?? [];
-    $permissoesAtribuidas = $permissoesAtribuidas ?? [];
+    require_once APP_PATH . '/views/partials/matriz-permissoes.php';
+    ui_script_pagina('matriz-permissoes.js');
     $diagnosticoPermissoes = $diagnosticoPermissoes ?? ['incompativeis' => [], 'pendentes' => [], 'transitorias' => []];
-    $rotuloModulo = [
-      'solicitacao_vaga' => 'Solicitação de Vagas',
-      'kanban_vagas' => 'Kanban de Vagas',
-      'mensagens' => 'Mensagens',
-      'comunicacoes' => 'Histórico de Comunicação',
-      'pesquisa_experiencia' => 'Pesquisa de Experiência',
-      'integracao_colaborador' => 'Integração do Colaborador',
-    ];
+    $rolesMatriz = ['admin' => 'Admin', 'rh' => 'RH', 'gestor' => 'Gestor', 'viewer' => 'Leitor'];
+    $opcoesPerfilMatriz = !empty($podeAlterarPerfil) ? ($rolesAtribuiveis ?? []) : [];
+    if ($opcoesPerfilMatriz !== [] && !isset($opcoesPerfilMatriz[strtolower((string)$user->role)])) {
+        $opcoesPerfilMatriz[strtolower((string)$user->role)] = $rolesMatriz[strtolower((string)$user->role)] ?? strtoupper((string)$user->role);
+    }
   ?>
   <section class="rounded-ds-md border border-border bg-surface-secondary p-5">
     <h3 class="text-lg font-semibold text-text-primary">Permissões de acesso</h3>
     <p class="mt-1 text-sm text-text-secondary">
-      Controla o que este usuário pode fazer em cada módulo, independentemente do papel (Permissão)
-      dele. Administradores e RH possuem acesso total; para os demais, só o que estiver marcado aqui.
+      Controla o que este usuário pode fazer em cada módulo. Administradores e RH possuem acesso total pelo perfil; para os demais, só o que estiver
+      marcado aqui <strong>e</strong> for compatível com o perfil. A matriz mostra o que está realmente gravado — o modelo recomendado só é aplicado
+      se você pedir (trocar o perfil ou "Restaurar modelo") e nada é salvo até clicar em <em>Salvar permissões</em>.
     </p>
 
-    <?php if ($diagnosticoPermissoes['incompativeis'] !== []): ?>
-      <div class="mt-3 rounded border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">
-        Permissões gravadas incompatíveis com o perfil <?= Security::e(strtoupper((string)$user->role)) ?> (não concedem acesso; para salvar a seleção de permissões, desmarque-as): <?= Security::e(implode(', ', $diagnosticoPermissoes['incompativeis'])) ?>
-      </div>
-    <?php endif; ?>
     <?php if ($diagnosticoPermissoes['pendentes'] !== []): ?>
       <div class="mt-3 rounded border border-border bg-surface px-3 py-2 text-xs text-text-secondary">
         Mantidas por dependência operacional ainda não decidida (novas atribuições são recusadas): <?= Security::e(implode(', ', $diagnosticoPermissoes['pendentes'])) ?>
       </div>
     <?php endif; ?>
-    <form action="<?= $base ?>/admin/usuarios/<?= (int)$user->id ?>/permissoes" method="post" class="mt-4 space-y-5">
+    <form action="<?= $base ?>/admin/usuarios/<?= (int)$user->id ?>/permissoes" method="post" class="mt-4 space-y-4">
       <input type="hidden" name="csrf" value="<?= Security::e($csrf) ?>">
-
-      <div class="divide-y divide-border">
-        <?php foreach ($catalogoPermissoes as $modulo => $itens): ?>
-          <div class="flex flex-col gap-2 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:gap-4">
-            <span class="text-sm font-medium text-text-primary sm:w-44 sm:shrink-0"><?= Security::e($rotuloModulo[$modulo] ?? ucfirst(str_replace('_', ' ', $modulo))) ?></span>
-            <div class="grid grid-cols-2 gap-x-4 gap-y-2 sm:flex sm:flex-1 sm:flex-wrap sm:gap-x-5 sm:gap-y-2">
-              <?php foreach ($itens as $permissao): ?>
-                <label class="flex items-center gap-2 text-sm text-text-primary">
-                  <input type="checkbox" name="permissao_ids[]" value="<?= (int)$permissao['id'] ?>"
-                         class="h-4 w-4 shrink-0 rounded border-border"
-                         <?= in_array((int)$permissao['id'], $permissoesAtribuidas, true) ? 'checked' : '' ?>>
-                  <span><?= Security::e((string)$permissao['nome']) ?></span>
-                </label>
-              <?php endforeach; ?>
-            </div>
-          </div>
-        <?php endforeach; ?>
-      </div>
-      <?php if ($catalogoPermissoes === []): ?>
-        <p class="text-sm text-text-secondary">Nenhuma permissão cadastrada.</p>
+      <?php if ($opcoesPerfilMatriz !== []): ?>
+        <div class="max-w-xs">
+          <label for="matriz-perfil" class="block text-sm text-text-primary">Perfil</label>
+          <select id="matriz-perfil" name="role" class="mt-1 w-full rounded border border-border px-2 py-1.5 text-sm">
+            <?php foreach ($opcoesPerfilMatriz as $valorPerfil => $rotuloPerfil): ?>
+              <option value="<?= Security::e($valorPerfil) ?>" <?= strtolower((string)$user->role) === $valorPerfil ? 'selected' : '' ?>><?= Security::e($rotuloPerfil) ?></option>
+            <?php endforeach; ?>
+          </select>
+          <p class="mt-1 text-xs text-text-secondary">Trocar o perfil aqui só vale depois de <em>Salvar permissões</em> (perfil e permissões são gravados juntos).</p>
+        </div>
       <?php endif; ?>
-
+      <?= ui_matriz_permissoes($matriz, $opcoesPerfilMatriz !== [] ? 'matriz-perfil' : '') ?>
       <button class="<?= ui_btn('primario') ?>">Salvar permissões</button>
     </form>
   </section>

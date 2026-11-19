@@ -215,7 +215,12 @@ class Authorization
         )));
 
         $pdo = Database::conn();
-        $pdo->beginTransaction();
+        // Etapa 3: o cadastro/edição de usuário grava perfil + permissões numa transação ÚNICA do chamador; se já houver transação
+        // aberta, esta função não a controla (nem confirma, nem desfaz) — quem abriu decide. Sem transação aberta, comporta-se como antes.
+        $propria = !$pdo->inTransaction();
+        if ($propria) {
+            $pdo->beginTransaction();
+        }
         try {
             $pdo->prepare('DELETE FROM usuario_permissoes WHERE usuario_id = ?')->execute([$usuarioId]);
             if ($idsFiltrados !== []) {
@@ -224,9 +229,13 @@ class Authorization
                     $stmt->execute([$usuarioId, $permissaoId]);
                 }
             }
-            $pdo->commit();
+            if ($propria) {
+                $pdo->commit();
+            }
         } catch (Throwable) {
-            $pdo->rollBack();
+            if ($propria && $pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
             return ['ok' => false, 'error' => 'Falha ao salvar as permissões do usuário.'];
         }
 

@@ -110,6 +110,10 @@ Identificados na auditoria arquitetural de 2026-07-09, documentados aqui para n�
      transição do Leitor); "Marcar todas" fica restrito ao lote do perfil (Leitor: só dashboards — sem seleção global de operacionais);
      "Alternar linha": todas aplicáveis marcadas → limpa, senão marca todas. Botões sem alvo aplicável ficam DESABILITADOS (nunca um clique
      sem efeito) e cada ação informa o resultado. O legado incompatível nunca entra no lote.
+     **Etapa 3.1:** `PermissaoPerfilPolicy` separa recomendado (`modeloRecomendado`) × concedível (`concediveis`) × bloqueado
+     (`motivoBloqueio`/`categoriaBloqueioGestor`, toda permissão do catálogo tem decisão — falha em `unit_permissao_perfil_cobertura`).
+     Viewer: a transição operacional só se MANTÉM onde já gravada (`podeReceberPermissao`); nova concessão é recusada.
+     Auditoria completa e pendências de Recrutamento (vaga↔setor): `docs/claude/auditoria-permissoes-gestor.md`.
      Testes: `integration_matriz_permissoes.php` (PHP), `tests/matriz-permissoes.spec.js` (fixture) e `tests/matriz-permissoes-real.spec.js`
      (Playwright contra a aplicação real: `php -S 127.0.0.1:8010 -t public` + banco de desenvolvimento; não rodar junto com a suíte PHP).
    - **Efeito operacional conhecido:** viewer com `recruitment_webhooks.*` deixa de abrir Integrações; `candidaturas.*`, `pipeline.*`,

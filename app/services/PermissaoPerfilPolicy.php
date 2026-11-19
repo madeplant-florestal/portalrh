@@ -26,7 +26,7 @@
  * um código sem classificação explícita.
  *
  * Perfis: admin e RH — global, qualquer permissão é "permitida" (o acesso vem do perfil, não de linhas em usuario_permissoes).
- * Viewer — apenas dashboards agregados autorizados (+ as tiers acima, de transição). Gestor — FUTURO: inativo (`PERFIL_GESTOR_ATIVO`)
+ * Viewer — apenas dashboards agregados autorizados (as de transição só se mantêm onde já gravadas; sem novas concessões — Etapa 3.1). Gestor — FUTURO: inativo (`PERFIL_GESTOR_ATIVO`)
  * e sem ENUM/conta; a política já existe para ser ativada sem refazer a matriz.
  */
 final class PermissaoPerfilPolicy
@@ -78,6 +78,52 @@ final class PermissaoPerfilPolicy
      * depende de designação formal e a segunda expõe indicador consolidado — não devem nascer marcadas.
      */
     private const GESTOR_FORA_DO_MODELO = ['solicitacao_vaga.aprovar_lider', 'dashboard_integracao_agregado.visualizar'];
+
+    // ---- GESTOR: permissões NÃO concedíveis (Etapa 3.1) — categoria + motivo, ancorados na auditoria de 2026-11 ------------------------
+    public const BLOQUEIO_SEM_CONSUMIDOR = 'sem_consumidor';
+    public const BLOQUEIO_REQUER_ESCOPO = 'requer_escopo';
+    public const BLOQUEIO_ADMINISTRATIVA = 'administrativa';
+    public const BLOQUEIO_GLOBAL_NOMINAL = 'global_nominal';
+
+    /**
+     * Por MÓDULO (prefixo do código): todo código do catálogo que não está em GESTOR_PERMITIDAS precisa de uma categoria e de um motivo —
+     * `unit_permissao_perfil_cobertura.php` falha se o catálogo ganhar um código sem decisão. Conceder uma permissão daqui a um Gestor NÃO
+     * teria efeito (o endpoint exige role Admin/RH) e liberar exigiria escopo setorial no backend: não é um simples "marcar" na matriz.
+     * Nada aqui é decidido por ID ou nome de usuário.
+     */
+    private const GESTOR_BLOQUEIOS_POR_MODULO = [
+        'dashboard' => [self::BLOQUEIO_GLOBAL_NOMINAL, 'Dashboard People Analytics: filtros sem tamanho mínimo de amostra (reidentificação) e sem escopo setorial.'],
+        'indicadores_rh' => [self::BLOQUEIO_GLOBAL_NOMINAL, 'Indicadores de RH: dados consolidados da empresa, sem escopo setorial e com risco de reidentificação.'],
+        'dashboard_turnover' => [self::BLOQUEIO_GLOBAL_NOMINAL, 'Turnover: visão global da empresa, sem escopo setorial.'],
+        'dashboard_recrutamento' => [self::BLOQUEIO_REQUER_ESCOPO, 'Dashboard de Recrutamento: consultas globais (todas as vagas); requer escopo por setor da solicitação.'],
+        'dashboard_entrevista_desligamento' => [self::BLOQUEIO_GLOBAL_NOMINAL, 'Entrevista de Desligamento: respostas individuais/agregadas sem amostra mínima e sem escopo setorial.'],
+        'entrevista_desligamento' => [self::BLOQUEIO_GLOBAL_NOMINAL, 'Entrevista de Desligamento: dado nominal e sensível, sem escopo setorial.'],
+        'integracao_colaborador' => [self::BLOQUEIO_GLOBAL_NOMINAL, 'Integração do Colaborador: resultados globais com comentários, sem amostra mínima (o agregado k>=5 é a permissão própria).'],
+        'pesquisa_reacao_integracao' => [self::BLOQUEIO_ADMINISTRATIVA, 'Pesquisa de Reação: configuração e resultados corporativos (Admin/RH).'],
+        'pesquisa_experiencia' => [self::BLOQUEIO_REQUER_ESCOPO, 'Pesquisa de Experiência (candidatura): sem escopo setorial; só é lida dentro do fluxo de Candidaturas (Admin/RH).'],
+        'comunicacoes' => [self::BLOQUEIO_REQUER_ESCOPO, 'Histórico de Comunicação com candidatos: sem escopo setorial; só é lido dentro de Candidaturas (Admin/RH).'],
+        'candidaturas' => [self::BLOQUEIO_REQUER_ESCOPO, 'Candidaturas: dados pessoais (CPF, e-mail, currículo) sem vínculo setorial direto — candidatura → vaga → solicitação (opcional) → setor; endpoints exigem Admin/RH.'],
+        'pipeline' => [self::BLOQUEIO_REQUER_ESCOPO, 'Pipeline de candidatos: consulta e movimentação globais, sem escopo por setor da vaga; endpoints exigem Admin/RH.'],
+        'vagas' => [self::BLOQUEIO_REQUER_ESCOPO, 'Vagas: `vagas.area` é texto livre e `solicitacao_vaga_id` é opcional — não há vínculo confiável com o setor; endpoints exigem Admin/RH.'],
+        'indicacoes' => [self::BLOQUEIO_GLOBAL_NOMINAL, 'Indicações: dados nominais e financeiros (pagamento de comissão).'],
+        'recruitment_webhooks' => [self::BLOQUEIO_ADMINISTRATIVA, 'Webhooks de recrutamento: configuração crítica de integração (Admin/RH).'],
+        'movimentacao_pessoal' => [self::BLOQUEIO_REQUER_ESCOPO, 'Movimentação de Pessoal: documento nominal com dados salariais e assinatura de RH, sem escopo setorial.'],
+        'mensagens' => [self::BLOQUEIO_ADMINISTRATIVA, 'Mensagens: configuração corporativa de modelos (Admin/RH).'],
+        'beneficios' => [self::BLOQUEIO_ADMINISTRATIVA, 'Benefícios: catálogo corporativo (Admin/RH).'],
+        'avaliacoes' => [self::BLOQUEIO_ADMINISTRATIVA, 'Cadastro de Avaliações (modelos): configuração corporativa (Admin/RH).'],
+        'empresas' => [self::BLOQUEIO_ADMINISTRATIVA, 'Cadastro de Empresas: dado mestre corporativo (Admin/RH).'],
+        'setores' => [self::BLOQUEIO_ADMINISTRATIVA, 'Cadastro de Setores: dado mestre corporativo (Admin/RH).'],
+        'cargos' => [self::BLOQUEIO_ADMINISTRATIVA, 'Cadastro de Cargos: dado mestre corporativo (Admin/RH).'],
+        'manual' => [self::BLOQUEIO_ADMINISTRATIVA, 'Manual do Portal: tela restrita a Admin/RH/Leitor, sem uso para Gestor.'],
+    ];
+
+    /** Exceções por CÓDIGO: o módulo é parcialmente concedível, mas esta ação não tem operação protegida/implementada. */
+    private const GESTOR_BLOQUEIOS_POR_CODIGO = [
+        'colaboradores.editar' => [self::BLOQUEIO_SEM_CONSUMIDOR, 'Edição do cadastro do colaborador: a operação é exclusiva de Admin/RH por role; nenhuma ação do Gestor usa esta permissão.'],
+        'solicitacao_vaga.editar' => [self::BLOQUEIO_SEM_CONSUMIDOR, 'Editar solicitação: nenhuma operação do Gestor consome esta permissão (a edição/aprovação de RH é por role).'],
+        'solicitacao_vaga.cancelar' => [self::BLOQUEIO_SEM_CONSUMIDOR, 'Cancelar solicitação: nenhuma operação do Gestor consome esta permissão.'],
+        'kanban_vagas.editar' => [self::BLOQUEIO_SEM_CONSUMIDOR, 'Editar card do Kanban: nenhuma operação consome esta permissão (movimentar e anotar usam kanban_vagas.movimentar).'],
+    ];
 
     /** Perfis com acesso global pelo próprio papel (Authorization já os libera sem linhas em usuario_permissoes). */
     private const PERFIS_GLOBAIS = ['admin', 'rh'];
@@ -208,7 +254,7 @@ final class PermissaoPerfilPolicy
             return array_values($catalogo ?? []);
         }
         if ($role === 'viewer') {
-            return array_values(array_merge(self::VIEWER_PERMITIDAS, self::TRANSITORIAS_GESTOR));
+            return self::VIEWER_PERMITIDAS; // as de transição só são MANTIDAS quando já gravadas (podeReceberPermissao/permissaoEfetiva)
         }
         if ($role === 'gestor' && self::gestorAtivo()) {
             return self::GESTOR_PERMITIDAS;
@@ -233,14 +279,71 @@ final class PermissaoPerfilPolicy
     }
 
     /**
+     * Permissões CONCEDÍVEIS ao perfil (Etapa 3.1): o conjunto que o administrador pode atribuir individualmente. É distinto do modelo
+     * recomendado (sugestão inicial, subconjunto): o modelo nunca limita o que é concedível, e algo concedível não entra no modelo
+     * sozinho.
+     *
+     * @return string[]
+     */
+    public static function concediveis(string $role): array
+    {
+        return self::permissoesPermitidas($role);
+    }
+
+    /**
+     * Motivo (texto para o administrador) pelo qual `$codigo` não pode ser concedida ao perfil, ou null se pode. Para o Gestor vem da
+     * auditoria (categorias BLOQUEIO_*); para o Viewer, novas concessões operacionais de transição estão fechadas.
+     */
+    public static function motivoBloqueio(string $role, string $codigo): ?string
+    {
+        $role = self::normalizarRole($role);
+        if (self::classificar($role, $codigo) === self::PERMITIDA) {
+            return null;
+        }
+        if ($role === 'gestor') {
+            return (self::bloqueioGestor($codigo) ?? [self::BLOQUEIO_REQUER_ESCOPO, 'Sem decisão de escopo setorial para este código: negado por padrão.'])[1];
+        }
+        if ($role === 'viewer') {
+            return self::classificar($role, $codigo) === self::TRANSITORIA_GESTOR
+                ? 'Permissão operacional de transição: só permanece onde já estava gravada; novas concessões ao Leitor não são permitidas (use o perfil Gestor).'
+                : 'Incompatível com o perfil Leitor (dado nominal, global ou administrativo).';
+        }
+        return 'Incompatível com o perfil.';
+    }
+
+    /** Categoria BLOQUEIO_* do código para o Gestor, ou null se é concedível ao Gestor. */
+    public static function categoriaBloqueioGestor(string $codigo): ?string
+    {
+        return in_array($codigo, self::GESTOR_PERMITIDAS, true) ? null : (self::bloqueioGestor($codigo)[0] ?? self::BLOQUEIO_REQUER_ESCOPO);
+    }
+
+    /** @return array{0:string,1:string}|null */
+    private static function bloqueioGestor(string $codigo): ?array
+    {
+        if (in_array($codigo, self::GESTOR_PERMITIDAS, true)) {
+            return null;
+        }
+        $prefixo = explode('.', $codigo, 2)[0];
+        return self::GESTOR_BLOQUEIOS_POR_CODIGO[$codigo] ?? self::GESTOR_BLOQUEIOS_POR_MODULO[$prefixo] ?? null;
+    }
+
+    /** Há decisão explícita de bloqueio (módulo ou código) para o Gestor? Usado pelo teste de cobertura do catálogo. */
+    public static function gestorTemDecisao(string $codigo): bool
+    {
+        return in_array($codigo, self::GESTOR_PERMITIDAS, true) || self::bloqueioGestor($codigo) !== null;
+    }
+
+    /**
      * Pode ser ATRIBUÍDA numa seleção. `$jaAtribuida`: a permissão pendente de decisão só é mantida se já estava gravada
      * (nova atribuição recusada).
      */
     public static function podeReceberPermissao(string $role, string $codigo, bool $jaAtribuida = false): bool
     {
+        // Etapa 3.1: a transição do Viewer deixou de ser porta de NOVAS concessões operacionais — só se mantém o que já está gravado
+        // (continua efetivo, ver permissaoEfetiva). Operacional novo = perfil Gestor.
         return match (self::classificar($role, $codigo)) {
-            self::PERMITIDA, self::TRANSITORIA_GESTOR => true,
-            self::PENDENTE_DECISAO => $jaAtribuida,
+            self::PERMITIDA => true,
+            self::TRANSITORIA_GESTOR, self::PENDENTE_DECISAO => $jaAtribuida,
             default => false,
         };
     }

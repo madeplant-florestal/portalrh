@@ -40,9 +40,14 @@ if (!function_exists('ui_matriz_permissoes')) {
     <strong>Perfil de acesso global.</strong> Admin e RH acessam todos os módulos pelo próprio perfil: não é preciso marcar permissões individuais
     e as ações em lote ficam desativadas. As restrições hierárquicas (Supervisor Geral, Admin) continuam valendo e não dependem desta matriz.
   </div>
-  <div data-matriz-aviso-viewer class="hidden rounded-ds-md border border-border bg-surface px-3 py-2 text-xs text-text-secondary">
-    Leitor: só dashboards agregados auditados. Os dashboards com risco de reidentificação não são marcados automaticamente, e as ações em lote
-    não marcam as permissões operacionais de transição — marque-as uma a uma, se necessário.
+  <div data-matriz-aviso-viewer class="<?= $matriz['perfil'] === 'viewer' ? '' : 'hidden ' ?>rounded-ds-md border border-border bg-surface px-3 py-2 text-xs text-text-secondary">
+    Leitor: só dashboards agregados auditados. Os dashboards com risco de reidentificação não são marcados automaticamente. Permissões operacionais
+    não podem mais ser concedidas ao Leitor (as já gravadas continuam valendo até serem regularizadas); para acesso operacional use o perfil Gestor.
+  </div>
+  <div data-matriz-aviso-gestor class="<?= $matriz['perfil'] === 'gestor' ? '' : 'hidden ' ?>rounded-ds-md border border-border bg-surface px-3 py-2 text-xs text-text-secondary">
+    Gestor: o <strong>modelo recomendado</strong> é só a sugestão inicial; o administrador pode conceder individualmente qualquer permissão habilitada
+    (inclusive as fora do modelo). Permissões desabilitadas não podem ser concedidas por ausência de escopo setorial comprovado — o motivo aparece ao
+    passar o mouse. Os registros acessíveis seguem sempre os setores gerenciados do usuário.
   </div>
   <div data-matriz-aviso-legado class="<?= $matriz['legado'] === [] ? 'hidden ' : '' ?>rounded-ds-md border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger" role="alert">
     Permissões gravadas e incompatíveis com o perfil (sem efeito; <strong>não são reativadas</strong>). O salvamento só é aceito depois de
@@ -55,7 +60,7 @@ if (!function_exists('ui_matriz_permissoes')) {
     <li class="flex items-center gap-1"><span aria-hidden="true">★</span> Modelo recomendado</li>
     <li class="flex items-center gap-1"><span aria-hidden="true" class="text-warning">◐</span> Transição (uso atual do Leitor)</li>
     <li class="flex items-center gap-1"><span aria-hidden="true" class="text-danger">⚠</span> Gravada sem efeito (incompatível)</li>
-    <li class="flex items-center gap-1"><span aria-hidden="true">—</span> Não aplicável ao perfil</li>
+    <li class="flex items-center gap-1"><span aria-hidden="true">—</span> Não concedível ao perfil (passe o mouse para ver o motivo)</li>
   </ul>
 
   <div class="overflow-x-auto rounded-ds-md border border-border" tabindex="0" role="region" aria-label="Matriz de permissões (role horizontalmente em telas pequenas)">
@@ -91,7 +96,7 @@ if (!function_exists('ui_matriz_permissoes')) {
                   <?php else:
                       $desabilitada = !$c['aplicavel'] && !$c['legado_incompativel'];
                       $rotuloCelula = $linha['rotulo'] . ' — ' . $c['nome']; ?>
-                    <label class="inline-flex items-center gap-1" title="<?= $e($c['codigo']) ?>">
+                    <label class="inline-flex items-center gap-1" title="<?= $e($c['codigo'] . (!empty($c['motivo']) ? ' — Não concedível ao perfil: ' . $c['motivo'] : '')) ?>">
                       <input type="checkbox"
                              <?= $desabilitada ? '' : 'name="permissao_ids[]"' ?>
                              value="<?= (int)$c['id'] ?>"
@@ -100,7 +105,7 @@ if (!function_exists('ui_matriz_permissoes')) {
                              data-codigo="<?= $e($c['codigo']) ?>"
                              data-classe="<?= $e($c['classe']) ?>"
                              data-legado="<?= $c['legado_incompativel'] ? '1' : '0' ?>"
-                             aria-label="<?= $e($rotuloCelula) ?>"
+                             aria-label="<?= $e($rotuloCelula . (!empty($c['motivo']) ? ' (não concedível ao perfil)' : '')) ?>"
                              class="h-4 w-4 shrink-0 rounded border-border accent-primary-700 <?= $c['legado_incompativel'] ? 'ring-2 ring-danger' : '' ?>"
                              <?= $c['marcada'] ? 'checked' : '' ?>
                              <?= $desabilitada ? 'disabled' : '' ?>>

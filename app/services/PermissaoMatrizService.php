@@ -117,6 +117,8 @@ final class PermissaoMatrizService
                     // incompatível mas gravada: aparece marcada ("armazenada, sem efeito") para o administrador poder DESMARCAR de forma explícita.
                     'legado_incompativel' => $gravada && $classe === PermissaoPerfilPolicy::INCOMPATIVEL,
                     'recomendada' => isset($modeloAtual[$codigo]),
+                    // por que NÃO pode ser concedida (texto da política central; null quando pode)
+                    'motivo' => $aplicavel ? null : PermissaoPerfilPolicy::motivoBloqueio($role, $codigo),
                 ];
             }
             return ['modulo' => $prefixo, 'modulo_catalogo' => array_keys($modulosColuna), 'celulas' => $celulas];
@@ -178,10 +180,11 @@ final class PermissaoMatrizService
      *   lote       — ids que "Marcar todas/grupo/linha" pode marcar (só permissões PLENAS: as de transição do viewer exigem clique
      *                individual; perfis globais não usam permissões individuais);
      *   transicao  — ids de permissões de transição do viewer (marcador visual);
+     *   motivos    — id => por que a permissão não é concedível ao perfil (tooltip; texto da política);
      *   modelo     — ids do modelo recomendado.
      *
      * @param array<int,array<string,mixed>> $catalogo
-     * @return array<string,array{global:bool,rotulo:string,aplicaveis:int[],lote:int[],transicao:int[],modelo:int[]}>
+     * @return array<string,array{global:bool,rotulo:string,aplicaveis:int[],lote:int[],transicao:int[],motivos:array<int,string>,modelo:int[]}>
      */
     private static function perfisParaJs(array $catalogo, ?array $rolesDisponiveis): array
     {
@@ -194,6 +197,7 @@ final class PermissaoMatrizService
             $lote = [];
             $idsModelo = [];
             $transicao = [];
+            $motivos = [];
             foreach ($catalogo as $p) {
                 $codigo = (string)$p['codigo'];
                 $id = (int)$p['id'];
@@ -210,6 +214,9 @@ final class PermissaoMatrizService
                 if (isset($modelo[$codigo])) {
                     $idsModelo[] = $id;
                 }
+                if (!$global && !PermissaoPerfilPolicy::podeReceberPermissao($role, $codigo, false)) {
+                    $motivos[$id] = PermissaoPerfilPolicy::motivoBloqueio($role, $codigo);
+                }
             }
             $saida[$role] = [
                 'global' => $global,
@@ -217,6 +224,7 @@ final class PermissaoMatrizService
                 'aplicaveis' => $global ? [] : $aplicaveis, // global: o acesso vem do perfil; a matriz não oferece seleção
                 'lote' => $lote,
                 'transicao' => $transicao,
+                'motivos' => $motivos,
                 'modelo' => $idsModelo,
             ];
         }

@@ -19,6 +19,7 @@
   var totalTexto = raiz.querySelector('[data-matriz-total-texto]');
   var avisoGlobal = raiz.querySelector('[data-matriz-aviso-global]');
   var avisoViewer = raiz.querySelector('[data-matriz-aviso-viewer]');
+  var avisoGestor = raiz.querySelector('[data-matriz-aviso-gestor]');
   var avisoLegado = raiz.querySelector('[data-matriz-aviso-legado]');
   var listaLegado = raiz.querySelector('[data-matriz-legado-lista]');
   var feedback = raiz.querySelector('[data-matriz-feedback]');
@@ -68,11 +69,17 @@
       if (comModelo) c.checked = ok && !!modelo[id];
       else if (!ok && !legado) c.checked = false;
       marcador(c, d, ok, !!trans[id], !!modelo[id]);
+      var rotuloCel = c.closest('label');
+      if (rotuloCel) {
+        var motivo = !ok && d.motivos ? d.motivos[id] : '';
+        rotuloCel.title = c.getAttribute('data-codigo') + (motivo ? ' — Não concedível ao perfil: ' + motivo : '');
+      }
     });
     perfil = role;
     raiz.setAttribute('data-perfil', role);
     if (avisoGlobal) avisoGlobal.classList.toggle('hidden', !d.global);
     if (avisoViewer) avisoViewer.classList.toggle('hidden', role !== 'viewer');
+    if (avisoGestor) avisoGestor.classList.toggle('hidden', role !== 'gestor');
     atualizar();
   }
 

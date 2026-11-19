@@ -195,28 +195,33 @@ test('edição de Admin e de RH: atribuições gravadas aparecem como tal e o lo
   await expect(page.locator('[data-matriz-contador]')).toHaveText('0 atribuições individuais');
 });
 
-test('Viewer: grupo e linha marcam TODAS as permissões habilitadas do escopo (inclusive as de transição); Marcar todas continua só nos dashboards', async ({ page }) => {
+test('Viewer (Etapa 3.1): sem novas permissões operacionais — grupo/linha operacionais desabilitados; dashboards seguem em lote', async ({ page }) => {
   await entrar(page);
   await page.goto('/admin/usuarios/novo');
   await page.getByRole('button', { name: 'Desmarcar todas' }).click();
-  await area(page, 'avaliacoes').getByRole('button', { name: 'Marcar grupo' }).click();
-  expect(await marcadas(page)).toEqual(['avaliacao_desempenho.avaliar', 'avaliacao_desempenho.visualizar', 'avaliacao_experiencia.avaliar', 'avaliacao_experiencia.visualizar', 'feedback.avaliar', 'feedback.visualizar', 'pdi.acompanhar', 'pdi.gerenciar', 'pdi.visualizar']);
-  await expect(page.locator('[data-matriz-feedback]')).toContainText('9 permissões marcadas no grupo. Nada foi salvo.');
-  expect((await enviados(page)).length).toBe(9);
-  await area(page, 'avaliacoes').getByRole('button', { name: 'Limpar grupo' }).click();
-  expect(await marcadas(page)).toEqual([]);
-  const linhaSolic = page.locator('[data-matriz-linha="solicitacao_vaga"] [data-matriz-acao="alternar-linha"]');
-  await expect(linhaSolic).toHaveText('marcar linha');
-  await linhaSolic.click();
-  expect(await marcadas(page)).toEqual(['solicitacao_vaga.cancelar', 'solicitacao_vaga.criar', 'solicitacao_vaga.editar', 'solicitacao_vaga.visualizar']); // aprovar_lider é incompatível com o Leitor: fica de fora
-  await expect(cel(page, 'solicitacao_vaga.aprovar_lider')).toBeDisabled();
-  await expect(linhaSolic).toHaveText('limpar linha');
-  await linhaSolic.click();
-  expect(await marcadas(page)).toEqual([]);
+  for (const chave of ['avaliacoes', 'recrutamento', 'administracao', 'pessoas']) {
+    await expect(area(page, chave).getByRole('button', { name: 'Marcar grupo' })).toBeDisabled();
+  }
+  await expect(page.locator('[data-matriz-linha="solicitacao_vaga"] [data-matriz-acao="alternar-linha"]')).toBeDisabled();
+  await expect(cel(page, 'pdi.gerenciar')).toBeDisabled();
+  await area(page, 'indicadores').getByRole('button', { name: 'Marcar grupo' }).click();
+  expect((await marcadas(page)).length).toBe(5);
+  await page.getByRole('button', { name: 'Desmarcar todas' }).click();
   await page.getByRole('button', { name: 'Marcar todas', exact: true }).click();
-  expect((await marcadas(page)).length).toBe(5); // lote do Leitor: só dashboards
-  // grupo sem nenhuma permissão aplicável ao perfil: botão desabilitado (sem no-op silencioso)
-  await expect(area(page, 'administracao').getByRole('button', { name: 'Marcar grupo' })).toBeDisabled();
+  expect((await marcadas(page)).length).toBe(5);
+});
+
+test('Gestor: concede combinação individual fora do modelo; bloqueadas explicam o motivo; nada é salvo até clicar em salvar', async ({ page }) => {
+  await entrar(page);
+  await page.goto(`/admin/usuarios/${dados.gestor}`);
+  expect(await marcadas(page)).toEqual(['colaboradores.visualizar']);
+  await cel(page, 'solicitacao_vaga.aprovar_lider').check();
+  await cel(page, 'dashboard_integracao_agregado.visualizar').check();
+  await expect(cel(page, 'vagas.criar')).toBeDisabled();
+  await expect(cel(page, 'candidaturas.editar').locator('xpath=ancestor::label')).toHaveAttribute('title', /Não concedível ao perfil/);
+  expect((await enviados(page)).length).toBe(3);
+  await page.reload();
+  expect(await marcadas(page)).toEqual(['colaboradores.visualizar']); // nada salvo sem a ação explícita
 });
 
 test('perfil global na edição: Marcar todas, Marcar grupo e linha ficam desabilitados (nada de clique sem efeito)', async ({ page }) => {

@@ -35,16 +35,39 @@ test('cadastro Viewer: modelo aplicado; Marcar todas só nos dashboards; Desmarc
   expect(await marcadas(page)).toEqual(['dashboard_recrutamento.visualizar']);
 });
 
-test('marcação por grupo atua nas permissões habilitadas do escopo; grupo sem permissão aplicável fica desabilitado', async ({ page }) => {
+test('marcação por grupo atua nas permissões habilitadas; grupo sem permissão concedível fica desabilitado (Leitor: sem novas operacionais)', async ({ page }) => {
   await abrir(page, 'viewer');
   await page.getByRole('button', { name: 'Desmarcar todas' }).click();
   await page.locator('[data-matriz-area="indicadores"]').getByRole('button', { name: 'Marcar grupo' }).click();
   expect((await marcadas(page)).length).toBe(5);
   await page.locator('[data-matriz-area="indicadores"]').getByRole('button', { name: 'Limpar grupo' }).click();
   expect(await marcadas(page)).toEqual([]);
-  await page.locator('[data-matriz-area="avaliacoes"]').getByRole('button', { name: 'Marcar grupo' }).click();
-  expect((await marcadas(page)).length).toBe(9); // transitórias do Leitor: habilitadas, logo marcadas pelo grupo (fora só do "Marcar todas")
+  // Etapa 3.1: o Leitor não recebe NOVAS permissões operacionais — o grupo de avaliações não tem nada concedível
+  await expect(page.locator('[data-matriz-area="avaliacoes"]').getByRole('button', { name: 'Marcar grupo' })).toBeDisabled();
   await expect(page.locator('[data-matriz-area="administracao"]').getByRole('button', { name: 'Marcar grupo' })).toBeDisabled();
+  await expect(cel(page, 'pdi.gerenciar')).toBeDisabled();
+});
+
+test('Gestor: concedíveis ≠ modelo — Marcar grupo/todas marcam as concedíveis fora do modelo; bloqueadas desabilitadas com motivo; Restaurar volta ao modelo', async ({ page }) => {
+  await abrir(page, 'gestor');
+  const modelo = await marcadas(page);
+  expect(modelo).not.toContain('solicitacao_vaga.aprovar_lider');
+  await expect(cel(page, 'solicitacao_vaga.aprovar_lider')).toBeEnabled();
+  await page.getByRole('button', { name: 'Desmarcar todas' }).click();
+  await page.locator('[data-matriz-area="recrutamento"]').getByRole('button', { name: 'Marcar grupo' }).click();
+  expect(await marcadas(page)).toEqual([
+    'kanban_vagas.detalhes', 'kanban_vagas.movimentar', 'kanban_vagas.visualizar',
+    'solicitacao_vaga.aprovar_lider', 'solicitacao_vaga.criar', 'solicitacao_vaga.visualizar',
+  ]); // todas as concedíveis da área, inclusive a fora do modelo; nenhuma de Vagas/Candidaturas/Pipeline
+  for (const bloqueada of ['candidaturas.visualizar', 'pipeline.movimentar', 'vagas.criar', 'solicitacao_vaga.editar', 'colaboradores.editar']) {
+    await expect(cel(page, bloqueada)).toBeDisabled();
+  }
+  await expect(cel(page, 'candidaturas.visualizar').locator('xpath=ancestor::label')).toHaveAttribute('title', /Não concedível ao perfil: Candidaturas/);
+  await page.getByRole('button', { name: 'Marcar todas', exact: true }).click();
+  expect((await marcadas(page)).length).toBe(modelo.length + 2); // modelo + aprovar líder + dashboard agregado
+  await page.getByRole('button', { name: 'Restaurar modelo do perfil' }).click();
+  expect(await marcadas(page)).toEqual(modelo);
+  await expect(page.locator('[data-matriz-aviso-gestor]')).toBeVisible();
 });
 
 test('troca de perfil no cadastro: aplica o modelo; com ajuste manual pede confirmação e o cancelamento preserva tudo', async ({ page }) => {

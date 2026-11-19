@@ -168,7 +168,7 @@ try {
     $p = $mViewer['perfis'];
     $permitidasViewer = ['dashboard.visualizar', 'indicadores_rh.visualizar', 'dashboard_turnover.visualizar', 'dashboard_recrutamento.visualizar', 'dashboard_entrevista_desligamento.visualizar'];
     $check($ord($p['viewer']['lote']) === $ord($ids($permitidasViewer)), 'Viewer: "Marcar todas" atua só nos dashboards agregados permitidos');
-    $check(array_intersect($p['viewer']['lote'], $ids(['pdi.gerenciar', 'solicitacao_vaga.criar', 'kanban_vagas.movimentar'])) === [] && $p['viewer']['transicao'] !== [], 'Viewer: permissões operacionais de transição ficam FORA do lote (só clique individual)');
+    $check(array_intersect($p['viewer']['aplicaveis'], $ids(['pdi.gerenciar', 'solicitacao_vaga.criar', 'kanban_vagas.movimentar', 'colaboradores.visualizar'])) === [] && $p['viewer']['transicao'] === [] && $ord($p['viewer']['aplicaveis']) === $ord($ids($permitidasViewer)), 'Viewer (Etapa 3.1): NÃO há novas concessões operacionais — o aplicável é só o dos dashboards (a transição só se mantém onde já gravada)');
     $check(array_intersect($p['viewer']['aplicaveis'], $ids(['empresas.criar', 'candidaturas.editar', 'integracao_colaborador.visualizar'])) === [], 'Viewer: permissões incompatíveis nunca são aplicáveis (nem pelo lote)');
     $check($p['admin']['lote'] === [] && $p['rh']['lote'] === [] && $p['admin']['global'] && $p['admin']['aplicaveis'] === [], 'Admin/RH: lote vazio — "Marcar todas" não concede nada por permissão individual');
     $check(!in_array('is_supervisor', array_keys($p['admin']), true) && array_diff(array_keys($p), ['admin', 'rh', 'viewer', 'gestor']) === [], 'a matriz só conhece perfis da política; não há perfil/flag de Supervisor Geral');
@@ -378,11 +378,6 @@ try {
     // Viewer legado transitório continua sendo política (não desativado nesta etapa)
     $check(PermissaoPerfilPolicy::classificar('viewer', 'pdi.visualizar') === PermissaoPerfilPolicy::TRANSITORIA_GESTOR && EscopoSetorial::VIEWER_LEGADO_TRANSITORIO === true, 'VIEWER_LEGADO_TRANSITORIO e as permissões de transição do Viewer seguem como estavam');
 
-    if ($falhas !== []) {
-        fwrite(STDERR, "\n" . count($falhas) . " falha(s).\n");
-        exit(1);
-    }
-    echo "\nOK — matriz horizontal de permissões e modelos por perfil.\n";
 } finally {
     $pdo->prepare('DELETE FROM permissoes WHERE codigo = ?')->execute(["zzmat_{$mk}.visualizar"]);
     $st = $pdo->prepare('SELECT id FROM usuarios WHERE email LIKE ?');
@@ -397,3 +392,10 @@ try {
         $pdo->prepare('DELETE FROM setores WHERE id = ?')->execute([$setorId]);
     }
 }
+
+// O relatório fica FORA do try: exit dentro dele pularia o finally e deixaria usuários/permissão de teste no banco.
+if ($falhas !== []) {
+    fwrite(STDERR, "\n" . count($falhas) . " falha(s).\n");
+    exit(1);
+}
+echo "\nOK — matriz horizontal de permissões e modelos por perfil.\n";

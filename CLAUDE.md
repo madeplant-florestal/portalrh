@@ -153,6 +153,7 @@ tocar o assunto correspondente.
 | Roadmap técnico (migração incremental, Kanban de Solicitações de Vaga, integração METADADOS) | [`roadmap-tecnico.md`](docs/claude/roadmap-tecnico.md) | planejamento técnico, módulo em transição |
 | Indicadores de RH (dicionário de fórmulas, fonte de dados, qualidade, limitações) | [`indicadores-rh.md`](docs/claude/indicadores-rh.md) | mudança na camada analítica ou no dashboard `/admin/indicadores-rh` |
 | Riscos conhecidos | [`riscos-conhecidos.md`](docs/claude/riscos-conhecidos.md) | qualquer alteração nas áreas afetadas |
+| Auditoria de permissões do Gestor (recomendado × concedível × bloqueado, com motivo e pendências) | [`auditoria-permissoes-gestor.md`](docs/claude/auditoria-permissoes-gestor.md) | liberar/bloquear permissão para o Gestor; escopo setorial |
 
 ---
 

@@ -132,8 +132,10 @@ try {
     User::setActiveStatus($userNadaId, true);
     $criados['usuarios'][] = $userNadaId;
 
-    $check(Authorization::usuarioTemPermissao($userVisId, 'integracao_colaborador.visualizar') && !Authorization::usuarioTemPermissao($userVisId, 'integracao_colaborador.editar'), '(admin) Usuário só com .visualizar vê o QR mas NÃO abre/encerra integração');
-    $check(Authorization::usuarioTemPermissao($userEditId, 'integracao_colaborador.editar'), '(admin) Usuário com .editar abre/encerra integração');
+    // Etapa 2C.2B: Integração do Colaborador FECHADA ao Viewer (resultados/QR/dashboard são globais e sem amostra mínima). A independência
+    // visualizar × editar só tem sentido nos perfis globais (Admin/RH), que têm bypass — o viewer não tem nenhuma das duas, mesmo gravadas.
+    $check(!Authorization::usuarioTemPermissao($userVisId, 'integracao_colaborador.visualizar') && !Authorization::usuarioTemPermissao($userVisId, 'integracao_colaborador.editar'), '(admin) [2C.2B] Viewer com .visualizar GRAVADA não acessa a Integração');
+    $check(!Authorization::usuarioTemPermissao($userEditId, 'integracao_colaborador.editar') && !Authorization::usuarioTemPermissao($userEditId, 'integracao_colaborador.visualizar'), '(admin) [2C.2B] Viewer com .editar GRAVADA não abre/encerra integração');
     $check(!Authorization::usuarioTemPermissao($userNadaId, 'integracao_colaborador.visualizar'), '(admin) Usuário viewer sem nenhuma permissão individual não acessa a área');
 
     $corpoDoMetodo = static function (string $classe, string $metodo): string {

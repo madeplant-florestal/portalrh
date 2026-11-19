@@ -11,7 +11,7 @@ class AdminSolicitacoesVagaKanbanController extends Controller
 {
     public function index(): void
     {
-        Auth::requireRole(['admin', 'rh', 'viewer']);
+        Auth::requireRole(['admin', 'rh', 'gestor', 'viewer']);
         // Capacidade (Sprint "Permissões Individuais") — não confundir com escopo de registro.
         // Acessar o Kanban exige `kanban_vagas.visualizar` de verdade: bypass central só para
         // Admin (dentro de Authorization); `role = rh` e `is_supervisor = 1` NÃO dão acesso
@@ -66,7 +66,7 @@ class AdminSolicitacoesVagaKanbanController extends Controller
 
     public function move(): void
     {
-        Auth::requireRole(['admin', 'rh', 'viewer']);
+        Auth::requireRole(['admin', 'rh', 'gestor', 'viewer']);
 
         $input = json_decode(file_get_contents('php://input'), true);
         if (!is_array($input)) {
@@ -103,8 +103,8 @@ class AdminSolicitacoesVagaKanbanController extends Controller
             return;
         }
 
-        // Reaproveita a mesma checagem de acesso por linha do restante do módulo — gestor só
-        // movimenta solicitações onde é solicitante ou aprovador designado.
+        // Reaproveita a mesma checagem de acesso por linha do restante do módulo — Gestor: só solicitações de Setor Gerenciado
+        // (revalidado a CADA POST); viewer legado: solicitante ou aprovador designado.
         if (!SolicitacaoVaga::findAccessible($solicitacaoId, $userId, $role, $isSupervisor)) {
             http_response_code(404);
             echo json_encode(['error' => 'Solicitação de vaga não encontrada.']);

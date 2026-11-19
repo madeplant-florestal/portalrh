@@ -160,3 +160,26 @@ Identificados na auditoria arquitetural de 2026-07-09, documentados aqui para n�
      o responsável de ações; o Gestor passa a vê-lo (exposição só de nomes, preexistente para o viewer-gestor); (b) o aviso do PDI "o gestor
      responsável não possui pdi.visualizar" descreve o responsável registrado, não o acesso (que agora é por setor); (c) `MovimentacaoPessoal` lê
      `avaliacoes_desempenho` por conta própria e continua fora do perfil Gestor. Cobertura: `integration_gestor_escopo_desempenho_feedback_pdi.php`.
+12. **Solicitação de Vaga, Kanban de Vagas, Integração do Colaborador e Experiência/avaliar (Etapa 2C.2B, 2026-11) — IMPLEMENTADO, com decisões pendentes.**
+   - **Solicitação/Kanban (Gestor):** acesso por LINHA = `solicitacoes_vaga.setor_id` ∈ Setores Gerenciados (`EscopoSetorial::sqlSetorId()`);
+     solicitante/aprovador designado e `is_supervisor` NÃO dão acesso (fora do setor = não encontrada). O Gestor exige a permissão individual
+     (`solicitacao_vaga.visualizar` p/ lista/detalhe; `.criar` p/ criar; `kanban_vagas.visualizar`/`.movimentar`; anotação = `kanban_vagas.movimentar`).
+     Criação revalida o setor no backend (contexto do usuário ∩ Setores Gerenciados; `setor_id` do POST é ignorado), bem como colaborador
+     substituído/gestor solicitante. Movimentação e anotação revalidam o escopo A CADA POST (`findAccessible`). Listas de apoio (setores, gestores,
+     colaboradores, centros de custo, contexto do solicitante) só com o setor gerenciado. Viewer/Admin/RH: regra legada INALTERADA.
+   - **NÃO liberado (decisão pendente):** aprovação de líder/RH pelo Gestor (não existe código de permissão de aprovação nem política: `requireRole`
+     segue sem `gestor` em `approveLeader/approveRh`; um aprovador designado que seja Gestor NÃO consegue aprovar — o fluxo só avança por Admin/RH
+     /Supervisor Geral ou por viewer designado); `solicitacao_vaga.editar/cancelar` e `kanban_vagas.editar` (sem operação implementada).
+   - **Integração do Colaborador — FECHADA a Viewer e Gestor.** Resultados, Dashboard e QR são GLOBAIS (por data de integração), trazem comentários
+     livres com cargo/empresa e não têm amostra mínima (setor pequeno = reidentificação de quem respondeu; o RH já havia pedido que a identidade nunca
+     apareça). `integracao_colaborador.*` passou a INCOMPATÍVEL para o Viewer (antes transitória) e segue incompatível ao Gestor; registro individual
+     (`updateIntegracao`/`gerarPesquisaIntegracao`) já era Admin/RH. Para liberar ao Gestor é preciso decidir: regra de amostra mínima por setor e se
+     comentários entram. **Impacto:** viewers com `integracao_colaborador.*` gravada perdem a tela (permissão gravada não vale).
+   - **Pipeline/Candidaturas/Indicações:** seguem só Admin/RH (testado: 403 ao Gestor).
+   - **Experiência — `avaliacao_experiencia.avaliar` liberada ao Gestor** após revisão: escopo (`temAcessoAoColaborador`) em salvar/concluir/ciência/
+     detalhe, permissão, CSRF (2C.2A), tipo whitelist, regras de desligado/concluído e reabrir só Admin/RH. Endurecido: o `gestor_usuario_id` enviado
+     no POST agora só vale para Admin/RH (antes qualquer um podia registrar um usuário arbitrário como responsável). Resíduo: mensagem distinta
+     "sem acesso" × "não encontrado" em `contratoParaAvaliar` revela a existência do contrato (sem dados).
+   - **Residuais:** (a) o JSON de `/api/solicitacoes-vaga/move` só é testado no próprio processo (php://input); (b) viewers legados seguem com
+     Solicitação/Kanban por solicitante/aprovador (transição); (c) `solicitacao_vaga.*`/`kanban_vagas.*` continuam "transitórias" para o Viewer.
+     Cobertura: `integration_gestor_solicitacoes_kanban_integracao.php`.

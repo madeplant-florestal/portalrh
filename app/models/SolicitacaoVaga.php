@@ -408,7 +408,7 @@ class SolicitacaoVaga
             usort($cargosFallbackAdministrativo, static fn (array $a, array $b) => strcmp($a['nome'], $b['nome']));
         }
 
-        return [
+        $dependencias = [
             'setores' => array_map(static function (array $row): array {
                 return ['id' => (int)$row['id'], 'nome' => $row['nome']];
             }, $setores),
@@ -476,6 +476,44 @@ class SolicitacaoVaga
             'pode_fallback_cargo_administrativo' => $podeFallbackCargoAdministrativo,
             'cargos_fallback_administrativo' => $cargosFallbackAdministrativo,
         ];
+
+        return self::restringirDependenciasAoGestor($dependencias, $actorUserId, $currentAccess['role'] ?? '');
+    }
+
+    /**
+     * Gestor (Etapa 2C.2B): listas de apoio (setores, gestores, colaboradores, centros de custo e o contexto do solicitante) só com os Setores
+     * Gerenciados — nada nominal de outro setor sai nas telas/JSON. Demais perfis: inalterado.
+     */
+    private static function restringirDependenciasAoGestor(array $dep, ?int $actorUserId, string $role): array
+    {
+        $escopo = self::escopoGestor($actorUserId, $role);
+        if ($escopo === null) {
+            return $dep;
+        }
+        $params = [];
+        $stmt = Database::conn()->prepare('SELECT s.id FROM setores s WHERE ' . $escopo->sqlSetorId('s.id', $params));
+        $stmt->execute($params);
+        $ok = array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
+        $noEscopo = static fn(array $linhas, string $chave): array => array_values(array_filter($linhas, static fn(array $l): bool => $l[$chave] !== null && in_array((int)$l[$chave], $ok, true)));
+        $dep['setores'] = $noEscopo($dep['setores'], 'id');
+        $dep['gestores'] = $noEscopo($dep['gestores'], 'setor_id');
+        $dep['colaboradores'] = $noEscopo($dep['colaboradores'], 'setor_id');
+        $dep['centros_custo'] = $noEscopo($dep['centros_custo'], 'setor_id');
+        if (isset($dep['solicitante_contexto']) && is_array($dep['solicitante_contexto'])) {
+            $ctx = $dep['solicitante_contexto'];
+            $ctx['setores'] = $noEscopo($ctx['setores'] ?? [], 'id');
+            $ids = array_map(static fn(array $s): int => (int)$s['id'], $ctx['setores']);
+            foreach (['cargos_por_setor', 'centros_custo_by_setor'] as $k) {
+                if (isset($ctx[$k]) && is_array($ctx[$k])) {
+                    $ctx[$k] = array_intersect_key($ctx[$k], array_flip($ids));
+                }
+            }
+            if ($ctx['setores'] === []) {
+                $ctx['bloqueado_sem_setor'] = true;
+            }
+            $dep['solicitante_contexto'] = $ctx;
+        }
+        return $dep;
     }
 
 
@@ -593,7 +631,11 @@ class SolicitacaoVaga
         $params = [];
 
         $currentRole = strtolower(trim((string)$currentRole));
-        if (!$isSupervisor && !in_array($currentRole, ['admin', 'rh'], true)) {
+        $escopoGestor = self::escopoGestor($currentUserId, $currentRole);
+        if ($escopoGestor !== null) {
+            // Gestor (Etapa 2C.2B): SOMENTE solicitações dos Setores Gerenciados — nunca solicitante/aprovador, nunca o flag de supervisor.
+            $sql .= ' AND ' . $escopoGestor->sqlSetorId('sv.setor_id', $params);
+        } elseif (!$isSupervisor && !in_array($currentRole, ['admin', 'rh'], true)) {
             $sql .= " AND (sv.solicitante_usuario_id = ? OR ap_lider.destinatario_usuario_id = ?)";
             $params[] = (int)$currentUserId;
             $params[] = (int)$currentUserId;
@@ -649,7 +691,11 @@ class SolicitacaoVaga
         $params = [$id];
 
         $currentRole = strtolower(trim((string)$currentRole));
-        if (!$isSupervisor && !in_array($currentRole, ['admin', 'rh'], true)) {
+        $escopoGestor = self::escopoGestor($currentUserId, $currentRole);
+        if ($escopoGestor !== null) {
+            // Gestor (Etapa 2C.2B): consulta/operação só no Setor Gerenciado; fora dele = não encontrada (mesmo para o solicitante/aprovador).
+            $sql .= ' AND ' . $escopoGestor->sqlSetorId('sv.setor_id', $params);
+        } elseif (!$isSupervisor && !in_array($currentRole, ['admin', 'rh'], true)) {
             $sql .= " AND (
                 sv.solicitante_usuario_id = ?
                 OR EXISTS (
@@ -719,7 +765,11 @@ class SolicitacaoVaga
         $params = [];
 
         $currentRole = strtolower(trim((string)$currentRole));
-        if (!$isSupervisor && !in_array($currentRole, ['admin', 'rh'], true)) {
+        $escopoGestor = self::escopoGestor($currentUserId, $currentRole);
+        if ($escopoGestor !== null) {
+            // Gestor (Etapa 2C.2B): SOMENTE solicitações dos Setores Gerenciados — nunca solicitante/aprovador, nunca o flag de supervisor.
+            $sql .= ' AND ' . $escopoGestor->sqlSetorId('sv.setor_id', $params);
+        } elseif (!$isSupervisor && !in_array($currentRole, ['admin', 'rh'], true)) {
             $sql .= " AND (sv.solicitante_usuario_id = ? OR ap_lider.destinatario_usuario_id = ?)";
             $params[] = (int)$currentUserId;
             $params[] = (int)$currentUserId;
@@ -1097,7 +1147,42 @@ class SolicitacaoVaga
     public static function userCanCreate(?string $role, bool $isSupervisor): bool
     {
         $role = strtolower(trim((string)$role));
-        return $isSupervisor || in_array($role, ['admin', 'rh', 'viewer'], true);
+        return $isSupervisor || in_array($role, ['admin', 'rh', 'viewer', 'gestor'], true);
+    }
+
+    /**
+     * Escopo setorial SÓ para o perfil Gestor (Etapa 2C.2B). `null` = regra legada (admin/rh/viewer: solicitante/aprovador). O flag
+     * de supervisor NUNCA altera o escopo do Gestor.
+     */
+    public static function escopoGestor(?int $userId, ?string $role): ?EscopoSetorial
+    {
+        return strtolower(trim((string)$role)) === 'gestor'
+            ? EscopoSetorial::resolver(['id' => (int)$userId, 'role' => 'gestor'])
+            : null;
+    }
+
+    /** Backend: o Gestor só cria solicitação para Setor que gerencia (revalidado em todo POST; independe da tela). */
+    private static function exigirSetorDoGestor(int $actorUserId, int $setorId): void
+    {
+        $escopo = self::escopoGestor($actorUserId, self::userAccessProfile($actorUserId)['role'] ?? '');
+        if ($escopo !== null && !$escopo->permiteSetorId($setorId)) {
+            throw new InvalidArgumentException('Você só pode solicitar vagas para Setores que gerencia.');
+        }
+    }
+
+    /** Backend: colaborador referenciado (gestor solicitante / substituído) precisa ser de Setor Gerenciado quando o ator é Gestor. */
+    private static function exigirColaboradorDoSetorDoGestor(int $actorUserId, int $colaboradorId, string $rotulo): void
+    {
+        $escopo = self::escopoGestor($actorUserId, self::userAccessProfile($actorUserId)['role'] ?? '');
+        if ($escopo === null) {
+            return;
+        }
+        $stmt = Database::conn()->prepare('SELECT setor_id FROM colaboradores WHERE id = ?');
+        $stmt->execute([$colaboradorId]);
+        $setorId = $stmt->fetchColumn();
+        if ($setorId === false || $setorId === null || !$escopo->permiteSetorId((int)$setorId)) {
+            throw new InvalidArgumentException($rotulo . ' fora dos Setores que você gerencia.');
+        }
     }
 
     /**
@@ -1126,6 +1211,7 @@ class SolicitacaoVaga
         // de um id arbitrário do POST. 0 Setores -> bloqueia; 1 -> automático; vários -> exige
         // escolha entre os autorizados.
         $setorId = self::resolverSetorSolicitacao($solicitanteUsuarioId, $input['setor_id'] ?? null);
+        self::exigirSetorDoGestor($actorUserId, $setorId);
 
         // Cargo da vaga: matriz OFICIAL Cargo x Setor (`cargo_setores_metadados`, espelho técnico
         // do METADADOS) — "Setor selecionado -> lista/valida SOMENTE os Cargos oficialmente
@@ -1157,6 +1243,7 @@ class SolicitacaoVaga
         $rawGestor = trim((string)($input['gestor_solicitante_colaborador_id'] ?? ''));
         if ($rawGestor !== '') {
             $gestorColaboradorId = self::requiredEntityId($rawGestor, 'colaboradores', 'Gestor solicitante');
+            self::exigirColaboradorDoSetorDoGestor($actorUserId, $gestorColaboradorId, 'Gestor solicitante');
         }
 
         $quantidadeVagas = max(0, (int)($input['quantidade_vagas'] ?? 0));
@@ -1259,6 +1346,7 @@ class SolicitacaoVaga
         $motivoSaidaOutros = '';
         if ($tipoVaga === 'substituicao') {
             $colaboradorSubstituidoId = self::requiredEntityId($input['colaborador_substituido_id'] ?? null, 'colaboradores', 'Nome do colaborador substituído');
+            self::exigirColaboradorDoSetorDoGestor($actorUserId, $colaboradorSubstituidoId, 'Colaborador substituído');
             $dataDesligamento = DateHelper::toDatabaseDate($input['data_desligamento'] ?? '');
             if (!$dataDesligamento) {
                 throw new InvalidArgumentException('Informe a data do desligamento no formato DD/MM/AAAA.');

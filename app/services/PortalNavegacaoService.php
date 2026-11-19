@@ -337,7 +337,8 @@ class PortalNavegacaoService
         }
         if ($regra === 'pedidos_vaga') {
             if ($this->role === 'gestor') {
-                return false; // Solicitação de Vaga/Kanban: módulos da Etapa 2C.2 — o backend nega ao Gestor
+                // Etapa 2C.2B: o Gestor só vê o menu com permissão individual (nunca pelo flag pode_solicitar_vaga); o escopo é imposto no backend.
+                return $perm('solicitacao_vaga.visualizar') || $perm('solicitacao_vaga.criar') || $perm('kanban_vagas.visualizar');
             }
             // 2026-10: usuarios.pode_solicitar_vaga precisa abrir o menu — é o mesmo flag que já
             // libera o backend (canCreate()). `vagas.criar` (outro módulo) deliberadamente NÃO

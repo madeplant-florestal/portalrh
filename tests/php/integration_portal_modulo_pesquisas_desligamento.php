@@ -144,12 +144,12 @@ try {
     $check($visiveis['RH sem permissão'] === ['integracao' => ['pesquisas', 'qr', 'dashboard'], 'desligamento' => ['turnover', 'dashboard-entrevista', 'entrevistas']], '(abas) RH vê todas as abas mesmo sem nenhuma permissão individual concedida — bypass central de Authorization (Bloco 4)');
     $check($visiveis['viewer sem permissão'] === ['integracao' => [], 'desligamento' => []] && $visiveis['supervisor sem permissão'] === ['integracao' => [], 'desligamento' => []], '(abas) viewer e supervisor SEM permissão individual não veem nenhuma aba (o backend exige a permissão; supervisor não ganha escopo extra)');
     $check($visiveis['só turnover']['desligamento'] === ['turnover'] && $visiveis['só dashboard entrevista']['desligamento'] === ['dashboard-entrevista'] && $visiveis['só entrevistas']['desligamento'] === [], '(abas) [Etapa 2B compl.: entrevista_desligamento.* não vale para viewer] Cada permissão de Turnover/Desligamento libera só a própria aba');
-    $check($visiveis['só reação']['integracao'] === [] && $visiveis['só integração']['integracao'] === ['pesquisas', 'qr', 'dashboard'], '(abas) Reação abre só a Central; Integração abre a Central (resultados por QR), o QR e o Dashboard (Etapa 8)');
+    $check($visiveis['só reação']['integracao'] === [] && $visiveis['só integração']['integracao'] === [], '(abas) [Etapa 2C.2B] Viewer não vê nenhuma aba de Integração, nem com integracao_colaborador.visualizar gravada (resultados/QR/dashboard são globais); a Reação também não vale para viewer');
     $comoUsuario($perfis['só integração']);
     $cardInteg = array_values(array_filter((new PortalNavegacaoService())->modulos(), static fn(array $c): bool => $c['chave'] === 'integracao'));
     $comoUsuario($perfis['só entrevistas']);
     $cardDesl = array_values(array_filter((new PortalNavegacaoService())->modulos(), static fn(array $c): bool => $c['chave'] === 'desligamento'));
-    $check(($cardInteg[0]['href'] ?? '') === '/admin/pesquisa-integracao-qr' && $cardDesl === [], '(Central) [entrevistas-só: viewer não tem mais destino] Os cards apontam para o primeiro destino realmente acessível (integração-só → QR; entrevistas-só → Entrevistas)');
+    $check($cardInteg === [] && $cardDesl === [], '(Central) [2C.2B] viewer só-integração e só-entrevistas não têm mais destino: nenhum card de Integração/Desligamento');
     $check((int)$pdo->query('SELECT COUNT(*) FROM permissoes')->fetchColumn() === $permissoesAntes, '(permissões) Nenhuma permissão nova foi criada');
 
     // ---- páginas administrativas --------------------------------------------------------------------------------------------------

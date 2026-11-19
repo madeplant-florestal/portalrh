@@ -176,6 +176,41 @@ final class EscopoSetorial
             . ' AND cm_esc.codigo_setor IN (' . implode(', ', array_fill(0, count($this->codigos), '?')) . '))';
     }
 
+    /** O setor (`setores.id`) é acessível? Global: sempre; restrito: o código do setor está nos Setores Gerenciados; id inexistente/sem código: nunca. */
+    public function permiteSetorId(int $setorId): bool
+    {
+        if ($this->ehGlobal()) {
+            return true;
+        }
+        if ($setorId <= 0 || !$this->enxergaAlgo()) {
+            return false;
+        }
+        $stmt = Database::conn()->prepare('SELECT codigo_setor FROM setores WHERE id = ? LIMIT 1');
+        $stmt->execute([$setorId]);
+        $codigo = $stmt->fetchColumn();
+        return $this->permiteSetor($codigo === false || $codigo === null ? null : (string)$codigo);
+    }
+
+    /**
+     * Condição SQL parametrizada sobre uma coluna que guarda `setores.id` (ex.: `solicitacoes_vaga.setor_id`). Global: `1 = 1`; restrito com
+     * setores: `coluna IN (SELECT id FROM setores WHERE codigo_setor IN (...))`; vazio/nenhum: `1 = 0`. `$colunaSetorId` é identificador FIXO.
+     *
+     * @param array<int,mixed> $params recebe os parâmetros posicionais
+     */
+    public function sqlSetorId(string $colunaSetorId, array &$params): string
+    {
+        if ($this->ehGlobal()) {
+            return '1 = 1';
+        }
+        if (!$this->enxergaAlgo()) {
+            return '1 = 0';
+        }
+        foreach ($this->codigos as $c) {
+            $params[] = $c;
+        }
+        return $colunaSetorId . ' IN (SELECT s_esc.id FROM setores s_esc WHERE s_esc.codigo_setor IN (' . implode(', ', array_fill(0, count($this->codigos), '?')) . '))';
+    }
+
     /**
      * Condição SQL parametrizada para uma coluna de código de setor. Global: `1 = 1`; restrito com setores: `coluna IN (?, ...)`;
      * vazio/nenhum: `1 = 0` (NUNCA sem filtro). `$coluna` deve ser um identificador FIXO do código (nunca entrada de usuário).

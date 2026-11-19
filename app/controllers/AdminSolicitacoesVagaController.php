@@ -1,9 +1,21 @@
 <?php
 class AdminSolicitacoesVagaController extends Controller
 {
+    /**
+     * Etapa 2C.2B: o Gestor só entra com a permissão individual do código informado (o escopo por Setor Gerenciado é imposto no model);
+     * os demais perfis seguem a regra legada (role + autorização por objeto), inalterada.
+     */
+    private function exigirPermissaoDoGestor(string $codigo): void
+    {
+        if (Auth::role() === 'gestor') {
+            Authorization::requirePermissao($codigo);
+        }
+    }
+
     public function index(): void
     {
-        Auth::requireRole(['admin', 'rh', 'viewer']);
+        Auth::requireRole(['admin', 'rh', 'gestor', 'viewer']);
+        $this->exigirPermissaoDoGestor('solicitacao_vaga.visualizar');
         $userId = (int)($_SESSION['user_id'] ?? 0);
         $role = Auth::role();
         $isSupervisor = !empty($_SESSION['user_is_supervisor']);
@@ -23,7 +35,8 @@ class AdminSolicitacoesVagaController extends Controller
 
     public function create(): void
     {
-        Auth::requireRole(['admin', 'rh', 'viewer']);
+        Auth::requireRole(['admin', 'rh', 'gestor', 'viewer']);
+        $this->exigirPermissaoDoGestor('solicitacao_vaga.criar');
         $userId = (int)($_SESSION['user_id'] ?? 0);
         $role = Auth::role();
         $isSupervisor = !empty($_SESSION['user_is_supervisor']);
@@ -59,7 +72,8 @@ class AdminSolicitacoesVagaController extends Controller
 
     public function store(): void
     {
-        Auth::requireRole(['admin', 'rh', 'viewer']);
+        Auth::requireRole(['admin', 'rh', 'gestor', 'viewer']);
+        $this->exigirPermissaoDoGestor('solicitacao_vaga.criar');
         if (!Security::csrfCheck($_POST['csrf'] ?? '')) {
             http_response_code(400);
             echo 'CSRF inválido';
@@ -118,7 +132,8 @@ class AdminSolicitacoesVagaController extends Controller
 
     public function show(string $id): void
     {
-        Auth::requireRole(['admin', 'rh', 'viewer']);
+        Auth::requireRole(['admin', 'rh', 'gestor', 'viewer']);
+        $this->exigirPermissaoDoGestor('solicitacao_vaga.visualizar');
         $userId = (int)($_SESSION['user_id'] ?? 0);
         $role = Auth::role();
         $isSupervisor = !empty($_SESSION['user_is_supervisor']);
@@ -179,7 +194,8 @@ class AdminSolicitacoesVagaController extends Controller
 
     public function addNota(string $id): void
     {
-        Auth::requireRole(['admin', 'rh', 'viewer']);
+        Auth::requireRole(['admin', 'rh', 'gestor', 'viewer']);
+        $this->exigirPermissaoDoGestor('kanban_vagas.movimentar'); // anotação do Kanban = escrita operacional
         if (!Security::csrfCheck($_POST['csrf'] ?? '')) {
             http_response_code(400);
             echo 'CSRF inválido';
@@ -283,6 +299,9 @@ class AdminSolicitacoesVagaController extends Controller
         SchemaManager::ensure();
         if (Authorization::usuarioTemPermissao($userId, 'solicitacao_vaga.criar')) {
             return true;
+        }
+        if ($role === 'gestor') {
+            return false; // Gestor: só a permissão individual (o flag pode_solicitar_vaga não basta)
         }
 
         // Demais usuários: autorização EXPLÍCITA em `usuarios.pode_solicitar_vaga` (migration

@@ -49,11 +49,13 @@ final class PermissaoPerfilPolicy
 
     /**
      * GESTOR: SOMENTE permissões de módulos com escopo setorial COMPROVADO (`usuario_setores_gerenciados`, via EscopoSetorial) e fluxo revisado.
-     *  - Etapa 2C.1: colaboradores.visualizar, avaliacao_experiencia.visualizar. `avaliacao_experiencia.avaliar` segue DE FORA (o CSRF foi
-     *    corrigido na 2C.2A, mas a liberação de escrita da Experiência ao Gestor não faz parte desta etapa — decisão pendente).
+     *  - Etapa 2C.1: colaboradores.visualizar, avaliacao_experiencia.visualizar (`.avaliar` entrou na 2C.2B).
      *  - Etapa 2C.2A: Avaliação de Desempenho, Feedback e PDI — leitura e escrita com escopo por LINHA = setor ATUAL do contrato
      *    (listagem, detalhe por ID, criação com colaborador do POST, edição, ciência, conclusão, cancelamento, acompanhamento, transições).
-     *    Reabrir concluído segue só Admin/RH. Solicitação de Vaga, Kanban e Integração do Colaborador seguem indisponíveis (2C.2B).
+     *    Reabrir concluído segue só Admin/RH. Integração do Colaborador segue fechada (resultados globais, sem amostra mínima).
+     *  - Etapa 2C.2B: Solicitação de Vaga (visualizar/criar) e Kanban de Vagas (visualizar/detalhes/movimentar) com escopo por setor da
+     *    solicitação. Ficam FORA por não terem operação implementada/protegida: solicitacao_vaga.editar/cancelar, kanban_vagas.editar. A
+     *    aprovação de líder pelo Gestor NÃO é liberada (não há código de permissão nem política).
      */
     private const GESTOR_PERMITIDAS = [
         'colaboradores.visualizar',
@@ -61,6 +63,10 @@ final class PermissaoPerfilPolicy
         'avaliacao_desempenho.visualizar', 'avaliacao_desempenho.avaliar',
         'feedback.visualizar', 'feedback.avaliar',
         'pdi.visualizar', 'pdi.gerenciar', 'pdi.acompanhar',
+        // Etapa 2C.2B: avaliar Experiência (escopo/CSRF/elegibilidade/reabertura comprovados) e Solicitação de Vaga/Kanban com escopo por setor da solicitação.
+        'avaliacao_experiencia.avaliar',
+        'solicitacao_vaga.visualizar', 'solicitacao_vaga.criar',
+        'kanban_vagas.visualizar', 'kanban_vagas.detalhes', 'kanban_vagas.movimentar',
     ];
 
     /** Perfis com acesso global pelo próprio papel (Authorization já os libera sem linhas em usuario_permissoes). */
@@ -85,7 +91,6 @@ final class PermissaoPerfilPolicy
         'avaliacao_desempenho.visualizar', 'avaliacao_desempenho.avaliar',
         'feedback.visualizar', 'feedback.avaliar',
         'pdi.visualizar', 'pdi.gerenciar', 'pdi.acompanhar',
-        'integracao_colaborador.visualizar', 'integracao_colaborador.editar',
         'solicitacao_vaga.visualizar', 'solicitacao_vaga.criar', 'solicitacao_vaga.editar', 'solicitacao_vaga.cancelar',
         'kanban_vagas.visualizar', 'kanban_vagas.detalhes', 'kanban_vagas.editar', 'kanban_vagas.movimentar',
     ];
@@ -99,6 +104,8 @@ final class PermissaoPerfilPolicy
 
     /** Explícitas (e não só "o resto") para o teste de cobertura detectar códigos novos sem classificação. */
     private const VIEWER_INCOMPATIVEIS = [
+        // Etapa 2C.2B: resultados/dashboard/QR da Integração são GLOBAIS e trazem respostas e comentários sem amostra mínima (reidentificação) — fora do viewer.
+        'integracao_colaborador.visualizar', 'integracao_colaborador.editar',
         'candidaturas.visualizar', 'candidaturas.editar',
         'pipeline.visualizar', 'pipeline.movimentar',
         'indicacoes.visualizar', 'indicacoes.gerenciar_pagamento',

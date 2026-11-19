@@ -293,7 +293,10 @@ class AvaliacaoExperienciaService
         }
 
         $agoraSql = $agora->format('Y-m-d H:i:s');
-        $gestorUsuarioId = (int)($dados['gestor_usuario_id'] ?? ($ctx['gestor']['id'] ?? $ator['id']));
+        // Responsável registrado: só Admin/RH podem informá-lo no POST (Etapa 2C.2B); para os demais o valor enviado é IGNORADO (Gestor Imediato do contrato ou o próprio ator).
+        $gestorUsuarioId = self::escopoTotal($ator)
+            ? (int)($dados['gestor_usuario_id'] ?? ($ctx['gestor']['id'] ?? $ator['id']))
+            : (int)($ctx['gestor']['id'] ?? $ator['id']);
         $gestorUsuario = $this->repository->usuarioAtivo($gestorUsuarioId);
         if ($gestorUsuario === null) {
             return self::falha('Selecione um gestor responsável válido.');

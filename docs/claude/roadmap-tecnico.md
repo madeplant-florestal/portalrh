@@ -689,10 +689,10 @@ Levantamento do escopo REAL de cada módulo operacional hoje usado por viewers d
 **B — precisam implementar o escopo setorial** (hoje restringem por outro critério, que NÃO serve ao Gestor definitivo):
 - ~~Avaliação de Desempenho, Feedback, PDI~~ — **FEITO na Etapa 2C.2A (2026-11):** escopo por setor ATUAL do contrato via `EscopoSetorial`
   (`gestor_usuario_id` virou só o responsável registrado). Ver `riscos-conhecidos.md` item 11.
-- Solicitação de Vaga e Kanban de Vagas (`solicitacao_vaga.*`, `kanban_vagas.*`): escopo por **solicitante/aprovador** (objeto), não por setor.
+- ~~Solicitação de Vaga e Kanban de Vagas~~ — **FEITO na Etapa 2C.2B:** escopo por setor da solicitação para o Gestor (viewer legado segue por solicitante/aprovador). Aprovação pelo Gestor: pendente de política.
 - Movimentação de Pessoal: por solicitante e `is_gestor` legado (`usuario_colaboradores`).
-- Integração do Colaborador (`integracao_colaborador.*`: QR, resultados, dashboard de Integração): **sem filtro por ator** (resultados e
-  dashboard globais; o "gestor" do dashboard é só um filtro opcional).
+- Integração do Colaborador (`integracao_colaborador.*`): **fechada a Viewer e Gestor na Etapa 2C.2B** (resultados globais com comentários, sem amostra
+  mínima). Para liberar ao Gestor: definir amostra mínima por setor e tratamento dos comentários; só então aplicar escopo setorial.
 
 **C — exclusivos de Admin/RH (nunca viewer, nem Gestor sem decisão nova):** Entrevista de Desligamento operacional
 (`entrevista_desligamento.*`: lista nominal de desligados, resultados individuais), Pesquisa de Reação (`pesquisa_reacao_integracao.*`),

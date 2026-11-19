@@ -46,7 +46,14 @@ $somenteAdminRh = [
 
 // Etapa 2C.1: ações que aceitam o perfil Gestor no gate de role (módulos com escopo setorial comprovado). A Avaliação de Experiência
 // não usa requireRole — só permissão efetiva (que a PermissaoPerfilPolicy limita ao Gestor).
-$gestorAutorizado = ['AdminCentralController::index', 'AdminColaboradoresController::index'];
+// Etapa 2C.2B: Solicitação de Vaga e Kanban — o Gestor entra com permissão individual (exigirPermissaoDoGestor) e escopo por setor da solicitação no model.
+// A aprovação (approveLeader/approveRh) e o controle de RH/gerar vaga NÃO aceitam gestor.
+$gestorAutorizado = [
+    'AdminCentralController::index', 'AdminColaboradoresController::index',
+    'AdminSolicitacoesVagaController::index', 'AdminSolicitacoesVagaController::create', 'AdminSolicitacoesVagaController::store',
+    'AdminSolicitacoesVagaController::show', 'AdminSolicitacoesVagaController::addNota',
+    'AdminSolicitacoesVagaKanbanController::index', 'AdminSolicitacoesVagaKanbanController::move',
+];
 
 $rotas = (string)file_get_contents($raiz . '/index.php');
 preg_match_all('/\$router->(?:get|post)\(\s*[\'"][^\'"]+[\'"]\s*,\s*\[\s*(\w+)::class\s*,\s*[\'"](\w+)[\'"]\s*\]/', $rotas, $m, PREG_SET_ORDER);

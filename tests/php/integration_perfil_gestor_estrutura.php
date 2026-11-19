@@ -173,15 +173,15 @@ try {
     $check(EscopoSetorial::resolver(['id' => 0, 'role' => 'gestor'])->semAutorizacao() && EscopoSetorial::resolver(['id' => $g1, 'role' => 'inventada'])->semAutorizacao() && EscopoSetorial::resolver(null)->semAutorizacao() && EscopoSetorial::resolver(['id' => $g1, 'role' => ''])->semAutorizacao(), '(7) ator inexistente, role desconhecida ou vazia: sem autorização');
 
     // ---- 8. política de permissões do Gestor ----------------------------------------------------------------------------
-    $check(PermissaoPerfilPolicy::permissoesPermitidas('gestor') === ['colaboradores.visualizar', 'avaliacao_experiencia.visualizar', 'avaliacao_desempenho.visualizar', 'avaliacao_desempenho.avaliar', 'feedback.visualizar', 'feedback.avaliar', 'pdi.visualizar', 'pdi.gerenciar', 'pdi.acompanhar'] && PermissaoPerfilPolicy::modeloRecomendado('gestor') === [], '(política) Gestor (2C.2A): Colaboradores, Experiência (só visualizar), Desempenho, Feedback e PDI — módulos com escopo setorial comprovado; nenhum modelo automático');
+    $check(PermissaoPerfilPolicy::permissoesPermitidas('gestor') === ['colaboradores.visualizar', 'avaliacao_experiencia.visualizar', 'avaliacao_desempenho.visualizar', 'avaliacao_desempenho.avaliar', 'feedback.visualizar', 'feedback.avaliar', 'pdi.visualizar', 'pdi.gerenciar', 'pdi.acompanhar', 'avaliacao_experiencia.avaliar', 'solicitacao_vaga.visualizar', 'solicitacao_vaga.criar', 'kanban_vagas.visualizar', 'kanban_vagas.detalhes', 'kanban_vagas.movimentar'] && PermissaoPerfilPolicy::modeloRecomendado('gestor') === [], '(política) Gestor (2C.2B): Colaboradores, Experiência, Desempenho, Feedback, PDI, Solicitação de Vaga (visualizar/criar) e Kanban (visualizar/detalhes/mover) — escopo setorial comprovado; nenhum modelo automático');
     $tem = static fn(int $u, string $p): bool => Authorization::usuarioTemPermissao($u, $p);
     $check($tem($gTudo, 'colaboradores.visualizar') && $tem($gTudo, 'avaliacao_experiencia.visualizar'), '(política) permissões autorizadas valem para o Gestor');
-    $bloqueadas = ['avaliacao_experiencia.avaliar', 'solicitacao_vaga.criar', 'kanban_vagas.movimentar', 'integracao_colaborador.visualizar', 'candidaturas.visualizar', 'pipeline.visualizar', 'indicacoes.visualizar', 'entrevista_desligamento.visualizar', 'pesquisa_reacao_integracao.visualizar', 'mensagens.visualizar', 'recruitment_webhooks.visualizar', 'empresas.visualizar', 'dashboard.visualizar'];
+    $bloqueadas = ['integracao_colaborador.visualizar', 'candidaturas.visualizar', 'pipeline.visualizar', 'indicacoes.visualizar', 'entrevista_desligamento.visualizar', 'pesquisa_reacao_integracao.visualizar', 'mensagens.visualizar', 'recruitment_webhooks.visualizar', 'empresas.visualizar', 'dashboard.visualizar'];
     $check(array_reduce($bloqueadas, static fn(bool $ok, string $p) => $ok && !$tem($gTudo, $p), true), '(6) todas as permissões de módulos não preparados/administrativos, mesmo GRAVADAS no Gestor, não concedem acesso');
     $check(!$tem($gSem, 'colaboradores.visualizar'), '(política) gestor sem permissão não tem nada');
     $check(count($gravadas($gTudo)) === 19, '(legado) as permissões gravadas continuam armazenadas (nada apagado)');
-    $v = PermissaoPerfilPolicy::validarSelecao('gestor', [$permId['colaboradores.visualizar'], $permId['solicitacao_vaga.criar']], []);
-    $check(!$v['ok'] && $v['incompativeis'] === ['solicitacao_vaga.criar'], '(política) seleção de permissões do Gestor com módulo não preparado (Solicitação de Vaga, 2C.2B) é recusada');
+    $v = PermissaoPerfilPolicy::validarSelecao('gestor', [$permId['colaboradores.visualizar'], $permId['integracao_colaborador.visualizar']], []);
+    $check(!$v['ok'] && $v['incompativeis'] === ['integracao_colaborador.visualizar'], '(política) seleção de permissões do Gestor com módulo fechado (Integração do Colaborador) é recusada');
     $liberadas2c2a = ['pdi.visualizar', 'pdi.gerenciar', 'feedback.avaliar', 'avaliacao_desempenho.avaliar']; // as que o gTudo tem gravadas
     $check(array_reduce($liberadas2c2a, static fn(bool $ok, string $p) => $ok && $tem($gTudo, $p), true), '(2C.2A) PDI, Feedback e Desempenho valem para o Gestor (o escopo por LINHA é provado em integration_gestor_escopo_desempenho_feedback_pdi)');
 
@@ -237,7 +237,7 @@ try {
         ['AdminDashboardTurnoverController', 'index'], ['AdminDashboardRecrutamentoController', 'index'], ['AdminDashboardEntrevistaDesligamentoController', 'index'],
         ['AdminCandidaturasController', 'index'], ['AdminPipelineController', 'index'], ['AdminIndicacoesController', 'index'], ['AdminIndicacoesController', 'contasReceberApi'],
         ['AdminEntrevistaDesligamentoController', 'index'], ['AdminPesquisaReacaoIntegracaoController', 'index'], ['AdminMensagensController', 'index'],
-        ['AdminSolicitacoesVagaController', 'index'], ['AdminSolicitacoesVagaKanbanController', 'index'], ['AdminPesquisaIntegracaoQrController', 'index'],
+        ['AdminPesquisaIntegracaoQrController', 'index'],
         ['AdminMovimentacoesPessoalController', 'index'], ['AdminVagasController', 'index'], ['AdminSetoresController', 'index'], ['AdminBeneficiosController', 'index'],
         ['AdminAvaliacoesController', 'index'], ['AdminManualController', 'index'], ['AdminIntegracoesController', 'index'],
     ];
@@ -277,7 +277,7 @@ try {
     $navT = new PortalNavegacaoService();
     $mt = array_column($navT->modulos(), 'chave');
     sort($mt);
-    $check($mt === ['avaliacoes-desenvolvimento', 'colaboradores'], '(4) a navegação não mostra módulos bloqueados nem para o Gestor com permissões legadas gravadas');
+    $check($mt === ['avaliacoes-desenvolvimento', 'colaboradores', 'solicitacoes-vaga'] && array_column($navT->abas('recrutamento'), 'chave') === ['solicitacoes'], '(4) a navegação não mostra módulos bloqueados (Integração, Cadastros, Configurações) nem para o Gestor com permissões legadas gravadas; Recrutamento só com a aba Solicitações de Vaga (permissão de Solicitação/Kanban), sem Candidaturas/Pipeline/Indicações');
     $_SESSION = [];
 
     // ---- 14/15. Autoridade: o Gestor não administra ---------------------------------------------------------------------
@@ -315,8 +315,8 @@ try {
     [$st] = $requisitar($adm, 'admin', false, 'AdminUsuariosController', 'updateRole', ['role' => 'superadmin'], [(string)$vAlvo]);
     $check($st === 400 && $linha($vAlvo)['role'] === 'gestor', '(2) perfil inventado pela rota: 400, nada muda');
     // permissões do gestor pela rota de edição (política central)
-    [$st] = $requisitar($adm, 'admin', false, 'AdminUsuariosController', 'updatePermissoes', ['permissao_ids' => [$permId['colaboradores.visualizar'], $permId['solicitacao_vaga.criar']]], [(string)$vAlvo]);
-    $check($gravadas($vAlvo) === [], '(8) Administrador: seleção do Gestor com Solicitação de Vaga (módulo não preparado) recusada, nada gravado');
+    [$st] = $requisitar($adm, 'admin', false, 'AdminUsuariosController', 'updatePermissoes', ['permissao_ids' => [$permId['colaboradores.visualizar'], $permId['integracao_colaborador.visualizar']]], [(string)$vAlvo]);
+    $check($gravadas($vAlvo) === [], '(8) Administrador: seleção do Gestor com Integração do Colaborador (módulo fechado) recusada, nada gravado');
     [$st] = $requisitar($adm, 'admin', false, 'AdminUsuariosController', 'updatePermissoes', ['permissao_ids' => [$permId['colaboradores.visualizar'], $permId['avaliacao_experiencia.visualizar']]], [(string)$vAlvo]);
     $check($gravadas($vAlvo) === ['avaliacao_experiencia.visualizar', 'colaboradores.visualizar'], '(8) Administrador: seleção compatível do Gestor é gravada');
     [$st, $htmlShow] = $requisitar($adm, 'admin', false, 'AdminUsuariosController', 'show', [], [(string)$vAlvo]);

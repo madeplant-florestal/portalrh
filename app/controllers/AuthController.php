@@ -21,7 +21,21 @@ class AuthController extends Controller
         }
         $csrf = $_SESSION['csrf_token'];
         $expired = isset($_GET['expired']) && $_GET['expired'] === '1';
-        $error = $expired ? 'Sessão expirada por inatividade de 20 minutos. Faça login novamente.' : null;
+        $error = null;
+        if ($expired) {
+            // Mensagem derivada da política central (SessionPolicy) — nunca um número fixo no texto.
+            $horas = SessionPolicy::ociosidade() / 3600;
+            $limiteH = SessionPolicy::limiteTotal() / 3600;
+            $fmt = static fn(float $h): string => $h >= 1 ? rtrim(rtrim(number_format($h, 1, ',', ''), '0'), ',') . ' hora(s)' : round($h * 60) . ' minutos';
+            $error = (($_GET['motivo'] ?? '') === 'limite')
+                ? 'Sua sessão atingiu o tempo máximo de ' . $fmt($limiteH) . '. Faça login novamente.'
+                : 'Sessão expirada por inatividade de ' . $fmt($horas) . '. Faça login novamente.';
+            if (($_GET['perdido'] ?? '') === '1') {
+                $error .= ' O envio que você estava fazendo NÃO foi salvo — refaça a ação depois de entrar.';
+            }
+        }
+        // Retorno à página em que o usuário estava (só caminho do próprio site dentro de /admin — ver Security::caminhoDeRetornoSeguro()).
+        $_SESSION['login_next'] = Security::caminhoDeRetornoSeguro((string)($_GET['next'] ?? ''));
         $this->view->render('admin/login', ['csrf' => $csrf, 'error' => $error, 'isLoginPage' => true], 'layouts/main');
     }
 
@@ -87,7 +101,10 @@ class AuthController extends Controller
                     'role' => $attempt['user']->role ?? null
                 ]);
                 $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-                redirect($this->postLoginPath());
+                $next = Security::caminhoDeRetornoSeguro((string)($_SESSION['login_next'] ?? ''));
+                unset($_SESSION['login_next']);
+                // Só volta para a página anterior se o usuário PUDER abri-la; a 1ª rota acessível continua o padrão (sem ampliar nada).
+                redirect($next ?? $this->postLoginPath());
             }
 
             $rateState = Security::rateLimitHit(

@@ -200,3 +200,20 @@ Identificados na auditoria arquitetural de 2026-07-09, documentados aqui para n�
      consultas; recomenda-se registrar/limitar a frequência das consultas se o risco aumentar; (b) com 5 respondentes, distribuições por pergunta mostram a distribuição das
      notas (não quem deu qual); (c) a unicidade da pessoa usa `codigo_pessoa` (fallback contrato/colaborador). Cobertura: `integration_gestor_aprovacao_lider_vaga.php`,
      `integration_gestor_integracao_agregada.php`.
+14. **Expiração de sessão (2026-11) — CORRIGIDA; prazo na hospedagem a CONFIRMAR em produção.**
+   - **Causa dos "20 minutos":** `Security::enforceInactivityTimeout(1200)` fixo no bootstrap (a mensagem tinha o número escrito). Mas havia um SEGUNDO relógio oculto:
+     `session.gc_maxlifetime` nunca era definido (padrão do PHP = 1440 s ≈ 24 min), então o coletor de sessões apagava o arquivo de qualquer sessão ociosa por ~24 min,
+     mesmo que o limite lógico subisse — a pessoa cairia no login SEM mensagem. O cookie (`lifetime 0`) nunca foi a causa (cookie de sessão do navegador, não expira por tempo).
+   - **Política central:** `app/core/SessionPolicy.php` (config `security.session_idle_timeout_seconds` = 28800 e `security.session_absolute_lifetime_seconds` = 86400, com limites
+     de sanidade). Ociosidade 8 h renovada por QUALQUER requisição autenticada (sem ping automático); teto total 24 h desde o login (nenhuma sessão é permanente); sessão expirada
+     NUNCA é renovada (é destruída no servidor); `gc_maxlifetime` é DERIVADO (teto + 1 h) e aplicado antes do `session_start`, junto de `use_strict_mode` (anti-fixação),
+     `use_only_cookies` e coleta ativa (1/100). Cookie continua HttpOnly, Secure em HTTPS, SameSite=Lax, sem persistência após fechar o navegador. ID regenerado no login (inalterado).
+   - **Formulários longos:** expirar durante o preenchimento exige 8 h parado na mesma tela. Agora: POST após expirar NÃO é processado e o login avisa "o envio NÃO foi salvo";
+     GET volta à página (`next`, só caminho do mesmo site em /admin — sem redirecionamento aberto); chamada AJAX/API recebe 401 JSON (a tela mostra o erro, em vez de HTML de login).
+     NÃO foi implementado rascunho no navegador (guardaria dados pessoais/avaliações no cliente); se o RH quiser, a opção segura é `sessionStorage` por aba, só dos campos não sensíveis,
+     apagado ao enviar/sair — requer decisão. Cache: o PHP já envia `no-store` em páginas com sessão.
+   - **Hospedagem (Hostinger) — confirmar:** a aplicação pede `gc_maxlifetime` por `ini_set` e usa pasta PRÓPRIA (`storage/sessions`), então cron/coletor de outras aplicações não a varre.
+     O que só o servidor de produção pode provar: (1) que `ini_set` não está bloqueado; (2) que a pasta `storage/sessions` é gravável e não é limpa por rotina da hospedagem; (3) que o
+     PHP-FPM não recicla sessões por outro meio. Prova: logado como Supervisor Geral, abrir `/admin/usuarios/supervisor/sessao` (JSON somente leitura) e conferir
+     `prazo_garantido: true` e `session.gc_maxlifetime` = 90000; se `false`, a hospedagem bloqueou o `ini_set` — ajustar `session.gc_maxlifetime` (>= 90000) no hPanel (PHP Configuration)
+     ou em `.user.ini`. A aplicação registra um aviso no log (1x por sessão) quando o servidor não aceita o valor. Cobertura: `integration_sessao_politica.php`.

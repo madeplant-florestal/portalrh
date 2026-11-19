@@ -41,6 +41,9 @@ return [
     'security' => [
         'csrf_key' => 'csrf_token',
         'session_name' => 'RHMADEPLANTSESSID',
+        // Duração da sessão (SessionPolicy): ociosidade (segundos sem requisição autenticada) e teto absoluto desde o login. Padrões: 8 h e 24 h.
+        'session_idle_timeout_seconds' => 28800,
+        'session_absolute_lifetime_seconds' => 86400,
         'supervisor_email' => 'admin@seu-dominio.com.br',
         'supervisor_password' => 'troque-por-uma-senha-forte',
         'allowed_upload_mime' => ['application/pdf'],

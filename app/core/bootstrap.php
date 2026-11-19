@@ -34,6 +34,7 @@ require_once __DIR__ . '/MetadadosSyncEnvelope.php';
 require_once __DIR__ . '/MetadadosSyncEndpointValidator.php';
 require_once __DIR__ . '/MetadadosTexto.php';
 require_once __DIR__ . '/PasswordPolicy.php';
+require_once __DIR__ . '/SessionPolicy.php';
 require_once __DIR__ . '/Security.php';
 require_once __DIR__ . '/Cipher.php';
 require_once __DIR__ . '/DateHelper.php';
@@ -119,7 +120,7 @@ ini_set('display_errors', $debug ? '1' : '0');
 
 Logger::init($app);
 Security::startSecureSession($app['security']['session_name'] ?? 'RHMADEPLANTSESSID');
-Security::enforceInactivityTimeout(1200);
+Security::enforceInactivityTimeout(); // limites: SessionPolicy (config security.session_*)
 
 set_exception_handler(function (\Throwable $e) use ($debug): void {
     http_response_code(500);

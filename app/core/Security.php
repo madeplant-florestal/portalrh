@@ -25,8 +25,15 @@ class Security
             'samesite' => 'Lax',
         ]);
         session_name($name);
+        // Duração da sessão: política central (SessionPolicy). O gc_maxlifetime precisa ser definido ANTES do session_start — sem isso o coletor do PHP
+        // apagava sessões ociosas por ~24 min, independentemente do limite lógico da aplicação.
+        self::$statusIni = SessionPolicy::aplicarIni();
         if (session_status() !== PHP_SESSION_ACTIVE) {
             session_start();
+        }
+        if (!self::$statusIni['aceito'] && empty($_SESSION['__aviso_gc_registrado'])) {
+            $_SESSION['__aviso_gc_registrado'] = 1;
+            Logger::warning('A hospedagem NÃO aceitou session.gc_maxlifetime: o prazo real da sessão pode ser menor que o configurado', self::$statusIni);
         }
         if (empty($_SESSION['__session_initialized'])) {
             session_regenerate_id(true);
@@ -34,16 +41,70 @@ class Security
         }
     }
 
-    public static function enforceInactivityTimeout(int $seconds = 1200): void
+    /** Resultado de SessionPolicy::aplicarIni() desta requisição (diagnóstico). @var array{gc_maxlifetime_pedido:int,gc_maxlifetime_efetivo:int,aceito:bool}|null */
+    public static ?array $statusIni = null;
+
+    /**
+     * Valida e renova a sessão conforme SessionPolicy (ociosidade 8 h por padrão + teto total). Sessão expirada NUNCA é renovada: é encerrada
+     * (destruída no servidor) e o usuário vai ao login — com 401 JSON em chamadas AJAX/API. O parâmetro $seconds existe só por compatibilidade.
+     */
+    public static function enforceInactivityTimeout(?int $seconds = null): void
     {
-        $now = time();
-        $last = $_SESSION['last_activity'] ?? null;
-        $isLogged = !empty($_SESSION['user_id']);
-        if ($isLogged && $last !== null && ($now - (int)$last) > $seconds) {
-            Auth::logout();
-            redirect('/admin/login?expired=1');
+        $motivo = SessionPolicy::avaliar(SessionPolicy::agora());
+        if ($motivo === 'ok') {
+            return;
         }
-        $_SESSION['last_activity'] = $now;
+        $metodo = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
+        $uri = (string)($_SERVER['REQUEST_URI'] ?? '');
+        $ajax = self::requisicaoAjax();
+        Auth::logout();
+        if ($ajax) {
+            http_response_code(401);
+            header('Content-Type: application/json; charset=UTF-8');
+            echo json_encode(['error' => 'Sua sessão expirou. Entre novamente — esta ação NÃO foi concluída.', 'erro' => 'sessao_expirada', 'motivo' => $motivo], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        $q = ['expired' => '1'];
+        if ($motivo === 'limite_total') {
+            $q['motivo'] = 'limite';
+        }
+        if ($metodo === 'GET') {
+            $next = self::caminhoDeRetornoSeguro($uri);
+            if ($next !== null) {
+                $q['next'] = $next;
+            }
+        } else {
+            $q['perdido'] = '1'; // POST/PUT...: o envio NÃO foi processado — a tela de login avisa (sem perda silenciosa)
+        }
+        redirect('/admin/login?' . http_build_query($q));
+    }
+
+    public static function requisicaoAjax(): bool
+    {
+        $accept = strtolower((string)($_SERVER['HTTP_ACCEPT'] ?? ''));
+        $tipo = strtolower((string)($_SERVER['CONTENT_TYPE'] ?? ''));
+        $uri = (string)parse_url((string)($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_PATH);
+        return strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest'
+            || str_contains($accept, 'application/json')
+            || str_contains($tipo, 'application/json')
+            || str_contains($uri, '/api/');
+    }
+
+    /**
+     * Caminho para voltar depois do login: SOMENTE caminho relativo ao mesmo site (começa com uma única "/", sem esquema, sem barra invertida nem
+     * caracteres de controle), dentro de /admin e fora de login/logout — evita redirecionamento aberto. `null` = não aproveitar.
+     */
+    public static function caminhoDeRetornoSeguro(?string $uri): ?string
+    {
+        $uri = trim((string)$uri);
+        if ($uri === '' || strlen($uri) > 500 || $uri[0] !== '/' || str_starts_with($uri, '//') || str_contains($uri, '\\') || preg_match('/[\x00-\x1f\x7f]/', $uri)) {
+            return null;
+        }
+        $path = (string)parse_url($uri, PHP_URL_PATH);
+        if (!preg_match('#/admin(/|$)#', $path) || preg_match('#/(login|logout)(/|$)#', $path)) {
+            return null;
+        }
+        return $uri;
     }
 
     public static function e(string $value): string

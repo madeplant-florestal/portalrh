@@ -41,6 +41,9 @@ class Config
             'security' => [
                 'csrf_key' => 'csrf_token',
                 'session_name' => 'RHMADEPLANTSESSID',
+                // Sessão (SessionPolicy): ociosidade 8 h (renovada a cada requisição autenticada) e teto absoluto de 24 h desde o login.
+                'session_idle_timeout_seconds' => 28800,
+                'session_absolute_lifetime_seconds' => 86400,
                 'webhook_allow_private_targets' => false
             ],
             'mail' => [

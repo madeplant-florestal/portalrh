@@ -366,6 +366,8 @@ try {
     $router->get('/admin/usuarios/{id}', [AdminUsuariosController::class, 'show']);
     $router->post('/admin/usuarios/novo', [AdminUsuariosController::class, 'store']);
     $router->post('/admin/usuarios/supervisor/garantir', [AdminSupervisorController::class, 'ensure']);
+    // Diagnóstico somente leitura da sessão no servidor web (Supervisor Geral) — prova na hospedagem que o prazo configurado é cumprido.
+    $router->get('/admin/usuarios/supervisor/sessao', [AdminSupervisorController::class, 'sessao']);
     $router->post('/admin/usuarios/{id}/supervisor-geral', [AdminUsuariosController::class, 'alterarSupervisorGeral']);
     $router->post('/admin/usuarios/{id}/role', [AdminUsuariosController::class, 'updateRole']);
     $router->post('/admin/usuarios/{id}/status', [AdminUsuariosController::class, 'updateStatus']);

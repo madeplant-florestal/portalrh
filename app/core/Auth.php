@@ -88,6 +88,9 @@ class Auth
         }
         $_SESSION['user_is_supervisor'] = $isSupervisor && $role === 'admin';
         session_regenerate_id(true);
+        // Marca o início da sessão autenticada (teto total da SessionPolicy) e a atividade; o ID já foi regenerado (sem fixação de sessão).
+        $_SESSION['session_started_at'] = SessionPolicy::agora();
+        $_SESSION['last_activity'] = SessionPolicy::agora();
     }
 
     public static function logout(): void

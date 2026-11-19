@@ -93,15 +93,19 @@ class PdiRepository
     }
 
     /** Contratos sem desligamento efetivado (nome/empresa/unidade contendo o texto), para escolher o colaborador. */
-    public function buscarContratos(string $busca, string $hoje, int $limite = 20): array
+    public function buscarContratos(string $busca, string $hoje, int $limite = 20, ?EscopoSetorial $escopo = null): array
     {
         $like = '%' . str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $busca) . '%';
+        $params = [$hoje, $like, $like, $like];
+        // `null` = sem restrição (uso interno/testes) — o PdiService sempre informa o escopo do ator.
+        $condEscopo = $escopo !== null ? $escopo->sqlColaborador('cm.id', $params) : '1 = 1';
         return $this->todas(
             sprintf(self::SELECT_CONTRATO, self::SQL_CARGO_CATALOGO)
             . " WHERE (cm.demissao IS NULL OR cm.demissao > ?) AND " . ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusao('cm.id') . "
                  AND (cm.nome LIKE ? ESCAPE '\\\\' OR cm.empresa LIKE ? ESCAPE '\\\\' OR cm.unidade LIKE ? ESCAPE '\\\\')
+                 AND " . $condEscopo . "
                ORDER BY cm.nome LIMIT " . max(1, $limite),
-            [$hoje, $like, $like, $like]
+            $params
         );
     }
 
@@ -175,15 +179,14 @@ class PdiRepository
      * Lista com contagem de ações (total/concluídas/atrasadas) — uma consulta, sem N+1.
      *
      * @param array   $f             status, busca, empresa, unidade ("EMP|UNI"), cargo, gestor, origem, prazo (atrasado|no_prazo)
-     * @param ?int    $escopoGestor  não nulo = só PDIs desse gestor (escopo por linha de quem não é Admin/RH)
+     * @param ?EscopoSetorial $escopo restringe pelo setor ATUAL do contrato do PDI (Etapa 2C.2A); `null` = sem restrição (uso interno/testes)
      */
-    public function listar(array $f, ?int $escopoGestor, string $hoje, int $limite): array
+    public function listar(array $f, ?EscopoSetorial $escopo, string $hoje, int $limite): array
     {
         $where = ['1 = 1'];
         $params = [$hoje];
-        if ($escopoGestor !== null) {
-            $where[] = 'p.gestor_usuario_id = ?';
-            $params[] = $escopoGestor;
+        if ($escopo !== null) {
+            $where[] = $escopo->sqlColaborador('p.metadados_id', $params);
         }
         if (!empty($f['status'])) {
             $where[] = 'p.status = ?';
@@ -239,12 +242,12 @@ class PdiRepository
     }
 
     /** Opções dos filtros da lista, dentro do escopo (só valores que existem em PDIs acessíveis). */
-    public function opcoesFiltro(?int $escopoGestor): array
+    public function opcoesFiltro(?EscopoSetorial $escopoSetorial): array
     {
         // Exclusão analítica GLOBAL: as opções de filtro só nascem de PDIs de contratos elegíveis.
+        $params = [];
         $escopo = ' WHERE ' . ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusaoPorMetadadosId('pdis.metadados_id')
-            . ($escopoGestor !== null ? ' AND gestor_usuario_id = ?' : '');
-        $params = $escopoGestor !== null ? [$escopoGestor] : [];
+            . ($escopoSetorial !== null ? ' AND ' . $escopoSetorial->sqlColaborador('pdis.metadados_id', $params) : '');
         return [
             'empresas' => $this->todas("SELECT snap_codigo_empresa AS codigo, MAX(snap_empresa) AS nome FROM pdis{$escopo} GROUP BY snap_codigo_empresa ORDER BY nome", $params),
             'unidades' => $this->todas("SELECT snap_codigo_empresa AS codigo_empresa, snap_codigo_unidade AS codigo_unidade, MAX(snap_unidade) AS nome, MAX(snap_empresa) AS empresa FROM pdis{$escopo} GROUP BY snap_codigo_empresa, snap_codigo_unidade ORDER BY nome", $params),
@@ -389,16 +392,15 @@ class PdiRepository
     }
 
     /** PDIs do MESMO contrato (para "Adicionar a PDI existente" — nunca de outro colaborador, §15). */
-    public function pdisDoContrato(int $metadadosId, ?int $escopoGestor): array
+    public function pdisDoContrato(int $metadadosId, ?EscopoSetorial $escopo): array
     {
         if (!ColaboradorMetadadosElegibilidadeService::acessoIndividual($metadadosId)) {
             return [];
         }
         $where = 'p.metadados_id = ?';
         $params = [$metadadosId];
-        if ($escopoGestor !== null) {
-            $where .= ' AND p.gestor_usuario_id = ?';
-            $params[] = $escopoGestor;
+        if ($escopo !== null) {
+            $where .= ' AND ' . $escopo->sqlColaborador('p.metadados_id', $params);
         }
         return $this->todas(
             "SELECT p.id, p.snap_nome, p.status, p.origem_tipo, p.data_abertura, p.data_prevista_conclusao

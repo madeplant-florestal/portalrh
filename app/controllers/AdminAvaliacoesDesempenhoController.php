@@ -22,6 +22,19 @@ class AdminAvaliacoesDesempenhoController
         }
     }
 
+    /**
+     * CSRF obrigatório em toda escrita (Etapa 2C.2A): falha => 400 e NADA é processado. Antes, o retorno de
+     * Security::csrfCheck() era descartado e a requisição seguia mesmo sem token válido.
+     */
+    private function exigirCsrf(): void
+    {
+        if (!Security::csrfCheck($_POST['csrf'] ?? '')) {
+            http_response_code(400);
+            echo 'CSRF inválido';
+            exit;
+        }
+    }
+
     public function index(): void
     {
         $this->exigirLogin();
@@ -73,7 +86,7 @@ class AdminAvaliacoesDesempenhoController
         $this->view->render('admin/avaliacoes-desempenho/form', [
             'modo' => 'criar', 'avaliacao' => null, 'criterios' => [], 'indicadores' => null, 'ciencias' => [], 'eventos' => [],
             'contrato' => $contrato, 'gestorSugerido' => $gestorSugerido, 'avaliacoesAnteriores' => $avaliacoesAnteriores,
-            'contratosBusca' => $busca !== '' ? $service->buscarContratos($busca) : [],
+            'contratosBusca' => $busca !== '' ? $service->buscarContratos($busca, $ator) : [],
             'busca' => $busca,
             'usuarios' => $service->usuariosParaEscolha($ator),
             'escopoTotal' => AvaliacaoDesempenhoService::escopoTotal($ator),
@@ -85,7 +98,7 @@ class AdminAvaliacoesDesempenhoController
     public function store(): void
     {
         $this->exigirLogin();
-        Security::csrfCheck($_POST['csrf'] ?? '');
+        $this->exigirCsrf();
         $ator = AvaliacaoDesempenhoService::atorDaSessao();
         $result = (new AvaliacaoDesempenhoService())->criar($_POST, $ator, new DateTimeImmutable('now'), $_SERVER['REMOTE_ADDR'] ?? null);
         if (!($result['ok'] ?? false)) {
@@ -122,7 +135,7 @@ class AdminAvaliacoesDesempenhoController
     public function atualizar(string $id): void
     {
         $this->exigirLogin();
-        Security::csrfCheck($_POST['csrf'] ?? '');
+        $this->exigirCsrf();
         $ator = AvaliacaoDesempenhoService::atorDaSessao();
         $result = (new AvaliacaoDesempenhoService())->atualizar((int)$id, $_POST, $ator, new DateTimeImmutable('now'), $_SERVER['REMOTE_ADDR'] ?? null);
         $destino = '/admin/avaliacoes-desempenho/' . (int)$id . '/editar';
@@ -132,7 +145,7 @@ class AdminAvaliacoesDesempenhoController
     public function concluir(string $id): void
     {
         $this->exigirLogin();
-        Security::csrfCheck($_POST['csrf'] ?? '');
+        $this->exigirCsrf();
         $ator = AvaliacaoDesempenhoService::atorDaSessao();
         $result = (new AvaliacaoDesempenhoService())->concluir((int)$id, $_POST, $ator, new DateTimeImmutable('now'), $_SERVER['REMOTE_ADDR'] ?? null);
         $destino = '/admin/avaliacoes-desempenho/' . (int)$id . '/editar';
@@ -142,7 +155,7 @@ class AdminAvaliacoesDesempenhoController
     public function cancelar(string $id): void
     {
         $this->exigirLogin();
-        Security::csrfCheck($_POST['csrf'] ?? '');
+        $this->exigirCsrf();
         $ator = AvaliacaoDesempenhoService::atorDaSessao();
         $result = (new AvaliacaoDesempenhoService())->cancelar((int)$id, (string)($_POST['motivo'] ?? ''), $ator, new DateTimeImmutable('now'), $_SERVER['REMOTE_ADDR'] ?? null);
         $destino = '/admin/avaliacoes-desempenho/' . (int)$id . '/editar';
@@ -152,7 +165,7 @@ class AdminAvaliacoesDesempenhoController
     public function ciencia(string $id): void
     {
         $this->exigirLogin();
-        Security::csrfCheck($_POST['csrf'] ?? '');
+        $this->exigirCsrf();
         $ator = AvaliacaoDesempenhoService::atorDaSessao();
         $avaliacao = (new AvaliacaoDesempenhoRepository())->buscarPorId((int)$id);
         $nomeColaborador = Security::sanitizeString($_POST['nome_colaborador'] ?? ($avaliacao['snap_nome'] ?? ''));
@@ -164,7 +177,7 @@ class AdminAvaliacoesDesempenhoController
     public function reabrir(string $id): void
     {
         $this->exigirLogin();
-        Security::csrfCheck($_POST['csrf'] ?? '');
+        $this->exigirCsrf();
         $ator = AvaliacaoDesempenhoService::atorDaSessao();
         $result = (new AvaliacaoDesempenhoService())->reabrir((int)$id, (string)($_POST['justificativa'] ?? ''), $ator, new DateTimeImmutable('now'), $_SERVER['REMOTE_ADDR'] ?? null);
         $destino = '/admin/avaliacoes-desempenho/' . (int)$id . '/editar';

@@ -13,7 +13,7 @@ $unidadeSelecionada = !empty($f['unidade']) ? $f['unidade']['codigo_empresa'] . 
 <div class="space-y-5">
   <?= ui_modulo_topo($base, 'avaliacoes-desenvolvimento', 'pdi', [
       'titulo' => 'PDI — Plano de Desenvolvimento Individual',
-      'descricao' => 'Processo de desenvolvimento acompanhado por RH e gestor. ' . ($escopoTotal ? 'Você vê todos os PDIs.' : 'Você vê os PDIs em que é o gestor responsável.'),
+      'descricao' => 'Processo de desenvolvimento acompanhado por RH e gestor. ' . ($escopoTotal ? 'Você vê todos os PDIs.' : 'Você vê os PDIs dos colaboradores dos setores que gerencia.'),
       'acao' => !empty($podeCriar) ? ['label' => 'Novo PDI', 'href' => $base . '/admin/pdis/novo'] : null,
   ]) ?>
   <?php if (!empty($erro)): ?><div class="rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger"><?= Security::e($erro) ?></div><?php endif; ?>

@@ -18,6 +18,7 @@
  */
 
 require __DIR__ . '/../../app/core/bootstrap.php';
+require __DIR__ . '/fixture_setor_gerenciado.php';
 
 SchemaManager::ensure();
 $pdo = Database::conn();
@@ -32,11 +33,11 @@ $check = static function (bool $cond, string $msg) use (&$falhas): void {
 };
 
 $suffix = (string)time() . (string)random_int(100, 999);
-$criados = ['usuarios' => [], 'metadados' => [], 'pdis' => []];
+$criados = ['usuarios' => [], 'metadados' => [], 'pdis' => [], 'setores' => []];
 $senha = password_hash('irrelevante', PASSWORD_BCRYPT);
 $hoje = new DateTimeImmutable('2026-09-30');
 
-$criarContrato = static function (string $nome) use ($pdo, &$criados, $suffix): int {
+$criarContrato = static function (string $nome, string $codigoSetor) use ($pdo, &$criados, $suffix): int {
     static $seq = 0;
     $seq++;
     $identificador = 'ZZPO' . $suffix . $seq;
@@ -47,7 +48,7 @@ $criarContrato = static function (string $nome) use ($pdo, &$criados, $suffix): 
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)'
     )->execute([
         $identificador, 'EMPA', 'UNI', 'ZC' . $suffix . $seq, 'ZP' . $suffix . $seq, null, $nome, 'ZZPO Empresa', 'ZZPO Unidade',
-        'ST1', 'ZZPO Setor', 'ZZPO Cargo', 'CG1', '2024-01-10', '2024-01-10', 'zzpo-teste',
+        $codigoSetor, 'ZZPO Setor', 'ZZPO Cargo', 'CG1', '2024-01-10', '2024-01-10', 'zzpo-teste',
     ]);
     $criados['metadados'][] = $identificador;
     return (int)$pdo->lastInsertId();
@@ -81,8 +82,17 @@ try {
     $atorGestorB = ['id' => $gestorBId, 'role' => 'viewer'];
     $atorRh = ['id' => $rhId, 'role' => 'rh'];
 
-    $contratoA = $criarContrato('ZZPO Colaborador A');
-    $contratoB = $criarContrato('ZZPO Colaborador B');
+    // Etapa 2C.2A: acesso por Setor Gerenciado — A gerencia o setor do contrato A; B, o do contrato B.
+    $codSetorA = 'ZA' . substr($suffix, -5);
+    $codSetorB = 'ZB' . substr($suffix, -5);
+    $setorA = zzSetorTeste($pdo, $codSetorA, 'ZZPO');
+    $setorB = zzSetorTeste($pdo, $codSetorB, 'ZZPO');
+    $criados['setores'][] = $setorA;
+    $criados['setores'][] = $setorB;
+    zzGerenciar($pdo, $gestorAId, $setorA);
+    zzGerenciar($pdo, $gestorBId, $setorB);
+    $contratoA = $criarContrato('ZZPO Colaborador A', $codSetorA);
+    $contratoB = $criarContrato('ZZPO Colaborador B', $codSetorB);
 
     // AvaliacaoExperienciaService::contratoParaAvaliar() resolve o gestor do contrato via o vínculo "Gestor
     // Imediato" (usuarios.colaborador_metadados_id -> usuarios.gestor_usuario_id), não pelo gestor_usuario_id
@@ -295,6 +305,7 @@ try {
         $pdo->prepare('UPDATE usuarios SET gestor_usuario_id = NULL WHERE gestor_usuario_id = ?')->execute([$id]);
         $pdo->prepare('DELETE FROM usuarios WHERE id = ?')->execute([$id]);
     }
+    zzLimparSetores($pdo, $criados['setores']);
 }
 
 if ($falhas !== []) {

@@ -48,14 +48,19 @@ final class PermissaoPerfilPolicy
     }
 
     /**
-     * GESTOR (Etapa 2C.1): SOMENTE permissões de módulos com escopo setorial COMPROVADO (`usuario_setores_gerenciados`) e fluxo revisado.
-     * `avaliacao_experiencia.avaliar` ficou DE FORA (evidência: as ações de escrita de AdminAvaliacoesExperienciaController ignoram o
-     * retorno de Security::csrfCheck — ver riscos-conhecidos.md); entra na Etapa 2C.2 junto com a correção aprovada. Os demais módulos
-     * (Desempenho, Feedback, PDI, Solicitação de Vaga, Kanban, Integração) seguem indisponíveis ao Gestor até a 2C.2.
+     * GESTOR: SOMENTE permissões de módulos com escopo setorial COMPROVADO (`usuario_setores_gerenciados`, via EscopoSetorial) e fluxo revisado.
+     *  - Etapa 2C.1: colaboradores.visualizar, avaliacao_experiencia.visualizar. `avaliacao_experiencia.avaliar` segue DE FORA (o CSRF foi
+     *    corrigido na 2C.2A, mas a liberação de escrita da Experiência ao Gestor não faz parte desta etapa — decisão pendente).
+     *  - Etapa 2C.2A: Avaliação de Desempenho, Feedback e PDI — leitura e escrita com escopo por LINHA = setor ATUAL do contrato
+     *    (listagem, detalhe por ID, criação com colaborador do POST, edição, ciência, conclusão, cancelamento, acompanhamento, transições).
+     *    Reabrir concluído segue só Admin/RH. Solicitação de Vaga, Kanban e Integração do Colaborador seguem indisponíveis (2C.2B).
      */
     private const GESTOR_PERMITIDAS = [
         'colaboradores.visualizar',
         'avaliacao_experiencia.visualizar',
+        'avaliacao_desempenho.visualizar', 'avaliacao_desempenho.avaliar',
+        'feedback.visualizar', 'feedback.avaliar',
+        'pdi.visualizar', 'pdi.gerenciar', 'pdi.acompanhar',
     ];
 
     /** Perfis com acesso global pelo próprio papel (Authorization já os libera sem linhas em usuario_permissoes). */

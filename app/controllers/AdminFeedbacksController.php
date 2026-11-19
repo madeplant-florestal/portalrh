@@ -21,6 +21,19 @@ class AdminFeedbacksController
         }
     }
 
+    /**
+     * CSRF obrigatório em toda escrita (Etapa 2C.2A): falha => 400 e NADA é processado. Antes, o retorno de
+     * Security::csrfCheck() era descartado e a requisição seguia mesmo sem token válido.
+     */
+    private function exigirCsrf(): void
+    {
+        if (!Security::csrfCheck($_POST['csrf'] ?? '')) {
+            http_response_code(400);
+            echo 'CSRF inválido';
+            exit;
+        }
+    }
+
     public function index(): void
     {
         $this->exigirLogin();
@@ -71,7 +84,7 @@ class AdminFeedbacksController
         $this->view->render('admin/feedbacks/form', [
             'modo' => 'criar', 'feedback' => null, 'valores' => [], 'ciencias' => [], 'eventos' => [],
             'contrato' => $contrato, 'gestorSugerido' => $gestorSugerido,
-            'contratosBusca' => $busca !== '' ? $service->buscarContratos($busca) : [],
+            'contratosBusca' => $busca !== '' ? $service->buscarContratos($busca, $ator) : [],
             'busca' => $busca,
             'usuarios' => $service->usuariosParaEscolha($ator),
             'escopoTotal' => FeedbackService::escopoTotal($ator),
@@ -82,7 +95,7 @@ class AdminFeedbacksController
     public function store(): void
     {
         $this->exigirLogin();
-        Security::csrfCheck($_POST['csrf'] ?? '');
+        $this->exigirCsrf();
         $ator = FeedbackService::atorDaSessao();
         $result = (new FeedbackService())->criar($_POST, $ator, new DateTimeImmutable('now'), $_SERVER['REMOTE_ADDR'] ?? null);
         if (!($result['ok'] ?? false)) {
@@ -119,7 +132,7 @@ class AdminFeedbacksController
     public function atualizar(string $id): void
     {
         $this->exigirLogin();
-        Security::csrfCheck($_POST['csrf'] ?? '');
+        $this->exigirCsrf();
         $ator = FeedbackService::atorDaSessao();
         $result = (new FeedbackService())->atualizar((int)$id, $_POST, $ator, new DateTimeImmutable('now'), $_SERVER['REMOTE_ADDR'] ?? null);
         $destino = '/admin/feedbacks/' . (int)$id . '/editar';
@@ -129,7 +142,7 @@ class AdminFeedbacksController
     public function concluir(string $id): void
     {
         $this->exigirLogin();
-        Security::csrfCheck($_POST['csrf'] ?? '');
+        $this->exigirCsrf();
         $ator = FeedbackService::atorDaSessao();
         $result = (new FeedbackService())->concluir((int)$id, $_POST, $ator, new DateTimeImmutable('now'), $_SERVER['REMOTE_ADDR'] ?? null);
         $destino = '/admin/feedbacks/' . (int)$id . '/editar';
@@ -139,7 +152,7 @@ class AdminFeedbacksController
     public function espacoColaborador(string $id): void
     {
         $this->exigirLogin();
-        Security::csrfCheck($_POST['csrf'] ?? '');
+        $this->exigirCsrf();
         $ator = FeedbackService::atorDaSessao();
         $result = (new FeedbackService())->registrarEspacoColaborador((int)$id, (string)($_POST['espaco_colaborador'] ?? ''), $ator, new DateTimeImmutable('now'));
         $destino = '/admin/feedbacks/' . (int)$id . '/editar';
@@ -149,7 +162,7 @@ class AdminFeedbacksController
     public function ciencia(string $id): void
     {
         $this->exigirLogin();
-        Security::csrfCheck($_POST['csrf'] ?? '');
+        $this->exigirCsrf();
         $ator = FeedbackService::atorDaSessao();
         $feedback = (new FeedbackRepository())->buscarPorId((int)$id);
         $nomeColaborador = Security::sanitizeString($_POST['nome_colaborador'] ?? ($feedback['snap_nome'] ?? ''));
@@ -161,7 +174,7 @@ class AdminFeedbacksController
     public function reabrir(string $id): void
     {
         $this->exigirLogin();
-        Security::csrfCheck($_POST['csrf'] ?? '');
+        $this->exigirCsrf();
         $ator = FeedbackService::atorDaSessao();
         $result = (new FeedbackService())->reabrir((int)$id, (string)($_POST['justificativa'] ?? ''), $ator, new DateTimeImmutable('now'), $_SERVER['REMOTE_ADDR'] ?? null);
         $destino = '/admin/feedbacks/' . (int)$id . '/editar';

@@ -21,6 +21,19 @@ class AdminAvaliacoesExperienciaController
         }
     }
 
+    /**
+     * CSRF obrigatório em toda escrita (Etapa 2C.2A): falha => 400 e NADA é processado. Antes, o retorno de
+     * Security::csrfCheck() era descartado e a requisição seguia mesmo sem token válido.
+     */
+    private function exigirCsrf(): void
+    {
+        if (!Security::csrfCheck($_POST['csrf'] ?? '')) {
+            http_response_code(400);
+            echo 'CSRF inválido';
+            exit;
+        }
+    }
+
     public function index(): void
     {
         $this->exigirLogin();
@@ -77,7 +90,7 @@ class AdminAvaliacoesExperienciaController
     public function salvar(string $metadadosId, string $tipo): void
     {
         $this->exigirLogin();
-        Security::csrfCheck($_POST['csrf'] ?? '');
+        $this->exigirCsrf();
         $ator = AvaliacaoExperienciaService::atorDaSessao();
         $result = (new AvaliacaoExperienciaService())->salvarRascunho((int)$metadadosId, $tipo, $_POST, $ator, new DateTimeImmutable('now'), $_SERVER['REMOTE_ADDR'] ?? null);
         if (!($result['ok'] ?? false)) {
@@ -89,7 +102,7 @@ class AdminAvaliacoesExperienciaController
     public function concluir(string $id): void
     {
         $this->exigirLogin();
-        Security::csrfCheck($_POST['csrf'] ?? '');
+        $this->exigirCsrf();
         $ator = AvaliacaoExperienciaService::atorDaSessao();
         $avaliacaoId = (int)$id;
         $service = new AvaliacaoExperienciaService();
@@ -105,7 +118,7 @@ class AdminAvaliacoesExperienciaController
     public function ciencia(string $id): void
     {
         $this->exigirLogin();
-        Security::csrfCheck($_POST['csrf'] ?? '');
+        $this->exigirCsrf();
         $ator = AvaliacaoExperienciaService::atorDaSessao();
         $avaliacaoId = (int)$id;
         $service = new AvaliacaoExperienciaService();
@@ -119,7 +132,7 @@ class AdminAvaliacoesExperienciaController
     public function reabrir(string $id): void
     {
         $this->exigirLogin();
-        Security::csrfCheck($_POST['csrf'] ?? '');
+        $this->exigirCsrf();
         $ator = AvaliacaoExperienciaService::atorDaSessao();
         $avaliacaoId = (int)$id;
         $service = new AvaliacaoExperienciaService();

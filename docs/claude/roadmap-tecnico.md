@@ -687,8 +687,8 @@ Levantamento do escopo REAL de cada módulo operacional hoje usado por viewers d
 - Avaliação de Experiência (`avaliacao_experiencia.*`): `AvaliacaoExperienciaService`/repositório filtram por setores gerenciados.
 
 **B — precisam implementar o escopo setorial** (hoje restringem por outro critério, que NÃO serve ao Gestor definitivo):
-- Avaliação de Desempenho, Feedback, PDI (`avaliacao_desempenho.*`, `feedback.*`, `pdi.*`): escopo por **gestor imediato/avaliador**
-  (`gestor_usuario_id`) via `escopoGestor` — exatamente o mecanismo que a política proíbe como fonte de escopo setorial.
+- ~~Avaliação de Desempenho, Feedback, PDI~~ — **FEITO na Etapa 2C.2A (2026-11):** escopo por setor ATUAL do contrato via `EscopoSetorial`
+  (`gestor_usuario_id` virou só o responsável registrado). Ver `riscos-conhecidos.md` item 11.
 - Solicitação de Vaga e Kanban de Vagas (`solicitacao_vaga.*`, `kanban_vagas.*`): escopo por **solicitante/aprovador** (objeto), não por setor.
 - Movimentação de Pessoal: por solicitante e `is_gestor` legado (`usuario_colaboradores`).
 - Integração do Colaborador (`integracao_colaborador.*`: QR, resultados, dashboard de Integração): **sem filtro por ator** (resultados e

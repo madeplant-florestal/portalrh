@@ -23,6 +23,7 @@
  */
 
 require __DIR__ . '/../../app/core/bootstrap.php';
+require __DIR__ . '/fixture_setor_gerenciado.php';
 
 SchemaManager::ensure();
 $pdo = Database::conn();
@@ -37,11 +38,13 @@ $check = static function (bool $cond, string $msg) use (&$falhas): void {
 };
 
 $suffix = (string)time() . (string)random_int(100, 999);
-$criados = ['usuarios' => [], 'metadados' => []];
+$criados = ['usuarios' => [], 'metadados' => [], 'setores' => []];
+// Etapa 2C.2A: o acesso é por Setor Gerenciado (setor ATUAL do contrato) — não mais por gestor_usuario_id.
+$codigoSetorTeste = 'ZD' . substr($suffix, -5);
 $senha = password_hash('irrelevante', PASSWORD_BCRYPT);
 $hoje = new DateTimeImmutable('2026-09-30');
 
-$criarContrato = static function (string $nome) use ($pdo, &$criados, $suffix): int {
+$criarContrato = static function (string $nome) use ($pdo, &$criados, $suffix, $codigoSetorTeste): int {
     static $seq = 0;
     $seq++;
     $identificador = 'ZZAD' . $suffix . $seq;
@@ -52,7 +55,7 @@ $criarContrato = static function (string $nome) use ($pdo, &$criados, $suffix): 
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)'
     )->execute([
         $identificador, 'EMPA', 'UNI', 'ZC' . $suffix . $seq, 'ZP' . $suffix . $seq, null, $nome, 'ZZAD Empresa', 'ZZAD Unidade',
-        'ST1', 'ZZAD Setor', 'ZZAD Cargo', 'CG1', '2024-01-10', '2024-01-10', 'zzad-teste',
+        $codigoSetorTeste, 'ZZAD Setor', 'ZZAD Cargo', 'CG1', '2024-01-10', '2024-01-10', 'zzad-teste',
     ]);
     $criados['metadados'][] = $identificador;
     return (int)$pdo->lastInsertId();
@@ -95,6 +98,9 @@ try {
     Authorization::sincronizar($gestorAId, [$permVis, $permAva]);
     Authorization::sincronizar($gestorBId, [$permVis, $permAva]);
     Authorization::sincronizar($rhId, [$permVis, $permAva]);
+    $setorTeste = zzSetorTeste($pdo, $codigoSetorTeste, 'ZZAD');
+    $criados['setores'][] = $setorTeste;
+    zzGerenciar($pdo, $gestorAId, $setorTeste); // só o Gestor A gerencia o setor do colaborador; o B não
     $atorGestorA = ['id' => $gestorAId, 'role' => 'viewer'];
     $atorGestorB = ['id' => $gestorBId, 'role' => 'viewer'];
     $atorRh = ['id' => $rhId, 'role' => 'rh'];
@@ -289,6 +295,7 @@ try {
         $pdo->prepare('UPDATE usuarios SET gestor_usuario_id = NULL WHERE gestor_usuario_id = ?')->execute([$id]);
         $pdo->prepare('DELETE FROM usuarios WHERE id = ?')->execute([$id]);
     }
+    zzLimparSetores($pdo, $criados['setores']);
 }
 
 if ($falhas !== []) {

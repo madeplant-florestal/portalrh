@@ -133,6 +133,50 @@ final class EscopoSetorial
     }
 
     /**
+     * O CONTRATO (`colaboradores_metadados.id`) é acessível? Decide pelo setor ATUAL do contrato, lido agora do METADADOS (nunca um
+     * snapshot gravado em feedback/avaliação/PDI): transferido = acompanha o setor novo; setor ausente/vazio = só o escopo global;
+     * contrato inexistente = nunca. Cada contrato de um colaborador com múltiplos contratos é avaliado isoladamente.
+     */
+    public function permiteColaborador(int $metadadosId): bool
+    {
+        if ($metadadosId <= 0) {
+            return false;
+        }
+        if ($this->ehGlobal()) {
+            return true;
+        }
+        if (!$this->enxergaAlgo()) {
+            return false;
+        }
+        $stmt = Database::conn()->prepare('SELECT codigo_setor FROM colaboradores_metadados WHERE id = ? LIMIT 1');
+        $stmt->execute([$metadadosId]);
+        $codigo = $stmt->fetchColumn();
+        return $this->permiteSetor($codigo === false || $codigo === null ? null : (string)$codigo);
+    }
+
+    /**
+     * Condição SQL parametrizada sobre uma coluna que guarda `colaboradores_metadados.id` (setor ATUAL do contrato, via EXISTS).
+     * Global: `1 = 1`; restrito com setores: EXISTS(... codigo_setor IN (?, ...)); vazio/nenhum: `1 = 0`. `$colunaMetadadosId` é um
+     * identificador FIXO (nunca entrada de usuário).
+     *
+     * @param array<int,mixed> $params recebe os parâmetros posicionais
+     */
+    public function sqlColaborador(string $colunaMetadadosId, array &$params): string
+    {
+        if ($this->ehGlobal()) {
+            return '1 = 1';
+        }
+        if (!$this->enxergaAlgo()) {
+            return '1 = 0';
+        }
+        foreach ($this->codigos as $c) {
+            $params[] = $c;
+        }
+        return 'EXISTS (SELECT 1 FROM colaboradores_metadados cm_esc WHERE cm_esc.id = ' . $colunaMetadadosId
+            . ' AND cm_esc.codigo_setor IN (' . implode(', ', array_fill(0, count($this->codigos), '?')) . '))';
+    }
+
+    /**
      * Condição SQL parametrizada para uma coluna de código de setor. Global: `1 = 1`; restrito com setores: `coluna IN (?, ...)`;
      * vazio/nenhum: `1 = 0` (NUNCA sem filtro). `$coluna` deve ser um identificador FIXO do código (nunca entrada de usuário).
      *

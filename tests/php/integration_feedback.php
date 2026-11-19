@@ -16,11 +16,12 @@
  *     imutabilidade após conclusão (§59);
  *   - ciência COMPARTILHADA (AvaliacoesDesenvolvimentoAuditoriaService) grava o documento_tipo/
  *     documento_id corretos e nunca permite registrar ciência em documento de terceiro;
- *   - escopo por linha (gestor responsável) — mesmo padrão de PdiService/AvaliacaoExperienciaService,
- *     Admin/RH veem tudo, gestor sem vínculo é bloqueado (IDOR).
+ *   - escopo por linha (Setor Gerenciado do gestor — Etapa 2C.2A; antes: gestor responsável) — mesmo padrão de AvaliacaoExperienciaService,
+ *     Admin/RH veem tudo, gestor sem o setor do colaborador é bloqueado (IDOR).
  */
 
 require __DIR__ . '/../../app/core/bootstrap.php';
+require __DIR__ . '/fixture_setor_gerenciado.php';
 
 SchemaManager::ensure();
 $pdo = Database::conn();
@@ -35,11 +36,13 @@ $check = static function (bool $cond, string $msg) use (&$falhas): void {
 };
 
 $suffix = (string)time() . (string)random_int(100, 999);
-$criados = ['usuarios' => [], 'metadados' => []];
+$criados = ['usuarios' => [], 'metadados' => [], 'setores' => []];
 $senha = password_hash('irrelevante', PASSWORD_BCRYPT);
 $agora = new DateTimeImmutable('2026-06-15 10:00:00');
 
-$criarContrato = static function (string $nome) use ($pdo, &$criados, $suffix): int {
+// Etapa 2C.2A: o acesso é por Setor Gerenciado (setor ATUAL do contrato) — não mais por gestor_usuario_id.
+$codigoSetorTeste = 'ZF' . substr($suffix, -5);
+$criarContrato = static function (string $nome) use ($pdo, &$criados, $suffix, $codigoSetorTeste): int {
     static $seq = 0;
     $seq++;
     $identificador = 'ZZFB' . $suffix . $seq;
@@ -50,7 +53,7 @@ $criarContrato = static function (string $nome) use ($pdo, &$criados, $suffix): 
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     )->execute([
         $identificador, 'EMPA', 'UNI', 'ZC' . $suffix . $seq, 'ZP' . $suffix . $seq, null, $nome, 'ZZFB Empresa', 'ZZFB Unidade',
-        'ST1', 'ZZFB Setor', 'ZZFB Cargo', 'CG1', '2020-01-01', '2020-01-01', null, null, 1, 'zzfb-teste',
+        $codigoSetorTeste, 'ZZFB Setor', 'ZZFB Cargo', 'CG1', '2020-01-01', '2020-01-01', null, null, 1, 'zzfb-teste',
     ]);
     $criados['metadados'][] = $identificador;
     return (int)$pdo->lastInsertId();
@@ -88,6 +91,9 @@ try {
     Authorization::sincronizar($gestorAId, [$permVis, $permAva]);
     Authorization::sincronizar($gestorBId, [$permVis, $permAva]);
     Authorization::sincronizar($rhId, [$permVis, $permAva]);
+    $setorTeste = zzSetorTeste($pdo, $codigoSetorTeste, 'ZZFB');
+    $criados['setores'][] = $setorTeste;
+    zzGerenciar($pdo, $gestorAId, $setorTeste); // só o Gestor A gerencia o setor do colaborador; o B não
     $atorGestorA = ['id' => $gestorAId, 'role' => 'viewer'];
     $atorGestorB = ['id' => $gestorBId, 'role' => 'viewer'];
     $atorRh = ['id' => $rhId, 'role' => 'rh'];
@@ -270,6 +276,7 @@ try {
         $pdo->prepare('UPDATE usuarios SET gestor_usuario_id = NULL WHERE gestor_usuario_id = ?')->execute([$id]);
         $pdo->prepare('DELETE FROM usuarios WHERE id = ?')->execute([$id]);
     }
+    zzLimparSetores($pdo, $criados['setores']);
 }
 
 if ($falhas !== []) {

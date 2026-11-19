@@ -130,7 +130,7 @@ Identificados na auditoria arquitetural de 2026-07-09, documentados aqui para n�
      acesso dos viewers-gestores atuais; na arquitetura definitiva = NENHUM (decisão da etapa de migração).
    - **Gestor hoje:** perfil conhecido, sem poder administrativo, sem privilégio por `is_supervisor`, rotas só da Central, Colaboradores
      (escopo setorial, sem salário) e Avaliação de Experiência (visualizar). Gates `requireRole` NÃO receberam `gestor` em massa (teste estático).
-   - **ACHADO — CSRF não imposto em ações de escrita (pré-existente, NÃO corrigido; requer aprovação, ver item 7 do CLAUDE.md):**
+   - **ACHADO — CSRF não imposto em ações de escrita (pré-existente; CORRIGIDO na Etapa 2C.2A — ver item 11):**
      `AdminAvaliacoesExperienciaController` (salvar/concluir/ciencia/reabrir), `AdminAvaliacoesDesempenhoController`, `AdminFeedbacksController`
      (e, a verificar, PDI) chamam `Security::csrfCheck(...)` SEM usar o retorno — a requisição é processada mesmo com token inválido/ausente.
      Por isso `avaliacao_experiencia.avaliar` (e os demais módulos de escrita) NÃO foi liberado ao Gestor; entra na 2C.2 junto com a correção
@@ -138,3 +138,25 @@ Identificados na auditoria arquitetural de 2026-07-09, documentados aqui para n�
    - **Pendências da 2C.2:** Desempenho, Feedback, PDI, Solicitação de Vaga, Kanban e Integração do Colaborador (escopo ainda não setorial);
      relatório de reclassificação: `database/diagnosticos/2026-11-21-gestor-reclassificacao-relatorio.sql`. Cobertura:
      `integration_perfil_gestor_estrutura.php`, `integration_migration_role_gestor.php` (schema isolado), `unit_rotas_viewer_cobertura.php`.
+11. **Escopo setorial em Avaliação de Desempenho, Feedback e PDI (Etapa 2C.2A, 2026-11) — IMPLEMENTADO; CSRF CORRIGIDO.**
+   - **Regra permanente:** o acesso por LINHA é o setor ATUAL do contrato (`colaboradores_metadados.codigo_setor`, lido na hora — nunca o
+     snapshot gravado no registro) ∈ Setores Gerenciados do ator (`usuario_setores_gerenciados`, via `EscopoSetorial::permiteColaborador()` /
+     `sqlColaborador()`). `gestor_usuario_id` passou a ser SÓ o responsável registrado (exibição/autoria), nunca fonte de acesso. Colaborador sem
+     setor = só escopo global; transferido = acompanha o setor novo; cada contrato (múltiplos contratos) é avaliado pelo seu setor; desligado = segue
+     o setor do contrato (histórico consultável ao gestor do setor; regras de elegibilidade para NOVOS registros continuam valendo). Perder um setor
+     retira o acesso na hora; o registro, a autoria e o responsável permanecem intactos e visíveis a Admin/RH (nada é reatribuído).
+   - **Defesa em profundidade:** além de listar/detalhe/escrita, a CRIAÇÃO valida o `metadados_id` do POST contra o escopo, a busca/abertura de
+     formulário de contrato é filtrada (não vazam dados do colaborador nem avaliações anteriores) e o PDI filtra "PDIs do contrato" e origens.
+     Repositórios aceitam `?EscopoSetorial` (`null` = sem restrição, só uso interno/teste; os services sempre informam o escopo do ator).
+   - **Permissões do Gestor (2C.2A):** `avaliacao_desempenho.visualizar/avaliar`, `feedback.visualizar/avaliar`, `pdi.visualizar/gerenciar/acompanhar`
+     (somando Colaboradores e Experiência-visualizar da 2C.1). `avaliacao_experiencia.avaliar` segue fora (decisão pendente). Reabrir concluído segue
+     só Admin/RH.
+   - **CSRF — RESOLVIDO (era o achado do item 10):** `AdminFeedbacksController`, `AdminAvaliacoesDesempenhoController` e
+     `AdminAvaliacoesExperienciaController` agora usam `exigirCsrf()` (400 + `exit`, nada processado). O PDI já impunha CSRF (`entrarPost`).
+   - **IMPACTO a conferir em produção (viewers legados):** viewers que operavam esses módulos como "gestor responsável" (`gestor_usuario_id`) e
+     NÃO têm Setores Gerenciados passam a ver lista vazia (a regra do Gestor definitivo é por setor). Os 9 viewers transitórios (78, 81, 83, 87,
+     89, 90, 93, 95, 97): só 78, 81, 87 e 97 têm setores; os demais perdem a visão por responsável até serem reclassificados/receberem setores.
+   - **Residuais:** (a) `PdiService::usuariosParaEscolha` lista todos os usuários ativos (id/nome/role) a quem tem `pdi.gerenciar` — usado para escolher
+     o responsável de ações; o Gestor passa a vê-lo (exposição só de nomes, preexistente para o viewer-gestor); (b) o aviso do PDI "o gestor
+     responsável não possui pdi.visualizar" descreve o responsável registrado, não o acesso (que agora é por setor); (c) `MovimentacaoPessoal` lê
+     `avaliacoes_desempenho` por conta própria e continua fora do perfil Gestor. Cobertura: `integration_gestor_escopo_desempenho_feedback_pdi.php`.

@@ -121,13 +121,16 @@ class PdiService
      */
     public static function escopoTotal(array $ator): bool
     {
-        return in_array((string)($ator['role'] ?? ''), ['admin', 'rh'], true);
+        return self::escopo($ator)->ehGlobal();
     }
 
-    /** null = sem restrição (Admin/RH com permissão); id = só PDIs em que o usuário é o gestor responsável. */
-    public static function escopoGestor(array $ator): ?int
+    /**
+     * Escopo setorial do ator (resolvedor central, Etapa 2C.2A): global (admin/RH/Supervisor Geral — o flag não muda nada), Setores
+     * Gerenciados (Gestor) ou nenhum. NÃO usa `gestor_usuario_id` (só o responsável registrado no PDI).
+     */
+    public static function escopo(array $ator): EscopoSetorial
     {
-        return self::escopoTotal($ator) ? null : (int)$ator['id'];
+        return EscopoSetorial::resolver($ator);
     }
 
     public static function papelDoAtor(array $ator): string
@@ -138,9 +141,13 @@ class PdiService
         return ($ator['role'] ?? '') === 'rh' ? 'rh' : 'gestor';
     }
 
+    /**
+     * Acesso por LINHA: global, ou o contrato do PDI está num Setor Gerenciado do ator (setor ATUAL do contrato — nunca o snapshot).
+     * Perder o setor retira o acesso; o PDI, seu histórico e o responsável registrado permanecem intactos.
+     */
     public static function podeAcessar(array $pdi, array $ator): bool
     {
-        return (int)($ator['id'] ?? 0) > 0 && (self::escopoTotal($ator) || (int)$pdi['gestor_usuario_id'] === (int)$ator['id']);
+        return (int)($ator['id'] ?? 0) > 0 && self::escopo($ator)->permiteColaborador((int)($pdi['metadados_id'] ?? 0));
     }
 
     private static function temPermissao(array $ator, string $permissao): bool
@@ -466,7 +473,7 @@ class PdiService
             'gestor' => ctype_digit((string)($filtros['gestor'] ?? '')) ? (int)$filtros['gestor'] : 0,
             'unidade' => $unidade,
         ];
-        $escopo = self::escopoGestor($ator);
+        $escopo = self::escopo($ator);
         $linhas = $this->repository->listar($f, $escopo, $hoje->format('Y-m-d'), self::LIMITE_LISTAGEM);
         foreach ($linhas as &$l) {
             $l['prazo'] = self::situacaoPrazo($l, $hoje);
@@ -555,7 +562,7 @@ class PdiService
         if (self::semPermissao($ator, 'pdi.gerenciar') !== null) {
             return [];
         }
-        return $this->repository->pdisDoContrato($metadadosId, self::escopoGestor($ator));
+        return $this->repository->pdisDoContrato($metadadosId, self::escopo($ator));
     }
 
     /** @return array{itens:array,texto:string} filtra os candidatos pelas chaves marcadas e junta os textos selecionados. */
@@ -647,12 +654,12 @@ class PdiService
         if (self::semPermissao($ator, 'pdi.gerenciar') !== null || mb_strlen($busca) < 2) {
             return [];
         }
-        return $this->repository->buscarContratos($busca, $hoje->format('Y-m-d'));
+        return $this->repository->buscarContratos($busca, $hoje->format('Y-m-d'), 20, self::escopo($ator));
     }
 
     public function contratoParaCriacao(int $metadadosId, array $ator, DateTimeImmutable $hoje): ?array
     {
-        if (self::semPermissao($ator, 'pdi.gerenciar') !== null) {
+        if (self::semPermissao($ator, 'pdi.gerenciar') !== null || !self::escopo($ator)->permiteColaborador($metadadosId)) {
             return null;
         }
         return $this->repository->buscarContrato($metadadosId);
@@ -671,7 +678,9 @@ class PdiService
         if ($erro = self::semPermissao($ator, 'pdi.gerenciar')) {
             return $erro;
         }
-        $contrato = $this->repository->buscarContrato(ctype_digit((string)($post['metadados_id'] ?? '')) ? (int)$post['metadados_id'] : 0);
+        // O colaborador informado no POST precisa estar no escopo do ator (não confia no metadados_id recebido).
+        $metadadosPost = ctype_digit((string)($post['metadados_id'] ?? '')) ? (int)$post['metadados_id'] : 0;
+        $contrato = self::escopo($ator)->permiteColaborador($metadadosPost) ? $this->repository->buscarContrato($metadadosPost) : null;
         if ($contrato === null) {
             return self::falha('Selecione o colaborador (contrato oficial do METADADOS).');
         }

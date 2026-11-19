@@ -7,7 +7,7 @@
  *     competências em texto (máx. 10, sem duplicadas), ações (máx. 3 por slot, prazo dentro do PDI);
  *   - transições de status e regras de conclusão/reabertura; atraso e progresso só como SINALIZAÇÃO;
  *   - divergência com o METADADOS (cargo/unidade/desligamento) só sinaliza;
- *   - escopo por linha (Admin/RH total; demais só o próprio) e papel do ator;
+ *   - escopo por linha (Admin/RH total; Gestor só o setor ATUAL do contrato — Etapa 2C.2A; ids inexistentes: sem consulta de setor) e papel do ator;
  *   - fontes: sem Área, sem anexos/upload, sem notificações, sem assinatura, sem cifragem, sem CPF/codigo_pessoa/
  *     `colaboradores` legado, sem rota do colaborador, acompanhamentos/eventos append-only.
  */
@@ -105,13 +105,14 @@ $check($S::divergencias(['atual_demissao' => '2026-09-25'] + $snap, $hoje)['desl
 // ---- escopo, papel -------------------------------------------------------------------------------------------------------------------
 $admin = ['id' => 1, 'role' => 'admin', 'supervisor' => false];
 $rh = ['id' => 2, 'role' => 'rh', 'supervisor' => false];
-$viewer = ['id' => 3, 'role' => 'viewer', 'supervisor' => false];
-$super = ['id' => 4, 'role' => 'viewer', 'supervisor' => true]; // o flag é IGNORADO no PDI
+$viewer = ['id' => 2147480003, 'role' => 'viewer', 'supervisor' => false]; // id inexistente: sem Setores Gerenciados (escopo vazio, nunca global)
+$super = ['id' => 2147480004, 'role' => 'viewer', 'supervisor' => true]; // o flag é IGNORADO no PDI
 $check($S::escopoTotal($admin) && $S::escopoTotal($rh) && !$S::escopoTotal($super) && !$S::escopoTotal($viewer), '(escopo) Só Admin e RH têm escopo total; supervisor (sinalização) e viewer/gestor só o próprio');
-$check($S::escopoGestor($rh) === null && $S::escopoGestor($viewer) === 3 && $S::escopoGestor($super) === 4, '(escopo) Filtro por linha: null para Admin/RH, id do usuário para os demais');
+$check($S::escopo($rh)->ehGlobal() && $S::escopo($admin)->ehGlobal() && !$S::escopo($viewer)->enxergaAlgo() && !$S::escopo($super)->enxergaAlgo() && $S::escopo(['id' => 0, 'role' => 'admin'])->semAutorizacao(), '(escopo) Resolvedor central: global para Admin/RH; sem Setores Gerenciados = conjunto VAZIO (nunca global); sem usuário = sem autorização');
 $check($S::papelDoAtor($admin) === 'admin' && $S::papelDoAtor($super) === 'gestor' && $S::papelDoAtor($rh) === 'rh' && $S::papelDoAtor($viewer) === 'gestor', '(papel) admin / rh / gestor');
-$pdiDoGestor3 = ['gestor_usuario_id' => 3];
-$check($S::podeAcessar($pdiDoGestor3, $viewer) && !$S::podeAcessar(['gestor_usuario_id' => 9], $viewer) && $S::podeAcessar(['gestor_usuario_id' => 9], $rh) && $S::podeAcessar(['gestor_usuario_id' => 9], $admin) && !$S::podeAcessar($pdiDoGestor3, ['id' => 0, 'role' => 'admin']) && !$S::podeAcessar(['gestor_usuario_id' => 9], $super) && $S::podeAcessar(['gestor_usuario_id' => 4], $super), '(escopo) Gestor (e supervisor sem ser Admin/RH) só acessa o PDI em que é o responsável; sem usuário nunca acessa');
+$pdiDoContrato9 = ['metadados_id' => 9, 'gestor_usuario_id' => 2147480003];
+$check($S::podeAcessar($pdiDoContrato9, $rh) && $S::podeAcessar($pdiDoContrato9, $admin) && !$S::podeAcessar($pdiDoContrato9, ['id' => 0, 'role' => 'admin']), '(escopo) Admin/RH acessam qualquer PDI; sem usuário nunca');
+$check(!$S::podeAcessar($pdiDoContrato9, $viewer) && !$S::podeAcessar($pdiDoContrato9, $super), '(escopo) Ser o gestor RESPONSÁVEL registrado (gestor_usuario_id) NÃO dá acesso: quem não gerencia o setor do contrato (e o supervisor sem ser Admin/RH) é negado');
 
 // ---- formatação do histórico -------------------------------------------------------------------------------------------------------------
 $check($S::formatarValorEvento('data_prevista_conclusao', '2026-10-20') === '20/10/2026' && $S::formatarValorEvento('status', 'em_andamento') === 'Em andamento' && $S::formatarValorEvento('avaliacao_final', 'superou_expectativa') === 'Superou expectativa' && $S::formatarValorEvento('acao_1.prazo', '2026-11-05') === '05/11/2026' && $S::formatarValorEvento('acao_2.status', 'concluida') === 'Concluída' && $S::formatarValorEvento('x', null) === '—', '(histórico) Datas, status e avaliação formatados nos eventos');

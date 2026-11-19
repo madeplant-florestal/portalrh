@@ -14,6 +14,7 @@
  */
 
 require __DIR__ . '/../../app/core/bootstrap.php';
+require __DIR__ . '/fixture_setor_gerenciado.php';
 
 $pdo = Database::conn();
 $falhas = [];
@@ -27,7 +28,12 @@ $check = static function (bool $cond, string $msg) use (&$falhas): void {
 };
 
 $suffix = substr((string)time(), -5) . (string)random_int(10, 99);
-$criados = ['usuarios' => [], 'metadados' => []];
+$criados = ['usuarios' => [], 'metadados' => [], 'setores' => []];
+// Etapa 2C.2A: acesso por Setor Gerenciado (setor ATUAL do contrato). SA = setor dos contratos de teste (gerenciado pelos gestores A/B e pelos
+// usuários de permissão); SX = setor de um "gestor de fora" (sem nenhum contrato); SS = setor do supervisor (que não é Admin/RH).
+$codA = 'PA' . substr($suffix, -5);
+$codX = 'PX' . substr($suffix, -5);
+$codS = 'PS' . substr($suffix, -5);
 $senha = password_hash('irrelevante', PASSWORD_BCRYPT);
 $cpfSecreto = '52998224725';
 $emp = 'ZPE' . $suffix;
@@ -76,18 +82,18 @@ $eventosDe = static function (int $id, string $tipo) use ($eventos): array {
     return array_values(array_filter($eventos($id), static fn(array $e): bool => $e['tipo_evento'] === $tipo));
 };
 
-$mk = static function (string $nome, string $unidade, string $cargo, ?string $dem = null) use ($pdo, &$criados, $suffix, $emp, $cpfSecreto, $dia): int {
+$mk = static function (string $nome, string $unidade, string $cargo, ?string $dem = null, ?string $setor = null) use ($pdo, &$criados, $suffix, $emp, $cpfSecreto, $dia, $codA): int {
     static $seq = 0;
     $seq++;
     $identificador = 'ZZPDI_' . $suffix . '_' . $seq;
     $pdo->prepare(
         'INSERT INTO colaboradores_metadados (
             identificador, codigo_empresa, codigo_unidade, numero_contrato, codigo_pessoa, cpf, nome, empresa, unidade,
-            cargo, codigo_cargo, admissao, data_inicio_cargo, demissao, motivo_rescisao_codigo, ativo, origem_metadados
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            cargo, codigo_cargo, admissao, data_inicio_cargo, demissao, motivo_rescisao_codigo, ativo, origem_metadados, codigo_setor, setor
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     )->execute([
         $identificador, $emp, $unidade, 'ZC' . $suffix . $seq, 'ZP' . $suffix . $seq, $cpfSecreto, $nome, 'ZZPDI Empresa', 'ZZPDI Unidade ' . $unidade,
-        'ZZPDI Cargo ' . $cargo, $cargo, $dia(-800), $dia(-200), $dem, $dem === null ? null : '003', $dem === null ? 1 : 0, 'zzpdi-teste',
+        'ZZPDI Cargo ' . $cargo, $cargo, $dia(-800), $dia(-200), $dem, $dem === null ? null : '003', $dem === null ? 1 : 0, 'zzpdi-teste', $setor ?? $codA, 'ZZPDI Setor',
     ]);
     $criados['metadados'][] = $identificador;
     return (int)$pdo->lastInsertId();
@@ -140,6 +146,16 @@ try {
     $gA = $ator($gestorAId, 'viewer');
     $gB = $ator($gestorBId, 'viewer');
     $semPerm = $ator($semPermId, 'rh');
+    $gestorXId = $novoUsuario('Gestor X', 'viewer', $todasPerm); // gestor de OUTRO setor (sem contratos): o "de fora" dos testes de escopo
+    $gX = $ator($gestorXId, 'viewer');
+    $sA = zzSetorTeste($pdo, $codA, 'ZZPDI');
+    $sX = zzSetorTeste($pdo, $codX, 'ZZPDI');
+    $sS = zzSetorTeste($pdo, $codS, 'ZZPDI');
+    $criados['setores'] = [$sA, $sX, $sS];
+    foreach ([$gestorAId, $gestorBId, $soVisId, $soGerId, $soAcoId] as $uSetorA) {
+        zzGerenciar($pdo, $uSetorA, $sA);
+    }
+    zzGerenciar($pdo, $gestorXId, $sX);
 
     $tem = static fn(int $u, string $p): bool => Authorization::usuarioTemPermissao($u, 'pdi.' . $p);
     $check($tem($adminId, 'visualizar') && $tem($adminId, 'gerenciar') && $tem($adminId, 'acompanhar'), '(permissão) Admin acessa tudo pelo bypass central');
@@ -454,7 +470,7 @@ try {
     $aVis = $ator($soVisId, 'viewer');
     $aGer = $ator($soGerId, 'viewer');
     $aAco = $ator($soAcoId, 'viewer');
-    $check($svc->detalhe($pVis, $aVis, $hoje) !== null && count($svc->listar([], $aVis, $hoje)['itens']) === 1, '(visualizar) Vê a lista e o detalhe do PDI em que é gestor');
+    $check($svc->detalhe($pVis, $aVis, $hoje) !== null && in_array($pVis, array_map('intval', array_column($svc->listar([], $aVis, $hoje)['itens'], 'id')), true), '(visualizar) Vê a lista e o detalhe dos PDIs do setor que gerencia (inclusive o em que consta como responsável)');
     $check($svc->atualizarEstrutura($pVis, $postEdicao($pVis, ['pontos_fortes' => 'x']), $aVis, $agora, $ip)['ok'] === false && $svc->adicionarAcompanhamento($pVis, 'x', false, $aVis, $agora, $ip)['ok'] === false && $svc->liberar($pVis, $aVis, $agora, $ip)['ok'] === false && $svc->registrarEspacoColaborador($pVis, 'x', 'y', $aVis, $agora, $ip)['ok'] === false, '(visualizar) Não edita, não acompanha e não muda status');
     $check($svc->atualizarEstrutura($pGer, $postEdicao($pGer, ['pontos_fortes' => 'Novo texto']), $aGer, $agora, $ip)['ok'] === true && $svc->liberar($pGer, $aGer, $agora, $ip)['ok'] === false && $svc->adicionarAcompanhamento($pGer, 'x', false, $aGer, $agora, $ip)['ok'] === false && $svc->registrarEspacoColaborador($pGer, 'Momento', '', $aGer, $agora, $ip)['ok'] === true, '(gerenciar) Edita a estrutura e registra o espaço do colaborador; NÃO altera status nem acompanha');
     $check($svc->atualizarEstrutura($pAco, $postEdicao($pAco, ['pontos_fortes' => 'x']), $aAco, $agora, $ip)['ok'] === false && $svc->liberar($pAco, $aAco, $agora, $ip)['ok'] === true && $svc->iniciar($pAco, $aAco, $agora, $ip)['ok'] === true && $svc->adicionarAcompanhamento($pAco, 'Ok', false, $aAco, $agora, $ip)['ok'] === true && $svc->registrarEvidencias($pAco, 'Evid', $aAco, $agora, $ip)['ok'] === true, '(acompanhar) Muda status, acompanha e registra evidências; NÃO edita a estrutura');
@@ -470,23 +486,28 @@ try {
     $idsB = array_map('intval', array_column($svc->listar([], $gB, $hoje)['itens'], 'id'));
     $idsRh = array_map('intval', array_column($svc->listar([], $rh, $hoje)['itens'], 'id'));
     $idsAdm = array_map('intval', array_column($svc->listar([], $adm, $hoje)['itens'], 'id'));
-    $donoA = array_map('intval', array_column($todas('SELECT id FROM pdis WHERE gestor_usuario_id = ?', [$gestorAId]), 'id'));
-    $donoB = array_map('intval', array_column($todas('SELECT id FROM pdis WHERE gestor_usuario_id = ?', [$gestorBId]), 'id'));
+    $idsX = array_map('intval', array_column($svc->listar([], $gX, $hoje)['itens'], 'id'));
+    $donoA = array_map('intval', array_column($todas('SELECT p.id FROM pdis p INNER JOIN colaboradores_metadados cm ON cm.id = p.metadados_id WHERE cm.codigo_setor = ?', [$codA]), 'id'));
+    $donoB = $donoA; // gestores A e B gerenciam o MESMO setor (SA): o acesso é do setor, não de quem é o responsável registrado
     sort($idsA);
     sort($donoA);
-    $check($idsA === $donoA && $idsA !== [] && array_diff($idsA, $donoB) === $idsA, '(escopo) A lista do gestor A traz SÓ os PDIs em que ele é o responsável');
-    $check(count(array_intersect($idsB, $donoA)) === 0 && $idsB !== [], '(escopo) A lista do gestor B não traz PDIs do gestor A');
+    sort($idsB);
+    $check($idsA === $donoA && $idsA !== [], '(escopo) A lista do gestor A traz TODOS e SÓ os PDIs de colaboradores do setor que ele gerencia (não mais "os que ele é responsável")');
+    $check($idsB === $donoA, '(escopo) O gestor B, do mesmo setor, vê os mesmos PDIs — o responsável registrado (gestor_usuario_id) NÃO é fonte de acesso');
+    $check($idsX === [], '(escopo) Gestor de OUTRO setor (SX) não vê nenhum PDI do setor SA');
     $check(!array_diff(array_merge($donoA, $donoB), $idsRh) && !array_diff(array_merge($donoA, $donoB), $idsAdm), '(escopo) RH e Admin veem os PDIs de todos os gestores');
-    $alheio = $donoB[0];
-    $check($svc->detalhe($alheio, $gA, $hoje) === null && $svc->detalhe($alheio, $rh, $hoje) !== null, '(escopo) Detalhe de PDI alheio: o gestor recebe "não encontrado"; RH acessa');
-    $check($svc->atualizarEstrutura($alheio, $postEdicao($alheio, ['pontos_fortes' => 'invasão']), $gA, $agora, $ip)['ok'] === false && $svc->adicionarAcompanhamento($alheio, 'invasão', false, $gA, $agora, $ip)['ok'] === false && $svc->registrarEvidencias($alheio, 'invasão', $gA, $agora, $ip)['ok'] === false && $svc->liberar($alheio, $gA, $agora, $ip)['ok'] === false && $svc->cancelar($alheio, 'invasão', $gA, $agora, $ip)['ok'] === false, '(escopo) O gestor A não altera, comenta, avalia, muda status nem cancela PDI do gestor B (mesmo com as três permissões)');
+    $alheio = $donoA[0];
+    $check($svc->detalhe($alheio, $gX, $hoje) === null && $svc->detalhe($alheio, $rh, $hoje) !== null, '(escopo) Detalhe de PDI alheio: o gestor recebe "não encontrado"; RH acessa');
+    $check($svc->atualizarEstrutura($alheio, $postEdicao($alheio, ['pontos_fortes' => 'invasão']), $gX, $agora, $ip)['ok'] === false && $svc->adicionarAcompanhamento($alheio, 'invasão', false, $gX, $agora, $ip)['ok'] === false && $svc->registrarEvidencias($alheio, 'invasão', $gX, $agora, $ip)['ok'] === false && $svc->liberar($alheio, $gX, $agora, $ip)['ok'] === false && $svc->cancelar($alheio, 'invasão', $gX, $agora, $ip)['ok'] === false, '(escopo) O gestor de outro setor não altera, comenta, avalia, muda status nem cancela PDI de colaborador de setor que não gerencia (mesmo com as três permissões)');
     $rowAlheio = $pdiRow($alheio);
     $check($rowAlheio['pontos_fortes'] !== 'invasão' && $rowAlheio['evidencias_evolucao'] !== 'invasão', '(escopo) Nada foi gravado no PDI alheio');
     // supervisor: a sinalização NÃO dá escopo global no PDI (só permissão individual + escopo por linha)
     $supId = $novoUsuario('Supervisor', 'viewer', $todasPerm);
     $pdo->prepare('UPDATE usuarios SET is_supervisor = 1 WHERE id = ?')->execute([$supId]);
     $supAtor = ['id' => $supId, 'role' => 'viewer', 'supervisor' => true];
-    $pSup = (int)$svc->criar($post($cP, $supId), $rh, $agora, $ip)['id'];
+    $cS = $mk('ZZPDI Contrato Supervisor', 'ZPU1', $cg1, null, $codS);
+    zzGerenciar($pdo, $supId, $sS); // o supervisor (não Admin/RH) só tem o escopo do SEU setor
+    $pSup = (int)$svc->criar($post($cS, $supId), $rh, $agora, $ip)['id'];
     $check($svc->detalhe($alheio, $supAtor, $hoje) === null && $svc->atualizarEstrutura($alheio, $postEdicao($alheio, ['pontos_fortes' => 'invasão do supervisor']), $supAtor, $agora, $ip)['ok'] === false && $svc->adicionarAcompanhamento($alheio, 'invasão', false, $supAtor, $agora, $ip)['ok'] === false && $svc->liberar($alheio, $supAtor, $agora, $ip)['ok'] === false && $pdiRow($alheio)['pontos_fortes'] !== 'invasão do supervisor', '(escopo) Supervisor com as três permissões, mas que não é Admin/RH, NÃO abre nem altera PDI de outro gestor');
     $check($svc->detalhe($pSup, $supAtor, $hoje) !== null && array_map('intval', array_column($svc->listar([], $supAtor, $hoje)['itens'], 'id')) === [$pSup] && $svc->adicionarAcompanhamento($pSup, 'x', false, $supAtor, $agora, $ip)['ok'] === false /* rascunho */ && $svc->registrarEspacoColaborador($pSup, 'Momento', '', $supAtor, $agora, $ip)['ok'] === true, '(escopo) Supervisor acessa o PDI em que ele próprio é o gestor, e a lista traz só esse');
     $comoUsuario($supId, 'viewer');
@@ -501,8 +522,8 @@ try {
     // Bloco 4 (2026-10, pedido do RH): bypass central de RH em Authorization::usuarioTemPermissao() —
     // RH sem permissão individual ($semPerm) agora acessa igual a RH com permissão ($rh) e Admin.
     $check($rhSemPermLista['ok'] === true && $svc->detalhe($alheio, $semPerm, $hoje) !== null && $svc->detalhe($alheio, $rh, $hoje) !== null && $svc->detalhe($alheio, $adm, $hoje) !== null, '(escopo) Matriz: RH (com ou sem permissão individual) e Admin (bypass central) acessam qualquer PDI — Bloco 4');
-    $filtroGestor = $svc->listar(['gestor' => (string)$gestorBId], $gA, $hoje);
-    $check(count(array_intersect(array_map('intval', array_column($filtroGestor['itens'], 'id')), $donoB)) === 0, '(escopo) Filtrar por outro gestor não amplia o escopo do gestor A');
+    $filtroGestor = $svc->listar(['gestor' => (string)$gestorBId], $gX, $hoje);
+    $check($filtroGestor['itens'] === [], '(escopo) Filtrar por gestor responsável não amplia o escopo do gestor de outro setor');
     $lf = $svc->listar(['status' => 'em_andamento', 'origem' => 'feedback', 'unidade' => $emp . '|ZPU1', 'cargo' => $cg1, 'empresa' => $emp, 'busca' => 'Ana'], $rh, $hoje);
     $check($lf['ok'] === true && array_diff(array_unique(array_column($lf['itens'], 'status')), ['em_andamento']) === [] && array_diff(array_unique(array_column($lf['itens'], 'snap_nome')), ['ZZPDI Ana Colaboradora']) === [], '(lista) Filtros de status, origem, unidade, cargo, empresa e colaborador combinam');
     $check($svc->listar(['status' => "x'; DROP TABLE pdis;--", 'busca' => "%_' OR 1=1 --", 'unidade' => "a|b' OR '1'='1"], $rh, $hoje)['ok'] === true && (int)$pdo->query('SELECT COUNT(*) FROM pdis')->fetchColumn() > 0, '(segurança) Filtros maliciosos são ignorados/parametrizados');
@@ -551,8 +572,10 @@ try {
     $check(!preg_match('/Warning:|Notice:|Deprecated:|Fatal error/i', $htmlIdx) && str_contains($htmlIdx, 'PDI — Plano de Desenvolvimento Individual') && str_contains($htmlIdx, 'Novo PDI') && str_contains($htmlIdx, 'ZZPDI Ana Colaboradora') && str_contains($htmlIdx, 'ações'), '(página) Lista renderiza com filtros, "Novo PDI" (tem pdi.gerenciar), colaborador e progresso das ações');
     $check(str_contains($htmlIdx, 'name="status"') && str_contains($htmlIdx, 'name="prazo"') && str_contains($htmlIdx, 'name="origem"') && str_contains($htmlIdx, 'name="unidade"') && str_contains($htmlIdx, 'name="cargo"') && str_contains($htmlIdx, 'name="gestor"') && !preg_match('/name="(area|setor)"/i', $htmlIdx), '(página) Filtros: status, prazo, colaborador, empresa, unidade, cargo, gestor, origem — sem Área');
     $_GET = ['busca' => 'Contrato Permissoes'];
+    $comoUsuario($gestorXId, 'viewer'); // gestor de OUTRO setor (SX)
     $htmlEsc = $renderizar(static fn() => (new AdminPdisController())->index());
-    $check(!str_contains($htmlEsc, '/admin/pdis/' . $pAco . '"') && !str_contains($htmlEsc, '/admin/pdis/' . $pGer . '"'), '(página) O gestor A não vê, na lista, PDIs de outros gestores (nem filtrando por nome)');
+    $check(!str_contains($htmlEsc, '/admin/pdis/' . $pAco . '"') && !str_contains($htmlEsc, '/admin/pdis/' . $pGer . '"'), '(página) O gestor de outro setor não vê, na lista, PDIs de colaboradores de setores que não gerencia (nem filtrando por nome)');
+    $comoUsuario($gestorAId, 'viewer'); // volta ao gestor A (setor SA) para as páginas seguintes
     $_GET = ['busca' => 'ZZPDI Ana', 'contrato' => (string)$c1];
     $htmlNovo1 = $renderizar(static fn() => (new AdminPdisController())->novo());
     $check(str_contains($htmlNovo1, 'Novo PDI — Ana') || str_contains($htmlNovo1, 'ZZPDI Ana Colaboradora'), '(página) Novo PDI abre o formulário do contrato escolhido');
@@ -568,8 +591,9 @@ try {
         $check(str_contains($htmlShowOk, $secao), "(página) Detalhe exibe a seção \"{$secao}\"");
     }
     $check(str_contains($htmlShowOk, 'registrado por RH/Gestor em nome do colaborador') && str_contains($htmlShowOk, 'Manter o PDI'), '(página) O espaço do colaborador informa que é registrado por RH/Gestor em nome dele');
+    $comoUsuario($gestorXId, 'viewer');
     $htmlAlheio = $renderizar(static fn() => (new AdminPdisController())->show((string)$alheio));
-    $check(str_contains($htmlAlheio, 'PDI não encontrado') && !str_contains($htmlAlheio, 'ZZPDI Colaborador'), '(página) PDI de outro gestor: "não encontrado" (não vaza a existência)');
+    $check(str_contains($htmlAlheio, 'PDI não encontrado') && !str_contains($htmlAlheio, 'ZZPDI Colaborador'), '(página) PDI de colaborador de outro setor: "não encontrado" (não vaza a existência)');
     $todosHtml = $htmlIdx . $htmlNovo0 . $htmlNovo1 . $htmlShowOk;
     $check(!str_contains($todosHtml, $cpfSecreto) && !str_contains($todosHtml, '529.982.247-25') && !preg_match('/codigo_pessoa|ZP' . $suffix . '/', $todosHtml) && !preg_match('/\son(click|submit|change|load)\s*=/i', $todosHtml), '(privacidade/CSP) Sem CPF, sem codigo_pessoa e sem handlers inline nas páginas');
     $comoUsuario($rhId, 'rh');
@@ -602,6 +626,7 @@ try {
         $pdo->exec("DELETE FROM pdis WHERE gestor_usuario_id IN ($lu) OR criado_por_usuario_id IN ($lu)");
         $pdo->exec("DELETE FROM usuarios WHERE id IN ($lu)");
     }
+    zzLimparSetores($pdo, $criados['setores']);
 }
 
 if ($falhas !== []) {

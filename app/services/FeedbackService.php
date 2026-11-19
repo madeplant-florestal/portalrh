@@ -94,19 +94,24 @@ class FeedbackService
         return ['id' => (int)($_SESSION['user_id'] ?? 0), 'role' => strtolower(trim((string)($_SESSION['user_role'] ?? '')))];
     }
 
+    /** Escopo setorial do ator (resolvedor central, Etapa 2C.2A): global (admin/RH/Supervisor Geral), setores gerenciados ou nenhum. */
+    public static function escopo(array $ator): EscopoSetorial
+    {
+        return EscopoSetorial::resolver($ator);
+    }
+
     public static function escopoTotal(array $ator): bool
     {
-        return in_array((string)($ator['role'] ?? ''), ['admin', 'rh'], true);
+        return self::escopo($ator)->ehGlobal();
     }
 
-    public static function escopoGestor(array $ator): ?int
-    {
-        return self::escopoTotal($ator) ? null : (int)$ator['id'];
-    }
-
+    /**
+     * Acesso por LINHA: global, ou o contrato do feedback está num Setor Gerenciado do ator (setor ATUAL do contrato — nunca o snapshot
+     * nem `gestor_usuario_id`, que é só o responsável registrado). Perder o setor retira o acesso; o registro permanece intacto.
+     */
     public static function podeAcessar(array $feedback, array $ator): bool
     {
-        return (int)($ator['id'] ?? 0) > 0 && (self::escopoTotal($ator) || (int)$feedback['gestor_usuario_id'] === (int)$ator['id']);
+        return (int)($ator['id'] ?? 0) > 0 && self::escopo($ator)->permiteColaborador((int)($feedback['metadados_id'] ?? 0));
     }
 
     private static function temPermissao(array $ator, string $permissao): bool
@@ -158,7 +163,8 @@ class FeedbackService
 
     public function contratoParaCriacao(int $metadadosId, array $ator): array
     {
-        $contrato = $this->repository->buscarContrato($metadadosId);
+        // Contrato fora do escopo é indistinguível de contrato inexistente (não revela dados nem a existência).
+        $contrato = self::escopo($ator)->permiteColaborador($metadadosId) ? $this->repository->buscarContrato($metadadosId) : null;
         if ($contrato === null) {
             return self::falha('Contrato não encontrado.');
         }
@@ -166,9 +172,9 @@ class FeedbackService
         return ['ok' => true, 'contrato' => $contrato, 'gestor' => $gestor];
     }
 
-    public function buscarContratos(string $busca): array
+    public function buscarContratos(string $busca, array $ator): array
     {
-        return $this->repository->buscarContratos($busca, (DateHelper::hojeOperacional())->format('Y-m-d'));
+        return $this->repository->buscarContratos($busca, (DateHelper::hojeOperacional())->format('Y-m-d'), 20, self::escopo($ator));
     }
 
     public function usuariosParaEscolha(array $ator): array
@@ -193,7 +199,8 @@ class FeedbackService
         if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', (string)$dataFeedback)) {
             return self::falha('Informe a data do feedback.');
         }
-        $contrato = $this->repository->buscarContrato($metadadosId);
+        // O colaborador informado no POST precisa estar no escopo do ator (não confia no metadados_id recebido).
+        $contrato = self::escopo($ator)->permiteColaborador($metadadosId) ? $this->repository->buscarContrato($metadadosId) : null;
         if ($contrato === null) {
             return self::falha('Contrato não encontrado.');
         }
@@ -374,7 +381,7 @@ class FeedbackService
 
     public function listar(array $filtros, array $ator): array
     {
-        return $this->repository->listar($filtros, self::escopoGestor($ator), 200);
+        return $this->repository->listar($filtros, self::escopo($ator), 200);
     }
 
     /**

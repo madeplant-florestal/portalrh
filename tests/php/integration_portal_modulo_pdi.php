@@ -7,13 +7,14 @@
  *   - PDI grande (3 ações, competências, vários acompanhamentos/eventos, concluído) e PDI pequeno (rascunho, sem itens) e PDI cancelado renderizam
  *     sem Warning/Notice e com as seções, badges (tom por status), aviso de concluído/cancelado e linha do tempo do histórico;
  *   - todos os campos/POST/ações sensíveis do detalhe continuam presentes conforme a permissão (liberar/iniciar/editar/concluir/cancelar/reabrir);
- *   - escopo e autorização inalterados: Admin e RH com permissão veem tudo; gestor só o próprio; Supervisor sem permissão e RH sem permissão
+ *   - escopo e autorização inalterados: Admin e RH com permissão veem tudo; gestor só os PDIs dos setores que gerencia (2C.2A); Supervisor sem permissão e RH sem permissão
  *     individual não abrem nada; nenhuma permissão nova;
  *   - nenhum <script> inline nem onclick=/onsubmit=/onchange= nas telas do PDI (CSP `script-src 'self'`) e nenhum hex solto nas views.
  */
 
 require __DIR__ . '/../../app/core/bootstrap.php';
 require_once APP_PATH . '/views/partials/ui-shell.php';
+require_once __DIR__ . '/fixture_setor_gerenciado.php';
 
 $pdo = Database::conn();
 $falhas = [];
@@ -28,7 +29,10 @@ $check = static function (bool $cond, string $msg) use (&$falhas): void {
 $sessaoOriginal = $_SESSION;
 $getOriginal = $_GET;
 $suffix = substr((string)time(), -5) . (string)random_int(10, 99);
-$criados = ['usuarios' => [], 'metadados' => []];
+$criados = ['usuarios' => [], 'metadados' => [], 'setores' => []];
+// Etapa 2C.2A: acesso por Setor Gerenciado — o gestor A gerencia o setor SA (contratos dele); o gestor B, o SB (contrato "alheio").
+$codA = 'UA' . substr($suffix, -5);
+$codB = 'UB' . substr($suffix, -5);
 $senha = password_hash('irrelevante', PASSWORD_BCRYPT);
 $ip = '127.0.0.1';
 $agora = DateTimeImmutable::createFromFormat('Y-m-d H:i:s', date('Y-m-d H:i:s'));
@@ -78,19 +82,24 @@ try {
     $rh = $novoUsuario('RH', 'rh', $todas);
     $gestorA = $novoUsuario('Gestor A', 'viewer', $todas);
     $gestorB = $novoUsuario('Gestor B', 'viewer', $todas);
+    $setorA = zzSetorTeste($pdo, $codA, 'ZZPDU');
+    $setorB = zzSetorTeste($pdo, $codB, 'ZZPDU');
+    $criados['setores'] = [$setorA, $setorB];
+    zzGerenciar($pdo, $gestorA['id'], $setorA);
+    zzGerenciar($pdo, $gestorB['id'], $setorB);
     $semPerm = $novoUsuario('RH Sem Permissao', 'rh', []);
     $supSem = $novoUsuario('Supervisor Sem Permissao', 'viewer', [], true);
     $soVis = $novoUsuario('So Visualiza', 'viewer', ['visualizar']);
 
     $seq = 0;
-    $mk = static function (string $nome) use ($pdo, &$criados, $suffix, $dia, &$seq): int {
+    $mk = static function (string $nome, ?string $codigoSetor = null) use ($pdo, &$criados, $suffix, $dia, &$seq, $codA): int {
         $seq++;
         $identificador = 'ZZPDU_' . $suffix . '_' . $seq;
         $pdo->prepare(
             'INSERT INTO colaboradores_metadados (identificador, codigo_empresa, codigo_unidade, numero_contrato, codigo_pessoa, cpf, nome, empresa, unidade,
-                cargo, codigo_cargo, admissao, data_inicio_cargo, demissao, motivo_rescisao_codigo, ativo, origem_metadados)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, 1, ?)'
-        )->execute([$identificador, 'ZPU' . $suffix, 'U1', 'ZC' . $suffix . $seq, 'ZP' . $suffix . $seq, '52998224725', $nome, 'ZZPDU Empresa', 'ZZPDU Unidade', 'ZZPDU Cargo', 'ZPC' . $suffix, $dia(-800), $dia(-200), 'zzpdu-teste']);
+                cargo, codigo_cargo, admissao, data_inicio_cargo, demissao, motivo_rescisao_codigo, ativo, origem_metadados, codigo_setor, setor)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, 1, ?, ?, ?)'
+        )->execute([$identificador, 'ZPU' . $suffix, 'U1', 'ZC' . $suffix . $seq, 'ZP' . $suffix . $seq, '52998224725', $nome, 'ZZPDU Empresa', 'ZZPDU Unidade', 'ZZPDU Cargo', 'ZPC' . $suffix, $dia(-800), $dia(-200), 'zzpdu-teste', $codigoSetor ?? $codA, 'ZZPDU Setor']);
         $criados['metadados'][] = $identificador;
         return (int)$pdo->lastInsertId();
     };
@@ -113,7 +122,7 @@ try {
     $cGrande = $mk('ZZPDU Grande Concluida');
     $cPequeno = $mk('ZZPDU Pequeno Rascunho');
     $cCancel = $mk('ZZPDU Cancelado Exemplo');
-    $cAlheio = $mk('ZZPDU Alheio Do B');
+    $cAlheio = $mk('ZZPDU Alheio Do B', $codB);
     $grande = (int)$svc->criar($post($cGrande, $gestorA['id']), $rh, $agora, $ip)['id'];
     $pequeno = (int)$svc->criar($post($cPequeno, $gestorA['id'], ['pontos_fortes' => '', 'oportunidades_desenvolvimento' => '', 'objetivo_esperado' => '', 'competencias' => '', 'acoes' => []]), $rh, $agora, $ip)['id'];
     $cancelado = (int)$svc->criar($post($cCancel, $gestorA['id']), $rh, $agora, $ip)['id'];
@@ -189,7 +198,7 @@ try {
     $htmlGestorLista = $renderizar(static fn() => (new AdminPdisController())->index());
     $htmlGestorAlheio = $renderizar(static fn() => (new AdminPdisController())->show((string)$alheio));
     $htmlGestorProprio = $renderizar(static fn() => (new AdminPdisController())->show((string)$pequeno));
-    $check(str_contains($htmlGestorLista, 'ZZPDU Grande Concluida') && !str_contains($htmlGestorLista, 'ZZPDU Alheio Do B'), '(escopo) Gestor vê só os próprios PDIs na lista');
+    $check(str_contains($htmlGestorLista, 'ZZPDU Grande Concluida') && !str_contains($htmlGestorLista, 'ZZPDU Alheio Do B'), '(escopo) Gestor vê só os PDIs dos colaboradores do setor que gerencia (SA), não os do setor SB');
     $check(str_contains($htmlGestorAlheio, 'PDI não encontrado') && !str_contains($htmlGestorAlheio, 'ZZPDU Alheio'), '(escopo) Gestor recebe "não encontrado" no PDI de outro gestor');
     $check(str_contains($htmlGestorProprio, 'data-app-shell-v2'), '(escopo) Gestor abre o próprio PDI no AppShell V2');
     $comoUsuario($adm);
@@ -255,6 +264,7 @@ try {
         $pdo->exec("DELETE FROM usuario_permissoes WHERE usuario_id IN ($lu)");
         $pdo->exec("DELETE FROM usuarios WHERE id IN ($lu)");
     }
+    zzLimparSetores($pdo, $criados['setores']);
 }
 
 if ($falhas !== []) {

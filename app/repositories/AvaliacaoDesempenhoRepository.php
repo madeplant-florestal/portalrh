@@ -73,15 +73,19 @@ class AvaliacaoDesempenhoRepository
     }
 
     /** Contratos sem desligamento efetivado (nome contendo o texto), para escolher o colaborador. */
-    public function buscarContratos(string $busca, string $hoje, int $limite = 20): array
+    /** @param ?EscopoSetorial $escopo restringe pelo setor ATUAL do contrato; `null` = sem restrição (uso interno/testes — os services sempre informam o escopo do ator) */
+    public function buscarContratos(string $busca, string $hoje, int $limite = 20, ?EscopoSetorial $escopo = null): array
     {
         $like = '%' . str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $busca) . '%';
+        $params = [$hoje, $like];
+        $condEscopo = $escopo !== null ? $escopo->sqlColaborador('cm.id', $params) : '1 = 1';
         $sql = 'SELECT cm.id AS metadados_id, cm.nome, cm.empresa, cm.unidade,
                        COALESCE(' . self::SQL_CARGO_CATALOGO . ', NULLIF(cm.cargo, \'\')) AS cargo
                 FROM colaboradores_metadados cm
                 WHERE (cm.demissao IS NULL OR cm.demissao > ?) AND ' . ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusao('cm.id') . ' AND cm.nome LIKE ? ESCAPE \'\\\\\'
+                  AND ' . $condEscopo . '
                 ORDER BY cm.nome LIMIT ' . max(1, $limite);
-        return $this->todas($sql, [$hoje, $like]);
+        return $this->todas($sql, $params);
     }
 
     public function buscarPorId(int $id): ?array
@@ -157,16 +161,15 @@ class AvaliacaoDesempenhoRepository
 
     /**
      * @param array $f status, ciclo, busca, gestor
-     * @param ?int  $escopoGestor não nulo = só avaliações desse gestor
+     * @param ?EscopoSetorial $escopo restringe pelo setor ATUAL do contrato da avaliação; `null` = sem restrição (uso interno/testes)
      */
-    public function listar(array $f, ?int $escopoGestor, int $limite): array
+    public function listar(array $f, ?EscopoSetorial $escopo, int $limite): array
     {
         // Exclusão analítica GLOBAL: avaliação de contrato excluído não entra na lista operacional.
         $where = [ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusaoPorMetadadosId('ad.metadados_id')];
         $params = [];
-        if ($escopoGestor !== null) {
-            $where[] = 'ad.gestor_usuario_id = ?';
-            $params[] = $escopoGestor;
+        if ($escopo !== null) {
+            $where[] = $escopo->sqlColaborador('ad.metadados_id', $params);
         }
         if (!empty($f['status'])) {
             $where[] = 'ad.status = ?';

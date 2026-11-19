@@ -106,7 +106,12 @@ Identificados na auditoria arquitetural de 2026-07-09, documentados aqui para n�
      permissões em UMA transação (`Authorization::sincronizar` respeita transação aberta); `updatePermissoes` aceita `role` opcional e
      grava perfil + permissões atomicamente (mesma `Autoridade::podeAtribuirRole` de `/role`; seleção validada contra o perfil NOVO;
      `is_supervisor` nunca é lido). Legado incompatível: aparece marcado "sem efeito", nunca é reativado nem apagado sem desmarcar e salvar.
-     Testes: `integration_matriz_permissoes.php` (PHP) e `tests/matriz-permissoes.spec.js` (Playwright, sem servidor).
+     Controles (JS): "Marcar grupo"/"marcar linha" atuam em TODAS as permissões habilitadas e aplicáveis ao perfil do escopo (inclusive as de
+     transição do Leitor); "Marcar todas" fica restrito ao lote do perfil (Leitor: só dashboards — sem seleção global de operacionais);
+     "Alternar linha": todas aplicáveis marcadas → limpa, senão marca todas. Botões sem alvo aplicável ficam DESABILITADOS (nunca um clique
+     sem efeito) e cada ação informa o resultado. O legado incompatível nunca entra no lote.
+     Testes: `integration_matriz_permissoes.php` (PHP), `tests/matriz-permissoes.spec.js` (fixture) e `tests/matriz-permissoes-real.spec.js`
+     (Playwright contra a aplicação real: `php -S 127.0.0.1:8010 -t public` + banco de desenvolvimento; não rodar junto com a suíte PHP).
    - **Efeito operacional conhecido:** viewer com `recruitment_webhooks.*` deixa de abrir Integrações; `candidaturas.*`, `pipeline.*`,
      `indicacoes.*`, catálogos (`empresas`, `setores`, `cargos`, `beneficios`, `avaliacoes`, `vagas`), `movimentacao_pessoal.*`,
      `comunicacoes`, `pesquisa_experiencia`, `manual` e `colaboradores.editar` não concedem nada ao viewer (já sem rota aberta a ele,

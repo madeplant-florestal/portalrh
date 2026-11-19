@@ -21,12 +21,21 @@
   var avisoViewer = raiz.querySelector('[data-matriz-aviso-viewer]');
   var avisoLegado = raiz.querySelector('[data-matriz-aviso-legado]');
   var listaLegado = raiz.querySelector('[data-matriz-legado-lista]');
+  var feedback = raiz.querySelector('[data-matriz-feedback]');
   var baseline = snapshot();
   var perfilAnterior = seletor ? seletor.value : perfil;
 
   function idDe(c) { return parseInt(c.getAttribute('data-perm-id'), 10); }
   function conjunto(lista) { var o = {}; (lista || []).forEach(function (i) { o[i] = true; }); return o; }
   function dados(role) { return perfis[role] || { global: false, rotulo: role, aplicaveis: [], lote: [], transicao: [], modelo: [] }; }
+
+  /** Células que o PERFIL ATUAL aceita (política) e que estão habilitadas: alvo de marcar grupo/linha. O legado incompatível nunca entra. */
+  function marcaveis(lista) {
+    var aplic = conjunto(dados(perfil).aplicaveis);
+    return lista.filter(function (c) { return !c.disabled && aplic[idDe(c)]; });
+  }
+  function celulasDe(el) { return Array.prototype.slice.call(el.querySelectorAll('[data-matriz-celula="1"]')); }
+  function avisar(texto) { if (feedback) feedback.textContent = texto; }
 
   function snapshot() {
     return celulas.filter(function (c) { return c.checked && !c.disabled; }).map(idDe).sort(function (a, b) { return a - b; }).join(',');
@@ -79,34 +88,61 @@
       avisoLegado.classList.toggle('hidden', legados.length === 0);
       if (listaLegado) listaLegado.textContent = legados.map(function (c) { return c.getAttribute('data-codigo'); }).join(', ');
     }
-    raiz.querySelectorAll('[data-matriz-acao="marcar-todas"]').forEach(function (b) { b.disabled = (d.lote || []).length === 0; });
+    var loteSet = conjunto(d.lote);
+    raiz.querySelectorAll('[data-matriz-acao="marcar-todas"]').forEach(function (b) {
+      b.disabled = marcaveis(celulas).filter(function (c) { return loteSet[idDe(c)]; }).length === 0;
+    });
+    // Marcar grupo / linha: só habilitados quando o perfil aceita ao menos uma permissão do escopo (senão o clique seria um no-op silencioso).
+    raiz.querySelectorAll('[data-matriz-acao="marcar-grupo"]').forEach(function (b) {
+      var vazio = marcaveis(celulasDe(b.closest('tbody'))).length === 0;
+      b.disabled = vazio;
+      b.title = vazio ? 'Nenhuma permissão deste grupo se aplica ao perfil selecionado' : '';
+    });
+    raiz.querySelectorAll('[data-matriz-acao="alternar-linha"]').forEach(function (b) {
+      var alvo = marcaveis(celulasDe(b.closest('tr')));
+      var todas = alvo.length > 0 && alvo.every(function (c) { return c.checked; });
+      b.disabled = alvo.length === 0;
+      b.title = alvo.length === 0 ? 'Nenhuma ação deste módulo se aplica ao perfil selecionado' : '';
+      b.textContent = todas ? 'limpar linha' : 'marcar linha';
+    });
   }
 
-  function marcarLote(escopo, marcar) {
-    var lote = conjunto(dados(perfil).lote);
-    escopo.forEach(function (c) {
-      if (c.disabled) return;
-      if (marcar) { if (lote[idDe(c)]) c.checked = true; } else { c.checked = false; }
-    });
+  /** Marca `alvo` (já filtrado) ou desmarca `escopo`; devolve quantas células mudaram de estado. */
+  function aplicar(alvo, marcar) {
+    var mudou = 0;
+    alvo.forEach(function (c) { if (c.checked !== marcar) { c.checked = marcar; mudou++; } });
     atualizar();
+    return mudou;
   }
-  function celulasDe(el) { return Array.prototype.slice.call(el.querySelectorAll('[data-matriz-celula="1"]')); }
+  function editaveis(lista) { return lista.filter(function (c) { return !c.disabled; }); }
 
   raiz.addEventListener('click', function (ev) {
     var b = ev.target.closest ? ev.target.closest('[data-matriz-acao]') : null;
-    if (!b || !raiz.contains(b)) return;
+    if (!b || !raiz.contains(b) || b.disabled) return;
     var acao = b.getAttribute('data-matriz-acao');
-    if (acao === 'marcar-todas') marcarLote(celulas, true);
-    else if (acao === 'desmarcar-todas') marcarLote(celulas, false);
-    else if (acao === 'restaurar-modelo') aplicarPerfil(perfil, true);
-    else if (acao === 'marcar-grupo') marcarLote(celulasDe(b.closest('tbody')), true);
-    else if (acao === 'desmarcar-grupo') marcarLote(celulasDe(b.closest('tbody')), false);
-    else if (acao === 'alternar-linha') {
-      var linha = celulasDe(b.closest('tr'));
-      var lote = conjunto(dados(perfil).lote);
-      var alvo = linha.filter(function (c) { return !c.disabled && lote[idDe(c)]; });
+    var d = dados(perfil), lote = conjunto(d.lote), n;
+    if (acao === 'marcar-todas') {
+      // Marcar todas = só o LOTE do perfil (permissões plenas pela política). Para o Leitor, as operacionais de transição ficam fora.
+      n = aplicar(marcaveis(celulas).filter(function (c) { return lote[idDe(c)]; }), true);
+      avisar(n + (n === 1 ? ' permissão marcada' : ' permissões marcadas') + '. Nada foi salvo.');
+    } else if (acao === 'desmarcar-todas') {
+      n = aplicar(editaveis(celulas), false);
+      avisar(n + (n === 1 ? ' permissão desmarcada' : ' permissões desmarcadas') + '. Nada foi salvo.');
+    } else if (acao === 'restaurar-modelo') {
+      aplicarPerfil(perfil, true);
+      avisar('Modelo recomendado do perfil restaurado (' + (d.modelo || []).length + '). Nada foi salvo.');
+    } else if (acao === 'marcar-grupo') {
+      n = aplicar(marcaveis(celulasDe(b.closest('tbody'))), true);
+      avisar(n + (n === 1 ? ' permissão marcada' : ' permissões marcadas') + ' no grupo. Nada foi salvo.');
+    } else if (acao === 'desmarcar-grupo') {
+      n = aplicar(editaveis(celulasDe(b.closest('tbody'))), false);
+      avisar(n + (n === 1 ? ' permissão desmarcada' : ' permissões desmarcadas') + ' no grupo. Nada foi salvo.');
+    } else if (acao === 'alternar-linha') {
+      // Alternar linha (comportamento único): se TODAS as ações aplicáveis da linha já estão marcadas, desmarca-as; senão marca TODAS as aplicáveis.
+      var alvo = marcaveis(celulasDe(b.closest('tr')));
       var todas = alvo.length > 0 && alvo.every(function (c) { return c.checked; });
-      marcarLote(linha, !todas);
+      n = aplicar(alvo, !todas);
+      avisar(n + (n === 1 ? ' permissão ' : ' permissões ') + (todas ? 'desmarcada' + (n === 1 ? '' : 's') : 'marcada' + (n === 1 ? '' : 's')) + ' na linha. Nada foi salvo.');
     }
   });
   raiz.addEventListener('change', function (ev) { if (ev.target && ev.target.getAttribute && ev.target.getAttribute('data-matriz-celula') === '1') atualizar(); });

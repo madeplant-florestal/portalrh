@@ -35,7 +35,7 @@ test('cadastro Viewer: modelo aplicado; Marcar todas só nos dashboards; Desmarc
   expect(await marcadas(page)).toEqual(['dashboard_recrutamento.visualizar']);
 });
 
-test('marcação por grupo respeita o lote do perfil', async ({ page }) => {
+test('marcação por grupo atua nas permissões habilitadas do escopo; grupo sem permissão aplicável fica desabilitado', async ({ page }) => {
   await abrir(page, 'viewer');
   await page.getByRole('button', { name: 'Desmarcar todas' }).click();
   await page.locator('[data-matriz-area="indicadores"]').getByRole('button', { name: 'Marcar grupo' }).click();
@@ -43,7 +43,8 @@ test('marcação por grupo respeita o lote do perfil', async ({ page }) => {
   await page.locator('[data-matriz-area="indicadores"]').getByRole('button', { name: 'Limpar grupo' }).click();
   expect(await marcadas(page)).toEqual([]);
   await page.locator('[data-matriz-area="avaliacoes"]').getByRole('button', { name: 'Marcar grupo' }).click();
-  expect(await marcadas(page)).toEqual([]); // nada deste grupo está no lote do Viewer
+  expect((await marcadas(page)).length).toBe(9); // transitórias do Leitor: habilitadas, logo marcadas pelo grupo (fora só do "Marcar todas")
+  await expect(page.locator('[data-matriz-area="administracao"]').getByRole('button', { name: 'Marcar grupo' })).toBeDisabled();
 });
 
 test('troca de perfil no cadastro: aplica o modelo; com ajuste manual pede confirmação e o cancelamento preserva tudo', async ({ page }) => {

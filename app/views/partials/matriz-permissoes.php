@@ -34,6 +34,8 @@ if (!function_exists('ui_matriz_permissoes')) {
     </div>
   </div>
 
+  <p data-matriz-feedback="1" role="status" aria-live="polite" class="min-h-[1rem] text-xs text-text-secondary"></p>
+
   <div data-matriz-aviso-global class="<?= $matriz['global'] ? '' : 'hidden ' ?>rounded-ds-md border border-primary-100 bg-primary-50 px-3 py-2 text-xs text-text-primary">
     <strong>Perfil de acesso global.</strong> Admin e RH acessam todos os módulos pelo próprio perfil: não é preciso marcar permissões individuais
     e as ações em lote ficam desativadas. As restrições hierárquicas (Supervisor Geral, Admin) continuam valendo e não dependem desta matriz.
@@ -71,15 +73,15 @@ if (!function_exists('ui_matriz_permissoes')) {
           <tr class="bg-primary-50">
             <th scope="colgroup" colspan="<?= (int)$nCol ?>" class="px-3 py-1.5 text-left text-xs font-bold text-text-primary">
               <span class="mr-3"><?= $e($area['rotulo']) ?></span>
-              <button type="button" data-matriz-acao="marcar-grupo" class="mr-2 text-[11px] font-semibold text-primary-700 underline">Marcar grupo</button>
-              <button type="button" data-matriz-acao="desmarcar-grupo" class="text-[11px] font-semibold text-primary-700 underline">Limpar grupo</button>
+              <button type="button" data-matriz-acao="marcar-grupo" class="mr-2 rounded border border-border bg-surface px-2 py-0.5 text-[11px] font-semibold text-primary-700 hover:bg-primary-50 disabled:cursor-not-allowed disabled:opacity-40">Marcar grupo</button>
+              <button type="button" data-matriz-acao="desmarcar-grupo" class="rounded border border-border bg-surface px-2 py-0.5 text-[11px] font-semibold text-primary-700 hover:bg-primary-50 disabled:cursor-not-allowed disabled:opacity-40">Limpar grupo</button>
             </th>
           </tr>
           <?php foreach ($area['linhas'] as $linha): ?>
             <tr class="border-t border-border" data-matriz-linha="<?= $e($linha['modulo']) ?>" data-modulo-catalogo="<?= $e(implode(',', $linha['modulo_catalogo'])) ?>">
               <th scope="row" class="sticky left-0 z-10 bg-surface px-3 py-2.5 text-left font-medium text-text-primary">
                 <?= $e($linha['rotulo']) ?>
-                <button type="button" data-matriz-acao="alternar-linha" class="ml-2 text-[11px] font-normal text-primary-700 underline" aria-label="Alternar todas as permissões de <?= $e($linha['rotulo']) ?>">linha</button>
+                <button type="button" data-matriz-acao="alternar-linha" class="ml-2 rounded border border-border bg-surface px-2 py-0.5 text-[11px] font-semibold text-primary-700 hover:bg-primary-50 disabled:cursor-not-allowed disabled:opacity-40 font-normal" aria-label="Marcar ou limpar todas as permissões aplicáveis de <?= $e($linha['rotulo']) ?>">marcar linha</button>
               </th>
               <?php foreach ($colunas as $acao => $rotuloAcao): ?>
                 <td class="px-2 py-2.5 text-center">

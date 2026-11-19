@@ -224,7 +224,7 @@ try {
     // aprovação de líder: fechada ao Gestor
     [$st] = $requisitar($g1, 'gestor', false, 'AdminSolicitacoesVagaController', 'approveLeader', ['decision' => 'aprovado'], [(string)$sb2]);
     [$st2] = $requisitar($g1, 'gestor', false, 'AdminSolicitacoesVagaController', 'approveRh', ['decision' => 'aprovado'], [(string)$sa]);
-    $check($st === 403 && $st2 === 403 && (string)$valor('SELECT status_fluxo FROM solicitacoes_vaga WHERE id = ?', [$sb2]) === 'pendente_lider', '(8) aprovação (líder/RH) NÃO é liberada ao Gestor (403, status inalterado) — decisão de política pendente');
+    $check($st === 403 && $st2 === 403 && (string)$valor('SELECT status_fluxo FROM solicitacoes_vaga WHERE id = ?', [$sb2]) === 'pendente_lider', '(8) sem a permissão solicitacao_vaga.aprovar_lider (e na etapa de RH, sempre) o Gestor recebe 403 e o status não muda — a aprovação de líder COM permissão é provada em integration_gestor_aprovacao_lider_vaga');
     foreach (['updateRh', 'gerarVaga'] as $m) {
         [$st] = $requisitar($g1, 'gestor', false, 'AdminSolicitacoesVagaController', $m, ['x' => '1'], [(string)$sa]);
         $check($st === 403, "(8) {$m}: Admin/RH apenas (Gestor = 403)");

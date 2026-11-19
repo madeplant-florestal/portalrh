@@ -285,6 +285,9 @@ try {
     $router->get('/admin/pesquisas-reacao-integracao/integracao/{data}/resultados', [AdminPesquisaIntegracaoResultadosController::class, 'resultados']);
     // Dashboard de Integração/Onboarding (Etapa 8, 2026-10) — painel agregado, mesma permissão.
     $router->get('/admin/pesquisas-reacao-integracao/integracao/dashboard', [AdminPesquisaIntegracaoResultadosController::class, 'dashboard']);
+    // Dashboard AGREGADO (Etapa 2C.2C, Gestor): só os Setores Gerenciados, mínimo de 5 respondentes, sem comentários/individuais — permissão própria.
+    $router->get('/admin/dashboard-integracao-agregado', [AdminDashboardIntegracaoAgregadoController::class, 'index']);
+    $router->get('/admin/dashboard-integracao-agregado/dados', [AdminDashboardIntegracaoAgregadoController::class, 'dados']);
 
     $router->get('/admin/pesquisa-integracao-qr', [AdminPesquisaIntegracaoQrController::class, 'index']);
     $router->post('/admin/pesquisa-integracao-qr/sessao', [AdminPesquisaIntegracaoQrController::class, 'abrir']);

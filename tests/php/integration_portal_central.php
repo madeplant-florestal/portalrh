@@ -219,6 +219,7 @@ try {
         '/admin/configuracoes/integracoes' => [AdminIntegracoesController::class, 'index'],
         '/admin/indicacoes' => [AdminIndicacoesController::class, 'index'],
         '/admin/solicitacoes-vaga' => [AdminSolicitacoesVagaController::class, 'index'],
+        '/admin/dashboard-integracao-agregado' => [AdminDashboardIntegracaoAgregadoController::class, 'index'],
         '/admin/colaboradores' => [AdminColaboradoresController::class, 'index'],
         '/admin/movimentacoes-pessoal' => [AdminMovimentacoesPessoalController::class, 'index'],
         '/admin/pdis' => [AdminPdisController::class, 'index'],

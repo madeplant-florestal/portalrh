@@ -53,6 +53,8 @@ $gestorAutorizado = [
     'AdminSolicitacoesVagaController::index', 'AdminSolicitacoesVagaController::create', 'AdminSolicitacoesVagaController::store',
     'AdminSolicitacoesVagaController::show', 'AdminSolicitacoesVagaController::addNota',
     'AdminSolicitacoesVagaKanbanController::index', 'AdminSolicitacoesVagaKanbanController::move',
+    // Etapa 2C.2C: dashboard AGREGADO de Integração (permissão própria + escopo + k>=5). Aprovação de líder: handleApproval (privado) aceita gestor só na etapa de líder.
+    'AdminDashboardIntegracaoAgregadoController::index', 'AdminDashboardIntegracaoAgregadoController::dados',
 ];
 
 $rotas = (string)file_get_contents($raiz . '/index.php');

@@ -254,7 +254,16 @@ class AdminSolicitacoesVagaController extends Controller
 
     private function handleApproval(int $id, string $step): void
     {
-        Auth::requireRole(['admin', 'rh', 'viewer']);
+        Auth::requireRole(['admin', 'rh', 'gestor', 'viewer']);
+        if (Auth::role() === 'gestor') {
+            // Etapa 2C.2C: o Gestor só aprova a etapa de LÍDER e com a permissão específica; o restante (designação, setor, etapa) é revalidado no model.
+            if ($step !== 'lider_imediato') {
+                http_response_code(403);
+                echo 'Acesso negado';
+                return;
+            }
+            Authorization::requirePermissao('solicitacao_vaga.aprovar_lider');
+        }
         if (!Security::csrfCheck($_POST['csrf'] ?? '')) {
             http_response_code(400);
             echo 'CSRF inválido';

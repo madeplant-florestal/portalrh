@@ -67,6 +67,9 @@ final class PermissaoPerfilPolicy
         'avaliacao_experiencia.avaliar',
         'solicitacao_vaga.visualizar', 'solicitacao_vaga.criar',
         'kanban_vagas.visualizar', 'kanban_vagas.detalhes', 'kanban_vagas.movimentar',
+        // Etapa 2C.2C: aprovar a etapa de LÍDER (só com designação formal, setor gerenciado e etapa correta — impostos no backend) e o dashboard
+        // AGREGADO de Integração (k>=5, sem comentários/respostas individuais). Aprovação de RH e a Integração operacional seguem fechadas ao Gestor.
+        'solicitacao_vaga.aprovar_lider', 'dashboard_integracao_agregado.visualizar',
     ];
 
     /** Perfis com acesso global pelo próprio papel (Authorization já os libera sem linhas em usuario_permissoes). */
@@ -106,6 +109,8 @@ final class PermissaoPerfilPolicy
     private const VIEWER_INCOMPATIVEIS = [
         // Etapa 2C.2B: resultados/dashboard/QR da Integração são GLOBAIS e trazem respostas e comentários sem amostra mínima (reidentificação) — fora do viewer.
         'integracao_colaborador.visualizar', 'integracao_colaborador.editar',
+        // Etapa 2C.2C: o Viewer segue SEM aprovação por permissão (a aprovação de viewer designado é a compatibilidade temporária por designação) e sem o dashboard agregado.
+        'solicitacao_vaga.aprovar_lider', 'dashboard_integracao_agregado.visualizar',
         'candidaturas.visualizar', 'candidaturas.editar',
         'pipeline.visualizar', 'pipeline.movimentar',
         'indicacoes.visualizar', 'indicacoes.gerenciar_pagamento',

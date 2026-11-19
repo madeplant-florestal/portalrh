@@ -123,7 +123,9 @@ $rhApproval = $approvalMap['rh'] ?? null;
 $canApproveLeader = $isShow
     && $leaderApproval
     && ($leaderApproval['status'] ?? '') === 'pendente'
-    && ($isSupervisor || (int)($leaderApproval['destinatario_usuario_id'] ?? 0) === (int)$currentUserId);
+    && ($isSupervisor || (int)($leaderApproval['destinatario_usuario_id'] ?? 0) === (int)$currentUserId)
+    // Gestor (2C.2C): só representação — o botão exige a permissão específica; o backend revalida designação, setor e etapa.
+    && (strtolower((string)($currentRole ?? '')) !== 'gestor' || Authorization::temPermissao('solicitacao_vaga.aprovar_lider'));
 $canApproveRh = $isShow
     && $rhApproval
     && ($rhApproval['status'] ?? '') === 'pendente'

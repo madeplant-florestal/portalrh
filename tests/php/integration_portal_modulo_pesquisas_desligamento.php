@@ -117,7 +117,7 @@ try {
 
     // ---- abas e cards ------------------------------------------------------------------------------------------------------------
     $modulos = PortalNavegacaoService::definicaoAbas();
-    $check(array_column($modulos['integracao']['abas'], 'chave') === ['pesquisas', 'qr', 'dashboard'] && array_column($modulos['desligamento']['abas'], 'chave') === ['turnover', 'dashboard-entrevista', 'entrevistas'], '(abas) Integração: Pesquisas e resultados | QR | Dashboard (Etapa 8); Turnover e Desligamento: Turnover | Dashboard da Entrevista | Entrevistas — sem megabarra');
+    $check(array_column($modulos['integracao']['abas'], 'chave') === ['pesquisas', 'qr', 'dashboard', 'agregado'] && array_column($modulos['desligamento']['abas'], 'chave') === ['turnover', 'dashboard-entrevista', 'entrevistas'], '(abas) Integração: Pesquisas e resultados | QR | Dashboard (Etapa 8) | Dashboard agregado (2C.2C, só aparece para o perfil Gestor com a permissão); Turnover e Desligamento: Turnover | Dashboard da Entrevista | Entrevistas — sem megabarra');
     $problemas = [];
     $visiveis = [];
     foreach ($perfis as $rotulo => $u) {

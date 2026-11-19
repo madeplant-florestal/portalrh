@@ -16,7 +16,7 @@ class DashboardIntegracaoRepository
                p.nota_nps, p.nota_clareza, p.nota_acolhimento, p.nota_normas, p.nota_utilidade,
                p.nota_satisfacao_geral, p.comentarios, p.respondida_em,
                COALESCE(p.metadados_id, col.metadados_id) AS metadados_id,
-               cm.codigo_empresa, cm.codigo_unidade, cm.codigo_setor,
+               cm.codigo_empresa, cm.codigo_unidade, cm.codigo_setor, cm.codigo_pessoa,
                NULLIF(cm.empresa, '') AS empresa, NULLIF(cm.unidade, '') AS unidade, NULLIF(cm.setor, '') AS setor,
                COALESCE(
                  (SELECT COALESCE(c.descricao_oficial, c.nome) FROM cargos c
@@ -65,6 +65,7 @@ class DashboardIntegracaoRepository
             $params[] = $filtros['codigo_setor'];
         }
         self::aplicarFiltroGestor($filtros, $where, $params);
+        self::aplicarEscopo($filtros, $where, $params);
         return [$where, $params];
     }
 
@@ -89,6 +90,26 @@ class DashboardIntegracaoRepository
         $where[] = "cm.codigo_setor IN ({$placeholders})";
         foreach ($codigos as $codigo) {
             $params[] = $codigo;
+        }
+    }
+
+    /**
+     * ESCOPO OBRIGATÓRIO (Etapa 2C.2C — dashboard agregado do Gestor): `escopo_codigos` ausente/null = sem restrição (Admin/RH, painel operacional);
+     * array = SÓ esses códigos de setor, e `[]` = NENHUM (`1 = 0`, nunca "sem filtro"). É um AND independente dos filtros do usuário — nenhum filtro o amplia.
+     */
+    private static function aplicarEscopo(array $filtros, array &$where, array &$params): void
+    {
+        if (!array_key_exists('escopo_codigos', $filtros) || $filtros['escopo_codigos'] === null) {
+            return;
+        }
+        $codigos = array_values((array)$filtros['escopo_codigos']);
+        if ($codigos === []) {
+            $where[] = '1 = 0';
+            return;
+        }
+        $where[] = 'cm.codigo_setor IN (' . implode(',', array_fill(0, count($codigos), '?')) . ')';
+        foreach ($codigos as $c) {
+            $params[] = (string)$c;
         }
     }
 
@@ -119,8 +140,11 @@ class DashboardIntegracaoRepository
     }
 
     /** Empresa/Unidade/Setor que já têm ALGUMA pesquisa de integração (respondida ou não) — opções seguras de filtro. */
-    public function opcoesEmpresaUnidadeSetor(): array
+    public function opcoesEmpresaUnidadeSetor(?array $escopoCodigos = null): array
     {
+        $whereEscopo = [];
+        $paramsEscopo = [];
+        self::aplicarEscopo(['escopo_codigos' => $escopoCodigos], $whereEscopo, $paramsEscopo);
         $sql = "SELECT DISTINCT cm.codigo_empresa, NULLIF(cm.empresa, '') AS empresa,
                        cm.codigo_unidade, NULLIF(cm.unidade, '') AS unidade,
                        cm.codigo_setor, NULLIF(cm.setor, '') AS setor
@@ -129,8 +153,11 @@ class DashboardIntegracaoRepository
                 INNER JOIN colaboradores_metadados cm ON cm.id = COALESCE(p.metadados_id, col.metadados_id)
                 WHERE cm.codigo_empresa IS NOT NULL AND cm.codigo_empresa <> ''
                   AND " . ColaboradorMetadadosElegibilidadeService::clausulaSqlExclusao('cm.id') . "
+                " . ($whereEscopo !== [] ? 'AND ' . implode(' AND ', $whereEscopo) : '') . "
                 ORDER BY empresa, unidade, setor";
-        return $this->connection()->query($sql)->fetchAll(PDO::FETCH_ASSOC);
+        $stmt = $this->connection()->prepare($sql);
+        $stmt->execute($paramsEscopo);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
     /**
@@ -166,6 +193,7 @@ class DashboardIntegracaoRepository
             $params[] = $filtros['codigo_setor'];
         }
         self::aplicarFiltroGestor($filtros, $where, $params);
+        self::aplicarEscopo($filtros, $where, $params);
         $sql = 'SELECT COUNT(*) FROM colaboradores c
                 LEFT JOIN colaboradores_metadados cm ON cm.id = c.metadados_id
                 WHERE ' . implode(' AND ', $where);

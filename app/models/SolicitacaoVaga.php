@@ -994,6 +994,28 @@ class SolicitacaoVaga
             return ['ok' => false, 'error' => 'Esta etapa já foi registrada anteriormente.'];
         }
 
+        // Gestor (Etapa 2C.2C): aprovação SÓ da etapa de líder, com permissão, designação formal, Setor Gerenciado e etapa correta. O flag de supervisor
+        // e o perfil de RH nunca se aplicam a ele. Decisão revalidada aqui, no model, independentemente do controller/tela.
+        if (strtolower((string)(self::userAccessProfile($actorUserId)['role'] ?? '')) === 'gestor') {
+            $isSupervisor = false;
+            $actorIsRh = false;
+            if ($step !== 'lider_imediato') {
+                return ['ok' => false, 'error' => 'O Gestor só pode aprovar a etapa de líder imediato.'];
+            }
+            if (!Authorization::usuarioTemPermissao($actorUserId, 'solicitacao_vaga.aprovar_lider')) {
+                return ['ok' => false, 'error' => 'Seu usuário não tem a permissão de aprovar como líder.'];
+            }
+            $escopoGestor = self::escopoGestor($actorUserId, 'gestor');
+            if ($escopoGestor === null || !$escopoGestor->permiteSetorId((int)($solicitacao['setor_id'] ?? 0))) {
+                return ['ok' => false, 'error' => 'Solicitação de vaga não encontrada.']; // fora do setor: indistinguível de inexistente
+            }
+            if ((int)($approval['destinatario_usuario_id'] ?? 0) !== $actorUserId) {
+                return ['ok' => false, 'error' => 'Apenas o líder imediato designado pode aprovar esta etapa.'];
+            }
+            if ((string)($solicitacao['status_fluxo'] ?? '') !== self::STATUS_PENDENTE_LIDER || !empty($solicitacao['cancelada_em']) || !empty($solicitacao['fechada_em'])) {
+                return ['ok' => false, 'error' => 'Esta solicitação não está aguardando a aprovação do líder (já decidida, cancelada ou fechada).'];
+            }
+        }
         if ($step === 'lider_imediato' && !$isSupervisor && (int)($approval['destinatario_usuario_id'] ?? 0) !== $actorUserId) {
             return ['ok' => false, 'error' => 'Apenas o líder imediato designado pode aprovar esta etapa.'];
         }

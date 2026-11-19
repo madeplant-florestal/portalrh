@@ -183,3 +183,20 @@ Identificados na auditoria arquitetural de 2026-07-09, documentados aqui para n�
    - **Residuais:** (a) o JSON de `/api/solicitacoes-vaga/move` só é testado no próprio processo (php://input); (b) viewers legados seguem com
      Solicitação/Kanban por solicitante/aprovador (transição); (c) `solicitacao_vaga.*`/`kanban_vagas.*` continuam "transitórias" para o Viewer.
      Cobertura: `integration_gestor_solicitacoes_kanban_integracao.php`.
+13. **Aprovação de líder pelo Gestor e Dashboard agregado de Integração (Etapa 2C.2C, 2026-11) — IMPLEMENTADO.**
+   - **Aprovação (`solicitacao_vaga.aprovar_lider`, nova no catálogo — migration `2026-11-23-permissoes-aprovacao-lider-e-integracao-agregada.sql` + rollback, manual):**
+     o Gestor só aprova/reprova a etapa de LÍDER e SOMENTE com TODAS as condições, revalidadas em `SolicitacaoVaga::approve()` (não só no controller): permissão,
+     designação formal (`solicitacao_vaga_aprovacoes.destinatario_usuario_id` = ele), Setor Gerenciado da solicitação (fora do setor = "não encontrada"), solicitação
+     em `pendente_lider` e não cancelada/fechada, CSRF e auditoria (`approval_lider_imediato`). Os parâmetros de RH/supervisor são ignorados para o Gestor; etapa de RH =
+     403 (rota) / recusa (model). Viewer DESIGNADO segue aprovando (compatibilidade temporária — remover só após a reclassificação controlada); Admin/RH/Supervisor Geral inalterados.
+   - **Dashboard agregado (`dashboard_integracao_agregado.visualizar`, nova):** `/admin/dashboard-integracao-agregado` (+ `/dados` JSON), serviço próprio
+     `DashboardIntegracaoAgregadoService`. Escopo = `usuario_setores_gerenciados` (AND obrigatório no repositório; filtros fora do escopo são descartados). Privacidade
+     no backend: mínimo 5 respondentes DISTINTOS (pessoa) após os filtros; abaixo disso só "dados insuficientes"; supressão complementar de grupos (setor/mês) para o
+     resíduo nunca isolar < 5; recusa de combinações de filtros cuja visão mais ampla (mês→ano→todo, empresa/unidade, setor — todas as combinações) diferenciaria < 5 pessoas;
+     fluxo individual/"integrações realizadas" só com >= 5; saída de estrutura fechada (sem comentário, nome, cargo, id, data de resposta).
+     O Gestor continua SEM o dashboard operacional, resultados, QR e campanhas (`integracao_colaborador.*` incompatível). Viewer: 403.
+   - **Limites conhecidos (k-anonimato não é garantia absoluta):** (a) ataques com MUITAS consultas combinadas (trackers) ou com conhecimento externo sobre quem respondeu
+     não são totalmente evitáveis por regra local — o guard cobre diferenças entre a visão pedida e as visões mais amplas obteníveis relaxando filtros, não toda combinação de
+     consultas; recomenda-se registrar/limitar a frequência das consultas se o risco aumentar; (b) com 5 respondentes, distribuições por pergunta mostram a distribuição das
+     notas (não quem deu qual); (c) a unicidade da pessoa usa `codigo_pessoa` (fallback contrato/colaborador). Cobertura: `integration_gestor_aprovacao_lider_vaga.php`,
+     `integration_gestor_integracao_agregada.php`.

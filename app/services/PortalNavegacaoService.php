@@ -136,6 +136,8 @@ class PortalNavegacaoService
                 'itens' => [
                     ['href' => '/admin/pesquisas-reacao-integracao', 'regra' => 'perm:pesquisa_reacao_integracao.visualizar'],
                     ['href' => '/admin/pesquisa-integracao-qr', 'regra' => 'perm:integracao_colaborador.visualizar'],
+                    // Etapa 2C.2C: visão AGREGADA do Gestor (regra só para o perfil gestor; Admin/RH seguem com o painel operacional).
+                    ['href' => '/admin/dashboard-integracao-agregado', 'regra' => 'gestor_perm:dashboard_integracao_agregado.visualizar'],
                 ]],
             ['chave' => 'desligamento', 'titulo' => 'Turnover e Desligamento', 'icone' => 'desligamento',
                 'descricao' => 'Dashboards de turnover e entrevistas de desligamento.',
@@ -213,6 +215,7 @@ class PortalNavegacaoService
                 // (integracao_colaborador.visualizar); não é uma capacidade nova, é a visão agregada dos
                 // mesmos dados já existentes.
                 ['chave' => 'dashboard', 'label' => 'Dashboard', 'href' => '/admin/pesquisas-reacao-integracao/integracao/dashboard', 'regra' => 'perm:integracao_colaborador.visualizar'],
+                ['chave' => 'agregado', 'label' => 'Dashboard agregado', 'href' => '/admin/dashboard-integracao-agregado', 'regra' => 'gestor_perm:dashboard_integracao_agregado.visualizar'],
             ]],
             'desligamento' => ['titulo' => 'Turnover e Desligamento', 'abas' => [
                 ['chave' => 'turnover', 'label' => 'Turnover', 'href' => '/admin/dashboard-turnover', 'regra' => 'perm:dashboard_turnover.visualizar'],
@@ -344,6 +347,9 @@ class PortalNavegacaoService
             // libera o backend (canCreate()). `vagas.criar` (outro módulo) deliberadamente NÃO
             // entra aqui.
             return $staff || $this->podeSolicitarVaga || $perm('solicitacao_vaga.visualizar') || $perm('solicitacao_vaga.criar') || $perm('kanban_vagas.visualizar');
+        }
+        if (str_starts_with($regra, 'gestor_perm:')) {
+            return $this->role === 'gestor' && $perm(substr($regra, 12));
         }
         if (str_starts_with($regra, 'perm:')) {
             return $perm(substr($regra, 5));

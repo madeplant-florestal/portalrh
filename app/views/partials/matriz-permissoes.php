@@ -19,8 +19,13 @@ if (!function_exists('ui_matriz_permissoes')) {
 <div data-matriz="1" data-perfis="<?= $e($perfisJson) ?>" data-perfil="<?= $e($matriz['perfil']) ?>" data-edicao="<?= $matriz['edicao'] ? '1' : '0' ?>" data-seletor-perfil="<?= $e($seletorPerfil) ?>" class="space-y-3">
   <div class="flex flex-wrap items-center justify-between gap-2">
     <p class="text-sm text-text-primary" role="status" aria-live="polite">
-      <strong data-matriz-contador><?= (int)$matriz['selecionadas'] ?> selecionadas</strong>
-      <span class="text-text-secondary" data-matriz-total-texto>de <?= (int)$matriz['total'] ?> permissões do catálogo</span>
+      <?php if ($matriz['global']): ?>
+        <strong data-matriz-contador><?= (int)$matriz['selecionadas'] ?> atribuições individuais</strong>
+        <span class="text-text-secondary" data-matriz-total-texto>gravada(s) — sem efeito prático: o acesso é global pelo perfil e não depende delas</span>
+      <?php else: ?>
+        <strong data-matriz-contador><?= (int)$matriz['selecionadas'] ?> selecionadas</strong>
+        <span class="text-text-secondary" data-matriz-total-texto>de <?= (int)$matriz['total'] ?> permissões do catálogo</span>
+      <?php endif; ?>
     </p>
     <div class="flex flex-wrap gap-2" role="group" aria-label="Seleção em lote">
       <button type="button" data-matriz-acao="marcar-todas" class="<?= ui_btn('secundario') ?>">Marcar todas</button>

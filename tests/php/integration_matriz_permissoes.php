@@ -214,6 +214,33 @@ try {
     $check(str_contains($body, 'não são reativadas') && str_contains($body, 'empresas.criar') && !PermissaoPerfilPolicy::permissaoEfetiva('viewer', 'empresas.criar') && !in_array('empresas.criar', PermissaoPerfilPolicy::permissoesEfetivas(User::findById($legadoU)), true), 'legado: aviso na tela; segue SEM efeito (política); diferenciação efetiva × armazenada');
     $check($gravadas($legadoU) === ['dashboard.visualizar', 'empresas.criar'], 'legado: abrir a tela não migra nem apaga nada');
 
+    // ---- 5b. Layout: matriz em largura total na edição; cadastro intacto; contador de perfil global ------------------------
+    $ancestraisDaMatriz = static function (string $htmlPagina): array {
+        $d = new DOMDocument();
+        @$d->loadHTML('<?xml encoding="utf-8"?>' . $htmlPagina);
+        $x = new DOMXPath($d);
+        $no = $x->query('//*[@data-matriz="1"]')->item(0);
+        $r = ['achou' => $no !== null, 'dentroGrid' => false, 'dentroMax2xl' => false, 'secao' => false];
+        for ($n = $no?->parentNode; $n instanceof DOMElement; $n = $n->parentNode) {
+            $r['dentroGrid'] = $r['dentroGrid'] || $n->hasAttribute('data-usuario-detalhe-colunas');
+            $r['dentroMax2xl'] = $r['dentroMax2xl'] || str_contains(' ' . $n->getAttribute('class') . ' ', ' max-w-2xl ');
+            $r['secao'] = $r['secao'] || $n->hasAttribute('data-usuario-permissoes-largura-total');
+        }
+        return $r;
+    };
+    [$st, $bodyEd] = $http($admin, 'admin', false, 'AdminUsuariosController', 'show', [], [(string)$viewerU]);
+    $a = $ancestraisDaMatriz($bodyEd);
+    $check($a['achou'] && !$a['dentroGrid'] && $a['secao'] && !$a['dentroMax2xl'] && str_contains($bodyEd, 'data-usuario-detalhe-colunas="1"') && str_contains($bodyEd, 'data-usuario-detalhe-coluna-esquerda="1"'), 'edição: a matriz fica numa seção independente em largura total, FORA do grid de duas colunas (que continua existindo)');
+    [$st, $bodyCad] = $http($admin, 'admin', false, 'AdminUsuariosController', 'create');
+    $a = $ancestraisDaMatriz($bodyCad);
+    $check($a['achou'] && !$a['dentroMax2xl'] && !$a['dentroGrid'], 'cadastro: layout da matriz preservado (largura total, fora do bloco estreito dos campos)');
+    $admComPerm = $mkUser('admperm', 'admin');
+    $grava($admComPerm, ['pdi.visualizar', 'dashboard.visualizar']);
+    [$st, $bodyAdm] = $http($admin, 'admin', false, 'AdminUsuariosController', 'show', [], [(string)$admComPerm]);
+    $check(str_contains($bodyAdm, '2 atribuições individuais') && !str_contains($bodyAdm, '2 selecionadas') && str_contains($bodyAdm, 'acesso é global pelo perfil') && $gravadas($admComPerm) === ['dashboard.visualizar', 'pdi.visualizar'], 'perfil global: o contador mostra ATRIBUIÇÕES INDIVIDUAIS gravadas (não "selecionadas") e explica que o acesso vem do perfil; nada é alterado');
+    $mAdminEd = PermissaoMatrizService::construir('admin', Authorization::idsAtribuidos($admComPerm), true);
+    $check($mAdminEd['selecionadas'] === 2 && $mAdminEd['global'], 'o número do contador = linhas realmente gravadas em usuario_permissoes (não derivado do acesso global)');
+
     // ---- 6. Cadastro (store) ---------------------------------------------------------------------------------
     $post = $novoUsuarioPost('cv', 'viewer', $ids($viewerModelo));
     [$st] = $http($admin, 'admin', false, 'AdminUsuariosController', 'store', $post);

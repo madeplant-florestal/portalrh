@@ -367,6 +367,10 @@ $podeAlterarPerfil = !empty($podeAlterarPerfil);
   </section>
   <?php endif; ?>
 
+    </div>
+  </div>
+
+  <!-- Permissões de acesso: seção independente, FORA do grid de duas colunas, em largura total (a matriz horizontal precisa dela). -->
   <?php if ($isAdminAtor): ?>
   <?php
     require_once APP_PATH . '/views/partials/matriz-permissoes.php';
@@ -378,7 +382,7 @@ $podeAlterarPerfil = !empty($podeAlterarPerfil);
         $opcoesPerfilMatriz[strtolower((string)$user->role)] = $rolesMatriz[strtolower((string)$user->role)] ?? strtoupper((string)$user->role);
     }
   ?>
-  <section class="rounded-ds-md border border-border bg-surface-secondary p-5">
+  <section class="mt-6 w-full rounded-ds-md border border-border bg-surface-secondary p-5" data-usuario-permissoes-largura-total="1">
     <h3 class="text-lg font-semibold text-text-primary">Permissões de acesso</h3>
     <p class="mt-1 text-sm text-text-secondary">
       Controla o que este usuário pode fazer em cada módulo. Administradores e RH possuem acesso total pelo perfil; para os demais, só o que estiver
@@ -409,8 +413,6 @@ $podeAlterarPerfil = !empty($podeAlterarPerfil);
     </form>
   </section>
   <?php endif; ?>
-    </div>
-  </div>
 
   <?php if ($isAdminAtor): ?>
   <div class="responsive-form-actions mt-6">

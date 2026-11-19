@@ -71,8 +71,9 @@
     var d = dados(perfil);
     var marcadas = celulas.filter(function (c) { return c.checked && !c.disabled; }).length;
     var habilitadas = celulas.filter(function (c) { return !c.disabled; }).length;
-    if (contador) contador.textContent = marcadas + (marcadas === 1 ? ' selecionada' : ' selecionadas');
-    if (totalTexto) totalTexto.textContent = d.global ? 'acesso global pelo perfil (permissões individuais dispensáveis)' : 'de ' + habilitadas + ' aplicáveis ao perfil';
+    // Perfil global: o número é de ATRIBUIÇÕES INDIVIDUAIS gravadas/marcadas (linhas em usuario_permissoes), não de acesso — o acesso vem do perfil.
+    if (contador) contador.textContent = d.global ? marcadas + (marcadas === 1 ? ' atribuição individual' : ' atribuições individuais') : marcadas + (marcadas === 1 ? ' selecionada' : ' selecionadas');
+    if (totalTexto) totalTexto.textContent = d.global ? 'gravada(s) — sem efeito prático: o acesso é global pelo perfil e não depende delas' : 'de ' + habilitadas + ' aplicáveis ao perfil';
     var legados = celulas.filter(function (c) { return c.getAttribute('data-legado') === '1' && c.checked && !c.disabled; });
     if (avisoLegado) {
       avisoLegado.classList.toggle('hidden', legados.length === 0);

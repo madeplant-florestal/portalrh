@@ -107,3 +107,12 @@ test('teclado e responsividade: checkboxes com nome acessível; a tabela rola de
   expect(m.rola).toBe(true);
   expect(m.paginaRola).toBe(false);
 });
+
+test('perfil global na edição: contador fala em atribuições individuais gravadas, não em selecionadas', async ({ page }) => {
+  await abrir(page, 'admin', '1', 'pdi.visualizar,dashboard.visualizar,empresas.criar');
+  await expect(page.locator('[data-matriz-contador]')).toHaveText('3 atribuições individuais');
+  await expect(page.locator('[data-matriz-total-texto]')).toContainText('acesso é global pelo perfil');
+  page.once('dialog', (d) => d.accept()); // na edição a troca de perfil sempre pede confirmação
+  await page.selectOption('#role', 'viewer');
+  await expect(page.locator('[data-matriz-contador]')).toHaveText(/selecionada/);
+});

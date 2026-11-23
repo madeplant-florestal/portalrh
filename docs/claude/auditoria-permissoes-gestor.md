@@ -64,7 +64,7 @@ Legenda de classificação proposta: **liberável** (já concedível), **bloquea
 
 ## 5. Pendências (decisão/trabalho necessários antes de liberar — NÃO liberadas)
 
-1. **Vaga ↔ setor.** `vagas.area` é texto livre e `vagas.solicitacao_vaga_id` é opcional; candidaturas só herdam setor por essa cadeia. Decisão
+1. **Vaga ↔ setor** (**base estrutural entregue na Etapa 3.2A**: `vagas.setor_id`, ver `vagas-setor-responsavel.md`; ainda NÃO libera permissões). `vagas.area` é texto livre e `vagas.solicitacao_vaga_id` é opcional; candidaturas só herdam setor por essa cadeia. Decisão
    necessária: (a) tornar o vínculo obrigatório para vagas novas (migration + backfill das existentes, a executar manualmente) **ou**
    (b) restringir o Gestor às vagas **com** solicitação e tratar as sem vínculo como "sem setor" (invisíveis ao Gestor).
 2. **Candidaturas/Pipeline/Kanban de candidatos:** reaproveitar `EscopoSetorial` em consultas, detalhes por ID, movimentação, anexos (CV e

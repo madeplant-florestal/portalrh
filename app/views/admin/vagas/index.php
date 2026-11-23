@@ -30,6 +30,7 @@ require_once APP_PATH . '/views/partials/modulo-topo.php';
         <th class="text-left p-3">Título</th>
         <th class="text-left p-3">Empresa</th>
         <th class="text-left p-3">Área</th>
+        <?php if (!empty($vagas) && array_key_exists('setor_nome', $vagas[0])): ?><th class="text-left p-3">Setor responsável</th><?php endif; ?>
         <th class="text-left p-3">Local</th>
         <th class="text-left p-3">Ativo</th>
         <th class="text-left p-3">Ações</th>
@@ -47,6 +48,9 @@ require_once APP_PATH . '/views/partials/modulo-topo.php';
           </td>
           <td class="p-3"><?= Security::e($v['empresa_nome'] ?? 'Padrão') ?></td>
           <td class="p-3"><?= Security::e($v['area']) ?></td>
+          <?php if (array_key_exists('setor_nome', $v)): ?>
+            <td class="p-3"><?= $v['setor_nome'] !== null ? Security::e($v['setor_nome']) : '<span class="rounded bg-warning/10 px-2 py-1 text-xs font-semibold text-warning">Sem setor</span>' ?></td>
+          <?php endif; ?>
           <td class="p-3"><?= Security::e($v['local']) ?></td>
           <td class="p-3">
             <?php if ($rascunho): ?>
@@ -83,6 +87,7 @@ require_once APP_PATH . '/views/partials/modulo-topo.php';
         <div class="text-base font-semibold text-text-primary"><?= Security::e($v['titulo']) ?></div>
         <div class="mt-2 text-sm text-text-secondary">Empresa: <?= Security::e($v['empresa_nome'] ?? 'Padrão') ?></div>
         <div class="mt-2 text-sm text-text-secondary">Área: <?= Security::e($v['area']) ?></div>
+        <?php if (array_key_exists('setor_nome', $v)): ?><div class="mt-1 text-sm text-text-secondary">Setor responsável: <?= $v['setor_nome'] !== null ? Security::e($v['setor_nome']) : 'sem setor' ?></div><?php endif; ?>
         <div class="mt-1 text-sm text-text-secondary">Local: <?= Security::e($v['local']) ?></div>
         <div class="mt-3">
           <span class="rounded px-2 py-1 text-xs font-semibold text-white <?= (int)$v['ativo'] === 1 ? 'bg-primary-700' : 'bg-danger' ?>">

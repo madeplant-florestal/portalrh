@@ -25,20 +25,31 @@ class Vaga
     public static function all(): array
     {
         RecruitmentWebhookSchemaService::ensureSchema();
-        $sql = 'SELECT v.*, e.nome AS empresa_nome
+        $sql = 'SELECT v.*, e.nome AS empresa_nome' . self::selectSetor() . '
                 FROM vagas v
-                LEFT JOIN empresas e ON e.id = v.empresa_id
+                LEFT JOIN empresas e ON e.id = v.empresa_id' . self::joinSetor() . '
                 ORDER BY v.created_at DESC';
         $stmt = Database::conn()->query($sql);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
+    /** Etapa 3.2A: nome/situação do setor responsável (só quando a migration já foi executada; antes dela nada muda). */
+    private static function selectSetor(): string
+    {
+        return VagaSetorService::schemaSuportaSetor() ? ', sv.nome AS setor_nome, sv.ativo AS setor_ativo' : '';
+    }
+
+    private static function joinSetor(): string
+    {
+        return VagaSetorService::schemaSuportaSetor() ? ' LEFT JOIN setores sv ON sv.id = v.setor_id' : '';
+    }
+
     public static function find(int $id): ?array
     {
         RecruitmentWebhookSchemaService::ensureSchema();
-        $sql = 'SELECT v.*, e.nome AS empresa_nome
+        $sql = 'SELECT v.*, e.nome AS empresa_nome' . self::selectSetor() . '
                 FROM vagas v
-                LEFT JOIN empresas e ON e.id = v.empresa_id
+                LEFT JOIN empresas e ON e.id = v.empresa_id' . self::joinSetor() . '
                 WHERE v.id = ? LIMIT 1';
         $stmt = Database::conn()->prepare($sql);
         $stmt->execute([$id]);
@@ -49,9 +60,11 @@ class Vaga
     public static function create(array $data): int
     {
         RecruitmentWebhookSchemaService::ensureSchema();
-        $sql = 'INSERT INTO vagas (titulo, descricao, requisitos, area, local, empresa_id, ativo) VALUES (?,?,?,?,?,?,?)';
+        // `setor_id` só é gravado quando informado E a coluna existe (a OBRIGATORIEDADE é validada no controller via VagaSetorService).
+        $comSetor = array_key_exists('setor_id', $data) && VagaSetorService::schemaSuportaSetor();
+        $sql = 'INSERT INTO vagas (titulo, descricao, requisitos, area, local, empresa_id, ativo' . ($comSetor ? ', setor_id' : '') . ') VALUES (?,?,?,?,?,?,?' . ($comSetor ? ',?' : '') . ')';
         $stmt = Database::conn()->prepare($sql);
-        $stmt->execute([
+        $params = [
             $data['titulo'],
             $data['descricao'],
             $data['requisitos'],
@@ -59,7 +72,11 @@ class Vaga
             $data['local'],
             self::normalizeEmpresaId($data['empresa_id'] ?? null),
             (int)$data['ativo']
-        ]);
+        ];
+        if ($comSetor) {
+            $params[] = $data['setor_id'] === null ? null : (int)$data['setor_id'];
+        }
+        $stmt->execute($params);
         return (int)Database::conn()->lastInsertId();
     }
 
@@ -70,12 +87,15 @@ class Vaga
         // que seja o caminho (publicação do rascunho ou edição manual). Nunca é apagado ao
         // desativar — responde "quando foi publicada?" na auditoria.
         $ativo = (int)$data['ativo'];
+        // `setor_id` só é tocado quando a chave vem em $data (chamadores antigos nunca o apagam) e a coluna existe.
+        $comSetor = array_key_exists('setor_id', $data) && VagaSetorService::schemaSuportaSetor();
         $sql = 'UPDATE vagas
                 SET titulo=?, descricao=?, requisitos=?, area=?, local=?, empresa_id=?, ativo=?,
-                    publicada_em = CASE WHEN ? = 1 THEN COALESCE(publicada_em, NOW()) ELSE publicada_em END
+                    publicada_em = CASE WHEN ? = 1 THEN COALESCE(publicada_em, NOW()) ELSE publicada_em END'
+                . ($comSetor ? ', setor_id=?' : '') . '
                 WHERE id=?';
         $stmt = Database::conn()->prepare($sql);
-        return $stmt->execute([
+        $params = [
             $data['titulo'],
             $data['descricao'],
             $data['requisitos'],
@@ -84,8 +104,12 @@ class Vaga
             self::normalizeEmpresaId($data['empresa_id'] ?? null),
             $ativo,
             $ativo,
-            $id
-        ]);
+        ];
+        if ($comSetor) {
+            $params[] = $data['setor_id'] === null ? null : (int)$data['setor_id'];
+        }
+        $params[] = $id;
+        return $stmt->execute($params);
     }
 
     public static function delete(int $id): bool

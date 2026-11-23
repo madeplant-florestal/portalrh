@@ -25,9 +25,44 @@ $editing = !empty($vaga);
       <label class="block text-ds-label text-text-primary">Requisitos</label>
       <textarea name="requisitos" rows="3" class="mt-1 w-full border rounded px-3 py-2" required><?= Security::e($vaga['requisitos'] ?? '') ?></textarea>
     </div>
+    <?php if (!empty($setorAtivoNoSchema)):
+        $setorOpcoes = $setorOpcoes ?? [];
+        $setorSel = $setorSelecionado ?? null;
+        $setorDeps = $setorDependencias ?? ['candidaturas' => 0, 'solicitacao' => false, 'beneficios' => 0];
+        $daSolicitacao = $setorDaSolicitacao ?? null;
+        $atualId = $setorAtualId ?? null;
+        $travado = $daSolicitacao !== null; // vaga originada de solicitação: o setor é o da solicitação
+        if ($travado) { $setorSel = $daSolicitacao; }
+        $historicaSemSetor = $editing && $atualId === null && !$travado;
+    ?>
+    <div class="rounded-ds-md border border-border bg-surface-secondary p-3">
+      <label for="setor_id" class="block text-ds-label text-text-primary">Setor responsável <?= $historicaSemSetor ? '' : '<span class="text-danger" aria-hidden="true">*</span>' ?></label>
+      <select id="setor_id" name="setor_id" <?= $historicaSemSetor ? '' : 'required' ?> <?= $travado ? 'disabled' : '' ?> class="mt-1 w-full border rounded px-3 py-2">
+        <option value=""><?= $historicaSemSetor ? '— sem setor (vaga histórica): selecione para regularizar —' : 'Selecione o setor responsável' ?></option>
+        <?php foreach ($setorOpcoes as $sid => $rotulo): ?>
+          <option value="<?= (int)$sid ?>" <?= (int)$setorSel === (int)$sid ? 'selected' : '' ?>><?= Security::e($rotulo) ?></option>
+        <?php endforeach; ?>
+      </select>
+      <?php if ($travado): ?>
+        <input type="hidden" name="setor_id" value="<?= (int)$daSolicitacao ?>">
+        <p class="mt-1 text-xs text-text-secondary">Esta vaga se originou de uma solicitação: o setor é o da solicitação e não pode ser alterado aqui.</p>
+      <?php else: ?>
+        <p class="mt-1 text-xs text-text-secondary">Setor oficial do cadastro do Portal. É a base do controle de acesso por setor: <strong>não</strong> é o texto livre do campo Área.</p>
+      <?php endif; ?>
+      <?php if ($editing && !$travado && $atualId !== null && $setorDeps['candidaturas'] > 0): ?>
+        <label class="mt-2 flex items-start gap-2 rounded border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-text-primary">
+          <input type="checkbox" name="confirmar_mudanca_setor" value="1" class="mt-0.5" <?= !empty($setorMudancaPendente) ? 'checked' : '' ?>>
+          <span>Esta vaga tem <strong><?= (int)$setorDeps['candidaturas'] ?></strong> candidatura(s). Se eu trocar o setor, confirmo que entendo que isso muda quem poderá ver esses candidatos no futuro. A alteração será registrada.</span>
+        </label>
+      <?php endif; ?>
+      <?php if ($historicaSemSetor): ?>
+        <p class="mt-1 text-xs text-warning">Vaga histórica sem setor identificado: pode ser salva assim, mas informe o setor assim que confirmá-lo. Após definido, o setor passa a ser obrigatório.</p>
+      <?php endif; ?>
+    </div>
+    <?php endif; ?>
     <div class="grid gap-3 md:grid-cols-2">
       <div>
-        <label class="block text-ds-label text-text-primary">Área</label>
+        <label class="block text-ds-label text-text-primary">Área <span class="text-text-muted font-normal">(texto exibido no site)</span></label>
         <input type="text" name="area" value="<?= Security::e($vaga['area'] ?? '') ?>" class="mt-1 w-full border rounded px-3 py-2" />
       </div>
       <div>

@@ -154,6 +154,7 @@ tocar o assunto correspondente.
 | Indicadores de RH (dicionário de fórmulas, fonte de dados, qualidade, limitações) | [`indicadores-rh.md`](docs/claude/indicadores-rh.md) | mudança na camada analítica ou no dashboard `/admin/indicadores-rh` |
 | Riscos conhecidos | [`riscos-conhecidos.md`](docs/claude/riscos-conhecidos.md) | qualquer alteração nas áreas afetadas |
 | Auditoria de permissões do Gestor (recomendado × concedível × bloqueado, com motivo e pendências) | [`auditoria-permissoes-gestor.md`](docs/claude/auditoria-permissoes-gestor.md) | liberar/bloquear permissão para o Gestor; escopo setorial |
+| Vagas × setor responsável (modelagem, regras, regularização histórica, implantação) | [`vagas-setor-responsavel.md`](docs/claude/vagas-setor-responsavel.md) | criar/editar vagas; base do escopo setorial de Recrutamento |
 
 ---
 

@@ -65,6 +65,8 @@ $excecoes = [
     // --- Fase C: contexto organizacional técnico do usuário, seeds de desenvolvimento e importações técnicas ---
     'models/MovimentacaoPessoal.php::userAccessProfile' => 'perfil de acesso técnico do usuário logado (contexto organizacional; não quebra login)',
     'models/MovimentacaoPessoal.php::seedReferenceData' => 'seed de dados de desenvolvimento (não é leitura operacional)',
+    'services/VagaSetorService.php::setorDaSolicitacao' => 'Etapa 3.2A: lê só o setor_id estruturado de UMA solicitação por id (checagem técnica de integridade vaga×solicitação); nenhum dado de colaborador',
+    'services/VagaSetorService.php::diagnosticoRegularizacao' => 'Etapa 3.2A: relatório administrativo de regularização do setor das vagas (id, título, setor); sem dados de colaborador nem pessoais',
     'models/SolicitacaoVaga.php::seedReferenceData' => 'seed de dados de desenvolvimento (não é leitura operacional)',
     'models/SolicitacaoVaga.php::findUserColaboradorByColaboradorId' => 'resolve o usuário de um colaborador JÁ validado por requiredEntityId() (técnico, por id)',
     'models/Candidatura.php::all' => 'lista de CANDIDATOS (pessoas externas) e Kanban de recrutamento: só lê sv.setor_id da vaga; CONDICIONADA (ver $condicoes) a nunca ler colaborador/contrato — provado por integration_exclusao_analitica_candidaturas.php',

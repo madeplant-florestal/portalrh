@@ -61,13 +61,21 @@ class SolicitacaoVagaPublicacaoService
 
         $dados = $this->montarDadosVaga($solicitacao);
 
+        // Etapa 3.2A: a vaga herda o setor ESTRUTURADO da solicitação (setor_id). Setor ausente/inválido/inelegível bloqueia a geração com
+        // mensagem clara — nunca escolhe outro nem cai no texto de `area`. (Antes da migration a coluna não existe e o fluxo é o anterior.)
+        $setorVaga = (new VagaSetorService($this->pdo))->setorParaRascunho($solicitacaoId);
+        if (!$setorVaga['ok']) {
+            return ['ok' => false, 'error' => (string)$setorVaga['error']];
+        }
+        $comSetor = $setorVaga['setor_id'] !== null;
+
         $this->pdo->beginTransaction();
         try {
             $stmt = $this->pdo->prepare(
-                'INSERT INTO vagas (solicitacao_vaga_id, titulo, descricao, requisitos, area, local, empresa_id, ativo, publicada_em)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, 0, NULL)'
+                'INSERT INTO vagas (solicitacao_vaga_id, titulo, descricao, requisitos, area, local, empresa_id, ativo, publicada_em' . ($comSetor ? ', setor_id' : '') . ')
+                 VALUES (?, ?, ?, ?, ?, ?, ?, 0, NULL' . ($comSetor ? ', ?' : '') . ')'
             );
-            $stmt->execute([
+            $params = [
                 $solicitacaoId,
                 $dados['titulo'],
                 $dados['descricao'],
@@ -75,7 +83,11 @@ class SolicitacaoVagaPublicacaoService
                 $dados['area'],
                 $dados['local'],
                 $dados['empresa_id'],
-            ]);
+            ];
+            if ($comSetor) {
+                $params[] = $setorVaga['setor_id'];
+            }
+            $stmt->execute($params);
             $vagaId = (int)$this->pdo->lastInsertId();
 
             SolicitacaoVaga::registrarEventoAuditoria(

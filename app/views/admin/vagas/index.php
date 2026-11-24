@@ -4,9 +4,8 @@ require_once APP_PATH . '/views/partials/modulo-topo.php';
 <div class="space-y-4">
   <?= ui_modulo_topo($base, 'recrutamento', 'vagas', [
       'titulo' => 'Vagas',
-      'descricao' => 'Vagas do site de recrutamento e rascunhos gerados a partir das solicitações aprovadas.',
-      'acao' => ['label' => 'Nova vaga (exceção)', 'href' => $base . '/admin/vagas/novo'],
-  ]) ?>
+      'descricao' => !empty($somenteLeitura) ? 'Vagas dos setores que você gerencia (consulta).' : 'Vagas do site de recrutamento e rascunhos gerados a partir das solicitações aprovadas.',
+  ] + (!empty($somenteLeitura) ? [] : ['acao' => ['label' => 'Nova vaga (exceção)', 'href' => $base . '/admin/vagas/novo']])) ?>
   <a href="https://madeplant.com.br/trabalhe-conosco" target="_blank" rel="noopener"
      class="inline-flex items-center gap-1.5 text-ds-label font-semibold text-primary-700 hover:text-primary-800">
     <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M14 5h5v5m0-5L10 14M9 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-3"/></svg>
@@ -19,10 +18,12 @@ require_once APP_PATH . '/views/partials/modulo-topo.php';
   <?php if (!empty($flashError)): ?>
     <div class="mt-3 rounded border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger"><?= Security::e($flashError) ?></div>
   <?php endif; ?>
+  <?php if (empty($somenteLeitura)): ?>
   <p class="mt-3 rounded border border-border bg-surface-secondary px-3 py-2 text-xs text-text-secondary">
     Fluxo normal: <strong>Solicitação de Vaga → aprovação → rascunho da vaga → publicar</strong>.
     "Nova vaga" é cadastro manual de exceção (admin/RH).
   </p>
+  <?php endif; ?>
   <div class="responsive-table-wrap mt-4">
     <table class="hidden min-w-full text-sm md:table">
     <thead>
@@ -33,7 +34,7 @@ require_once APP_PATH . '/views/partials/modulo-topo.php';
         <?php if (!empty($vagas) && array_key_exists('setor_nome', $vagas[0])): ?><th class="text-left p-3">Setor responsável</th><?php endif; ?>
         <th class="text-left p-3">Local</th>
         <th class="text-left p-3">Ativo</th>
-        <th class="text-left p-3">Ações</th>
+        <?php if (empty($somenteLeitura)): ?><th class="text-left p-3">Ações</th><?php endif; ?>
       </tr>
     </thead>
     <tbody>
@@ -42,7 +43,7 @@ require_once APP_PATH . '/views/partials/modulo-topo.php';
         <tr class="border-b hover:bg-surface-secondary">
           <td class="p-3 font-medium text-text-primary">
             <?= Security::e($v['titulo']) ?>
-            <?php if (!empty($v['solicitacao_vaga_id'])): ?>
+            <?php if (!empty($v['solicitacao_vaga_id']) && empty($somenteLeitura)): ?>
               <a href="<?= $base ?>/admin/solicitacoes-vaga/<?= (int)$v['solicitacao_vaga_id'] ?>" class="ml-1 text-xs font-normal text-text-muted hover:text-primary-700">(solicitação #<?= (int)$v['solicitacao_vaga_id'] ?>)</a>
             <?php endif; ?>
           </td>
@@ -61,6 +62,7 @@ require_once APP_PATH . '/views/partials/modulo-topo.php';
               </span>
             <?php endif; ?>
           </td>
+          <?php if (empty($somenteLeitura)): ?>
           <td class="p-3">
             <div class="responsive-card-actions">
               <?php if ((int)$v['ativo'] === 0): ?>
@@ -76,6 +78,7 @@ require_once APP_PATH . '/views/partials/modulo-topo.php';
               </form>
             </div>
           </td>
+          <?php endif; ?>
         </tr>
       <?php endforeach; ?>
     </tbody>
@@ -94,6 +97,7 @@ require_once APP_PATH . '/views/partials/modulo-topo.php';
             <?= (int)$v['ativo'] === 1 ? 'Ativa' : 'Inativa' ?>
           </span>
         </div>
+        <?php if (empty($somenteLeitura)): ?>
         <div class="responsive-card-actions mt-4">
           <a href="<?= $base ?>/admin/vagas/editar/<?= (int)$v['id'] ?>" class="text-text-primary hover:text-primary-700">Editar</a>
           <form action="<?= $base ?>/admin/vagas/excluir/<?= (int)$v['id'] ?>" method="post" data-confirm-message="Excluir esta vaga?">
@@ -101,6 +105,7 @@ require_once APP_PATH . '/views/partials/modulo-topo.php';
             <button class="text-danger hover:text-danger">Excluir</button>
           </form>
         </div>
+        <?php endif; ?>
       </div>
     <?php endforeach; ?>
   </div>

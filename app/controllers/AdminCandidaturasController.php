@@ -3,8 +3,20 @@ class AdminCandidaturasController extends Controller
 {
     public function index(): void
     {
-        // Nome/e-mail/CPF de candidatos: só admin/RH (Etapa 2A); viewer recebe 403 mesmo com candidaturas.visualizar.
-        Auth::requireRole(['admin', 'rh']);
+        // Nome/e-mail/CPF de candidatos: Admin/RH (visão completa, inalterada). Etapa 3.2C.1: Gestor com `candidaturas.visualizar` EFETIVA
+        // consulta só a LISTAGEM das candidaturas das vagas dos seus Setores Gerenciados, com projeção sem dados pessoais (view própria).
+        // Viewer segue com 403 mesmo com candidaturas.visualizar gravada (permissão incompatível com o perfil).
+        Authorization::requireRoleOuPermissao(['admin', 'rh'], 'candidaturas.visualizar');
+        $acesso = RecrutamentoLeituraSetorialService::paraCandidaturas((int)($_SESSION['user_id'] ?? 0), !empty($_SESSION['user_is_supervisor']), Auth::role());
+        if ($acesso['modo'] === RecrutamentoLeituraSetorialService::MODO_NEGADO) {
+            http_response_code(403);
+            echo 'Acesso negado';
+            return;
+        }
+        if ($acesso['modo'] === RecrutamentoLeituraSetorialService::MODO_SETORIAL) {
+            $this->indexSetorial($acesso['escopo']);
+            return;
+        }
         $filters = [
             'vaga_id' => isset($_GET['vaga_id']) ? (int)$_GET['vaga_id'] : null,
             'stage_id' => isset($_GET['stage_id']) ? (int)$_GET['stage_id'] : null,
@@ -20,6 +32,45 @@ class AdminCandidaturasController extends Controller
             'stages' => $stages,
             'filters' => $filters,
             'csrf' => Security::csrfToken(),
+        ], 'layouts/app-shell');
+    }
+
+    /**
+     * Listagem do Gestor (somente leitura): TODOS os filtros/busca/paginação/contador passam por Candidatura::listarEscopo/contarEscopo
+     * (escopo no SQL, `vagas.setor_id`); a projeção não carrega CPF, e-mail, telefone, currículo, indicação, observações nem metadados.
+     */
+    private function indexSetorial(EscopoSetorial $escopo): void
+    {
+        $data = static function (string $k): string {
+            $v = trim((string)($_GET[$k] ?? ''));
+            return preg_match('/^\d{4}-\d{2}-\d{2}$/', $v) === 1 && strtotime($v) !== false ? $v : '';
+        };
+        $filters = [
+            'vaga_id' => max(0, (int)($_GET['vaga_id'] ?? 0)),
+            'setor_id' => max(0, (int)($_GET['setor_id'] ?? 0)),
+            'stage_id' => max(0, (int)($_GET['stage_id'] ?? 0)),
+            'data_de' => $data('data_de'),
+            'data_ate' => $data('data_ate'),
+            'busca' => mb_substr(trim((string)($_GET['busca'] ?? '')), 0, 100),
+        ];
+        $consulta = array_filter($filters, static fn($v) => $v !== 0 && $v !== '');
+        if (!empty($consulta['data_ate'])) {
+            $consulta['data_ate'] .= ' 23:59:59'; // o dia final inclusivo
+        }
+        $porPagina = 20;
+        $total = Candidatura::contarEscopo($escopo, $consulta);
+        $paginas = max(1, (int)ceil($total / $porPagina));
+        $pagina = min(max(1, (int)($_GET['page'] ?? 1)), $paginas);
+        $candidaturas = Candidatura::listarEscopo($escopo, $consulta, $porPagina, ($pagina - 1) * $porPagina);
+        $this->view->render('admin/candidaturas/index-setorial', [
+            'candidaturas' => $candidaturas,
+            'vagas' => Vaga::all($escopo),
+            'setores' => Candidatura::setoresDisponiveisEscopo($escopo),
+            'stages' => PipelineStage::all(),
+            'filters' => $filters,
+            'total' => $total,
+            'pagina' => $pagina,
+            'paginas' => $paginas,
         ], 'layouts/app-shell');
     }
 

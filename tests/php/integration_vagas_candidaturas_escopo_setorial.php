@@ -216,7 +216,7 @@ try {
     $check($http($rh, 'rh', 'AdminCandidaturasController', 'index') === 200 && $http($rh, 'rh', 'AdminVagasController', 'index') === 200 && $http($rh, 'rh', 'AdminPipelineController', 'index') === 200, 'RH segue com acesso normal às telas');
 
     // ---- 12. Sem ampliação de permissões / API pública ----
-    foreach (['vagas.visualizar', 'candidaturas.visualizar', 'pipeline.visualizar', 'vagas.editar', 'candidaturas.editar', 'pipeline.movimentar'] as $perm) {
+    foreach (['pipeline.visualizar', 'vagas.editar', 'candidaturas.editar', 'pipeline.movimentar'] as $perm) { // leitura (vagas/candidaturas.visualizar) passou a concedível na 3.2C.1
         $check(!in_array($perm, PermissaoPerfilPolicy::concediveis('gestor'), true) && !in_array($perm, PermissaoPerfilPolicy::modeloRecomendado('gestor'), true), "permissão {$perm} continua fora do concedível e do modelo do Gestor");
     }
     $ativas = Vaga::allActive();

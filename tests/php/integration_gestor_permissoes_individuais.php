@@ -82,8 +82,8 @@ try {
     $semMotivo = array_filter($bloqueadas, static fn(string $c): bool => trim((string)$P::motivoBloqueio('gestor', $c)) === '' || !in_array($P::categoriaBloqueioGestor($c), $categorias, true));
     $check($semMotivo === [] && count($bloqueadas) > 40, 'toda permissão bloqueada tem categoria e motivo legível (' . count($bloqueadas) . ' bloqueadas)');
     $check(array_filter($concediveis, static fn(string $c): bool => $P::motivoBloqueio('gestor', $c) !== null) === [], 'nenhuma concedível carrega motivo de bloqueio');
-    $recrut = ['candidaturas.visualizar', 'candidaturas.editar', 'pipeline.visualizar', 'pipeline.movimentar', 'vagas.visualizar', 'vagas.criar', 'vagas.editar', 'vagas.excluir', 'vagas.publicar'];
-    $check(array_diff($recrut, $bloqueadas) === [] && $P::categoriaBloqueioGestor('candidaturas.visualizar') === $P::BLOQUEIO_REQUER_ESCOPO && $P::categoriaBloqueioGestor('recruitment_webhooks.gerenciar') === $P::BLOQUEIO_ADMINISTRATIVA && $P::categoriaBloqueioGestor('indicacoes.gerenciar_pagamento') === $P::BLOQUEIO_GLOBAL_NOMINAL && $P::categoriaBloqueioGestor('solicitacao_vaga.editar') === $P::BLOQUEIO_SEM_CONSUMIDOR, 'Recrutamento (candidaturas/pipeline/vagas) segue bloqueado por falta de escopo; webhooks administrativo; indicações nominal; editar sem consumidor');
+    $recrut = ['candidaturas.editar', 'pipeline.visualizar', 'pipeline.movimentar', 'vagas.criar', 'vagas.editar', 'vagas.excluir', 'vagas.publicar']; // Etapa 3.2C.1: vagas.visualizar e candidaturas.visualizar passaram a concedíveis (leitura setorial)
+    $check(array_diff($recrut, $bloqueadas) === [] && $P::categoriaBloqueioGestor('candidaturas.editar') === $P::BLOQUEIO_REQUER_ESCOPO && in_array('vagas.visualizar', $concediveis, true) && in_array('candidaturas.visualizar', $concediveis, true) && $P::categoriaBloqueioGestor('recruitment_webhooks.gerenciar') === $P::BLOQUEIO_ADMINISTRATIVA && $P::categoriaBloqueioGestor('indicacoes.gerenciar_pagamento') === $P::BLOQUEIO_GLOBAL_NOMINAL && $P::categoriaBloqueioGestor('solicitacao_vaga.editar') === $P::BLOQUEIO_SEM_CONSUMIDOR, 'Recrutamento (candidaturas/pipeline/vagas) segue bloqueado por falta de escopo; webhooks administrativo; indicações nominal; editar sem consumidor');
     $m = PermissaoMatrizService::construir('gestor', [], false);
     $cel = static function (array $m, string $c): ?array {
         foreach ($m['areas'] as $a) {
@@ -95,9 +95,11 @@ try {
         }
         return null;
     };
-    $c1 = $cel($m, 'candidaturas.visualizar');
+    $c1 = $cel($m, 'candidaturas.editar');
     $c2 = $cel($m, 'solicitacao_vaga.aprovar_lider');
     $check($c1 !== null && !$c1['aplicavel'] && !$c1['marcada'] && str_contains((string)$c1['motivo'], 'Candidaturas') && $c2 !== null && $c2['aplicavel'] && !$c2['marcada'] && $c2['motivo'] === null, 'matriz do Gestor: bloqueada vem desabilitada COM motivo; concedível fora do modelo vem habilitada e desmarcada');
+    $cv1 = $cel($m, 'vagas.visualizar'); $cv2 = $cel($m, 'candidaturas.visualizar');
+    $check($cv1 !== null && $cv1['aplicavel'] && !$cv1['marcada'] && $cv2 !== null && $cv2['aplicavel'] && !$cv2['marcada'], 'matriz: vagas.visualizar e candidaturas.visualizar habilitadas porém DESMARCADAS (fora do modelo recomendado; concessão sempre individual)');
     $js = json_encode($m['perfis']['gestor']['motivos']);
     $check(count($m['perfis']['gestor']['motivos']) === count($bloqueadas) && !str_contains($js, 'null'), 'a matriz entrega ao JS o motivo de cada bloqueada (tooltip acompanha a troca de perfil)');
 
@@ -154,7 +156,7 @@ try {
     // ---- 4. Recrutamento e demais bloqueadas: nenhum endpoint não escopado abre (com TODAS as permissões e setores) ----
     $gTodas = $mkUser('gestor', $codigos, [$setorA]);
     $naoEscopados = [
-        ['AdminCandidaturasController', 'index'], ['AdminPipelineController', 'index'], ['AdminVagasController', 'index'], ['AdminVagasController', 'create'],
+        ['AdminPipelineController', 'index'], ['AdminVagasController', 'create'], ['AdminVagasController', 'edit', ['1']], ['AdminCandidaturasController', 'show', ['1']],
         ['AdminIndicacoesController', 'index'], ['AdminIntegracoesController', 'index'], ['AdminMovimentacoesPessoalController', 'index'],
         ['AdminDashboardRecrutamentoController', 'index'], ['AdminRhIndicadoresController', 'index'], ['AdminDashboardTurnoverController', 'index'],
         ['AdminEntrevistaDesligamentoController', 'index'], ['AdminMensagensController', 'index'], ['AdminBeneficiosController', 'index'],
@@ -166,6 +168,8 @@ try {
     ];
     $abertos = array_filter($naoEscopados, fn(array $e): bool => $http($gTodas, 'gestor', $e[0], $e[1], [], $e[2] ?? []) !== 403);
     $check($abertos === [], 'endpoints sem escopo setorial (Candidaturas, Pipeline, Vagas, Indicações, Integrações, Movimentação, dashboards globais, cadastros…) seguem 403 ao Gestor com TODAS as permissões e setor: ' . ($abertos ? json_encode(array_values($abertos)) : 'nenhum aberto'));
+    // Etapa 3.2C.1: as duas LISTAGENS integradas abrem ao Gestor com permissão efetiva (escopo/projeção em integration_recrutamento_leitura_setorial)
+    $check($http($gTodas, 'gestor', 'AdminCandidaturasController', 'index') === 200 && $http($gTodas, 'gestor', 'AdminVagasController', 'index') === 200, 'listagens de Vagas e Candidaturas (integradas, somente leitura) abrem ao Gestor com permissão efetiva');
     $rh = $mkUser('rh');
     $check($http($rh, 'rh', 'AdminCandidaturasController', 'index') !== 403 && $http($rh, 'rh', 'AdminPipelineController', 'index') !== 403, 'RH mantém o acesso global por perfil (sem linhas em usuario_permissoes)');
 
@@ -199,12 +203,12 @@ try {
     $check($gravadas($alvo) === $ord($combo), 'o administrador concede uma combinação individual que inclui permissões fora do modelo (aprovar líder, dashboard agregado)');
     $antes = $gravadas($alvo);
     $falhouAlgum = false;
-    foreach (['candidaturas.visualizar', 'pipeline.movimentar', 'vagas.criar', 'colaboradores.editar', 'solicitacao_vaga.editar', 'kanban_vagas.editar', 'recruitment_webhooks.gerenciar', 'indicacoes.visualizar', 'dashboard.visualizar', 'empresas.criar'] as $forjada) {
+    foreach (['candidaturas.editar', 'pipeline.movimentar', 'vagas.criar', 'colaboradores.editar', 'solicitacao_vaga.editar', 'kanban_vagas.editar', 'recruitment_webhooks.gerenciar', 'indicacoes.visualizar', 'dashboard.visualizar', 'empresas.criar'] as $forjada) {
         $http($admin, 'admin', 'AdminUsuariosController', 'updatePermissoes', ['permissao_ids' => array_map(fn($c) => $idPorCodigo[$c], array_merge($combo, [$forjada]))], [(string)$alvo]);
         $falhouAlgum = $falhouAlgum || $gravadas($alvo) !== $antes;
     }
     $check(!$falhouAlgum, 'forjar no POST qualquer bloqueada (Recrutamento, cadastros, webhooks, sem consumidor…) recusa tudo: nenhuma gravação parcial');
-    $validacao = $P::validarSelecao('gestor', [$idPorCodigo['candidaturas.visualizar']], []);
+    $validacao = $P::validarSelecao('gestor', [$idPorCodigo['candidaturas.editar']], []);
     $check(!$validacao['ok'] && str_contains($validacao['mensagem'], 'Incompatível com o perfil GESTOR'), 'validação central recusa bloqueada com mensagem');
 
     // ---- 7. Viewer: sem novas concessões operacionais; legado preservado -----------------------------------------

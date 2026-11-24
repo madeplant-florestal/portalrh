@@ -70,6 +70,10 @@ final class PermissaoPerfilPolicy
         // Etapa 2C.2C: aprovar a etapa de LÍDER (só com designação formal, setor gerenciado e etapa correta — impostos no backend) e o dashboard
         // AGREGADO de Integração (k>=5, sem comentários/respostas individuais). Aprovação de RH e a Integração operacional seguem fechadas ao Gestor.
         'solicitacao_vaga.aprovar_lider', 'dashboard_integracao_agregado.visualizar',
+        // Etapa 3.2C.1: SOMENTE leitura de Vagas e da LISTAGEM de Candidaturas, com escopo por `vagas.setor_id` ∈ Setores Gerenciados (controllers
+        // integrados: AdminVagasController::index e AdminCandidaturasController::index, projeção sem dados pessoais). Detalhe, currículo, documentos,
+        // Carta/Exame, Pipeline (consulta e movimentação), indicações, comunicações e toda escrita seguem bloqueados (3.2C.2).
+        'vagas.visualizar', 'candidaturas.visualizar',
     ];
 
     /**
@@ -77,7 +81,7 @@ final class PermissaoPerfilPolicy
      * permitidas, mas só por concessão explícita) a aprovação de líder e o dashboard agregado de Integração da 2C.2C: a primeira
      * depende de designação formal e a segunda expõe indicador consolidado — não devem nascer marcadas.
      */
-    private const GESTOR_FORA_DO_MODELO = ['solicitacao_vaga.aprovar_lider', 'dashboard_integracao_agregado.visualizar'];
+    private const GESTOR_FORA_DO_MODELO = ['solicitacao_vaga.aprovar_lider', 'dashboard_integracao_agregado.visualizar', 'vagas.visualizar', 'candidaturas.visualizar'];
 
     // ---- GESTOR: permissões NÃO concedíveis (Etapa 3.1) — categoria + motivo, ancorados na auditoria de 2026-11 ------------------------
     public const BLOQUEIO_SEM_CONSUMIDOR = 'sem_consumidor';
@@ -102,9 +106,9 @@ final class PermissaoPerfilPolicy
         'pesquisa_reacao_integracao' => [self::BLOQUEIO_ADMINISTRATIVA, 'Pesquisa de Reação: configuração e resultados corporativos (Admin/RH).'],
         'pesquisa_experiencia' => [self::BLOQUEIO_REQUER_ESCOPO, 'Pesquisa de Experiência (candidatura): sem escopo setorial; só é lida dentro do fluxo de Candidaturas (Admin/RH).'],
         'comunicacoes' => [self::BLOQUEIO_REQUER_ESCOPO, 'Histórico de Comunicação com candidatos: sem escopo setorial; só é lido dentro de Candidaturas (Admin/RH).'],
-        'candidaturas' => [self::BLOQUEIO_REQUER_ESCOPO, 'Candidaturas: dados pessoais (CPF, e-mail, currículo) sem vínculo setorial direto — candidatura → vaga → solicitação (opcional) → setor; endpoints exigem Admin/RH.'],
-        'pipeline' => [self::BLOQUEIO_REQUER_ESCOPO, 'Pipeline de candidatos: consulta e movimentação globais, sem escopo por setor da vaga; endpoints exigem Admin/RH.'],
-        'vagas' => [self::BLOQUEIO_REQUER_ESCOPO, 'Vagas: `vagas.area` é texto livre e `solicitacao_vaga_id` é opcional — não há vínculo confiável com o setor; endpoints exigem Admin/RH.'],
+        'candidaturas' => [self::BLOQUEIO_REQUER_ESCOPO, 'Candidaturas: só a LISTAGEM setorial (candidaturas.visualizar) é concedível. Edição, detalhe, currículo, documentos, indicação e Carta/Exame seguem Admin/RH (dados pessoais; exigem a Etapa 3.2C.2).'],
+        'pipeline' => [self::BLOQUEIO_REQUER_ESCOPO, 'Pipeline de candidatos: o quadro ainda usa o setor da solicitação e expõe metadados de entrevista; a movimentação setorial existe (3.2B.3) mas não está integrada. Segue Admin/RH até a 3.2C.2.'],
+        'vagas' => [self::BLOQUEIO_REQUER_ESCOPO, 'Vagas: só a CONSULTA setorial (vagas.visualizar) é concedível. Criar, editar, excluir e publicar seguem Admin/RH (escrita não liberada ao Gestor).'],
         'indicacoes' => [self::BLOQUEIO_GLOBAL_NOMINAL, 'Indicações: dados nominais e financeiros (pagamento de comissão).'],
         'recruitment_webhooks' => [self::BLOQUEIO_ADMINISTRATIVA, 'Webhooks de recrutamento: configuração crítica de integração (Admin/RH).'],
         'movimentacao_pessoal' => [self::BLOQUEIO_REQUER_ESCOPO, 'Movimentação de Pessoal: documento nominal com dados salariais e assinatura de RH, sem escopo setorial.'],

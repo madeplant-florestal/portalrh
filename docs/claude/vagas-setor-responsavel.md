@@ -155,3 +155,39 @@ A verificação é **repetida dentro da transação**, depois do lock da candida
 ### Pontos a adaptar na 3.2C
 `AdminPipelineController::index` (role + `listarEscopo`/`contarEscopo`/`Vaga::all($escopo)`/`setoresDisponiveisEscopo`, `podeMovimentar` real) e `::move` (trocar `Candidatura::updateStage` por `PipelineMovimentacaoSetorialService::mover($_SESSION user)`, mapear `forbidden/transition`→403, `not_found`→404, `validation`→422, `conflict`→409); `PermissaoPerfilPolicy` só depois, com aprovação.
 Teste: `integration_pipeline_movimentacao_setorial.php` (40 verificações; 5 mutações detectadas). CSRF permanece no controller (existente).
+
+## 10. Etapa 3.2C.1 — leitura setorial de Vagas e Candidaturas INTEGRADA e concedível (sem escrita, sem detalhe, sem documentos)
+
+### O que foi integrado
+| Rota | Controller | Gate | Gestor (permissão efetiva + escopo) |
+|---|---|---|---|
+| GET `/admin/vagas` | `AdminVagasController::index` | `Authorization::requireRoleOuPermissao(['admin','rh','viewer'], 'vagas.visualizar')` | lista só vagas com `vagas.setor_id` ∈ Setores Gerenciados, somente leitura (sem Editar/Excluir/Publicar/Nova vaga/link de solicitação) |
+| GET `/admin/candidaturas` | `AdminCandidaturasController::index` | `Authorization::requireRoleOuPermissao(['admin','rh'], 'candidaturas.visualizar')` | view própria `index-setorial` com a projeção segura; filtros vaga/setor/etapa/período/nome, paginação (20) e contador via `listarEscopo/contarEscopo` |
+
+Decisão central: `RecrutamentoLeituraSetorialService` → modo `legado` (Admin, RH, Supervisor Geral e, **só em Vagas**, Viewer: comportamento anterior intacto, role da sessão como sempre), `setorial` (Gestor: perfil relido do **banco**, permissão efetiva, escopo `usuario_setores_gerenciados`, jamais global; sem setores = escopo vazio) ou `negado`. Fonte do setor da vaga: **`vagas.setor_id`** (nunca `area`, nunca `solicitacoes_vaga.setor_id`, sem COALESCE).
+
+### Permissões
+Concedíveis ao Gestor passam de 17 para **19**: `+ vagas.visualizar`, `+ candidaturas.visualizar`. Ficam **fora do modelo recomendado** (continua 15) — a concessão é sempre individual, pela matriz. Continuam NÃO concedíveis: `pipeline.*`, `candidaturas.editar`, `vagas.criar/editar/excluir/publicar`, `comunicacoes.visualizar`, `pesquisa_experiencia.visualizar`, `indicacoes.*`. O Viewer não pode receber as novas (política do Viewer intacta). Navegação: Vagas = `aberto_ou_perm:vagas.visualizar`; Candidaturas = `staff_ou:candidaturas.visualizar`; Pipeline/Indicações seguem `staff`.
+
+### Projeção do Gestor (aplicada no SQL, não na view)
+id, nome, vaga, setor da vaga, etapa, status, data. Fora: CPF, e-mail, telefone, currículo, experiência, cargo pretendido, observações, indicação/comissão, metadados de entrevista, Carta, Exame, comunicações. Sem links para detalhe/PDF/documentos/Kanban nem formulários.
+
+### Permanece bloqueado ao Gestor (403, testado com pipeline.*/candidaturas.editar/vagas.editar gravadas)
+Detalhe (`show`), `download`, `downloadDocumento`, upload, `update`, `updateIndicacao`, Pipeline (`index`/`move`), Vagas `create/store/edit/update/delete/publicar`. Os serviços da 3.2B.2 (`CandidaturaAcessoSetorialService`) e 3.2B.3 (`PipelineMovimentacaoSetorialService`) seguem preparados e **não integrados** (3.2C.2).
+
+### BLOQUEIO DE IMPLANTAÇÃO — permissões antigas já gravadas
+Uma linha `vagas.visualizar`/`candidaturas.visualizar` em `usuario_permissoes` de um **Gestor** (hoje ineficaz) fica **efetiva no momento da publicação**. Antes de publicar, rodar no phpMyAdmin (banco `u172743873_portalrh`, somente leitura) `database/diagnosticos/2026-11-26-auditoria-permissoes-leitura-recrutamento.sql`:
+1. consulta 1 deve retornar **0 linhas**. Se houver: **não publicar**; combinar com o RH quem deve mesmo ter a leitura e, para os demais, remover a atribuição pela tela de usuários (ação individual e auditada — nunca em massa/automática) **antes** da publicação; reexecutar até 0 (ou aprovar cada caso por escrito);
+2. consulta 5 (vagas sem setor) deve retornar 0 — vaga sem `setor_id` é invisível ao Gestor;
+3. consultas 3 e 4 são informativas (Gestores/Viewers com permissões que continuam ineficazes).
+Se o banco de produção não tiver Gestores (ENUM `gestor` ausente/0 contas), a consulta 1 retorna vazio e não há risco.
+
+### Pipeline — estratégia definitiva (3.2C.2)
+Referência oficial = `vagas.setor_id`. O Kanban do RH ainda usa o setor da solicitação (`Candidatura::all`); diagnóstico com banco explícito: `database/diagnosticos/2026-11-26-pipeline-setor-divergencia-producao.sql`. Em 3.2C.2: migrar filtro/exibição do RH para `vagas.setor_id` (as 6 vagas de produção já foram regularizadas), integrar `listarEscopo` ao `AdminPipelineController::index` com projeção sem metadados de entrevista e só então avaliar `pipeline.visualizar`/`pipeline.movimentar` (esta usando `PipelineMovimentacaoSetorialService`). COALESCE nunca é regra de autorização.
+
+### Plano de homologação (contas de teste controladas, sem tocar registros reais)
+Criar (pela tela de usuários, por Admin) contas **novas** de teste, concedendo individualmente: (a) Gestor com 1 setor + `vagas.visualizar` + `candidaturas.visualizar`; (b) Gestor com 2+ setores com as duas; (c) Gestor com setor e SEM as permissões (esperar 403); (d) Gestor com as permissões e SEM setores (esperar listas vazias e "Nenhuma candidatura…"); (e) RH (listagem completa); (f) Viewer (Candidaturas 403, Vagas como sempre). Conferir: só vagas/candidaturas dos seus setores; sem e-mail/telefone/CPF; sem links de detalhe/PDF/Kanban/Editar; URLs diretas `/admin/candidaturas/{id}`, `/admin/pipeline`, `/admin/vagas/novo` = 403; trocar o setor de uma vaga de teste (como RH) e recarregar = acesso muda na hora; remover a permissão = 403. Não usar candidatos reais para testar a troca de setor — criar vaga/candidatura de teste e removê-las depois.
+
+### Pendências e riscos
+Detalhe/documentos/Carta/Exame e Pipeline (3.2C.2); decisão de privacidade sobre e-mail/telefone/cargo pretendido para o Gestor; `Vaga::all` devolve `v.*` ao Gestor (a view só exibe título, empresa, área, setor, local e situação; rascunhos de vaga aparecem na lista); divergência empresa × setor não imposta; o gate de Candidaturas do Viewer segue por `requireRoleOuPermissao` (permissão incompatível ⇒ 403).
+Testes: `integration_recrutamento_leitura_setorial.php` (endpoints reais), `tests/recrutamento-leitura-setorial.spec.js` (Playwright), mais os testes das etapas anteriores atualizados (política 19/15).

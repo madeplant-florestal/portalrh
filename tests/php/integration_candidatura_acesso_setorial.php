@@ -204,7 +204,7 @@ try {
     $check($stRh === 200, 'RH segue abrindo o detalhe completo de qualquer candidatura (fluxo atual preservado)');
 
     // ---- 9. Sem ampliação de permissões ----
-    foreach (['candidaturas.visualizar', 'candidaturas.editar', 'pipeline.visualizar', 'pipeline.movimentar', 'comunicacoes.visualizar', 'pesquisa_experiencia.visualizar', 'vagas.visualizar'] as $p) {
+    foreach (['candidaturas.editar', 'pipeline.visualizar', 'pipeline.movimentar', 'comunicacoes.visualizar', 'pesquisa_experiencia.visualizar', 'vagas.editar'] as $p) {
         $check(!in_array($p, PermissaoPerfilPolicy::concediveis('gestor'), true) && !in_array($p, PermissaoPerfilPolicy::modeloRecomendado('gestor'), true), "{$p} continua fora do concedível e do modelo do Gestor");
     }
     $check(!array_key_exists('setor_nome', Vaga::allActive()[0] ?? []), 'Vaga::allActive (base da divulgação pública) não ganhou campos de setor; o contrato da API segue coberto por integration_vagas_setor_responsavel');

@@ -12,10 +12,20 @@ class AdminVagasController extends Controller
 
     public function index(): void
     {
-        Auth::requireRole(['admin', 'rh', 'viewer']);
-        $vagas = Vaga::all();
+        // Etapa 3.2C.1: Gestor com `vagas.visualizar` EFETIVA consulta SOMENTE as vagas dos Setores Gerenciados (`vagas.setor_id`), em
+        // modo somente leitura. Admin/RH/Supervisor/Viewer seguem exatamente como antes (requireRole + lista global).
+        Authorization::requireRoleOuPermissao(['admin', 'rh', 'viewer'], 'vagas.visualizar');
+        $acesso = RecrutamentoLeituraSetorialService::paraVagas((int)($_SESSION['user_id'] ?? 0), !empty($_SESSION['user_is_supervisor']), Auth::role());
+        if ($acesso['modo'] === RecrutamentoLeituraSetorialService::MODO_NEGADO) {
+            http_response_code(403);
+            echo 'Acesso negado';
+            return;
+        }
+        $setorial = $acesso['modo'] === RecrutamentoLeituraSetorialService::MODO_SETORIAL;
+        $vagas = Vaga::all($setorial ? $acesso['escopo'] : null);
         $this->view->render('admin/vagas/index', [
             'vagas' => $vagas,
+            'somenteLeitura' => $setorial,
             'flashSuccess' => Security::sanitizeString($_GET['ok'] ?? ''),
             'flashError' => Security::sanitizeString($_GET['erro'] ?? ''),
         ], 'layouts/app-shell');

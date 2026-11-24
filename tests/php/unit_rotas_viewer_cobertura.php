@@ -97,7 +97,11 @@ foreach ($acoes as $chave => [$classe, $metodo]) {
     $limpo = preg_replace('#//[^\n]*|/\*.*?\*/#s', '', $corpo);
     $abreViewer = (bool)preg_match('/Auth::requireRole\(\s*\[[^\]]*[\'"]viewer[\'"]/', $limpo);
     $temPermissao = (bool)preg_match('/Authorization::|temPermissao\(|usuarioTemPermissao\(|requirePermissao\(/', $limpo);
-    if ($abreViewer && !$temPermissao) {
+    // Etapa 3.2C.1: `Authorization::requireRoleOuPermissao(['admin','rh','viewer'], código)` também abre ao viewer SÓ pela role (a permissão vale para
+    // quem não está na lista, ex.: Gestor). Conta como aberta a viewer e exige a mesma exceção justificada.
+    $abreViewerRoleOuPerm = (bool)preg_match('/Authorization::requireRoleOuPermissao\(\s*\[[^\]]*[\'"]viewer[\'"]/', $limpo);
+    $abreViewer = $abreViewer || $abreViewerRoleOuPerm;
+    if (($abreViewer && !$temPermissao) || $abreViewerRoleOuPerm) {
         $achadas[$chave] = true;
     }
     if (in_array($chave, $somenteAdminRh, true) && $abreViewer) {

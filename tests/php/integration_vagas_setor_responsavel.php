@@ -256,11 +256,11 @@ try {
     $pdo->prepare('INSERT INTO usuario_permissoes (usuario_id, permissao_id) SELECT ?, id FROM permissoes WHERE ativo = 1')->execute([$gestor]);
     $setoresGer = $pdo->prepare('INSERT INTO usuario_setores_gerenciados (usuario_id, setor_id) VALUES (?, ?)');
     $setoresGer->execute([$gestor, $setorA]);
-    $alvos = [['AdminVagasController', 'index'], ['AdminVagasController', 'create'], ['AdminCandidaturasController', 'index'], ['AdminPipelineController', 'index']];
+    $alvos = [['AdminVagasController', 'create'], ['AdminPipelineController', 'index']]; // as LISTAGENS passaram a abrir com permissão efetiva na Etapa 3.2C.1 (integration_recrutamento_leitura_setorial)
     $abertos = array_filter($alvos, fn(array $a): bool => $http($gestor, 'gestor', $a[0], $a[1])[0] !== 403);
-    $check($abertos === [], 'Gestor com TODAS as permissões e o setor da vaga continua 403 em Vagas, Candidaturas e Pipeline (o setor_id não libera nada)');
-    $check(PermissaoPerfilPolicy::classificar('gestor', 'vagas.visualizar') === PermissaoPerfilPolicy::INCOMPATIVEL && PermissaoPerfilPolicy::classificar('gestor', 'candidaturas.visualizar') === PermissaoPerfilPolicy::INCOMPATIVEL && PermissaoPerfilPolicy::classificar('gestor', 'pipeline.movimentar') === PermissaoPerfilPolicy::INCOMPATIVEL, 'a política segue bloqueando vagas/candidaturas/pipeline para o Gestor');
-    $check(PermissaoPerfilPolicy::concediveis('gestor') === PermissaoPerfilPolicy::permissoesPermitidas('gestor') && count(PermissaoPerfilPolicy::concediveis('gestor')) === 17, 'conjunto concedível do Gestor inalterado (17)');
+    $check($abertos === [], 'Gestor com TODAS as permissões e o setor da vaga continua 403 na criação de vagas e no Pipeline (o setor_id não libera nada)');
+    $check(PermissaoPerfilPolicy::classificar('gestor', 'vagas.criar') === PermissaoPerfilPolicy::INCOMPATIVEL && PermissaoPerfilPolicy::classificar('gestor', 'candidaturas.editar') === PermissaoPerfilPolicy::INCOMPATIVEL && PermissaoPerfilPolicy::classificar('gestor', 'pipeline.movimentar') === PermissaoPerfilPolicy::INCOMPATIVEL, 'a política segue bloqueando escrita de vagas/candidaturas e o Pipeline para o Gestor');
+    $check(PermissaoPerfilPolicy::concediveis('gestor') === PermissaoPerfilPolicy::permissoesPermitidas('gestor') && count(PermissaoPerfilPolicy::concediveis('gestor')) === 19, 'conjunto concedível do Gestor: 17 anteriores + vagas.visualizar e candidaturas.visualizar (Etapa 3.2C.1)');
     $check($http($viewer, 'viewer', 'AdminVagasController', 'create')[0] === 403 && $http($viewer, 'viewer', 'AdminCandidaturasController', 'index')[0] === 403, 'Viewer: sem acesso à criação de vagas nem a Candidaturas');
 } finally {
     foreach ($vagasCriadas as $id) {

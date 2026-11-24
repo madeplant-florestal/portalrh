@@ -56,15 +56,17 @@ test('Gestor: concedíveis ≠ modelo — Marcar grupo/todas marcam as concedív
   await page.getByRole('button', { name: 'Desmarcar todas' }).click();
   await page.locator('[data-matriz-area="recrutamento"]').getByRole('button', { name: 'Marcar grupo' }).click();
   expect(await marcadas(page)).toEqual([
-    'kanban_vagas.detalhes', 'kanban_vagas.movimentar', 'kanban_vagas.visualizar',
-    'solicitacao_vaga.aprovar_lider', 'solicitacao_vaga.criar', 'solicitacao_vaga.visualizar',
-  ]); // todas as concedíveis da área, inclusive a fora do modelo; nenhuma de Vagas/Candidaturas/Pipeline
-  for (const bloqueada of ['candidaturas.visualizar', 'pipeline.movimentar', 'vagas.criar', 'solicitacao_vaga.editar', 'colaboradores.editar']) {
+    'candidaturas.visualizar', 'kanban_vagas.detalhes', 'kanban_vagas.movimentar', 'kanban_vagas.visualizar',
+    'solicitacao_vaga.aprovar_lider', 'solicitacao_vaga.criar', 'solicitacao_vaga.visualizar', 'vagas.visualizar',
+  ]); // todas as concedíveis da área, inclusive as fora do modelo (Etapa 3.2C.1: leitura de Vagas e Candidaturas); nenhuma escrita nem Pipeline
+  for (const bloqueada of ['candidaturas.editar', 'pipeline.visualizar', 'pipeline.movimentar', 'vagas.criar', 'vagas.editar', 'solicitacao_vaga.editar', 'colaboradores.editar']) {
     await expect(cel(page, bloqueada)).toBeDisabled();
   }
-  await expect(cel(page, 'candidaturas.visualizar').locator('xpath=ancestor::label')).toHaveAttribute('title', /Não concedível ao perfil: Candidaturas/);
+  await expect(cel(page, 'candidaturas.editar').locator('xpath=ancestor::label')).toHaveAttribute('title', /Não concedível ao perfil: Candidaturas/);
+  await expect(cel(page, 'candidaturas.visualizar')).toBeEnabled();
+  await expect(cel(page, 'vagas.visualizar')).toBeEnabled();
   await page.getByRole('button', { name: 'Marcar todas', exact: true }).click();
-  expect((await marcadas(page)).length).toBe(modelo.length + 2); // modelo + aprovar líder + dashboard agregado
+  expect((await marcadas(page)).length).toBe(modelo.length + 4); // modelo + aprovar líder + dashboard agregado + vagas.visualizar + candidaturas.visualizar
   await page.getByRole('button', { name: 'Restaurar modelo do perfil' }).click();
   expect(await marcadas(page)).toEqual(modelo);
   await expect(page.locator('[data-matriz-aviso-gestor]')).toBeVisible();

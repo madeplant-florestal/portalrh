@@ -87,3 +87,39 @@ acontece na 3.2C junto da abertura do `requireRole` (religar antes mudaria o que
 * Permanece bloqueado: detalhe (`show`), download/documentos, Carta Proposta/Exame, indicação, upload, `update`, Pipeline `move`, vagas
   criar/editar/excluir/publicar. Candidatura/Pipeline/Dashboard seguem Admin/RH.
 * Teste: `integration_vagas_candidaturas_escopo_setorial.php` (53 verificações; mutação do escopo derruba 23). Liberação ponta a ponta = 3.2C.
+
+## 8. Etapa 3.2B.2 — detalhe, documentos e downloads com escopo setorial (preparação; NENHUM acesso liberado)
+
+`CandidaturaAcessoSetorialService` (novo) é a camada pronta para a 3.2C. **Nenhum controller o chama**: todos os endpoints abaixo seguem `Auth::requireRole(['admin','rh'])` (Gestor/Viewer = 403).
+
+### Mapa de pontos de entrada (regra atual)
+| Rota | Controller::método | Dado | Guarda atual |
+|---|---|---|---|
+| GET `/admin/candidaturas/{id}` | AdminCandidaturasController::show | detalhe completo, histórico+observações, comunicações, carta, exame, documentos | admin/rh |
+| GET `/admin/candidaturas/{id}/download` | ::download | currículo (`storage/resumes`, `pdf_path`) | admin/rh + basename/realpath |
+| GET `/admin/candidaturas/{id}/documentos/{docId}` | ::downloadDocumento | `storage/candidatura_documentos` | admin/rh; doc precisa pertencer à candidatura da URL |
+| GET `/admin/cartas-propostas/{id}/pdf` e `/comprovante` | AdminCartaPropostaController | `storage/cartas_propostas` | admin/rh; resolve pelo id da CARTA (não confere a candidatura da URL — não há URL de candidatura) |
+| POST `.../documentos`, `.../atualizar`, `.../indicacao`, `.../carta-proposta`, `.../exame-admissional`, Pipeline `move` | escrita | — | admin/rh (fora de escopo) |
+| Exame Admissional | — | não há endpoint de arquivo | — |
+
+### Armazenamento
+Arquivos em `storage/{resumes,candidatura_documentos,cartas_propostas}`, fora de `public/`, com `.htaccess` "Require all denied" em `storage/` e em cada pasta (proteção **dependente de Apache**; em outro servidor exige regra equivalente). Nomes armazenados aleatórios; sem URL pública nem cache compartilhado (entrega só por controller). `public/uploads/logos` é o único diretório público (logos).
+
+### Autorização (service)
+`autorizar` (decisão no SQL: candidatura → vaga → `vagas.setor_id` ∈ escopo) → `detalhe` (projeção segura) → `arquivo(tipo: curriculo|documento|carta_pdf|carta_comprovante)`: exige a candidatura no escopo, o arquivo vinculado A ELA (`WHERE id=? AND candidatura_id=?`), e caminho por `basename`+`realpath` dentro da pasta. `null` = inexistente ou fora do escopo. `escopoNominal()` obtém o escopo: falha/ator inexistente/role vazia = NENHUM (nunca global) e Viewer = NENHUM (sem o legado transitório). Os parâmetros de escopo são não nulos (tipo): não há "sem escopo = global". Não retorna dados de outras candidaturas do mesmo nome/e-mail (não existe ficha global; `cpf` UNIQUE).
+
+### Classificação de campos (decisão de negócio PENDENTE para tudo que está "bloqueado")
+| Campo/recurso | Gestor (projeção atual) |
+|---|---|
+| nome, vaga, setor da vaga, etapa, status, data, histórico de etapas (de→para, data) | **liberado na projeção** |
+| cargo pretendido, experiência (texto do candidato) | bloqueado — decidir |
+| e-mail, telefone | bloqueado — decidir |
+| CPF | bloqueado (nunca completo sem decisão) |
+| currículo, documentos, Carta Proposta, Exame Admissional | bloqueado (service pronto; sem controller) |
+| observações/usuário do histórico, indicação, comunicações, pesquisa, metadados de etapa (entrevista/admissão) | bloqueado — exclusivo do RH até decisão |
+
+### Riscos registrados
+* `AdminCartaPropostaController::pdf/comprovante` resolvem por id da carta — a 3.2C deve usar `arquivo(..., 'carta_pdf', $cartaId)` com a candidatura derivada do banco, nunca da URL.
+* Proteção de `storage/` depende de `.htaccess` (Apache).
+* Documentos do RH (`downloadDocumento`) entregam o MIME gravado no upload; validado no upload (`Upload::saveDocumento`).
+* Teste: `integration_candidatura_acesso_setorial.php` (44 verificações; mutações do escopo e do vínculo documento×candidatura são detectadas).

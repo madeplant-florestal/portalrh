@@ -25,7 +25,8 @@ class RecruitmentPipelineService
         ?int $userId,
         array $metadata = [],
         bool $checkConcurrency = false,
-        ?int $expectedCurrentStageId = null
+        ?int $expectedCurrentStageId = null,
+        ?callable $guardaSobLock = null
     ): array {
         PipelineStage::ensureRecruitmentLifecycle();
         $candidate = Candidatura::find($candidateId);
@@ -90,6 +91,17 @@ class RecruitmentPipelineService
                     'error' => 'conflict',
                     'message' => 'O candidato já foi movimentado para outra etapa por outro usuário. Recarregue a página.',
                 ];
+            }
+
+            // Etapa 3.2B.3: guarda de AUTORIZAÇÃO reavaliada DENTRO da transação, depois do lock da candidatura e antes de qualquer
+            // escrita (usada pela movimentação setorial: revalida perfil/permissão/escopo e trava a vaga). Retorna null = autorizado;
+            // array de erro = nada foi gravado (rollback). `null` (padrão) mantém exatamente o fluxo anterior de Admin/RH.
+            if ($guardaSobLock !== null) {
+                $negado = $guardaSobLock($pdo, isset($candidate['stage_slug']) ? (string)$candidate['stage_slug'] : null, $newStageSlug);
+                if ($negado !== null) {
+                    $pdo->rollBack();
+                    return $negado;
+                }
             }
 
             if ($metadata !== []) {

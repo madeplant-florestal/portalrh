@@ -12,6 +12,19 @@ class Candidatura
         return Database::conn()->query('SELECT id, nome FROM setores WHERE ativo = 1 ORDER BY nome ASC')->fetchAll(PDO::FETCH_ASSOC);
     }
 
+    /**
+     * Etapa 3.2B.3 — setores do filtro do Kanban restritos ao escopo (o Gestor nunca vê no filtro o nome de setores que não gerencia).
+     * Global = todos os ativos (igual a setoresDisponiveis()); restrito = só os dos Setores Gerenciados; vazio/nenhum = [].
+     */
+    public static function setoresDisponiveisEscopo(EscopoSetorial $escopo): array
+    {
+        $params = [];
+        $cond = $escopo->sqlSetorId('setores.id', $params);
+        $stmt = Database::conn()->prepare('SELECT id, nome FROM setores WHERE ativo = 1 AND ' . $cond . ' ORDER BY nome ASC');
+        $stmt->execute($params);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
     public static function create(array $data): int
     {
         $telefone = Phone::normalize((string)($data['telefone'] ?? ''));

@@ -123,3 +123,35 @@ Arquivos em `storage/{resumes,candidatura_documentos,cartas_propostas}`, fora de
 * Proteção de `storage/` depende de `.htaccess` (Apache).
 * Documentos do RH (`downloadDocumento`) entregam o MIME gravado no upload; validado no upload (`Upload::saveDocumento`).
 * Teste: `integration_candidatura_acesso_setorial.php` (44 verificações; mutações do escopo e do vínculo documento×candidatura são detectadas).
+
+## 9. Etapa 3.2B.3 — movimentação do Pipeline com autorização setorial (preparação; NENHUM acesso liberado)
+
+`PipelineMovimentacaoSetorialService::mover()` é a camada pronta para a 3.2C; `AdminPipelineController::move` **não foi alterado** (segue `requireRole(['admin','rh'])`, CSRF, JSON).
+
+### Efeitos de uma movimentação (todos na mesma transação, em `RecruitmentPipelineService::moveCandidateToStage`)
+1. `candidaturas.stage_id`; 2. `candidatura_stage_metadata` (entrevista/teste/admissão); 3. `pipeline_movements` (candidatura, etapa anterior/nova, usuário, data);
+4. `candidatura_historico` (de→para + observações; "Motivo da reprovação" se Reprovado); 5. **sobrescreve `candidaturas.observacoes`** quando há texto;
+6. etapa Contratado/Admissão + indicação: grava `indicacao_data_contratacao` e `..._fim_experiencia` (+90 dias) — **relógio de comissão**;
+7. **evento de webhook** enfileirado e entregue na hora (payload com dados da candidatura) à integração externa; 8. Carta Proposta/Exame Admissional **não** são disparados pela movimentação (ações manuais separadas).
+
+### Modelo de autorização de escrita
+Perfil (lido do banco) → permissão **efetiva** `pipeline.movimentar` (política + atribuição; leitura nunca autoriza mover) → escopo nominal (viewer/falha = nenhum) → candidatura cuja vaga tem `vagas.setor_id` no escopo (vaga sem setor = negado; fora do escopo = "não encontrada") → transição permitida → etapa atual esperada obrigatória.
+Admin/RH: fluxo global **inalterado**. Viewer e demais perfis: negados.
+
+### Concorrência
+A verificação é **repetida dentro da transação**, depois do lock da candidatura, por um guarda opcional (`$guardaSobLock`, `null` = fluxo antigo) que refaz perfil/permissão/escopo e executa `SELECT ... FOR UPDATE` na junção candidatura×vaga: trava só essas duas linhas até o commit (trocar o setor da vaga durante a gravação espera). Etapa esperada obrigatória + lock existente = repetição/corrida viram `conflict` sem gravar. Recusa = rollback antes de qualquer escrita (sem histórico/movimento/evento).
+
+### Transições
+* **Operacionais do Gestor** (decisão conservadora, a aprovar): origem **e** destino em {Entrevista Gestor, Testes}; metadados só de entrevista/teste (observações, confirmação e dados de admissão são descartados).
+* **Exclusivas do RH**: Aprovado, Admissão (relógio de comissão), Reprovado (motivo interno/observações), Banco de Talentos, Nova Inscrição, Triagem RH, Entrevista RH — e retirar candidato de etapa do RH.
+* Decisão de negócio pendente: se o Gestor poderá recomendar/aprovar/reprovar (alternativa: ação "recomendar" que só registra parecer, sem mover).
+
+### Auditoria
+`pipeline_movements` (usuário, candidatura, etapas, data) + `candidatura_historico` bastam para rastrear o Gestor (o perfil vem do usuário). Lacunas: não há `origem` da operação nem snapshot do setor da vaga na época — evolução opcional (coluna em `pipeline_movements`); **sem migration nesta etapa**.
+
+### Filtros do Pipeline (divergência)
+`Candidatura::all` (RH) filtra/exibe setor pela **solicitação** (`sv.setor_id`); o escopo do Gestor usa **`vagas.setor_id`** (`listarEscopo`). Diagnóstico: `database/diagnosticos/2026-11-25-pipeline-setor-divergencia.sql`. Estratégia: manter o filtro do RH como está até a 3.2C; unificar com `COALESCE(v.setor_id, sv.setor_id)` (vaga direta passa a ser reconhecida) depois de rodar o diagnóstico em produção. `Candidatura::setoresDisponiveisEscopo` restringe o filtro de setores do Gestor aos seus.
+
+### Pontos a adaptar na 3.2C
+`AdminPipelineController::index` (role + `listarEscopo`/`contarEscopo`/`Vaga::all($escopo)`/`setoresDisponiveisEscopo`, `podeMovimentar` real) e `::move` (trocar `Candidatura::updateStage` por `PipelineMovimentacaoSetorialService::mover($_SESSION user)`, mapear `forbidden/transition`→403, `not_found`→404, `validation`→422, `conflict`→409); `PermissaoPerfilPolicy` só depois, com aprovação.
+Teste: `integration_pipeline_movimentacao_setorial.php` (40 verificações; 5 mutações detectadas). CSRF permanece no controller (existente).

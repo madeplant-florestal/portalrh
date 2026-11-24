@@ -136,6 +136,92 @@ class Candidatura
         return $data ?: null;
     }
 
+    /**
+     * Etapa 3.2B.1 — LISTAGEM COM ESCOPO SETORIAL e PROJEÇÃO SEGURA (sem CPF, e-mail, telefone, currículo, indicação, observações nem
+     * metadados de etapa). A candidatura pertence ao escopo SOMENTE pelo setor da SUA vaga (`vagas.setor_id`, nunca `area`, nunca o
+     * candidato): a mesma pessoa com candidaturas em vagas de setores distintos aparece só pelas candidaturas autorizadas. Sem JOIN de
+     * 1:N (cada linha = uma candidatura), logo sem duplicação. Global: tudo; restrito sem setores/nenhum: vazio. O filtro pedido pelo
+     * usuário (vaga_id/setor_id/etapa/período/nome) é SEMPRE combinado (AND) com o escopo — nunca o amplia.
+     *
+     * @param array{vaga_id?:int,setor_id?:int,stage_id?:int,data_de?:string,data_ate?:string,busca?:string} $filters
+     */
+    public static function listarEscopo(EscopoSetorial $escopo, array $filters = [], int $limite = 200, int $offset = 0): array
+    {
+        [$sql, $params] = self::montarListagemEscopo($escopo, $filters, false);
+        if ($sql === null) {
+            return [];
+        }
+        $sql .= ' ORDER BY c.created_at DESC, c.id DESC LIMIT ' . max(1, min(500, $limite)) . ' OFFSET ' . max(0, $offset);
+        $stmt = Database::conn()->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /** Total para paginação/contadores — usa exatamente o mesmo filtro+escopo de listarEscopo(). */
+    public static function contarEscopo(EscopoSetorial $escopo, array $filters = []): int
+    {
+        [$sql, $params] = self::montarListagemEscopo($escopo, $filters, true);
+        if ($sql === null) {
+            return 0;
+        }
+        $stmt = Database::conn()->prepare($sql);
+        $stmt->execute($params);
+        return (int)$stmt->fetchColumn();
+    }
+
+    /**
+     * Consulta por ID COM escopo (mesma projeção segura). `null` = inexistente OU fora do escopo (indistinguíveis de propósito, para não
+     * revelar a existência de registros de outros setores).
+     */
+    public static function acharEscopo(EscopoSetorial $escopo, int $id): ?array
+    {
+        if ($id <= 0) {
+            return null;
+        }
+        [$sql, $params] = self::montarListagemEscopo($escopo, [], false);
+        if ($sql === null) {
+            return null;
+        }
+        $stmt = Database::conn()->prepare($sql . ' AND c.id = ? LIMIT 1');
+        $stmt->execute(array_merge($params, [$id]));
+        return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+    }
+
+    /** @return array{0:?string,1:array<int,mixed>} [sql sem ORDER/LIMIT, parâmetros]; sql null = nada visível (schema sem vagas.setor_id e escopo restrito). */
+    private static function montarListagemEscopo(EscopoSetorial $escopo, array $filters, bool $contar): array
+    {
+        if (!$escopo->ehGlobal() && !VagaSetorService::schemaSuportaSetor()) {
+            return [null, []];
+        }
+        PipelineStage::ensureRecruitmentLifecycle();
+        self::ensureStageColumn();
+        $temSetor = VagaSetorService::schemaSuportaSetor();
+        $params = [];
+        $condEscopo = $temSetor ? $escopo->sqlSetorId('v.setor_id', $params) : '1 = 1';
+        $select = $contar
+            ? 'SELECT COUNT(*)'
+            : 'SELECT c.id, c.vaga_id, c.nome, c.status, c.stage_id, c.created_at,
+                      v.titulo AS vaga_titulo, ' . ($temSetor ? 'v.setor_id AS vaga_setor_id, st.nome AS vaga_setor_nome' : 'NULL AS vaga_setor_id, NULL AS vaga_setor_nome') . ',
+                      s.nome AS stage_nome, s.slug AS stage_slug, s.cor AS stage_cor';
+        $sql = $select . '
+                FROM candidaturas c
+                INNER JOIN vagas v ON v.id = c.vaga_id'
+            . ($temSetor && !$contar ? ' LEFT JOIN setores st ON st.id = v.setor_id' : '')
+            . ($contar ? '' : ' LEFT JOIN pipeline_stages s ON s.id = c.stage_id')
+            . ' WHERE ' . $condEscopo;
+        if (!empty($filters['vaga_id'])) { $sql .= ' AND c.vaga_id = ?'; $params[] = (int)$filters['vaga_id']; }
+        if ($temSetor && !empty($filters['setor_id']) && $filters['setor_id'] !== self::SETOR_NAO_INFORMADO) { $sql .= ' AND v.setor_id = ?'; $params[] = (int)$filters['setor_id']; }
+        if (!empty($filters['stage_id'])) { $sql .= ' AND c.stage_id = ?'; $params[] = (int)$filters['stage_id']; }
+        if (!empty($filters['data_de'])) { $sql .= ' AND c.created_at >= ?'; $params[] = (string)$filters['data_de']; }
+        if (!empty($filters['data_ate'])) { $sql .= ' AND c.created_at <= ?'; $params[] = (string)$filters['data_ate']; }
+        $busca = trim((string)($filters['busca'] ?? ''));
+        if ($busca !== '') {
+            $sql .= ' AND c.nome LIKE ?';
+            $params[] = '%' . str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $busca) . '%';
+        }
+        return [$sql, $params];
+    }
+
     public static function updateStage(
         int $id,
         int $newStageId,

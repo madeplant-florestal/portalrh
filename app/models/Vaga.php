@@ -22,15 +22,40 @@ class Vaga
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
-    public static function all(): array
+    public static function all(?EscopoSetorial $escopo = null): array
     {
         RecruitmentWebhookSchemaService::ensureSchema();
+        $params = [];
+        $where = self::condicaoEscopo($escopo, $params);
+        if ($where === null) {
+            return [];
+        }
         $sql = 'SELECT v.*, e.nome AS empresa_nome' . self::selectSetor() . '
                 FROM vagas v
                 LEFT JOIN empresas e ON e.id = v.empresa_id' . self::joinSetor() . '
+                WHERE ' . $where . '
                 ORDER BY v.created_at DESC';
-        $stmt = Database::conn()->query($sql);
+        $stmt = Database::conn()->prepare($sql);
+        $stmt->execute($params);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * Etapa 3.2B.1: condição de escopo setorial sobre `vagas.setor_id` (única fonte; nunca `area`). `null` ou escopo global = sem restrição
+     * (comportamento anterior, usado por Admin/RH). Escopo restrito/vazio/nenhum => só vagas com setor_id dentro dos Setores Gerenciados;
+     * vaga sem setor_id nunca casa. Retorna `null` quando o escopo é restrito mas o schema ainda não tem `vagas.setor_id` (restritivo: nada).
+     *
+     * @param array<int,mixed> $params
+     */
+    private static function condicaoEscopo(?EscopoSetorial $escopo, array &$params): ?string
+    {
+        if ($escopo === null || $escopo->ehGlobal()) {
+            return '1 = 1';
+        }
+        if (!VagaSetorService::schemaSuportaSetor()) {
+            return null;
+        }
+        return $escopo->sqlSetorId('v.setor_id', $params);
     }
 
     /** Etapa 3.2A: nome/situação do setor responsável (só quando a migration já foi executada; antes dela nada muda). */
@@ -44,15 +69,20 @@ class Vaga
         return VagaSetorService::schemaSuportaSetor() ? ' LEFT JOIN setores sv ON sv.id = v.setor_id' : '';
     }
 
-    public static function find(int $id): ?array
+    public static function find(int $id, ?EscopoSetorial $escopo = null): ?array
     {
         RecruitmentWebhookSchemaService::ensureSchema();
+        $params = [];
+        $where = self::condicaoEscopo($escopo, $params);
+        if ($where === null) {
+            return null;
+        }
         $sql = 'SELECT v.*, e.nome AS empresa_nome' . self::selectSetor() . '
                 FROM vagas v
                 LEFT JOIN empresas e ON e.id = v.empresa_id' . self::joinSetor() . '
-                WHERE v.id = ? LIMIT 1';
+                WHERE v.id = ? AND ' . $where . ' LIMIT 1';
         $stmt = Database::conn()->prepare($sql);
-        $stmt->execute([$id]);
+        $stmt->execute(array_merge([$id], $params));
         $data = $stmt->fetch(PDO::FETCH_ASSOC);
         return $data ?: null;
     }

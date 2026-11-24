@@ -70,3 +70,20 @@ oficial (**sugestão não comprovada**) · **D** sem informação suficiente.
 * **Solicitação com setor legado/inativo** bloqueia a geração da vaga — pode exigir regularização do cadastro de setores pela operação.
 * Auditoria da troca de setor de vaga **sem** solicitação fica em log de arquivo (não há tabela de auditoria de vagas).
 * A nova coluna não libera acesso: as Etapas 3.2B/3.2C precisam de escopo setorial em Candidaturas/Pipeline/Kanban de candidatos antes de qualquer permissão.
+
+## 7. Etapa 3.2B.1 — consulta setorial de Vagas e Candidaturas (somente leitura; NENHUM acesso liberado)
+
+Camada de consulta pronta e testada; **controllers inalterados** (continuam `admin/rh[/viewer]` → Gestor 403). O religamento dos controllers ao escopo
+acontece na 3.2C junto da abertura do `requireRole` (religar antes mudaria o que o Viewer vê hoje em `/admin/vagas`).
+
+* `Vaga::all(?EscopoSetorial)` / `Vaga::find($id, ?EscopoSetorial)`: `null`/global = como antes; restrito = `v.setor_id IN (setores do escopo)`
+  (`EscopoSetorial::sqlSetorId`, única fonte = `usuario_setores_gerenciados`). Vaga sem `setor_id` nunca casa; schema sem a coluna + escopo restrito = nada.
+* `Candidatura::listarEscopo / contarEscopo / acharEscopo`: a candidatura pertence ao escopo **só pelo setor da sua vaga** (`vagas.setor_id`), cada linha
+  = uma candidatura (sem JOIN 1:N, sem duplicação); filtros (vaga, setor, etapa, período, busca por nome com curingas LIKE escapados) são sempre `AND` com o
+  escopo; fora do escopo = `null`/vazio (indistinguível de inexistente). **Projeção segura**: id, vaga, nome, status, etapa, data, setor da vaga —
+  sem CPF, e-mail, telefone, currículo, indicação, observações nem metadados de etapa.
+* Achados da auditoria: `candidaturas.cpf` é UNIQUE (a "mesma pessoa" em duas vagas se repete por nome/e-mail); `Candidatura::all` (usada por RH) filtra setor
+  pela **solicitação** (`sv.setor_id`), não por `vagas.setor_id` — mantida para RH; o escopo novo usa só `vagas.setor_id`. Ficha global do candidato **não existe**.
+* Permanece bloqueado: detalhe (`show`), download/documentos, Carta Proposta/Exame, indicação, upload, `update`, Pipeline `move`, vagas
+  criar/editar/excluir/publicar. Candidatura/Pipeline/Dashboard seguem Admin/RH.
+* Teste: `integration_vagas_candidaturas_escopo_setorial.php` (53 verificações; mutação do escopo derruba 23). Liberação ponta a ponta = 3.2C.

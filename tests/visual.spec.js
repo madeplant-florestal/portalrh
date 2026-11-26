@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { credenciaisAdmin } = require('./support/credenciais-admin');
 
 const entryPath = process.env.ENTRY_PATH || '/';
 
@@ -10,8 +11,8 @@ async function getAppBase(page) {
 
 async function login(page, appBase) {
   await page.goto(`${appBase}/admin/login`, { waitUntil: 'domcontentloaded' });
-  await page.getByLabel('E-mail').fill(process.env.ADMIN_EMAIL || 'fabio.ozuna@madeplant.com.br');
-  await page.getByLabel('Senha').fill(process.env.ADMIN_PASSWORD || '23082524');
+  await page.getByLabel('E-mail').fill(credenciaisAdmin().email);
+  await page.getByLabel('Senha').fill(credenciaisAdmin().senha);
   await page.getByRole('button', { name: 'Entrar' }).click();
   await page.waitForLoadState('domcontentloaded');
   await expect(page).toHaveURL(new RegExp(`${appBase}/admin`));

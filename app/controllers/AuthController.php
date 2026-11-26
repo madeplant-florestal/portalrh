@@ -27,9 +27,11 @@ class AuthController extends Controller
             $horas = SessionPolicy::ociosidade() / 3600;
             $limiteH = SessionPolicy::limiteTotal() / 3600;
             $fmt = static fn(float $h): string => $h >= 1 ? rtrim(rtrim(number_format($h, 1, ',', ''), '0'), ',') . ' hora(s)' : round($h * 60) . ' minutos';
-            $error = (($_GET['motivo'] ?? '') === 'limite')
-                ? 'Sua sessão atingiu o tempo máximo de ' . $fmt($limiteH) . '. Faça login novamente.'
-                : 'Sessão expirada por inatividade de ' . $fmt($horas) . '. Faça login novamente.';
+            $error = match ((string)($_GET['motivo'] ?? '')) {
+                'limite' => 'Sua sessão atingiu o tempo máximo de ' . $fmt($limiteH) . '. Faça login novamente.',
+                'senha' => 'Sua sessão foi encerrada porque a senha desta conta foi alterada. Entre novamente com a senha atual.',
+                default => 'Sessão expirada por inatividade de ' . $fmt($horas) . '. Faça login novamente.',
+            };
             if (($_GET['perdido'] ?? '') === '1') {
                 $error .= ' O envio que você estava fazendo NÃO foi salvo — refaça a ação depois de entrar.';
             }

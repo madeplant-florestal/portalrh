@@ -249,3 +249,20 @@ Identificados na auditoria arquitetural de 2026-07-09, documentados aqui para n�
    - **Dompdf 3.1.5 → 3.1.6 (+ masterminds/html5 2.12.0, sabberworm/php-css-parser 9.5.0; thecodingmachine/safe removido):** corrige os 6 avisos (CVE-2026-59943/59942/59941/56722/55555/55554); `composer audit` limpo.
      O `CartaPropostaPdfService` passou a usar `chroot` próprio (vazio), sem PHP/JavaScript embutidos, além de `isRemoteEnabled=false`; o template não usa imagem nem arquivo local e escapa todo dado. PDFs gerados antes e depois: mesmas páginas, mesmo texto, mesmo tamanho.
    - **Residuais:** aceite pelo SMTP ≠ entrega; o limite por IP depende da confiabilidade do IP do cliente; a senha SMTP em `local.php` é um segredo de servidor (permissões do arquivo); contas sem e-mail válido nunca recebem avisos.
+16. **Credenciais administrativas nos testes e sessões após troca de senha (2026-11-26) — CORRIGIDO no código; rotação e histórico PENDENTES.**
+   - **Causa:** 11 specs Playwright usavam `process.env.ADMIN_* || '<valor fixo>'` com e-mail e senha de uma conta administrativa real; sem as variáveis, os testes
+     entravam com a conta real. Os valores continuam no **histórico do Git** (e em arquivos fora dos testes, abaixo) — o código atual não os remove do passado.
+   - **Correção (testes):** `tests/support/credenciais-admin.js` — só `ADMIN_EMAIL`/`ADMIN_PASSWORD` do ambiente local, sem valor padrão; sem elas o teste FALHA com
+     mensagem explícita. Use uma conta de teste do banco de desenvolvimento.
+   - **Causa (sessões):** a troca de senha não encerrava sessões já abertas — quem tivesse uma sessão (inclusive roubada) continuava logado até expirar (até 24 h).
+   - **Correção (sessões):** no login, `Auth::establishSession` grava `credencial_impressao` = SHA-256 do `senha_hash` (nunca o hash); a cada requisição autenticada,
+     `Security::enforceInactivityTimeout` → `SessionPolicy::avaliarCredencial()` compara com o banco. Qualquer troca de senha (recuperação por e-mail, redefinição
+     administrativa, senha temporária de Colaboradores → Acesso, script CLI ou SQL manual) gera um hash novo e encerra TODAS as sessões anteriores na próxima
+     requisição (login com `motivo=senha`; AJAX 401; POST não processado). Usuário excluído ou falha de leitura = sessão encerrada. Sem migration (reusa `senha_hash`).
+     Custo: 1 SELECT por chave primária por requisição autenticada. Sessões abertas ANTES do deploy adotam a credencial vigente na 1ª requisição (transição limitada
+     pelo teto de 24 h). Cobertura: `tests/php/integration_sessao_revogacao_senha.php`.
+   - **Pendente (fora do código, decisão do Fabio):** trocar a senha da conta exposta em produção (pela recuperação/administração do Portal — a troca agora derruba as
+     sessões antigas) e tratar o histórico do Git. Ocorrências pré-existentes NÃO alteradas: senha padrão em `scripts/init.php`, `scripts/reset_password_cli.php` e
+     `scripts/setup_full.php`; senha citada em `AUTH_PERMISSOES_FIX.md`; e-mail da conta como placeholder da tela de login (`app/views/admin/login.php`), em
+     `install.php` e `scripts/production_install.php`; hash bcrypt da conta nos dumps `recrutamento.sql` (raiz e `database/`) — ver item 1;
+     `security.supervisor_password` versionado igual ao do exemplo — ver item 2. Sessão de usuário DESATIVADO (sem `email_verified_at`) continua até expirar.

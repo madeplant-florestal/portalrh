@@ -96,4 +96,46 @@ final class SessionPolicy
         $_SESSION['last_activity'] = $agora;
         return 'ok';
     }
+
+    /**
+     * Impressão da credencial gravada na sessão no login (Auth::establishSession). Deriva do `usuarios.senha_hash` (bcrypt com salt: toda
+     * troca de senha gera um valor novo, por QUALQUER caminho — recuperação, redefinição administrativa, senha temporária, script/SQL manual).
+     * Só a impressão vai para a sessão, nunca o hash.
+     */
+    public static function impressaoCredencial(string $senhaHash): string
+    {
+        return hash('sha256', 'rhmadeplant-sessao|' . $senhaHash);
+    }
+
+    /**
+     * Revogação por troca de senha: 'ok' | 'credencial_alterada'. Sessão autenticada só continua válida se a senha atual do usuário no banco
+     * for a mesma do momento do login — trocar a senha encerra TODAS as sessões abertas antes, na próxima requisição de cada uma. Usuário
+     * inexistente ou falha de leitura = encerrada (falha fechada). Sessões abertas antes desta regra (sem impressão) adotam a credencial atual na
+     * 1ª requisição — mesmo tratamento de `session_started_at` em avaliar(); o teto total (limiteTotal) limita essa transição.
+     */
+    public static function avaliarCredencial(): string
+    {
+        $usuarioId = (int)($_SESSION['user_id'] ?? 0);
+        if ($usuarioId <= 0) {
+            return 'ok';
+        }
+        try {
+            $stmt = Database::conn()->prepare('SELECT senha_hash FROM usuarios WHERE id = ? LIMIT 1');
+            $stmt->execute([$usuarioId]);
+            $hash = $stmt->fetchColumn();
+        } catch (\Throwable $e) {
+            Logger::warning('Sessão encerrada: falha ao verificar a credencial do usuário', ['usuario_id' => $usuarioId, 'erro' => $e->getMessage()]);
+            return 'credencial_alterada';
+        }
+        if (!is_string($hash) || $hash === '') {
+            return 'credencial_alterada';
+        }
+        $atual = self::impressaoCredencial($hash);
+        $daSessao = $_SESSION['credencial_impressao'] ?? null;
+        if (!is_string($daSessao) || $daSessao === '') {
+            $_SESSION['credencial_impressao'] = $atual;
+            return 'ok';
+        }
+        return hash_equals($daSessao, $atual) ? 'ok' : 'credencial_alterada';
+    }
 }

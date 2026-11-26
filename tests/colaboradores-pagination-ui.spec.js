@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { credenciaisAdmin } = require('./support/credenciais-admin');
 
 const entryPath = process.env.ENTRY_PATH || '/';
 
@@ -10,8 +11,8 @@ async function getAppBase(page) {
 
 async function login(page, appBase) {
   await page.goto(`${appBase}/admin/login`, { waitUntil: 'domcontentloaded' });
-  await page.locator('input[name=email]').fill(process.env.ADMIN_EMAIL || 'fabio.ozuna@madeplant.com.br');
-  await page.locator('input[name=password]').fill(process.env.ADMIN_PASSWORD || '23082524');
+  await page.locator('input[name=email]').fill(credenciaisAdmin().email);
+  await page.locator('input[name=password]').fill(credenciaisAdmin().senha);
   await page.locator('button[type=submit]').click();
   await page.waitForLoadState('domcontentloaded');
 }

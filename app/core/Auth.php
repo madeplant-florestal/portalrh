@@ -91,6 +91,8 @@ class Auth
         // Marca o início da sessão autenticada (teto total da SessionPolicy) e a atividade; o ID já foi regenerado (sem fixação de sessão).
         $_SESSION['session_started_at'] = SessionPolicy::agora();
         $_SESSION['last_activity'] = SessionPolicy::agora();
+        // Revogação por troca de senha (SessionPolicy::avaliarCredencial): a sessão vale só enquanto a senha for a deste login.
+        $_SESSION['credencial_impressao'] = SessionPolicy::impressaoCredencial((string)$user->senha_hash);
     }
 
     public static function logout(): void

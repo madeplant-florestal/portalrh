@@ -52,6 +52,9 @@ class Security
     {
         $motivo = SessionPolicy::avaliar(SessionPolicy::agora());
         if ($motivo === 'ok') {
+            $motivo = SessionPolicy::avaliarCredencial(); // senha trocada depois do login => sessão revogada
+        }
+        if ($motivo === 'ok') {
             return;
         }
         $metodo = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
@@ -67,6 +70,8 @@ class Security
         $q = ['expired' => '1'];
         if ($motivo === 'limite_total') {
             $q['motivo'] = 'limite';
+        } elseif ($motivo === 'credencial_alterada') {
+            $q['motivo'] = 'senha';
         }
         if ($metodo === 'GET') {
             $next = self::caminhoDeRetornoSeguro($uri);

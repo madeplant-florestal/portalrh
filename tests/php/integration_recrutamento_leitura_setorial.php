@@ -179,8 +179,20 @@ try {
 
     // ---- 8. Viewer, RH, Admin ----
     $check($http($viewer, 'viewer', 'AdminCandidaturasController', 'index')[0] === 403 && $http($viewer2, 'viewer', 'AdminCandidaturasController', 'index')[0] === 403, 'Viewer: Candidaturas segue 403 (inclusive com candidaturas.visualizar gravada e setor gerenciado legado)');
-    [$st, $h] = $http($viewer, 'viewer', 'AdminVagasController', 'index');
-    $check($st === 200 && str_contains($h, "ZZLS Vaga3 {$mk}") && str_contains($h, "ZZLS VagaSem {$mk}") && str_contains($h, '/admin/vagas/editar'), 'Viewer: Vagas idêntico ao de antes (lista global, mesmos controles) — sem ampliar e sem reduzir');
+    $viewerLegado = $mkUser('viewerLegado', 'viewer', ['vagas.visualizar', 'candidaturas.visualizar', 'pipeline.visualizar'], [$s1, $s3]);
+    $abertosViewer = [];
+    foreach ([$viewer, $viewer2, $viewerLegado] as $u) {
+        foreach ([['AdminVagasController', 'index'], ['AdminCandidaturasController', 'index'], ['AdminPipelineController', 'index']] as [$ctl, $met]) {
+            [$st, $h] = $http($u, 'viewer', $ctl, $met);
+            if ($st !== 403 || str_contains($h, 'ZZLS Vaga')) { $abertosViewer[] = "{$u}:{$ctl}::{$met}={$st}"; }
+        }
+    }
+    $check($abertosViewer === [], 'Viewer (sem permissão, com setor legado, ou com vagas/candidaturas/pipeline.visualizar GRAVADAS): 403 nas listagens administrativas de Vagas, Candidaturas e Pipeline, sem nenhum título de vaga na resposta' . ($abertosViewer ? ' — ABERTOS: ' . implode(', ', $abertosViewer) : ''));
+    $_SESSION = ['user' => true, 'user_id' => $viewerLegado, 'user_role' => 'viewer', 'user_is_supervisor' => false];
+    $navViewer = new PortalNavegacaoService();
+    $abasViewer = array_column($navViewer->abas('recrutamento'), 'chave');
+    $check(!in_array('vagas', $abasViewer, true) && !in_array('candidaturas', $abasViewer, true) && !in_array('pipeline', $abasViewer, true), 'navegação do Viewer (mesmo com permissões operacionais gravadas) não oferece Vagas, Candidaturas nem Pipeline');
+    $_SESSION = [];
     $check($http($viewer, 'viewer', 'AdminCandidaturasController', 'show', [], [(string)$c1['id']])[0] === 403 && $http($viewer, 'viewer', 'AdminVagasController', 'edit', [], [(string)$v1])[0] === 403, 'Viewer: detalhe de candidatura e edição de vaga seguem 403');
     [$st, $h] = $http($rh, 'rh', 'AdminCandidaturasController', 'index', ['vaga_id' => $v3]);
     $check($st === 200 && str_contains($h, 'Carla Gama ZZLS') && str_contains($h, $c3['email']) && str_contains($h, 'Detalhes') && str_contains($h, 'Ver Kanban'), 'RH: listagem completa e global preservada (e-mail, detalhes, Kanban)');
@@ -205,7 +217,54 @@ try {
     $check($S::paraVagas(0, false, 'gestor')['modo'] === 'negado' && $S::paraCandidaturas(999999999, false, 'gestor')['modo'] === 'negado' && $S::paraCandidaturas($viewer, false, 'viewer')['modo'] === 'negado' && $S::paraVagas($gC, false, 'gestor')['escopo']->enxergaAlgo() === false, 'decisão: ator inválido/inexistente/viewer em candidaturas = negado; Gestor sem setores = escopo vazio (nunca global)');
     $check($S::paraVagas($gSemPerm, false, 'gestor')['modo'] === 'negado' && $S::paraCandidaturas($gSoVagas, false, 'gestor')['modo'] === 'negado' && $S::paraVagas($gSoCand, false, 'gestor')['modo'] === 'negado' && $S::paraCandidaturas($gSoCand, false, 'gestor')['modo'] === 'setorial' && $S::paraVagas($gPipe, false, 'gestor')['modo'] === 'setorial', 'decisão (serviço, independente do gate do controller): sem a permissão específica = negado; com ela = setorial; permissões de Pipeline/edição gravadas não somam nada')
     ;
-    $check($S::paraVagas($gB, false, 'gestor')['escopo']->ehRestrito() && $S::paraVagas($gB, false, 'admin')['modo'] === 'legado', 'decisão: o Gestor usa escopo restrito; a role legada só vale para Admin/RH/Viewer (gate já existente)');
+    $check($S::paraVagas($gB, false, 'gestor')['escopo']->ehRestrito() && $S::paraVagas($gB, false, 'admin')['modo'] === 'legado', 'decisão: o Gestor usa escopo restrito; a role legada só vale para Admin/RH (gate já existente)');
+    $check($S::paraVagas($viewer, false, 'viewer')['modo'] === 'negado' && $S::paraVagas($viewerLegado, false, 'viewer')['modo'] === 'negado' && $S::paraCandidaturas($viewerLegado, false, 'viewer')['modo'] === 'negado', 'decisão: Viewer = negado em Vagas e Candidaturas, inclusive com vagas.visualizar/candidaturas.visualizar gravadas');
+
+    // ---- 11. Situação da vaga: rascunho e encerrada nunca aparecem ao Gestor (listagem, filtro, busca, paginação, contador, URL) ----
+    $pdo->prepare("INSERT INTO vagas (titulo, descricao, requisitos, area, local, ativo, publicada_em, setor_id) VALUES (?, 'DescricaoInternaZZ', 'RequisitoInternoZZ', 'ZZ', 'l', 0, NULL, ?)")->execute(["ZZLS VagaRascunho {$mk}", $s1]);
+    $vRasc = $vagas[] = (int)$pdo->lastInsertId();
+    $pdo->prepare("INSERT INTO vagas (titulo, descricao, requisitos, area, local, ativo, publicada_em, setor_id) VALUES (?, 'd', 'r', 'ZZ', 'l', 0, NOW(), ?)")->execute(["ZZLS VagaEncerrada {$mk}", $s1]);
+    $vEnc = $vagas[] = (int)$pdo->lastInsertId();
+    $cRasc = $mkCand($vRasc, 'Rafael Rascunho ZZLS');
+    $cEnc = $mkCand($vEnc, 'Elisa Encerrada ZZLS');
+    [$st, $h] = $http($gA, 'gestor', 'AdminVagasController', 'index');
+    $check($st === 200 && !str_contains($h, "ZZLS VagaRascunho {$mk}") && !str_contains($h, "ZZLS VagaEncerrada {$mk}") && str_contains($h, "ZZLS Vaga1 {$mk}") && !str_contains($h, 'DescricaoInternaZZ'), 'Vagas do Gestor: rascunho e vaga despublicada/encerrada do PRÓPRIO setor não aparecem; publicadas sim');
+    [$st, $h] = $http($rh, 'rh', 'AdminVagasController', 'index');
+    $check($st === 200 && str_contains($h, "ZZLS VagaRascunho {$mk}") && str_contains($h, "ZZLS VagaEncerrada {$mk}"), 'RH continua vendo rascunhos e vagas encerradas na listagem administrativa');
+    [$st, $h] = $http($admin, 'admin', 'AdminVagasController', 'index');
+    $check($st === 200 && str_contains($h, "ZZLS VagaRascunho {$mk}"), 'Admin continua vendo rascunhos');
+    [$st, $h] = $http($gA, 'gestor', 'AdminCandidaturasController', 'index', ['busca' => 'ZZLS']);
+    $selectVagas = preg_match('#<select id="f-vaga".*?</select>#s', $h, $mSel) ? $mSel[0] : '';
+    $check($selectVagas !== '' && str_contains($selectVagas, "ZZLS Vaga1 {$mk}") && !str_contains($selectVagas, "ZZLS VagaRascunho {$mk}") && !str_contains($selectVagas, "ZZLS VagaEncerrada {$mk}") && !str_contains($h, "ZZLS VagaRascunho {$mk}"), 'filtro de vagas de Candidaturas do Gestor oferece só vagas publicadas (sem rascunho nem encerrada); o título do rascunho não aparece em lugar nenhum da página');
+    [$st, $h] = $http($gA, 'gestor', 'AdminCandidaturasController', 'index', ['busca' => 'Rafael Rascunho']);
+    $check(!str_contains($h, 'Rafael Rascunho ZZLS') && str_contains($h, '0 candidatura(s)'), 'candidatura de vaga em RASCUNHO não aparece ao Gestor nem soma no contador (busca por nome)');
+    [$st, $h] = $http($gA, 'gestor', 'AdminCandidaturasController', 'index', ['vaga_id' => $vRasc]);
+    $check(!str_contains($h, 'Rafael Rascunho ZZLS') && str_contains($h, '0 candidatura(s)'), 'vaga_id de RASCUNHO forçado na URL: nada é revelado');
+    [$st, $h] = $http($gA, 'gestor', 'AdminCandidaturasController', 'index', ['busca' => 'Elisa Encerrada']);
+    $check(str_contains($h, 'Elisa Encerrada ZZLS'), 'candidatura de vaga já publicada e depois encerrada continua na listagem de candidaturas do Gestor (acompanhamento do processo; a vaga não aparece na listagem de Vagas)');
+    $contaAntes = Candidatura::contarEscopo(CandidaturaAcessoSetorialService::escopoNominal(['id' => $gA, 'role' => 'gestor']), ['busca' => 'ZZLS']);
+    $check(Candidatura::acharEscopo(CandidaturaAcessoSetorialService::escopoNominal(['id' => $gA, 'role' => 'gestor']), $cRasc['id']) === null && Candidatura::acharEscopo(EscopoSetorial::global(), $cRasc['id']) !== null, 'consulta por ID com escopo: candidatura de rascunho = null para o Gestor; RH/Admin (global) a encontram');
+    $check(count(array_filter(Candidatura::listarEscopo(EscopoSetorial::global(), ['busca' => 'Rafael Rascunho']), static fn($r) => (int)$r['id'] === $cRasc['id'])) === 1, 'escopo global (Admin/RH) continua vendo candidaturas de rascunho');
+
+    // ---- 12. Projeção SQL das vagas do Gestor ----
+    $escA = CandidaturaAcessoSetorialService::escopoNominal(['id' => $gA, 'role' => 'gestor']);
+    $linhas = Vaga::listarSetorial($escA);
+    $chaves = $linhas ? array_keys($linhas[0]) : [];
+    sort($chaves);
+    $check($chaves === ['area', 'ativo', 'empresa_nome', 'id', 'local', 'setor_nome', 'titulo'], 'Vaga::listarSetorial projeta SOMENTE id, título, empresa, área, local, setor e situação (' . implode(',', $chaves) . ')');
+    $check(array_filter($linhas, static fn($l) => (int)$l['ativo'] !== 1) === [] && !in_array($vRasc, array_map('intval', array_column($linhas, 'id')), true), 'todas as linhas são vagas publicadas; rascunho fora');
+    $check(Vaga::listarSetorial(EscopoSetorial::global()) === [] && Vaga::listarSetorial(EscopoSetorial::nenhum()) === [] && Vaga::listarSetorial(EscopoSetorial::restrito([])) === [], 'listarSetorial nunca vira global: escopo global, nenhum ou vazio => []');
+    $fonte = (string)file_get_contents(__DIR__ . '/../../app/models/Vaga.php');
+    $ini = strpos($fonte, 'function listarSetorial');
+    $corpo = substr($fonte, $ini, strpos($fonte, 'function', $ini + 20) - $ini);
+    $colunas = preg_match('/SELECT(.*?)FROM/s', $corpo, $mCol) ? $mCol[1] : '';
+    $check($colunas !== '' && !str_contains($corpo, 'v.*') && !str_contains($corpo, 'SELECT *') && !preg_match('/\b(descricao|requisitos|solicitacao_vaga_id|publicada_em|empresa_id|setor_id|created_at)\b/', $colunas), 'a consulta setorial não usa SELECT */v.* e sua lista de colunas não inclui descrição, requisitos, solicitação, ids ou datas internas');
+
+    // ---- 13. Autorização relida do banco a cada requisição (sessão antiga não mantém acesso) ----
+    $pdo->prepare("UPDATE usuarios SET role = 'viewer' WHERE id = ?")->execute([$gB]);
+    $check($http($gB, 'gestor', 'AdminVagasController', 'index')[0] === 403 && $http($gB, 'gestor', 'AdminCandidaturasController', 'index')[0] === 403, 'perfil alterado no banco (gestor → viewer) com a sessão ainda dizendo "gestor": 403 na próxima requisição');
+    $pdo->prepare("UPDATE usuarios SET role = 'gestor' WHERE id = ?")->execute([$gB]);
+    $check($http($gB, 'gestor', 'AdminVagasController', 'index')[0] === 200, 'restaurado o perfil, o acesso volta (decisão por requisição)');
 } finally {
     foreach ($vagas as $id) {
         $pdo->prepare('DELETE FROM candidaturas WHERE vaga_id = ?')->execute([$id]);

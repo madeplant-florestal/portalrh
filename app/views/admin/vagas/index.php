@@ -39,7 +39,7 @@ require_once APP_PATH . '/views/partials/modulo-topo.php';
     </thead>
     <tbody>
       <?php foreach ($vagas as $v): ?>
-        <?php $rascunho = (int)$v['ativo'] === 0 && empty($v['publicada_em']) && !empty($v['solicitacao_vaga_id']); ?>
+        <?php $rascunho = (int)$v['ativo'] === 0 && empty($v['publicada_em'] ?? null) && !empty($v['solicitacao_vaga_id'] ?? null); ?>
         <tr class="border-b hover:bg-surface-secondary">
           <td class="p-3 font-medium text-text-primary">
             <?= Security::e($v['titulo']) ?>

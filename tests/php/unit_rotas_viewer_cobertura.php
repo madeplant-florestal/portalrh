@@ -20,7 +20,8 @@ $falhas = [];
 $excecoes = [
     'AdminCentralController::index' => 'Central do Portal: só navegação; os cards já respeitam as permissões',
     'AdminManualController::index' => 'Manual de uso: texto estático',
-    'AdminVagasController::index' => 'Catálogo de vagas publicadas (sem dado de candidato)',
+    // Etapa 3.2C.1 (complemento): AdminVagasController::index deixou de ser exceção — a listagem administrativa de vagas (inclui rascunhos) não é do
+    // viewer; está em $somenteAdminRh, que falha se o gate voltar a aceitar viewer.
     'AdminBeneficiosController::index' => 'Catálogo de benefícios',
     'AdminSetoresController::index' => 'Catálogo oficial de setores (espelho METADADOS, sem pessoa)',
     'AdminSetoresController::export' => 'Exporta o catálogo de setores (sem pessoa)',
@@ -42,6 +43,7 @@ $somenteAdminRh = [
     'AdminIndicacoesController::index', 'AdminIndicacoesController::statusApi', 'AdminIndicacoesController::contasReceberApi',
     'AdminIndicacoesController::conciliacaoApi', 'AdminIndicacoesController::relatoriosFinanceirosApi', 'AdminIndicacoesController::export',
     'AdminAvaliacoesController::index', 'AdminController::exportarColaboradores',
+    'AdminVagasController::index', // Etapa 3.2C.1: listagem administrativa (rascunhos/dados internos) — Admin/RH, ou Gestor por permissão efetiva
 ];
 
 // Etapa 2C.1: ações que aceitam o perfil Gestor no gate de role (módulos com escopo setorial comprovado). A Avaliação de Experiência

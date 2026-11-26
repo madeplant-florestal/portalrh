@@ -135,12 +135,13 @@ try {
     // Bloco 4 (2026-10, pedido do RH): role='rh' tem bypass central de todas as permissões
     // individuais, incluindo dashboard_recrutamento.visualizar.
     $check($visiveis['RH'] === ['dashboard', 'solicitacoes', 'vagas', 'candidaturas', 'pipeline', 'indicacoes'], '(RH) Vê as 6 abas, incluindo o Dashboard — bypass central de Authorization (Bloco 4)');
-    // Etapas 2A/2B/2C: Candidaturas, Pipeline e Indicações são Admin/RH (permissão gravada em viewer não vale); o viewer só tem Vagas, e o Dashboard de Recrutamento
-    // (agregado) continua liberável por permissão.
-    $check($visiveis['viewer'] === ['vagas'], '(viewer sem permissão) [2A] Só Vagas (Candidaturas é Admin/RH)');
-    $check($visiveis['gestor de vaga'] === ['solicitacoes', 'vagas'], '(gestor de vaga) Solicitações (permissão) + Vagas');
-    $check($visiveis['viewer+dashboard'] === ['dashboard', 'vagas'], '(viewer+dashboard) O Dashboard (agregado) aparece com a permissão individual');
-    $check($visiveis['viewer+pipeline/indicações'] === ['vagas'] && $visiveis['supervisor'] === ['vagas'], '(correção) [2B] viewer com pipeline/indicações GRAVADAS NÃO recebe as abas (incompatíveis); viewer com is_supervisor=1 também não — só Vagas');
+    // Etapas 2A/2B/2C: Candidaturas, Pipeline e Indicações são Admin/RH (permissão gravada em viewer não vale). Etapa 3.2C.1 (complemento): a listagem
+    // administrativa de Vagas também deixou de ser do viewer (perfil restrito aos dashboards autorizados); o Dashboard de Recrutamento (agregado)
+    // continua liberável por permissão.
+    $check($visiveis['viewer'] === [], '(viewer sem permissão) [2A/3.2C.1] Nenhuma aba de Recrutamento (Vagas e Candidaturas são administrativas)');
+    $check($visiveis['gestor de vaga'] === ['solicitacoes'], '(gestor de vaga) Só Solicitações (permissão de transição) — sem a listagem administrativa de Vagas');
+    $check($visiveis['viewer+dashboard'] === ['dashboard'], '(viewer+dashboard) O Dashboard (agregado) aparece com a permissão individual — e só ele');
+    $check($visiveis['viewer+pipeline/indicações'] === [] && $visiveis['supervisor'] === [], '(correção) [2B/3.2C.1] viewer com pipeline/indicações GRAVADAS NÃO recebe as abas (incompatíveis); viewer com is_supervisor=1 também não — nenhuma aba');
 
     // ---- gates de entrada: viewer com permissão abre; sem permissão é bloqueado; Admin pelo bypass -----------------------------
     $soPipe = $novoUsuario('So Pipeline', 'viewer', ['pipeline.visualizar']);
@@ -199,7 +200,7 @@ try {
     $svc = new PortalNavegacaoService();
     $comPipeline = $svc->abas('recrutamento', 'pipeline');
     $check(in_array('pipeline', array_column($comPipeline, 'chave'), true) && count(array_filter($comPipeline, static fn(array $a): bool => $a['ativo'])) === 1, '(aba atual) A aba da página em que o usuário já está aparece marcada como ativa mesmo sem regra de visibilidade');
-    $check($svc->entradaDoModulo('recrutamento') === '/admin/vagas' && $svc->abas('modulo-inexistente') === [], '(entrada) Entrada do módulo = primeira aba visível; módulo desconhecido = sem abas');
+    $check($svc->entradaDoModulo('recrutamento') === null && $svc->abas('modulo-inexistente') === [], '(entrada) Entrada do módulo = primeira aba visível (viewer sem dashboard: nenhuma); módulo desconhecido = sem abas');
     $comoUsuario($viewerDash);
     $check((new PortalNavegacaoService())->entradaDoModulo('recrutamento') === '/admin/dashboard-recrutamento', '(entrada) Com o Dashboard liberado, a entrada é o Dashboard');
 
@@ -209,7 +210,7 @@ try {
     $check($card !== null && $card['href'] === '/admin/dashboard-recrutamento', '(Central) O card Recrutamento continua apontando para a primeira entrada válida (Dashboard, se permitido)');
     $comoUsuario($viewer);
     $card = array_values(array_filter((new PortalNavegacaoService())->modulos(), static fn(array $m): bool => $m['chave'] === 'recrutamento'))[0] ?? null;
-    $check($card !== null && $card['href'] === '/admin/vagas', '(Central) [2A] Sem o Dashboard, o card cai em Vagas (único destino aberto ao viewer)');
+    $check($card === null, '(Central) [2A/3.2C.1] Sem o Dashboard, o viewer não recebe card de Recrutamento (nenhum destino administrativo aberto)');
 
     // ---- helper de topo -----------------------------------------------------------------------------------------------------------
     $comoUsuario($rh);

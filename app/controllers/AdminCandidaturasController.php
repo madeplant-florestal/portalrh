@@ -64,7 +64,7 @@ class AdminCandidaturasController extends Controller
         $candidaturas = Candidatura::listarEscopo($escopo, $consulta, $porPagina, ($pagina - 1) * $porPagina);
         $this->view->render('admin/candidaturas/index-setorial', [
             'candidaturas' => $candidaturas,
-            'vagas' => Vaga::all($escopo),
+            'vagas' => Vaga::listarSetorial($escopo), // só vagas publicadas do escopo (rascunhos nunca aparecem como opção)
             'setores' => Candidatura::setoresDisponiveisEscopo($escopo),
             'stages' => PipelineStage::all(),
             'filters' => $filters,

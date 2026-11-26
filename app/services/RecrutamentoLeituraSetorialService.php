@@ -1,17 +1,20 @@
 <?php
 
 /**
- * Etapa 3.2C.1 — decide COMO um usuário consulta Vagas e a listagem de Candidaturas (somente leitura). Único ponto usado pelos controllers.
+ * Etapa 3.2C.1 — decide COMO um usuário consulta as listagens administrativas de Vagas e de Candidaturas (somente leitura). Único ponto usado
+ * pelos controllers.
  *
  * Modos:
- *   MODO_LEGADO   — Admin, RH, Supervisor Geral (e, SÓ para Vagas, Viewer, como sempre foi): comportamento anterior, sem escopo, intocado.
+ *   MODO_LEGADO   — Admin, RH e Supervisor Geral: comportamento global anterior, intocado (todas as vagas, inclusive rascunhos).
  *   MODO_SETORIAL — Gestor com a permissão de leitura EFETIVA (gravada + ativa + compatível com PermissaoPerfilPolicy) — o escopo vem
  *                   exclusivamente de `usuario_setores_gerenciados` (EscopoSetorial) e o setor da vaga de `vagas.setor_id`.
- *   MODO_NEGADO   — todo o resto (perfil desconhecido, Gestor sem permissão, Viewer em Candidaturas, usuário inexistente).
+ *   MODO_NEGADO   — todo o resto: Viewer (perfil restrito aos dashboards autorizados — nenhuma permissão operacional legada gravada o
+ *                   contorna), Gestor sem a permissão específica, perfil desconhecido, usuário inexistente.
  *
- * O PERFIL é lido do BANCO (`usuarios.role`), nunca da sessão/POST. Falha de resolução = NEGADO, jamais global. No modo setorial o escopo
- * devolvido NUNCA é nulo nem global (se, por qualquer motivo, não for restrito, o modo vira NEGADO) e Gestor sem setores recebe um escopo
- * vazio: listagens vazias, nenhum registro nominal consultado.
+ * O perfil do Gestor é RELIDO DO BANCO (`usuarios.role`) a cada requisição — permissão e setores também —, então revogar permissão, setor
+ * ou mudar o perfil vale na próxima requisição, sem depender da sessão. A role da sessão só é usada para reconhecer Admin/RH (o mesmo gate
+ * `Auth::requireRole` de sempre). Falha de resolução = NEGADO, jamais global. No modo setorial o escopo nunca é nulo nem global; Gestor sem
+ * setores recebe escopo vazio (listagens vazias, nenhum registro nominal consultado).
  */
 final class RecrutamentoLeituraSetorialService
 {
@@ -23,26 +26,25 @@ final class RecrutamentoLeituraSetorialService
     public const PERMISSAO_CANDIDATURAS = 'candidaturas.visualizar';
 
     /**
-     * @param string|null $roleSessao role da sessão — usada SÓ para preservar o gate legado de Admin/RH/Viewer (que já era decidido por ela);
-     *        a decisão do Gestor nunca confia nela: o perfil é relido do banco.
-     * @return array{modo:string,escopo:?EscopoSetorial} Vagas: Viewer mantém o comportamento legado (sem ampliar nem reduzir).
+     * @param string|null $roleSessao role da sessão — usada SÓ para reconhecer Admin/RH (gate legado); o Gestor nunca é decidido por ela.
+     * @return array{modo:string,escopo:?EscopoSetorial}
      */
     public static function paraVagas(int $usuarioId, bool $supervisorDaSessao = false, ?string $roleSessao = null): array
     {
-        return self::decidir($usuarioId, $supervisorDaSessao, $roleSessao, self::PERMISSAO_VAGAS, true);
+        return self::decidir($usuarioId, $supervisorDaSessao, $roleSessao, self::PERMISSAO_VAGAS);
     }
 
-    /** @return array{modo:string,escopo:?EscopoSetorial} Candidaturas: Viewer NEGADO (como hoje: dados nominais só Admin/RH e Gestor setorial). */
+    /** @return array{modo:string,escopo:?EscopoSetorial} */
     public static function paraCandidaturas(int $usuarioId, bool $supervisorDaSessao = false, ?string $roleSessao = null): array
     {
-        return self::decidir($usuarioId, $supervisorDaSessao, $roleSessao, self::PERMISSAO_CANDIDATURAS, false);
+        return self::decidir($usuarioId, $supervisorDaSessao, $roleSessao, self::PERMISSAO_CANDIDATURAS);
     }
 
-    private static function decidir(int $usuarioId, bool $supervisor, ?string $roleSessao, string $permissao, bool $viewerLegado): array
+    private static function decidir(int $usuarioId, bool $supervisor, ?string $roleSessao, string $permissao): array
     {
         $negado = ['modo' => self::MODO_NEGADO, 'escopo' => null];
         $roleSessao = strtolower(trim((string)$roleSessao));
-        if ($supervisor || in_array($roleSessao, ['admin', 'rh'], true) || ($viewerLegado && $roleSessao === 'viewer')) {
+        if ($supervisor || in_array($roleSessao, ['admin', 'rh'], true)) {
             return ['modo' => self::MODO_LEGADO, 'escopo' => null];
         }
         if ($usuarioId <= 0) {
@@ -53,7 +55,7 @@ final class RecrutamentoLeituraSetorialService
             $stmt->execute([$usuarioId]);
             $role = strtolower(trim((string)($stmt->fetchColumn() ?: '')));
             if ($role !== 'gestor' || !Authorization::usuarioTemPermissao($usuarioId, $permissao)) {
-                return $negado;
+                return $negado; // inclui o Viewer, mesmo com vagas.visualizar/candidaturas.visualizar gravadas
             }
             $escopo = EscopoSetorial::resolver($usuarioId); // lê a role do banco; gestor => restrito (possivelmente vazio)
             if (!$escopo->ehRestrito()) {

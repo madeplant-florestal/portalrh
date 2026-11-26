@@ -207,6 +207,7 @@ class Candidatura
             return [null, []];
         }
         PipelineStage::ensureRecruitmentLifecycle();
+        RecruitmentWebhookSchemaService::ensureSchema(); // garante vagas.publicada_em (usada no filtro de rascunho)
         self::ensureStageColumn();
         $temSetor = VagaSetorService::schemaSuportaSetor();
         $params = [];
@@ -221,7 +222,10 @@ class Candidatura
                 INNER JOIN vagas v ON v.id = c.vaga_id'
             . ($temSetor && !$contar ? ' LEFT JOIN setores st ON st.id = v.setor_id' : '')
             . ($contar ? '' : ' LEFT JOIN pipeline_stages s ON s.id = c.stage_id')
-            . ' WHERE ' . $condEscopo;
+            . ' WHERE ' . $condEscopo
+            // Etapa 3.2C.1 (complemento): para quem não é global, vaga em RASCUNHO (nunca publicada: ativo = 0 e sem publicada_em) não expõe
+            // nada — nem candidaturas, nem título em busca/filtro/paginação/contador. Admin/RH (global) seguem vendo tudo.
+            . ($escopo->ehGlobal() ? '' : ' AND NOT (v.ativo = 0 AND v.publicada_em IS NULL)');
         if (!empty($filters['vaga_id'])) { $sql .= ' AND c.vaga_id = ?'; $params[] = (int)$filters['vaga_id']; }
         if ($temSetor && !empty($filters['setor_id']) && $filters['setor_id'] !== self::SETOR_NAO_INFORMADO) { $sql .= ' AND v.setor_id = ?'; $params[] = (int)$filters['setor_id']; }
         if (!empty($filters['stage_id'])) { $sql .= ' AND c.stage_id = ?'; $params[] = (int)$filters['stage_id']; }

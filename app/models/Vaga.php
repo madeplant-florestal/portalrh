@@ -87,6 +87,36 @@ class Vaga
         return $data ?: null;
     }
 
+    /**
+     * Etapa 3.2C.1 (complemento de segurança) — listagem de vagas do GESTOR. Consulta PRÓPRIA (não reaproveita `v.*` de all()): projeção
+     * explícita só com o que a tela do Gestor exibe — id, título, empresa, área (rótulo público), local, setor e situação. Nunca traz
+     * descrição, requisitos, solicitação de origem, ids internos nem datas internas.
+     *
+     * Regras (todas no SQL): escopo RESTRITO obrigatório (`vagas.setor_id` ∈ Setores Gerenciados; global/nenhum/vazio => []); só vagas
+     * PUBLICADAS (`ativo = 1`, o mesmo critério da vitrine pública `allActive()`): rascunhos (nunca publicados) e vagas despublicadas/encerradas
+     * ficam de fora (decisão conservadora: não há mecanismo de liberação operacional de vaga ao Gestor). Vaga sem setor nunca casa.
+     *
+     * @return array<int,array{id:int,titulo:string,empresa_nome:?string,area:?string,local:?string,setor_nome:?string,ativo:int}>
+     */
+    public static function listarSetorial(EscopoSetorial $escopo): array
+    {
+        if (!$escopo->ehRestrito() || !$escopo->enxergaAlgo() || !VagaSetorService::schemaSuportaSetor()) {
+            return [];
+        }
+        RecruitmentWebhookSchemaService::ensureSchema();
+        $params = [];
+        $cond = $escopo->sqlSetorId('v.setor_id', $params);
+        $sql = 'SELECT v.id, v.titulo, e.nome AS empresa_nome, v.area, v.local, s.nome AS setor_nome, v.ativo
+                FROM vagas v
+                INNER JOIN setores s ON s.id = v.setor_id
+                LEFT JOIN empresas e ON e.id = v.empresa_id
+                WHERE v.ativo = 1 AND ' . $cond . '
+                ORDER BY v.created_at DESC, v.id DESC';
+        $stmt = Database::conn()->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
     public static function create(array $data): int
     {
         RecruitmentWebhookSchemaService::ensureSchema();

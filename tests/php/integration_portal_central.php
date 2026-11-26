@@ -131,8 +131,9 @@ try {
     $comoUsuario($viewer);
     $cV = $cards();
     // Etapa 2A: Indicadores de RH passou a exigir indicadores_rh.visualizar e Candidaturas deixou de ser aberta ao viewer.
-    $check(array_keys($cV) === ['recrutamento', 'colaboradores', 'avaliacoes-desenvolvimento', 'cadastros'], '(viewer sem permissão) Só os módulos abertos a qualquer autenticado: ' . implode(', ', array_keys($cV)));
-    $check($cV['recrutamento'] === '/admin/vagas' && $cV['colaboradores'] === '/admin/movimentacoes-pessoal' && $cV['cadastros'] === '/admin/empresas', '(viewer sem permissão) Entradas caem no primeiro destino aberto de cada área');
+    // Etapa 3.2C.1 (complemento): a listagem administrativa de Vagas também deixou de ser aberta ao viewer — sem dashboard autorizado, não há card de Recrutamento.
+    $check(array_keys($cV) === ['colaboradores', 'avaliacoes-desenvolvimento', 'cadastros'], '(viewer sem permissão) Só os módulos abertos a qualquer autenticado (sem Recrutamento): ' . implode(', ', array_keys($cV)));
+    $check(!isset($cV['recrutamento']) && $cV['colaboradores'] === '/admin/movimentacoes-pessoal' && $cV['cadastros'] === '/admin/empresas', '(viewer sem permissão) Entradas caem no primeiro destino aberto de cada área; nenhuma entrada leva a /admin/vagas');
     $check($cV['avaliacoes-desenvolvimento'] === '/admin/avaliacoes-desenvolvimento', '(viewer sem permissão) "Avaliações e Desenvolvimento" é \'aberto\' (Avaliação de Desempenho legada já é aberta hoje em Cadastros) — o card aparece mesmo sem pdi/avaliacao_experiencia/feedback.visualizar; a landing é quem filtra o que mostrar por permissão');
     foreach (['usuarios', 'solicitacoes-vaga', 'integracao', 'desligamento', 'configuracoes'] as $ausente) {
         $check(!isset($cV[$ausente]), "(viewer sem permissão) Sem permissão, o card \"{$ausente}\" não é renderizado");
@@ -163,7 +164,7 @@ try {
         $comoUsuario($u);
         $c = $cards();
         // Etapas 2B/2C.2B: permissão INCOMPATÍVEL com o viewer (ex.: mensagens, pesquisas de reação/integração, entrevista de desligamento) não abre card algum.
-        if (PermissaoPerfilPolicy::classificar('viewer', $perm) === PermissaoPerfilPolicy::INCOMPATIVEL && !in_array($chave, ['recrutamento', 'colaboradores'], true)) {
+        if (PermissaoPerfilPolicy::classificar('viewer', $perm) === PermissaoPerfilPolicy::INCOMPATIVEL && $chave !== 'colaboradores') { // 3.2C.1: Recrutamento não tem mais destino aberto ao viewer
             $check(!isset($c[$chave]), "(permissão) {$perm} é incompatível com o viewer → o card \"{$chave}\" NÃO aparece (permissão gravada não vale)");
             continue;
         }
@@ -175,7 +176,7 @@ try {
     $comoUsuario($usuariosPorPerm['dashboard_recrutamento.visualizar']);
     $check($cards()['recrutamento'] === '/admin/dashboard-recrutamento', '(entrada) Com o dashboard liberado, a entrada de Recrutamento passa a ser o dashboard (primeiro destino visível)');
     $comoUsuario($usuariosPorPerm['pipeline.visualizar']);
-    $check($cards()['recrutamento'] === '/admin/vagas', '(entrada) [2A/2B] Pipeline é incompatível com o viewer: a permissão gravada não vale e a entrada de Recrutamento é o primeiro destino aberto (Vagas)');
+    $check(!isset($cards()['recrutamento']), '(entrada) [2A/2B/3.2C.1] Pipeline é incompatível com o viewer: a permissão gravada não vale e, sem destino aberto (Vagas deixou de ser), não há card de Recrutamento');
     $comoUsuario($usuariosPorPerm['dashboard_entrevista_desligamento.visualizar']);
     $check(count(array_diff(array_keys($cards()), ['indicadores', 'recrutamento', 'colaboradores', 'avaliacoes-desenvolvimento', 'cadastros', 'desligamento'])) === 0, '(permissão) Uma permissão libera só o módulo dela — nenhum outro card extra (avaliacoes-desenvolvimento é \'aberto\', sempre presente)');
 
@@ -330,7 +331,7 @@ try {
     $html = $renderizar(static fn() => (new AdminCentralController())->index());
     $check(!preg_match('/Warning:|Notice:|Deprecated:|Fatal error/i', $html) && str_contains($html, 'data-app-shell-v2="1"') && str_contains($html, 'Central do Portal RH') && str_contains($html, 'Escolha um módulo para continuar') && str_contains($html, '<title>Central do Portal RH — Portal RH</title>'), '(página) Renderiza no AppShell V2 com o título e a descrição da Central');
     $check(!str_contains($html, 'data-admin-sidebar') && !str_contains($html, 'class="sidebar') && !str_contains($html, 'app-header"') && !str_contains($html, '<nav aria-label="Trilha'), '(página) Sem sidebar/header antigos e sem breadcrumb redundante na raiz');
-    $check(substr_count($html, '<li class="min-w-0"><a href=') === 4 && str_contains($html, 'href="' . $baseUrl . '/admin/vagas"') && str_contains($html, 'href="' . $baseUrl . '/admin/avaliacoes-desenvolvimento"') && !str_contains($html, '/admin/pdis') && !str_contains($html, '/admin/usuarios'), '(página) [2A] O viewer sem permissão recebe 4 cards (Recrutamento→Vagas, Colaboradores, Avaliações e Desenvolvimento, Cadastros) e nenhum link para módulos sem acesso');
+    $check(substr_count($html, '<li class="min-w-0"><a href=') === 3 && !str_contains($html, 'href="' . $baseUrl . '/admin/vagas"') && str_contains($html, 'href="' . $baseUrl . '/admin/avaliacoes-desenvolvimento"') && !str_contains($html, '/admin/pdis') && !str_contains($html, '/admin/usuarios'), '(página) [2A/3.2C.1] O viewer sem permissão recebe 3 cards (Colaboradores, Avaliações e Desenvolvimento, Cadastros) — sem Recrutamento→Vagas e nenhum link para módulos sem acesso');
     $check(str_contains($html, 'grid-cols-[repeat(auto-fill,minmax(230px,1fr))]') && str_contains($html, 'gap-[18px]') && !str_contains($html, '<script>'), '(página) ModuleGrid elástico (auto-fill/230px/18px), sem JavaScript próprio');
     $comoUsuario($admin);
     $htmlAdmin = $renderizar(static fn() => (new AdminCentralController())->index());

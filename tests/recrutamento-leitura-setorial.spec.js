@@ -71,6 +71,7 @@ test('Gestor: listagem de candidaturas só do escopo, filtros visíveis, sem dad
   expect(setores.join('|')).toContain(`ZZRS Setor1 ${prefixo}`);
   expect(setores.join('|')).not.toContain(`ZZRS Setor3 ${prefixo}`);
   const vagas = await page.locator('select[name="vaga_id"] option').allTextContents();
+  expect(vagas.join('|')).not.toContain(dados.vagas.rascunho);
   expect(vagas.join('|')).not.toContain(dados.vagas.v3);
   expect(vagas.join('|')).not.toContain(dados.vagas.vSem);
   // um candidato de cada vaga do escopo (setor 1 e setor 2) aparece pela busca; o do setor 3 e o sem setor, nunca
@@ -118,7 +119,9 @@ test('Gestor: Vagas lista só as do escopo, sem Editar/Excluir/Publicar/Nova vag
   expect(await visivel(page, dados.vagas.v2)).toBeTruthy();
   expect(await visivel(page, dados.vagas.v3)).toBeFalsy();
   expect(await visivel(page, dados.vagas.vSem)).toBeFalsy();
+  expect(await visivel(page, dados.vagas.rascunho)).toBeFalsy(); // rascunho do PRÓPRIO setor: exclusivo de RH/Admin
   const html = await page.content();
+  expect(html).not.toContain(dados.vagas.rascunho);
   for (const proibido of ['/admin/vagas/editar', '/admin/vagas/novo', '/excluir', '/publicar', '/admin/solicitacoes-vaga/']) {
     expect(html, `não deve conter ${proibido}`).not.toContain(proibido);
   }
@@ -155,7 +158,7 @@ test('Gestor sem setores: listas vazias; Gestor sem permissão: 403', async ({ b
   await t.ctx.close();
 });
 
-test('RH e Viewer preservados', async ({ browser, baseURL }, testInfo) => {
+test('RH preservado (vê rascunhos); Viewer sem listagens administrativas', async ({ browser, baseURL }, testInfo) => {
   let t = await como(browser, baseURL, testInfo.project.use, 'rh');
   expect((await t.page.goto('/admin/candidaturas?busca=Externa')).status()).toBe(200);
   const html = await t.page.content();
@@ -163,10 +166,18 @@ test('RH e Viewer preservados', async ({ browser, baseURL }, testInfo) => {
   expect(html).toContain(dados.candidatoExternoEmail);
   await expect(t.page.getByRole('link', { name: 'Ver Kanban' })).toBeVisible();
   expect(await t.page.locator('a[href*="/admin/candidaturas/"]').count()).toBeGreaterThan(0);
+  await t.page.goto('/admin/vagas');
+  expect(await visivel(t.page, dados.vagas.rascunho)).toBeTruthy(); // RH vê o rascunho
   await t.ctx.close();
   t = await como(browser, baseURL, testInfo.project.use, 'viewer');
   expect((await t.page.goto('/admin/candidaturas')).status()).toBe(403);
-  expect((await t.page.goto('/admin/vagas')).status()).toBe(200);
-  expect(await visivel(t.page, dados.vagas.v3)).toBeTruthy(); // Viewer: lista global como sempre
+  // Viewer (com candidaturas.visualizar gravada e setor legado): listagens administrativas bloqueadas, sem vazar título algum
+  const rv = await t.page.goto('/admin/vagas');
+  expect(rv.status()).toBe(403);
+  expect(await t.page.content()).not.toContain('ZZRS Vaga');
+  expect((await t.page.goto('/admin/pipeline')).status()).toBe(403);
+  await t.page.goto('/admin');
+  expect(await t.page.locator('a[href$="/admin/vagas"]:not([aria-disabled="true"])').count()).toBe(0);
+  expect(await t.page.locator('a[href$="/admin/candidaturas"]:not([aria-disabled="true"])').count()).toBe(0);
   await t.ctx.close();
 });

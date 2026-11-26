@@ -12,9 +12,10 @@ class AdminVagasController extends Controller
 
     public function index(): void
     {
-        // Etapa 3.2C.1: Gestor com `vagas.visualizar` EFETIVA consulta SOMENTE as vagas dos Setores Gerenciados (`vagas.setor_id`), em
-        // modo somente leitura. Admin/RH/Supervisor/Viewer seguem exatamente como antes (requireRole + lista global).
-        Authorization::requireRoleOuPermissao(['admin', 'rh', 'viewer'], 'vagas.visualizar');
+        // Etapa 3.2C.1: listagem ADMINISTRATIVA de vagas = Admin/RH/Supervisor (global, todas as situações, inclusive rascunhos) ou Gestor com
+        // `vagas.visualizar` EFETIVA (somente vagas publicadas dos Setores Gerenciados, projeção explícita, sem ações). O Viewer não entra
+        // (perfil restrito aos dashboards autorizados; `vagas.visualizar` é incompatível com ele). A página pública de vagas não passa por aqui.
+        Authorization::requireRoleOuPermissao(['admin', 'rh'], 'vagas.visualizar');
         $acesso = RecrutamentoLeituraSetorialService::paraVagas((int)($_SESSION['user_id'] ?? 0), !empty($_SESSION['user_is_supervisor']), Auth::role());
         if ($acesso['modo'] === RecrutamentoLeituraSetorialService::MODO_NEGADO) {
             http_response_code(403);
@@ -22,7 +23,7 @@ class AdminVagasController extends Controller
             return;
         }
         $setorial = $acesso['modo'] === RecrutamentoLeituraSetorialService::MODO_SETORIAL;
-        $vagas = Vaga::all($setorial ? $acesso['escopo'] : null);
+        $vagas = $setorial ? Vaga::listarSetorial($acesso['escopo']) : Vaga::all();
         $this->view->render('admin/vagas/index', [
             'vagas' => $vagas,
             'somenteLeitura' => $setorial,

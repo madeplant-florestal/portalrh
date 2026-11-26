@@ -72,6 +72,8 @@ $mkCand = static function (int $vagaId, string $nome) use ($pdo, $prefixo, $stag
 
 $s1 = $mkSetor('1'); $s2 = $mkSetor('2'); $s3 = $mkSetor('3');
 $v1 = $mkVaga('1', $s1); $v2 = $mkVaga('2', $s2); $v3 = $mkVaga('3', $s3); $vSem = $mkVaga('Sem', null);
+// rascunho (nunca publicado) no setor do Gestor: só RH/Admin podem vê-lo
+$pdo->prepare("INSERT INTO vagas (titulo, descricao, requisitos, area, local, ativo, publicada_em, setor_id) VALUES (?, 'd', 'r', 'ZZ', 'l', 0, NULL, ?)")->execute(["ZZRS VagaRascunho {$prefixo}", $s1]);
 $emails = [$mkCand($v1, 'Alice Propria'), $mkCand($v2, 'Bruno Propria')];
 for ($i = 1; $i <= 22; $i++) { $mkCand($v1, sprintf('Pagina%02d Propria', $i)); }
 $emailsExternos = [$mkCand($v3, 'Carla Externa'), $mkCand($vSem, 'Dario SemSetor')];
@@ -89,6 +91,6 @@ echo json_encode([
     'candidatoPropriaId' => (int)$pdo->query("SELECT id FROM candidaturas WHERE email = '" . $emails[0] . "'")->fetchColumn(),
     'candidatoExternoEmail' => $emailsExternos[0],
     'candidatoPropriaEmail' => $emails[0],
-    'vagas' => ['v1' => "ZZRS Vaga1 {$prefixo}", 'v2' => "ZZRS Vaga2 {$prefixo}", 'v3' => "ZZRS Vaga3 {$prefixo}", 'vSem' => "ZZRS VagaSem {$prefixo}"],
+    'vagas' => ['v1' => "ZZRS Vaga1 {$prefixo}", 'v2' => "ZZRS Vaga2 {$prefixo}", 'v3' => "ZZRS Vaga3 {$prefixo}", 'vSem' => "ZZRS VagaSem {$prefixo}", 'rascunho' => "ZZRS VagaRascunho {$prefixo}"],
     'vaga1Id' => $v1,
 ], JSON_UNESCAPED_UNICODE) . "\n";

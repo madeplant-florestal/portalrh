@@ -109,7 +109,7 @@ class PortalNavegacaoService
                     ['href' => '/admin/dashboard-recrutamento', 'regra' => 'perm:dashboard_recrutamento.visualizar'],
                     ['href' => '/admin/candidaturas', 'regra' => 'staff_ou:candidaturas.visualizar'],
                     ['href' => '/admin/pipeline', 'regra' => 'staff'],
-                    ['href' => '/admin/vagas', 'regra' => 'aberto_ou_perm:vagas.visualizar'],
+                    ['href' => '/admin/vagas', 'regra' => 'staff_ou:vagas.visualizar'],
                     ['href' => '/admin/indicacoes', 'regra' => 'staff'],
                 ]],
             ['chave' => 'solicitacoes-vaga', 'titulo' => 'Solicitações de Vaga', 'icone' => 'vagas',
@@ -238,7 +238,7 @@ class PortalNavegacaoService
             'recrutamento' => ['titulo' => 'Recrutamento e Seleção', 'abas' => [
                 ['chave' => 'dashboard', 'label' => 'Dashboard', 'href' => '/admin/dashboard-recrutamento', 'regra' => 'perm:dashboard_recrutamento.visualizar'],
                 ['chave' => 'solicitacoes', 'label' => 'Solicitações de Vaga', 'href' => '/admin/solicitacoes-vaga', 'regra' => 'pedidos_vaga'],
-                ['chave' => 'vagas', 'label' => 'Vagas', 'href' => '/admin/vagas', 'regra' => 'aberto_ou_perm:vagas.visualizar'],
+                ['chave' => 'vagas', 'label' => 'Vagas', 'href' => '/admin/vagas', 'regra' => 'staff_ou:vagas.visualizar'],
                 ['chave' => 'candidaturas', 'label' => 'Candidaturas', 'href' => '/admin/candidaturas', 'regra' => 'staff_ou:candidaturas.visualizar'],
                 ['chave' => 'pipeline', 'label' => 'Pipeline Kanban', 'href' => '/admin/pipeline', 'regra' => 'staff'],
                 ['chave' => 'indicacoes', 'label' => 'Indicações', 'href' => '/admin/indicacoes', 'regra' => 'staff'],

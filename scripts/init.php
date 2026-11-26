@@ -1,15 +1,20 @@
 <?php
 require_once __DIR__ . '/../app/core/bootstrap.php';
-// Uso: php scripts/init.php [email] [senha] [--seed]
-$email = $argv[1] ?? 'fabio.ozuna@madeplant.com.br';
-$password = $argv[2] ?? '23082524';
+require_once __DIR__ . '/lib/senha_cli.php';
+// Uso: RH_ADMIN_SENHA='...' php scripts/init.php <email> [--seed]   (ou sem a variável, digitando a senha no terminal)
+// Sem e-mail ou sem senha: nada é criado. Nunca existe senha padrão.
+$email = trim((string)($argv[1] ?? ''));
+if ($email === '' || str_starts_with($email, '--') || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+    senhaCliAbortar('Informe o e-mail do administrador: php scripts/init.php <email> [--seed]. Nada foi alterado.');
+}
+senhaCliRecusarArgumento($argv, 2, 'RH_ADMIN_SENHA');
 $seed = in_array('--seed', $argv, true);
 
 $existing = User::findByEmail($email);
 if ($existing) {
-    echo "Usuário já existe: {$email}\n";
+    echo "Usuário já existe: {$email} (senha NÃO alterada)\n";
 } else {
-    $hash = password_hash($password, PASSWORD_BCRYPT);
+    $hash = password_hash(senhaCliObrigatoria('RH_ADMIN_SENHA'), PASSWORD_BCRYPT);
     $id = User::create('Administrador', $email, $hash, 'admin');
     echo "Usuário admin criado (ID: {$id}) para {$email}\n";
 }

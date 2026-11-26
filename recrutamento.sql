@@ -520,7 +520,7 @@ CREATE TABLE `usuarios` (
 
 LOCK TABLES `usuarios` WRITE;
 /*!40000 ALTER TABLE `usuarios` DISABLE KEYS */;
-INSERT INTO `usuarios` VALUES (1,'Fabio Ozuna','fabio.ozuna@madeplant.com.br','$2y$10$b5qeLyTpYx3tKJ7WtTb73.629RM45P55wLflJNHWdJpnvx.cPtZNq','admin',1,'2026-03-17 17:13:34','2026-06-03 15:49:30','2026-03-17 17:13:34');
+INSERT INTO `usuarios` VALUES (1,'Administrador (dump saneado)','admin.saneado@exemplo.invalid','!conta-sem-senha-saneada-do-dump','admin',1,'2026-03-17 17:13:34','2026-06-03 15:49:30','2026-03-17 17:13:34');
 /*!40000 ALTER TABLE `usuarios` ENABLE KEYS */;
 UNLOCK TABLES;
 

@@ -225,14 +225,28 @@ try {
         echo "Coluna stage_id adicionada.\n";
     }
 
-    // Create Admin User if not exists
-    $stmt = $pdo->prepare("SELECT COUNT(*) FROM usuarios WHERE email = ?");
-    $stmt->execute(['fabio.ozuna@madeplant.com.br']);
-    if ($stmt->fetchColumn() == 0) {
-        $passHash = password_hash('23082524', PASSWORD_DEFAULT);
-        $pdo->prepare("INSERT INTO usuarios (nome, email, senha_hash, role) VALUES (?, ?, ?, ?)")
-            ->execute(['Fabio Ozuna', 'fabio.ozuna@madeplant.com.br', $passHash, 'admin']);
-        echo "Usuário administrador criado (fabio.ozuna@madeplant.com.br / 23082524).\n";
+    // Administrador inicial: SOMENTE com credenciais do ambiente (sem senha padrão). Sem elas, nenhuma conta é criada —
+    // use depois `php scripts/init.php <email>`. A senha passa pela mesma PasswordPolicy do Portal e nunca é exibida.
+    $adminEmail = trim((string)(getenv('SETUP_ADMIN_EMAIL') ?: ''));
+    $adminSenha = (string)(getenv('SETUP_ADMIN_SENHA') ?: '');
+    if ($adminEmail === '' || $adminSenha === '') {
+        echo "Administrador NÃO criado: defina SETUP_ADMIN_EMAIL e SETUP_ADMIN_SENHA, ou rode depois scripts/init.php.\n";
+    } else {
+        require_once __DIR__ . '/../app/core/PasswordPolicy.php';
+        $politica = PasswordPolicy::validate($adminSenha);
+        if (!filter_var($adminEmail, FILTER_VALIDATE_EMAIL) || !$politica['valid']) {
+            echo "Administrador NÃO criado: e-mail inválido ou senha fora da política (" . implode(' ', $politica['errors']) . ").\n";
+        } else {
+            $stmt = $pdo->prepare("SELECT COUNT(*) FROM usuarios WHERE email = ?");
+            $stmt->execute([$adminEmail]);
+            if ($stmt->fetchColumn() == 0) {
+                $pdo->prepare("INSERT INTO usuarios (nome, email, senha_hash, role) VALUES (?, ?, ?, ?)")
+                    ->execute(['Administrador', $adminEmail, password_hash($adminSenha, PASSWORD_DEFAULT), 'admin']);
+                echo "Usuário administrador criado: {$adminEmail}\n";
+            } else {
+                echo "Usuário administrador já existe: {$adminEmail} (senha NÃO alterada)\n";
+            }
+        }
     }
 
     echo "Configuração do banco concluída com sucesso.\n";

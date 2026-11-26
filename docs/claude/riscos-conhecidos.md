@@ -261,8 +261,21 @@ Identificados na auditoria arquitetural de 2026-07-09, documentados aqui para n�
      requisição (login com `motivo=senha`; AJAX 401; POST não processado). Usuário excluído ou falha de leitura = sessão encerrada. Sem migration (reusa `senha_hash`).
      Custo: 1 SELECT por chave primária por requisição autenticada. Sessões abertas ANTES do deploy adotam a credencial vigente na 1ª requisição (transição limitada
      pelo teto de 24 h). Cobertura: `tests/php/integration_sessao_revogacao_senha.php`.
-   - **Pendente (fora do código, decisão do Fabio):** trocar a senha da conta exposta em produção (pela recuperação/administração do Portal — a troca agora derruba as
-     sessões antigas) e tratar o histórico do Git. Ocorrências pré-existentes NÃO alteradas: senha padrão em `scripts/init.php`, `scripts/reset_password_cli.php` e
-     `scripts/setup_full.php`; senha citada em `AUTH_PERMISSOES_FIX.md`; e-mail da conta como placeholder da tela de login (`app/views/admin/login.php`), em
-     `install.php` e `scripts/production_install.php`; hash bcrypt da conta nos dumps `recrutamento.sql` (raiz e `database/`) — ver item 1;
-     `security.supervisor_password` versionado igual ao do exemplo — ver item 2. Sessão de usuário DESATIVADO (sem `email_verified_at`) continua até expirar.
+   - **Senha da conta exposta:** trocada em produção pelo "Esqueci minha senha" (informado pelo Fabio em 2026-11-26).
+   - **Saneamento dos arquivos atuais (2026-11-26) — CONCLUÍDO:** nenhuma senha, e-mail administrativo real ou hash bcrypt nos arquivos versionados.
+     `scripts/init.php` e `scripts/reset_password_cli.php` sem senha padrão: senha SÓ por variável de ambiente (`RH_ADMIN_SENHA`/`RH_NOVA_SENHA`) ou digitação no
+     terminal, nunca por argumento, validada pela `PasswordPolicy`; sem ela, encerram sem alterar nada (`scripts/lib/senha_cli.php`). `reset_password_cli` não
+     imprime mais o hash nem um SQL de "fallback" com o hash. `scripts/setup_full.php` só cria administrador com `SETUP_ADMIN_EMAIL`/`SETUP_ADMIN_SENHA`.
+     `install.php`/`production_install.php` sem e-mail padrão; placeholder genérico na tela de login; `AUTH_PERMISSOES_FIX.md` sem credenciais.
+     `security.supervisor_password` vazio em `config.php`/`config.example.php` (definir só em `local.php`); `User::ensureSupervisor` nunca cria conta com senha vazia
+     (sem senha configurada, "garantir Supervisor" é recusado — a inicialização do Portal não depende desse valor). Dumps `recrutamento.sql` (raiz e `database/`):
+     linha `usuarios` id 1 mantida (relacionamentos), com nome/e-mail fictícios (`.invalid`) e `senha_hash` não-bcrypt (nenhuma senha autentica).
+     Cobertura: `tests/php/integration_scripts_sem_senha_padrao.php`.
+   - **Pendente:** histórico do Git (os valores antigos seguem nos commits anteriores — ver estratégia no relatório de 2026-11-26; não reescrito); PII de candidatura
+     no dump (item 1); `scripts/verify_password_cli.php` ainda recebe a senha como argumento (sem valor padrão). Sessão de usuário DESATIVADO (sem
+     `email_verified_at`) continua até expirar.
+17. **Sessões anteriores ao deploy da revogação por senha (2026-11-26) — PENDÊNCIA CONHECIDA, sem ação nesta etapa.** Sessões abertas antes do commit
+   9198876 não têm `credencial_impressao`; `SessionPolicy::avaliarCredencial()` as faz ADOTAR a senha vigente na 1ª requisição após o deploy. Se a senha tiver sido
+   trocada ANTES dessa 1ª requisição (caso da conta exposta, trocada antes/durante o deploy), uma sessão antiga ainda viva adota a senha nova e segue válida até o
+   teto de 24 h desde o login (ou 8 h de inatividade). Janela máxima: 24 h após o deploy (cada sessão antiga morre no máximo 24 h após o próprio login). Mitigação opcional,
+   se desejada: encerrar todas as sessões uma vez (apagar os arquivos de `storage/sessions` no servidor) — derruba todos os usuários; decisão do Fabio.

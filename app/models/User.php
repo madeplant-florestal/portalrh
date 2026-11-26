@@ -63,6 +63,10 @@ class User
             Database::conn()->prepare($sql)->execute(['admin', $existing->id]);
             return $existing->id;
         }
+        if ($password === '') {
+            // Nunca cria conta sem senha configurada (não há senha padrão versionada — security.supervisor_password só em local.php).
+            throw new InvalidArgumentException('Senha do Supervisor não configurada.');
+        }
         return self::createSupervisor($nome, $email, password_hash($password, PASSWORD_BCRYPT));
     }
 

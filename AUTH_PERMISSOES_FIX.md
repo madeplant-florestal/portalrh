@@ -15,7 +15,7 @@
 
 ## Testes de regressão executados
 
-- Login real com `fabio.ozuna@madeplant.com.br` + `23082524`:
+- Login real com uma conta administrativa de teste (credenciais fornecidas pelo ambiente, nunca registradas aqui):
   - Resultado: redirecionamento para `/dashboard`.
 - Acesso a `/dashboard` com sessão autenticada:
   - Resultado: carregamento do dashboard sem “Acesso negado”.

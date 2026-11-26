@@ -1,9 +1,16 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/../app/core/bootstrap.php';
+require_once __DIR__ . '/lib/senha_cli.php';
 
-$email = $argv[1] ?? 'fabio.ozuna@madeplant.com.br';
-$newPassword = $argv[2] ?? '23082524';
+// Uso: RH_NOVA_SENHA='...' php scripts/reset_password_cli.php <email>   (ou sem a variável, digitando a senha no terminal)
+// Sem e-mail ou sem senha: nada é alterado. Nunca existe senha padrão. A troca encerra as sessões abertas do usuário.
+$email = trim((string)($argv[1] ?? ''));
+if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+    senhaCliAbortar('Informe o e-mail da conta: php scripts/reset_password_cli.php <email>. Nada foi alterado.');
+}
+senhaCliRecusarArgumento($argv, 2, 'RH_NOVA_SENHA');
+$newPassword = senhaCliObrigatoria('RH_NOVA_SENHA');
 
 $timestamp = date('c');
 $auditDir = STORAGE_PATH . DIRECTORY_SEPARATOR . 'audit';
@@ -57,11 +64,9 @@ try {
 
     echo "OK: senha atualizada com sucesso.\n";
     echo "Email: {$email}\n";
-    echo "Hash gerado: {$storedHash}\n";
     echo "Algoritmo: " . ($algoInfo['algoName'] ?? 'desconhecido') . "\n";
     exit(0);
 } catch (Throwable $e) {
-    $fallbackHash = password_hash($newPassword, PASSWORD_BCRYPT);
     $payload = [
         'timestamp' => $timestamp,
         'action' => 'password_reset_direct_update',
@@ -72,9 +77,5 @@ try {
     $log($payload);
 
     fwrite(STDERR, "ERRO: " . $e->getMessage() . PHP_EOL);
-    if (is_string($fallbackHash) && $fallbackHash !== '' && password_verify($newPassword, $fallbackHash)) {
-        fwrite(STDERR, "Fallback hash compatível (bcrypt): {$fallbackHash}" . PHP_EOL);
-        fwrite(STDERR, "SQL fallback: UPDATE usuarios SET senha_hash = '{$fallbackHash}', last_password_reset_at = NOW() WHERE email = '{$email}';" . PHP_EOL);
-    }
     exit(1);
 }

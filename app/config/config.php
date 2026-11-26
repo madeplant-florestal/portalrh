@@ -43,7 +43,7 @@ return [
         'csrf_key' => 'csrf_token',
         'session_name' => 'RHMADEPLANTSESSID',
         'supervisor_email' => 'admin@seu-dominio.com.br',
-        'supervisor_password' => 'troque-por-uma-senha-forte',
+        'supervisor_password' => '', // defina SOMENTE em app/config/local.php (não versionado); vazio = "garantir Supervisor" recusado
         'allowed_upload_mime' => ['application/pdf'],
         'max_upload_bytes' => 5 * 1024 * 1024,
         'allowed_image_mime' => ['image/png', 'image/jpeg', 'image/webp'],

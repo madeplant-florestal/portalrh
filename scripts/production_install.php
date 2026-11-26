@@ -19,7 +19,7 @@ try {
         'mail_to_hr' => getenv('MAIL_TO_HR') ?: ($mail['to_hr'] ?? ''),
         'supervisor_email' => getenv('SUPERVISOR_EMAIL') ?: ($security['supervisor_email'] ?? ''),
         'supervisor_password' => getenv('SUPERVISOR_PASSWORD') ?: ($security['supervisor_password'] ?? ''),
-        'admin_email' => getenv('ADMIN_EMAIL') ?: 'fabio.ozuna@madeplant.com.br',
+        'admin_email' => getenv('ADMIN_EMAIL') ?: '',
         'admin_password' => getenv('ADMIN_PASSWORD') ?: '',
         'log_level' => getenv('LOG_LEVEL') ?: ($logging['level'] ?? 'INFO'),
         'log_alert_email' => getenv('LOG_ALERT_EMAIL') ?: ($logging['alert_email'] ?? ''),

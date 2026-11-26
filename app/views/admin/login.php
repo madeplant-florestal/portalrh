@@ -83,7 +83,7 @@
               name="email" 
               required 
               class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-ctgreen focus:border-ctgreen transition-colors"
-              placeholder="fabio.ozuna@madeplant.com.br"
+              placeholder="seu.email@empresa.com.br"
             />
           </div>
           

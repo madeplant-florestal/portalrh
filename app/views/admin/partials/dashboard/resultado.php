@@ -926,6 +926,7 @@ $opcoesFiltro = $opcoesFiltro ?? ['empresas' => [], 'setores' => []];
               <th class="px-3 py-2">Cargo</th>
               <th class="px-3 py-2">Sexo</th>
               <th class="px-3 py-2">Admissão</th>
+              <th class="px-3 py-2 whitespace-nowrap">Data de Desligamento</th>
               <th class="px-3 py-2">Situação</th>
               <th class="px-3 py-2">Tempo de Empresa</th>
               <th class="px-3 py-2">Centro de Custo</th>
@@ -949,6 +950,7 @@ $opcoesFiltro = $opcoesFiltro ?? ['empresas' => [], 'setores' => []];
                 <td class="px-3 py-2 text-text-secondary"><?= Security::e($colab['cargo']) ?></td>
                 <td class="px-3 py-2 text-text-secondary"><?= Security::e($colab['sexo']) ?></td>
                 <td class="px-3 py-2 text-text-secondary"><?= Security::e($colab['admissao']) ?></td>
+                <td class="px-3 py-2 whitespace-nowrap text-text-secondary"><?= Security::e($colab['data_desligamento']) ?></td>
                 <td class="px-3 py-2"><span class="inline-flex rounded-ds-sm px-2 py-0.5 text-[11px] font-semibold <?= $situacaoClasse ?>"><?= Security::e($colab['situacao']) ?></span></td>
                 <td class="px-3 py-2 text-text-secondary"><?= Security::e($colab['tempo_empresa']) ?></td>
                 <td class="px-3 py-2 text-text-secondary"><?= Security::e($colab['centro_custo']) ?></td>

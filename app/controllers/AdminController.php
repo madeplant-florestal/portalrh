@@ -293,11 +293,11 @@ class AdminController extends Controller
         header('Content-Disposition: attachment; filename="people-analytics-colaboradores-' . date('Ymd-His') . '.csv"');
         $saida = fopen('php://output', 'w');
         fwrite($saida, "\xEF\xBB\xBF"); // BOM UTF-8 — Excel abre acentuação corretamente.
-        fputcsv($saida, ['Nome', 'Empresa', 'Unidade', 'Setor', 'Cargo', 'Sexo', 'Admissão', 'Situação', 'Tempo de Empresa', 'Centro de Custo', 'Gestor Imediato'], ';');
+        fputcsv($saida, ['Nome', 'Empresa', 'Unidade', 'Setor', 'Cargo', 'Sexo', 'Admissão', 'Data de Desligamento', 'Situação', 'Tempo de Empresa', 'Centro de Custo', 'Gestor Imediato'], ';');
         foreach ($linhas as $linha) {
             fputcsv($saida, [
                 $linha['nome'], $linha['empresa'], $linha['unidade'], $linha['setor'], $linha['cargo'],
-                $linha['sexo'], $linha['admissao'], $linha['situacao'], $linha['tempo_empresa'],
+                $linha['sexo'], $linha['admissao'], $linha['data_desligamento'], $linha['situacao'], $linha['tempo_empresa'],
                 $linha['centro_custo'], $linha['gestor_imediato'],
             ], ';');
         }

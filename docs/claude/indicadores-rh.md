@@ -260,3 +260,18 @@ contavam origem e destino da mesma transferência (o mês atual escondia o erro 
 Limitação: `ausente_na_origem`/`ativo`/`codigo_setor` são o estado da última sincronização, não histórico; uma
 ausência SEM sucessor continua contando no histórico (não se inventa quando sumiu). O denominador do Turnover
 permanece "ativos do período" (definição congelada) e usa a população consolidada, não este Headcount.
+
+## Listagem nominal de Colaboradores — coluna Data de Desligamento (2026-11-26)
+
+Grid do People Analytics (`admin/partials/dashboard/resultado.php`) e CSV (`AdminController::exportarColaboradores`):
+colunas `… | Admissão | Data de Desligamento | Situação | Tempo de Empresa | …`. Fonte única:
+`colaboradores_metadados.demissao` (RHCONTRATOS.DATARESCISAO) do **próprio contrato** da linha, formatada em
+`PeopleAnalyticsService::enriquecerListagemColaboradores()` (`data_desligamento`, DD/MM/AAAA). Sem data = "—" (nunca
+inferida pela Situação nem substituída por hoje); readmissão é outro contrato/linha. Grid e CSV usam o mesmo registro
+enriquecido. Sem schema novo.
+
+**Divergência conhecida (diagnosticada, não alterada):** no contexto "Colaboradores ativos" a população é a
+**vigência** (`clausulaSqlVigente`: demissão nula **ou >= hoje**), mas a Situação exibida vem da flag `ativo`, que a
+sincronização grava como `DATARESCISAO IS NULL`. Contrato com rescisão lançada para hoje ou para o futuro (desligamento
+programado) é contado como vigente e exibido como "Desligado" — agora com a data visível na nova coluna. Não é erro de
+dado; é diferença entre os dois critérios. Decisão de rótulo pendente.

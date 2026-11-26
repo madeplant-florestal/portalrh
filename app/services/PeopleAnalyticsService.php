@@ -1362,6 +1362,9 @@ class PeopleAnalyticsService
                 'cargo' => (string)($linha['cargo'] ?? ''),
                 'sexo' => $sexo === 'M' ? 'Masculino' : ($sexo === 'F' ? 'Feminino' : 'Não informado'),
                 'admissao' => $admissao?->format('d/m/Y') ?? '—',
+                // Data oficial de desligamento DESTE contrato (colaboradores_metadados.demissao, linha a linha — readmissão
+                // é outro registro, nunca mistura datas). Sem data = "—": nunca inferida pela Situação nem substituída por hoje.
+                'data_desligamento' => $demissao?->format('d/m/Y') ?? '—',
                 'situacao' => $situacao,
                 'tempo_empresa' => $tempoEmpresa,
                 'centro_custo' => $centroCusto !== '' ? $centroCusto : 'Não informado',

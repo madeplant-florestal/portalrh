@@ -30,6 +30,10 @@ class AuthController extends Controller
             $error = match ((string)($_GET['motivo'] ?? '')) {
                 'limite' => 'Sua sessão atingiu o tempo máximo de ' . $fmt($limiteH) . '. Faça login novamente.',
                 'senha' => 'Sua sessão foi encerrada porque a senha desta conta foi alterada. Entre novamente com a senha atual.',
+                'desativada' => 'Sua sessão foi encerrada porque esta conta foi desativada. Procure o RH ou um administrador do Portal.',
+                'situacao' => 'Sua sessão foi encerrada porque a situação desta conta foi alterada por um administrador. Entre novamente.',
+                'perfil' => 'Sua sessão foi encerrada: o perfil de acesso desta conta é inválido. Procure um administrador do Portal.',
+                'seguranca' => 'Sua sessão foi encerrada por uma atualização de segurança do Portal. Entre novamente.',
                 default => 'Sessão expirada por inatividade de ' . $fmt($horas) . '. Faça login novamente.',
             };
             if (($_GET['perdido'] ?? '') === '1') {

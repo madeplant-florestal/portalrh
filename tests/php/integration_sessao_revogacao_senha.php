@@ -1,9 +1,9 @@
 <?php
 
 /**
- * Integração — revogação de sessões por TROCA DE SENHA (SessionPolicy::avaliarCredencial + Auth::establishSession).
+ * Integração — revogação de sessões por TROCA DE SENHA (SessionPolicy::avaliarSessaoAutenticada + Auth::establishSession).
  *
- * (A) regra pura, em processo: sem login = ok; sessão sem impressão (aberta antes da regra) adota a credencial atual; impressão diferente,
+ * (A) regra pura, em processo: sem login = ok; sessão sem impressão (legada) é ENCERRADA (Segurança 3.3 — sem adoção); impressão diferente,
  *     usuário inexistente = encerrada; alteração de outros dados do usuário não encerra.
  * (B) requisições reais pelo bootstrap (fixture_sessao_http.php: cookie de sessão + relógio controlado):
  *     - recuperação de senha real (PasswordRecoveryController::performReset) encerra TODAS as sessões abertas antes (2 navegadores), na
@@ -61,20 +61,24 @@ $revogada = static fn(array $m): bool => ($m['controller_rodou'] ?? true) === fa
     && str_contains((string)($m['location'] ?? ''), 'expired=1') && str_contains((string)($m['location'] ?? ''), 'motivo=senha');
 
 try {
-    // ---- A. regra pura ----------------------------------------------------------------------------------------------------------------------
+    // ---- A. regra pura (SessionPolicy::avaliarSessaoAutenticada) ------------------------------------------------------------------------------
     $alvoA = $novo('regra', 'rh');
-    $hashA = (string)$pdo->query('SELECT senha_hash FROM usuarios WHERE id = ' . (int)$alvoA['id'])->fetchColumn();
+    $linhaA = $pdo->query('SELECT senha_hash, email_verified_at FROM usuarios WHERE id = ' . (int)$alvoA['id'])->fetch(PDO::FETCH_ASSOC);
+    $hashA = (string)$linhaA['senha_hash'];
+    $sessaoValida = static fn(): array => ['user_id' => $alvoA['id'], 'user_role' => 'rh', 'credencial_impressao' => SessionPolicy::impressaoCredencial($hashA), 'conta_ativa_desde' => (string)$linhaA['email_verified_at']];
     $_SESSION = [];
-    $check(SessionPolicy::avaliarCredencial() === 'ok', '(A) visitante sem login: nada a verificar');
-    $_SESSION = ['user_id' => $alvoA['id']];
-    $check(SessionPolicy::avaliarCredencial() === 'ok' && ($_SESSION['credencial_impressao'] ?? '') === SessionPolicy::impressaoCredencial($hashA), '(A) sessão aberta antes da regra (sem impressão): adota a credencial atual e segue válida');
+    $check(SessionPolicy::avaliarSessaoAutenticada() === 'ok', '(A) visitante sem login: nada a verificar');
+    $_SESSION = ['user_id' => $alvoA['id'], 'user_role' => 'rh'];
+    $check(SessionPolicy::avaliarSessaoAutenticada() === 'sessao_legada' && !isset($_SESSION['credencial_impressao']), '(A) sessão sem impressão (legada): encerrada, NUNCA adota a credencial atual (Segurança 3.3)');
+    $_SESSION = $sessaoValida();
+    $check(SessionPolicy::avaliarSessaoAutenticada() === 'ok', '(A) sessão com as âncoras do login: válida');
     $check(!str_contains((string)$_SESSION['credencial_impressao'], $hashA) && strlen((string)$_SESSION['credencial_impressao']) === 64, '(A) a sessão guarda só a impressão (SHA-256), nunca o hash da senha');
     $pdo->prepare('UPDATE usuarios SET nome = ? WHERE id = ?')->execute(['ZZREV regra renomeado', $alvoA['id']]);
-    $check(SessionPolicy::avaliarCredencial() === 'ok', '(A) alterar outros dados do usuário (nome) NÃO encerra a sessão');
+    $check(SessionPolicy::avaliarSessaoAutenticada() === 'ok', '(A) alterar outros dados do usuário (nome) NÃO encerra a sessão');
     User::updatePassword($alvoA['id'], password_hash('OutraSenha#2026x', PASSWORD_BCRYPT));
-    $check(SessionPolicy::avaliarCredencial() === 'credencial_alterada', '(A) senha trocada depois da impressão: sessão encerrada');
-    $_SESSION = ['user_id' => 2147480000, 'credencial_impressao' => str_repeat('a', 64)];
-    $check(SessionPolicy::avaliarCredencial() === 'credencial_alterada', '(A) usuário inexistente (excluído): sessão encerrada (falha fechada)');
+    $check(SessionPolicy::avaliarSessaoAutenticada() === 'credencial_alterada', '(A) senha trocada depois da impressão: sessão encerrada');
+    $_SESSION = ['user_id' => 2147480000, 'credencial_impressao' => str_repeat('a', 64), 'conta_ativa_desde' => 'x'];
+    $check(SessionPolicy::avaliarSessaoAutenticada() === 'sessao_invalida', '(A) usuário inexistente (excluído): sessão encerrada (falha fechada)');
     $_SESSION = [];
 
     // ---- B. requisições reais ------------------------------------------------------------------------------------------------------------------

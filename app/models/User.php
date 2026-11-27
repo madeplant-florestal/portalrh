@@ -24,6 +24,20 @@ class User
         return $data ? self::map($data) : null;
     }
 
+    /**
+     * Estado ATUAL da conta para validar uma sessão autenticada (SessionPolicy::avaliarSessaoAutenticada) — uma consulta por chave
+     * primária, só as colunas necessárias. null = usuário inexistente.
+     *
+     * @return array{senha_hash:string,role:string,is_supervisor:int,email_verified_at:?string,email:string}|null
+     */
+    public static function estadoParaSessao(int $id): ?array
+    {
+        $stmt = Database::conn()->prepare('SELECT senha_hash, role, is_supervisor, email_verified_at, email FROM usuarios WHERE id = ? LIMIT 1');
+        $stmt->execute([$id]);
+        $u = $stmt->fetch(PDO::FETCH_ASSOC);
+        return is_array($u) ? $u : null;
+    }
+
     public static function verifyPassword(self $user, string $password): bool
     {
         return password_verify($password, $user->senha_hash);

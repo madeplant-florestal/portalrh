@@ -108,34 +108,54 @@ final class SessionPolicy
     }
 
     /**
-     * Revogação por troca de senha: 'ok' | 'credencial_alterada'. Sessão autenticada só continua válida se a senha atual do usuário no banco
-     * for a mesma do momento do login — trocar a senha encerra TODAS as sessões abertas antes, na próxima requisição de cada uma. Usuário
-     * inexistente ou falha de leitura = encerrada (falha fechada). Sessões abertas antes desta regra (sem impressão) adotam a credencial atual na
-     * 1ª requisição — mesmo tratamento de `session_started_at` em avaliar(); o teto total (limiteTotal) limita essa transição.
+     * Validação da sessão AUTENTICADA contra o cadastro atual (Segurança 3.3) — UMA consulta por requisição autenticada, feita pelo
+     * bootstrap (Security::enforceInactivityTimeout) ANTES de qualquer controller, view ou gate.
+     *
+     * Devolve 'ok' | 'sessao_legada' | 'sessao_invalida' | 'conta_desativada' | 'conta_reativada' | 'credencial_alterada' | 'perfil_invalido'.
+     * Qualquer valor ≠ 'ok' encerra a sessão (Auth::logout no chamador). Falha fechada: usuário excluído ou erro de leitura = 'sessao_invalida'.
+     *   - sessão sem as âncoras do login (`credencial_impressao` e `conta_ativa_desde`) = LEGADA: encerrada, nunca adotada;
+     *   - conta desativada (`email_verified_at` NULL — o mesmo estado que o login recusa) = encerrada;
+     *   - `email_verified_at` diferente do login = a conta foi desativada e reativada (a reativação grava um novo instante) = encerrada;
+     *   - senha trocada (impressão diferente) = encerrada (regra de 9198876, preservada);
+     *   - role desconhecida = encerrada (sem autoridade).
+     * Só com tudo válido a autoridade da sessão (`user_role`, `user_is_supervisor`) é REESCRITA a partir do cadastro atual
+     * (Auth::autoridadeEfetiva) — mudança de perfil ou do flag de Supervisor vale nesta mesma requisição, sem novo login.
+     * Nenhum hash, impressão ou cookie é registrado em log.
      */
-    public static function avaliarCredencial(): string
+    public static function avaliarSessaoAutenticada(): string
     {
         $usuarioId = (int)($_SESSION['user_id'] ?? 0);
         if ($usuarioId <= 0) {
             return 'ok';
         }
         try {
-            $stmt = Database::conn()->prepare('SELECT senha_hash FROM usuarios WHERE id = ? LIMIT 1');
-            $stmt->execute([$usuarioId]);
-            $hash = $stmt->fetchColumn();
+            $u = User::estadoParaSessao($usuarioId);
         } catch (\Throwable $e) {
-            Logger::warning('Sessão encerrada: falha ao verificar a credencial do usuário', ['usuario_id' => $usuarioId, 'erro' => $e->getMessage()]);
+            Logger::warning('Sessão encerrada: falha ao verificar a conta do usuário', ['usuario_id' => $usuarioId, 'tipo_erro' => get_class($e)]);
+            return 'sessao_invalida';
+        }
+        if (!is_array($u) || (string)($u['senha_hash'] ?? '') === '') {
+            return 'sessao_invalida';
+        }
+        $impressao = $_SESSION['credencial_impressao'] ?? null;
+        if (!is_string($impressao) || $impressao === '' || !array_key_exists('conta_ativa_desde', $_SESSION)) {
+            return 'sessao_legada';
+        }
+        $ativaDesde = (string)($u['email_verified_at'] ?? '');
+        if ($ativaDesde === '') {
+            return 'conta_desativada';
+        }
+        if (!hash_equals($impressao, self::impressaoCredencial((string)$u['senha_hash']))) {
             return 'credencial_alterada';
         }
-        if (!is_string($hash) || $hash === '') {
-            return 'credencial_alterada';
+        if (!hash_equals((string)$_SESSION['conta_ativa_desde'], $ativaDesde)) {
+            return 'conta_reativada';
         }
-        $atual = self::impressaoCredencial($hash);
-        $daSessao = $_SESSION['credencial_impressao'] ?? null;
-        if (!is_string($daSessao) || $daSessao === '') {
-            $_SESSION['credencial_impressao'] = $atual;
-            return 'ok';
+        $autoridade = Auth::autoridadeEfetiva($u);
+        if ($autoridade === null) {
+            return 'perfil_invalido';
         }
-        return hash_equals($daSessao, $atual) ? 'ok' : 'credencial_alterada';
+        Auth::aplicarAutoridadeNaSessao($autoridade);
+        return 'ok';
     }
 }

@@ -52,7 +52,9 @@ class Security
     {
         $motivo = SessionPolicy::avaliar(SessionPolicy::agora());
         if ($motivo === 'ok') {
-            $motivo = SessionPolicy::avaliarCredencial(); // senha trocada depois do login => sessão revogada
+            // Sessão autenticada x cadastro atual (1 consulta): legada, conta desativada/reativada, senha trocada, perfil inválido ou
+            // usuário excluído => encerrada; se válida, a autoridade da sessão é reescrita do banco ANTES de qualquer gate/controller.
+            $motivo = SessionPolicy::avaliarSessaoAutenticada();
         }
         if ($motivo === 'ok') {
             return;
@@ -64,14 +66,25 @@ class Security
         if ($ajax) {
             http_response_code(401);
             header('Content-Type: application/json; charset=UTF-8');
-            echo json_encode(['error' => 'Sua sessão expirou. Entre novamente — esta ação NÃO foi concluída.', 'erro' => 'sessao_expirada', 'motivo' => $motivo], JSON_UNESCAPED_UNICODE);
+            $texto = $motivo === 'conta_desativada'
+                ? 'Sua conta foi desativada. Procure o RH ou um administrador — esta ação NÃO foi concluída.'
+                : 'Sua sessão foi encerrada. Entre novamente — esta ação NÃO foi concluída.';
+            // `erro` mantém o contrato existente do front-end (sessao_expirada); `motivo` detalha.
+            echo json_encode(['error' => $texto, 'erro' => 'sessao_expirada', 'motivo' => $motivo], JSON_UNESCAPED_UNICODE);
             exit;
         }
         $q = ['expired' => '1'];
-        if ($motivo === 'limite_total') {
-            $q['motivo'] = 'limite';
-        } elseif ($motivo === 'credencial_alterada') {
-            $q['motivo'] = 'senha';
+        $codigoLogin = [
+            'limite_total' => 'limite',
+            'credencial_alterada' => 'senha',
+            'conta_desativada' => 'desativada',
+            'conta_reativada' => 'situacao',
+            'perfil_invalido' => 'perfil',
+            'sessao_legada' => 'seguranca',
+            'sessao_invalida' => 'seguranca',
+        ][$motivo] ?? null;
+        if ($codigoLogin !== null) {
+            $q['motivo'] = $codigoLogin;
         }
         if ($metodo === 'GET') {
             $next = self::caminhoDeRetornoSeguro($uri);

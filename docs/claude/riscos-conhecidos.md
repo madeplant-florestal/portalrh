@@ -256,11 +256,11 @@ Identificados na auditoria arquitetural de 2026-07-09, documentados aqui para n�
      mensagem explícita. Use uma conta de teste do banco de desenvolvimento.
    - **Causa (sessões):** a troca de senha não encerrava sessões já abertas — quem tivesse uma sessão (inclusive roubada) continuava logado até expirar (até 24 h).
    - **Correção (sessões):** no login, `Auth::establishSession` grava `credencial_impressao` = SHA-256 do `senha_hash` (nunca o hash); a cada requisição autenticada,
-     `Security::enforceInactivityTimeout` → `SessionPolicy::avaliarCredencial()` compara com o banco. Qualquer troca de senha (recuperação por e-mail, redefinição
+     `Security::enforceInactivityTimeout` → `SessionPolicy::avaliarSessaoAutenticada()` (antes `avaliarCredencial`, ver item 18) compara com o banco. Qualquer troca de senha (recuperação por e-mail, redefinição
      administrativa, senha temporária de Colaboradores → Acesso, script CLI ou SQL manual) gera um hash novo e encerra TODAS as sessões anteriores na próxima
      requisição (login com `motivo=senha`; AJAX 401; POST não processado). Usuário excluído ou falha de leitura = sessão encerrada. Sem migration (reusa `senha_hash`).
-     Custo: 1 SELECT por chave primária por requisição autenticada. Sessões abertas ANTES do deploy adotam a credencial vigente na 1ª requisição (transição limitada
-     pelo teto de 24 h). Cobertura: `tests/php/integration_sessao_revogacao_senha.php`.
+     Custo: 1 SELECT por chave primária por requisição autenticada. ~~Sessões abertas ANTES do deploy adotam a credencial vigente~~ — adoção REMOVIDA na
+     Segurança 3.3 (item 18): sessão sem impressão é encerrada. Cobertura: `tests/php/integration_sessao_revogacao_senha.php`.
    - **Senha da conta exposta:** trocada em produção pelo "Esqueci minha senha" (informado pelo Fabio em 2026-11-26).
    - **Saneamento dos arquivos atuais (2026-11-26) — CONCLUÍDO:** nenhuma senha, e-mail administrativo real ou hash bcrypt nos arquivos versionados.
      `scripts/init.php` e `scripts/reset_password_cli.php` sem senha padrão: senha SÓ por variável de ambiente (`RH_ADMIN_SENHA`/`RH_NOVA_SENHA`) ou digitação no
@@ -272,10 +272,37 @@ Identificados na auditoria arquitetural de 2026-07-09, documentados aqui para n�
      linha `usuarios` id 1 mantida (relacionamentos), com nome/e-mail fictícios (`.invalid`) e `senha_hash` não-bcrypt (nenhuma senha autentica).
      Cobertura: `tests/php/integration_scripts_sem_senha_padrao.php`.
    - **Pendente:** histórico do Git (os valores antigos seguem nos commits anteriores — ver estratégia no relatório de 2026-11-26; não reescrito); PII de candidatura
-     no dump (item 1); `scripts/verify_password_cli.php` ainda recebe a senha como argumento (sem valor padrão). Sessão de usuário DESATIVADO (sem
-     `email_verified_at`) continua até expirar.
-17. **Sessões anteriores ao deploy da revogação por senha (2026-11-26) — PENDÊNCIA CONHECIDA, sem ação nesta etapa.** Sessões abertas antes do commit
+     no dump (item 1); `scripts/verify_password_cli.php` ainda recebe a senha como argumento (sem valor padrão). ~~Sessão de usuário DESATIVADO continua até
+     expirar~~ — corrigido na Segurança 3.3 (item 18).
+17. **Sessões anteriores ao deploy da revogação por senha (2026-11-26) — RESOLVIDO na Segurança 3.3 (item 18): sessões legadas são encerradas, sem adoção.** Registro original: Sessões abertas antes do commit
    9198876 não têm `credencial_impressao`; `SessionPolicy::avaliarCredencial()` as faz ADOTAR a senha vigente na 1ª requisição após o deploy. Se a senha tiver sido
    trocada ANTES dessa 1ª requisição (caso da conta exposta, trocada antes/durante o deploy), uma sessão antiga ainda viva adota a senha nova e segue válida até o
    teto de 24 h desde o login (ou 8 h de inatividade). Janela máxima: 24 h após o deploy (cada sessão antiga morre no máximo 24 h após o próprio login). Mitigação opcional,
    se desejada: encerrar todas as sessões uma vez (apagar os arquivos de `storage/sessions` no servidor) — derruba todos os usuários; decisão do Fabio.
+18. **Segurança 3.3 — revogação de sessões legadas, desativação imediata e autoridade relida do banco (2026-11-27) — CORRIGIDO.**
+   - **Causas:** (1) `SessionPolicy::avaliarCredencial()` ADOTAVA a senha vigente em sessões sem `credencial_impressao` (sessões anteriores a 9198876 sobreviviam a
+     uma troca de senha feita antes da 1ª requisição); (2) a desativação (`usuarios.email_verified_at = NULL`) só era checada no login — a sessão aberta continuava
+     até expirar (até 24 h); (3) a autoridade (`user_role`, `user_is_supervisor`) era gravada na sessão SÓ no login e lida de lá por `Auth::role()`, gates,
+     `Authorization` (ator atual), navegação e dezenas de controllers/views — rebaixar um Admin ou revogar o flag de Supervisor só valia após novo login.
+   - **Correção (fonte única):** `Auth::autoridadeEfetiva(cadastro)` calcula a autoridade (mesmas regras de sempre: Supervisor Geral = admin +
+     flag, decidido por `Autoridade::ehSupervisorGeral`; gravação na sessão só por `Auth::aplicarAutoridadeNaSessao`, flag SOMENTE com role admin; role vazia legada → admin+supervisor só para o e-mail do supervisor configurado, senão viewer; role desconhecida = sem autoridade) e é usada no login E a
+     cada requisição. `SessionPolicy::avaliarSessaoAutenticada()` roda no bootstrap (`Security::enforceInactivityTimeout`), ANTES de qualquer gate/controller/view,
+     com UMA consulta (`User::estadoParaSessao`: `senha_hash, role, is_supervisor, email_verified_at, email` por chave primária — a mesma consulta que já existia, com mais colunas; 0 consultas
+     adicionais): sessão sem âncoras do login (`credencial_impressao` + `conta_ativa_desde`) = LEGADA, encerrada (`motivo=seguranca`); conta desativada = encerrada
+     (`motivo=desativada`); `email_verified_at` diferente do login (desativada e reativada entre requisições) = encerrada (`motivo=situacao`, exige novo login);
+     senha trocada = encerrada (`motivo=senha`); usuário excluído/erro de leitura = encerrada (falha fechada, `motivo=seguranca`). Só com tudo válido, `user_role`
+     e `user_is_supervisor` são REESCRITOS do banco — mudança de perfil/flag vale na mesma requisição, SEM desconectar. Nenhum controller foi alterado.
+   - **GET/POST/AJAX:** sessão encerrada → GET vai ao login com a mensagem do motivo (e retorno seguro `next`); POST NÃO é processado (`perdido=1`); AJAX/API recebe
+     401 JSON (`erro = sessao_expirada`, contrato do front-end preservado; `motivo` detalha). Operação não permitida pelo perfil atual → 403 do gate de sempre.
+   - **Implantação:** TODA sessão aberta antes deste deploy é legada (não tem `conta_ativa_desde`) e será encerrada na próxima requisição, com a mensagem
+     "atualização de segurança" — comunicar aos usuários que precisarão entrar novamente uma vez. Formulário enviado nesse instante não é processado (aviso no login).
+     Não é preciso apagar `storage/sessions`.
+   - **Testes:** `tests/php/integration_seguranca_33_autoridade.php` (sessões legadas/impressão incorreta/cookie reutilizado; desativação GET/POST/AJAX, login
+     recusado, reativação exige novo login, excluído; Admin→Viewer, Admin→RH, RH→Gestor, Gestor→Viewer, Viewer→Gestor com e sem permissão individual, duas
+     sessões, navegação; Supervisor válido, flag revogado, flag com role RH, SG rebaixado; dashboard do Viewer; inatividade). Mutações (sem reescrita de autoridade,
+     adoção de legado, sem checagem de desativação) detectadas.
+   - **Residuais / compatibilidades transitórias:** a regra legada "role vazia + e-mail do supervisor configurado ⇒ admin + Supervisor" foi PRESERVADA (agora
+     também a cada requisição, com o mesmo resultado do login); com a coluna `role` ENUM NOT NULL ela só se aplica a dado inválido gravado fora do modo estrito, mas
+     o `supervisor_email` versionado é um placeholder — avaliar removê-la (mudança de regra, requer aprovação). Viewer por setor em `EscopoSetorial` e os módulos
+     abertos ao Viewer por role (Movimentações, Cadastros, hub de Avaliações) NÃO foram alterados. `user_name` da sessão continua o do login (exibição, sem efeito
+     de autorização). Admin/RH que trocam o próprio perfil não existem (bloqueado), então nenhum ator perde a sessão por mudança da própria autoridade.

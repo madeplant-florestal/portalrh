@@ -333,3 +333,25 @@ Identificados na auditoria arquitetural de 2026-07-09, documentados aqui para n�
      esteve público. (2) Criar `storage/install.done` na hospedagem (trava nativa do instalador) e/ou remover `install.php` do deploy. (3) `.cpanel.yml`
      (outra conta cPanel; limpeza destrutiva) — remover ou corrigir. (4) `.dbg/` e `.serena/`, `.claude/` versionados — avaliar remoção do repositório.
      (5) O bloqueio de `.git`/`.sql` na produção também dependia da hospedagem; agora a aplicação garante por conta própria.
+20. **Segurança 3.4 — saneamento de arquivos sensíveis e proteção do instalador no PHP (2026-11-27) — CORRIGIDO no estado atual; histórico PENDENTE.**
+   - **Auditoria (só tipos e contagens; nenhum valor reproduzido):** `assets/colaboradores.xlsx` = dados REAIS (aba de colaboradores com ~404 linhas: nome,
+     empresa, CPF, admissão, nascimento, cargo, demissão, motivo de rescisão; aba de entrevistas de desligamento ~131 linhas; aba colaborador→gestor);
+     `storage/imports/*.json` (14 relatórios do importador, jun–jul/2026, versionados antes do `.gitignore`) = ~1.400 nomes e ~28 sequências de 11 dígitos;
+     `recrutamento.sql` e `database/recrutamento.sql` (idênticos) = 11 candidaturas (nome, e-mail, telefone, CPF, experiência, arquivo de currículo,
+     indicações), 35 históricos com observações, 27 movimentações, 24 nomes de colaboradores, 10 auditorias com IP; `.dbg/` = logs de depuração do front-end
+     SEM dado pessoal (só `127.0.0.1` em rastros de pilha) — mantido. CPFs em `tests/`, views e JS são fixtures/placeholders.
+   - **Correção:** planilha e relatórios RETIRADOS do índice (`git rm --cached`; a planilha já havia sido apagada da cópia local pelo Fabio; relatórios ficam
+     no disco local e são ignorados); `.gitignore` impede `*.xlsx|xls|csv` em `assets/` e `public/assets/`. Dumps: os 6 `INSERT` com dados pessoais trocados por
+     comentário — estrutura e dados organizacionais (cargos, setores, empresas, benefícios, etapas do pipeline, vagas, conta fictícia saneada) mantidos; importação
+     validada num banco temporário isolado. `scripts/import_colaboradores_xlsx.php` exige `--file` (sem fallback). O teste do leitor XLSX passou a gerar uma
+     planilha FICTÍCIA temporária (dependia da planilha real).
+   - **Efeito no deploy (Git pull):** a planilha e os 14 relatórios versionados são APAGADOS do disco de produção no próximo deploy (não são lidos por nenhum
+     código; os relatórios só são escritos). Relatórios gerados pela própria produção (não versionados) não são tocados.
+   - **Instalador:** guarda no próprio PHP, comum a `/install.php` e `/public/install.php` (este só inclui aquele): `Installer::acessoWeb()` — desabilitado por
+     padrão (403), habilitar exige `RH_INSTALADOR_WEB=1` (ou `security.installer_web_enabled` em `local.php`) E chave >= 32 caracteres em `INSTALLER_KEY` (ou
+     `security.installer_key` em `local.php`), ambas fora do Git; POST só com a chave (tempo constante; antes era OPCIONAL); instalação concluída = sempre
+     bloqueado. Defesa em profundidade: `Installer::run()` recusa execução web sem habilitação antes de qualquer escrita (a CLI `production_install.php` segue).
+     Testado sem Apache (`php -S`, sem `.htaccess`): 403 nos dois caminhos; habilitado, POST sem/errado chave = 403; configs intactas.
+   - **Residual:** os dados retirados continuam no HISTÓRICO do Git (commits anteriores) e no GitHub — exige decisão sobre reescrita (`git filter-repo`) e
+     limpeza de caches; considerar que a planilha pode ter sido baixada enquanto esteve pública (até 46fed12). Recomendado: guardar planilhas operacionais fora
+     da raiz publicada. Criar `storage/install.done` na hospedagem continua recomendado (trava nativa).

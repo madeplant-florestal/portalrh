@@ -29,3 +29,12 @@ storage/*.png
 *.cache
 Thumbs.db
 .DS_Store
+
+# Segurança 3.4: planilhas e exportações com dados pessoais NUNCA no repositório nem na raiz publicada.
+# O importador de colaboradores exige --file=<caminho>; guarde a planilha operacional fora de assets/ e public/.
+/assets/*.xlsx
+/assets/*.xls
+/assets/*.csv
+/public/assets/*.xlsx
+/public/assets/*.xls
+/public/assets/*.csv

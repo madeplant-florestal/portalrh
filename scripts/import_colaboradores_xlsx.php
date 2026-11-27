@@ -1,10 +1,17 @@
 <?php
 require __DIR__ . '/../app/core/bootstrap.php';
 
+// Uso: php scripts/import_colaboradores_xlsx.php --file=<caminho da planilha .xlsx/.csv> [--sheet=<aba>] [--dry-run] [--validate-only]
+// O caminho é OBRIGATÓRIO: não existe planilha padrão no repositório (Segurança 3.4 — a planilha real foi retirada do Git).
+// Guarde o arquivo operacional FORA da raiz publicada (ex.: um diretório privado do servidor, ou storage/, que é bloqueado por HTTP),
+// nunca em assets/ ou public/.
 $options = getopt('', ['file::', 'sheet::', 'dry-run', 'validate-only']);
-$filePath = isset($options['file']) && is_string($options['file']) && $options['file'] !== ''
-    ? $options['file']
-    : BASE_PATH . DIRECTORY_SEPARATOR . 'assets' . DIRECTORY_SEPARATOR . 'colaboradores.xlsx';
+$filePath = isset($options['file']) && is_string($options['file']) ? trim($options['file']) : '';
+if ($filePath === '') {
+    fwrite(STDERR, 'Informe a planilha: php scripts/import_colaboradores_xlsx.php --file=<caminho> [--sheet=<aba>] [--dry-run] [--validate-only]' . PHP_EOL);
+    fwrite(STDERR, 'Nenhum arquivo padrão é usado. Nada foi importado.' . PHP_EOL);
+    exit(2);
+}
 $sheetName = isset($options['sheet']) && is_string($options['sheet']) && $options['sheet'] !== ''
     ? $options['sheet']
     : 'Ativos x Desligados';

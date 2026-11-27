@@ -12,6 +12,16 @@ Este projeto possui instalador via navegador em `https://seu-dominio/install.php
   - e-mails de envio (RH e remetente)
   - credenciais do supervisor e admin inicial
 
+## Habilitar o instalador (desabilitado por padrão — Segurança 3.4)
+
+O instalador web vem DESABILITADO e responde 403 até que as duas condições abaixo existam, ambas FORA do Git:
+
+- `RH_INSTALADOR_WEB=1` no ambiente do servidor, ou `'installer_web_enabled' => true` em `security` de `app/config/local.php`;
+- uma chave forte (32+ caracteres) em `INSTALLER_KEY` no ambiente, ou `'installer_key'` em `security` de `app/config/local.php`.
+
+Depois da instalação concluída (`storage/install.done`), ele fica bloqueado de qualquer forma. Remova a habilitação e a chave ao terminar.
+O `.htaccess` também bloqueia `install.php`; para uma reinstalação planejada é preciso retirar essa regra temporariamente.
+
 ## Como instalar
 
 1. Abra `https://seu-dominio/install.php`.
@@ -20,7 +30,7 @@ Este projeto possui instalador via navegador em `https://seu-dominio/install.php
 4. Preencha os campos do formulário.
 5. Clique em **Instalar agora**.
 6. Aguarde o log finalizar com sucesso.
-7. Se seu provedor configurar `INSTALLER_KEY`, informe a chave para liberar a execução.
+7. Informe a chave do instalador (obrigatória) para liberar a execução.
 
 ## O que o instalador faz
 

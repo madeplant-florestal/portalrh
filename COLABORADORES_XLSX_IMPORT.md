@@ -2,7 +2,7 @@
 
 ## Objetivo
 
-Importar a aba `Ativos x Desligados` do arquivo `assets/colaboradores.xlsx` ou arquivos `.csv` equivalentes para a tabela `colaboradores`, com:
+Importar a aba `Ativos x Desligados` de uma planilha `.xlsx` (ou `.csv` equivalente) indicada EXPLICITAMENTE com `--file` para a tabela `colaboradores`, com:
 
 - validacao estrutural do arquivo
 - validacao de regras de negocio
@@ -57,30 +57,31 @@ Pela interface administrativa:
 4. aguardar o processamento e revisar o resumo exibido na propria tela
 5. atualizar a pagina para refletir os novos totais da listagem
 
-Pela linha de comando:
+Pela linha de comando (o caminho `--file` é OBRIGATÓRIO — Segurança 3.4: não há planilha padrão no repositório; guarde o arquivo
+operacional fora de `assets/` e `public/`, por exemplo em `storage/` (bloqueado por HTTP) ou num diretório privado do servidor):
 
 Validacao de homologacao sem persistir:
 
 ```bash
-php scripts/import_colaboradores_xlsx.php --dry-run
+php scripts/import_colaboradores_xlsx.php --file="/caminho/privado/colaboradores.xlsx" --dry-run
 ```
 
 Validacao apenas do arquivo e das linhas:
 
 ```bash
-php scripts/import_colaboradores_xlsx.php --validate-only
+php scripts/import_colaboradores_xlsx.php --file="/caminho/privado/colaboradores.xlsx" --validate-only
 ```
 
 Importacao real:
 
 ```bash
-php scripts/import_colaboradores_xlsx.php
+php scripts/import_colaboradores_xlsx.php --file="/caminho/privado/colaboradores.xlsx"
 ```
 
 Arquivo e aba customizados:
 
 ```bash
-php scripts/import_colaboradores_xlsx.php --file="c:/laragon/www/rhmadeplant/assets/colaboradores.xlsx" --sheet="Ativos x Desligados"
+php scripts/import_colaboradores_xlsx.php --file="/caminho/privado/colaboradores.xlsx" --sheet="Ativos x Desligados"
 ```
 
 ## Relatorio

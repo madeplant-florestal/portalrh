@@ -1,6 +1,20 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/app/core/bootstrap.php';
+
+// Segurança 3.4 — guarda no PRÓPRIO PHP (não depende do .htaccess) e única para /install.php e /public/install.php (este inclui aquele).
+// Desabilitado por padrão; instalação concluída = sempre bloqueado; habilitar exige RH_INSTALADOR_WEB=1 (ou security.installer_web_enabled
+// em local.php) + chave forte em INSTALLER_KEY (ou security.installer_key em local.php), fora do Git. Nada abaixo roda sem passar aqui.
+$acessoInstalador = Installer::acessoWeb((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'), (string)($_POST['installer_key'] ?? ''));
+if (!$acessoInstalador['ok']) {
+    http_response_code($acessoInstalador['status']);
+    header('Content-Type: text/plain; charset=UTF-8');
+    header('Cache-Control: no-store');
+    Logger::warning('Installer web access denied', ['motivo' => $acessoInstalador['mensagem'], 'metodo' => (string)($_SERVER['REQUEST_METHOD'] ?? '')]);
+    echo $acessoInstalador['mensagem'];
+    exit;
+}
+
 $app = Config::app();
 
 if (($app['env'] ?? 'prod') === 'dev' && isset($_GET['__force500'])) {
@@ -54,16 +68,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !Installer::isInstalled()) {
     if (!hash_equals($token, $postedToken)) {
         $messages[] = 'Token de segurança inválido.';
         Logger::warning('Installer invalid CSRF token', Logger::captureContext(400));
-    } else {
-        $requiredKey = getenv('INSTALLER_KEY');
-        if (is_string($requiredKey) && trim($requiredKey) !== '') {
-            $postedKey = (string)($_POST['installer_key'] ?? '');
-            if (!hash_equals(trim($requiredKey), trim($postedKey))) {
-                $messages[] = 'Chave do instalador inválida.';
-                Logger::warning('Installer invalid key', Logger::captureContext(403));
-            }
-        }
     }
+    // A chave do instalador já foi exigida e conferida no topo (Installer::acessoWeb) — obrigatória, não mais opcional.
 
     if (count($messages) === 0) {
         try {
@@ -156,12 +162,10 @@ $isLocked = Installer::isInstalled();
             <option value="local">app/config/local.php</option>
           </select>
         </div>
-        <?php if (is_string(getenv('INSTALLER_KEY')) && trim((string)getenv('INSTALLER_KEY')) !== ''): ?>
         <div class="field">
           <label>Chave do instalador</label>
-          <input name="installer_key" type="password" required>
+          <input name="installer_key" type="password" required autocomplete="off">
         </div>
-        <?php endif; ?>
 
         <div class="field"><label>DB DSN</label><input name="db_dsn" required placeholder="mysql:host=localhost;dbname=...;charset=utf8mb4" value="<?= htmlspecialchars($defaults['db_dsn']) ?>"></div>
         <div class="field"><label>DB Usuário</label><input name="db_user" required value="<?= htmlspecialchars($defaults['db_user']) ?>"></div>

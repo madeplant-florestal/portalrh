@@ -1,9 +1,57 @@
 <?php
 class Installer
 {
+    /** Tamanho mínimo da chave do instalador web (caracteres). */
+    public const CHAVE_MINIMA = 32;
+
     public static function isInstalled(): bool
     {
         return is_file(self::installLockPath());
+    }
+
+    /**
+     * Regra PURA de acesso ao instalador WEB (Segurança 3.4) — não depende do Apache. Desabilitado por padrão; habilitar exige as duas
+     * coisas, ambas FORA do Git: (1) `RH_INSTALADOR_WEB=1` no ambiente ou `security.installer_web_enabled = true` em app/config/local.php;
+     * (2) chave forte (>= CHAVE_MINIMA) em `INSTALLER_KEY` no ambiente ou `security.installer_key` em local.php. Instalação concluída =
+     * sempre bloqueado. POST só com a chave correta (comparação em tempo constante). Nunca registra a chave.
+     *
+     * @return array{ok:bool,status:int,mensagem:string}
+     */
+    public static function avaliarAcessoWeb(bool $instalado, bool $habilitado, string $chaveConfigurada, string $metodo, string $chaveEnviada): array
+    {
+        if ($instalado) {
+            return ['ok' => false, 'status' => 403, 'mensagem' => 'Instalador bloqueado: a aplicação já está instalada.'];
+        }
+        $chaveConfigurada = trim($chaveConfigurada);
+        if (!$habilitado || strlen($chaveConfigurada) < self::CHAVE_MINIMA) {
+            return ['ok' => false, 'status' => 403, 'mensagem' => 'Instalador web desabilitado.'];
+        }
+        if (strtoupper($metodo) !== 'GET' && !hash_equals($chaveConfigurada, trim($chaveEnviada))) {
+            return ['ok' => false, 'status' => 403, 'mensagem' => 'Chave do instalador inválida.'];
+        }
+        return ['ok' => true, 'status' => 200, 'mensagem' => ''];
+    }
+
+    /** @return array{ok:bool,status:int,mensagem:string} Acesso ao instalador web nesta requisição (configuração real). */
+    public static function acessoWeb(string $metodo, string $chaveEnviada): array
+    {
+        [$habilitado, $chave] = self::habilitacaoWeb();
+        return self::avaliarAcessoWeb(self::isInstalled(), $habilitado, $chave, $metodo, $chaveEnviada);
+    }
+
+    /** @return array{0:bool,1:string} [habilitado explicitamente, chave configurada] — só ambiente ou local.php (não versionado). */
+    private static function habilitacaoWeb(): array
+    {
+        $seg = [];
+        $local = self::basePath() . '/app/config/local.php';
+        if (is_file($local)) {
+            $cfg = require $local;
+            $seg = is_array($cfg) ? (array)($cfg['security'] ?? []) : [];
+        }
+        $habilitado = getenv('RH_INSTALADOR_WEB') === '1' || ($seg['installer_web_enabled'] ?? false) === true;
+        $chave = getenv('INSTALLER_KEY');
+        $chave = is_string($chave) && trim($chave) !== '' ? $chave : (string)($seg['installer_key'] ?? '');
+        return [$habilitado, $chave];
     }
 
     public static function requirements(): array
@@ -20,6 +68,14 @@ class Installer
 
     public static function run(array $input, callable $logger): array
     {
+        // Defesa em profundidade: pela web, só com o instalador habilitado e chave forte configurados fora do Git (a chave enviada é
+        // conferida antes, em install.php). Linha de comando (scripts/production_install.php) exige acesso ao servidor e segue permitida.
+        if (PHP_SAPI !== 'cli') {
+            [$habilitado, $chave] = self::habilitacaoWeb();
+            if (!$habilitado || strlen(trim($chave)) < self::CHAVE_MINIMA) {
+                throw new RuntimeException('Instalador web desabilitado.');
+            }
+        }
         Logger::init(Config::app());
         self::ensureDir(self::storagePath() . '/logs');
         $installLog = self::storagePath() . '/logs/install-' . date('Ymd-His') . '.log';

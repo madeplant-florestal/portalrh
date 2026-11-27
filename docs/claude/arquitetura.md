@@ -81,7 +81,7 @@ vendor/                     # Só Dompdf (Composer escopado, ver CLAUDE.md §3) 
 | Testes de unidade/integração PHP | Scripts standalone em `tests/php/*.php` | Sem PHPUnit — cada script faz `require bootstrap.php`, roda contra banco real, `exit(1)` em falha |
 | Testes de unidade JS | Scripts Node standalone em `tests/unit/*.test.js` | Sem Jest/Mocha — assertions manuais |
 | Testes visuais/E2E | Playwright (`@playwright/test` ^1.55) | `tests/*.spec.js`, screenshots com `maxDiffPixelRatio: 0.02` |
-| Deploy | cPanel (`.cpanel.yml`) + scripts PowerShell (`deploy.ps1`, `scripts/deploy_quick.ps1`) | Também há instalador web (`install.php`) para setup inicial |
+| Deploy | cPanel (`.cpanel.yml`) + scripts PowerShell (`deploy.ps1`, `scripts/deploy_quick.ps1`) | Também há instalador web (`install.php`) para setup inicial. **Versão exibida (Manual):** `VersaoPublicadaService` lê o commit em execução direto do `.git` do diretório publicado (deploy Git da hospedagem — sem shell, sem rede) e, sem `.git`, o `app/config/build.php` gerado por `scripts/generate_build_info.php` (mesmo leitor); data = data do COMMIT em America/Campo_Grande; sem metadado real, "Versão não disponível" (nunca `1.0.0`). O `.cpanel.yml` aponta para outra conta cPanel e não é usado pelo deploy atual (Hostinger) |
 
 Regras de bloqueio e exceções pontuais aprovadas: ver `CLAUDE.md` §3.
 

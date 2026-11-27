@@ -10,9 +10,10 @@
 require_once APP_PATH . '/views/partials/ui-shell.php';
 ui_titulo_pagina('Manual de Uso');
 ui_script_pagina('manual.js');
-$app = Config::app();
-$versao = trim((string)($app['version'] ?? ''));
-$releaseDate = trim((string)($app['release_date'] ?? ''));
+// Versão do commit em execução e data desse commit (America/Campo_Grande) — VersaoPublicadaService; sem dado real, estado neutro.
+$versaoPublicada = VersaoPublicadaService::atual();
+$versao = (string)($versaoPublicada['versao'] ?? '');
+$ultimaAtualizacao = (string)(VersaoPublicadaService::dataFormatada($versaoPublicada['data_commit'] ?? null) ?? '');
 
 /** Converte `` `código` `` em <code>, escapando o resto. Único ponto de HTML confiável nos textos abaixo. */
 function manual_texto(string $t): string
@@ -659,8 +660,8 @@ $faqGlobal = [
   <section class="rounded-ds-lg border border-border bg-surface p-4 shadow-resting">
     <h2 class="text-ds-caption font-bold uppercase tracking-wide text-text-muted">Versão e suporte</h2>
     <div class="mt-2 grid grid-cols-1 gap-4 text-sm sm:grid-cols-3">
-      <div><p class="text-text-muted">Versão</p><p class="font-semibold text-text-primary"><?= Security::e($versao !== '' ? $versao : 'não informada na configuração') ?></p></div>
-      <div><p class="text-text-muted">Data de release</p><p class="font-semibold text-text-primary"><?= Security::e($releaseDate !== '' ? $releaseDate : 'não informada na configuração') ?></p></div>
+      <div><p class="text-text-muted">Versão publicada</p><p class="font-semibold text-text-primary" data-manual-versao><?= Security::e($versao !== '' ? $versao : 'Versão não disponível') ?></p></div>
+      <div><p class="text-text-muted">Última atualização</p><p class="font-semibold text-text-primary" data-manual-atualizacao><?= Security::e($ultimaAtualizacao !== '' ? $ultimaAtualizacao : 'Data não disponível') ?></p></div>
       <div><p class="text-text-muted">Canal de suporte</p><a class="font-semibold text-primary-700 hover:underline" href="https://wa.me/5567993256260" target="_blank" rel="noopener noreferrer">WhatsApp (67) 99325-6260</a></div>
     </div>
   </section>

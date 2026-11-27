@@ -7,7 +7,8 @@
 Identificados na auditoria arquitetural de 2026-07-09, documentados aqui para não serem
 "descobertos" e corrigidos por impulso em uma tarefa não relacionada:
 
-1. **PII real de candidatos/colaboradores commitada em `recrutamento.sql`** (ambas as cópias —
+1. **[Estado atual: dumps REMOVIDOS na Segurança 3.5A — itens 20 e 21; resta o HISTÓRICO do Git, Segurança 3.5B]**
+   **PII real de candidatos/colaboradores commitada em `recrutamento.sql`** (ambas as cópias —
    `database/recrutamento.sql` e `recrutamento.sql` na raiz, arquivos idênticos) e presente no
    histórico do Git, que foi enviado a um remoto GitHub. Requer decisão explícita sobre como
    sanear o histórico sem quebrar o instalador que depende desse dump.
@@ -355,3 +356,16 @@ Identificados na auditoria arquitetural de 2026-07-09, documentados aqui para n�
    - **Residual:** os dados retirados continuam no HISTÓRICO do Git (commits anteriores) e no GitHub — exige decisão sobre reescrita (`git filter-repo`) e
      limpeza de caches; considerar que a planilha pode ter sido baixada enquanto esteve pública (até 46fed12). Recomendado: guardar planilhas operacionais fora
      da raiz publicada. Criar `storage/install.done` na hospedagem continua recomendado (trava nativa).
+21. **Segurança 3.5A — schema consolidado e dumps legados removidos (2026-11-27) — CONCLUÍDO no estado atual; histórico = 3.5B.**
+   - `recrutamento.sql` e `database/recrutamento.sql` REMOVIDOS do repositório. `database/schema.sql` passou a ser a única base de instalação:
+     ganhou `pipeline_stages` (+ as 6 etapas iniciais, `INSERT IGNORE`), `pipeline_movements`, `notas_recrutador`, `requisitos` e `beneficios`
+     (estrutura BASE idêntica à do dump, sobre a qual as migrations aplicam) e alinhou `candidaturas.telefone` (VARCHAR(40)) e
+     `indicacao_pagamento_auditoria.created_at` (NOT NULL) à linha da produção. `candidaturas.stage_id/observacoes` seguem criados em runtime.
+   - `Installer` e `scripts/setup_full.php` leem SOMENTE `database/schema.sql` (um `recrutamento.sql` que reapareça nunca é importado).
+   - Homologação (`tests/php/integration_schema_instalacao.php`, bancos temporários `zz35*` apagados no fim): instalação nova (importSchema +
+     SchemaManager::ensure + garantias de runtime) cria as tabelas, FKs íntegras e as etapas, sem dado de pessoa; EQUIVALÊNCIA com a base antiga —
+     mesmo fluxo a partir do dump saneado (lido do Git) e TODAS as migrations aplicadas aos dois: mesmas 68/87 migrations aceitas, mesmas 72 tabelas,
+     colunas e FKs. As 19 migrations recusadas falham igualmente na base antiga (pré-existente: dependem de estado de produção/ordem manual).
+   - **Efeito no deploy:** o próximo `git pull` apaga os dois dumps do disco de produção (já bloqueados por HTTP; nenhum código os lê).
+   - **Pendente (3.5B):** dados pessoais e credenciais antigas continuam no HISTÓRICO do Git — reescrita planejada na Segurança 3.5 (simulação
+     validada; backup em `portalrh-backup-seguranca35`), aguardando autorização.

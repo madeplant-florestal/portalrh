@@ -43,9 +43,9 @@ algo não estiver claro, pergunte — nunca presuma o que possa comprometer dado
 PHP 8.1+ (autoload manual via `glob()`, sem PSR-4), MySQL/MariaDB via PDO 100% prepared statements
 (`ATTR_EMULATE_PREPARES => false`), Tailwind CSS compilado via CLI, JavaScript vanilla sem
 bundler/TypeScript, templates PHP puro sem engine (`Security::e()` manual em toda view), testes
-sem framework (scripts standalone em `tests/php`, Playwright para E2E). Schema fragmentado em três
-fontes (`schema.sql`, dump de `recrutamento.sql`, migrations + `ensure*Schema()` em runtime) —
-nunca assuma que uma coluna não existe sem checar as três (detalhe em `arquitetura.md`).
+sem framework (scripts standalone em `tests/php`, Playwright para E2E). Schema em duas fontes
+(`database/schema.sql` = base de instalação; migrations + `ensure*Schema()` em runtime — o dump `recrutamento.sql` foi
+removido na Segurança 3.5A) — nunca assuma que uma coluna não existe sem checar as duas (detalhe em `arquitetura.md`).
 
 **Travado — proibido introduzir sem aprovação explícita e justificada do Fabio:** Laravel,
 Symfony, Doctrine, Eloquent, qualquer ORM, qualquer dependência via Composer que altere

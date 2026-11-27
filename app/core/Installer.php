@@ -62,7 +62,7 @@ class Installer
         $checks[] = self::check('Extensão pdo_mysql', extension_loaded('pdo_mysql'));
         $checks[] = self::check('Diretório storage gravável', self::isWritableDir(self::storagePath()));
         $checks[] = self::check('Diretório public/uploads gravável', self::isWritableDir(self::basePath() . '/public/uploads'));
-        $checks[] = self::check('Arquivo SQL raiz disponível', is_file(self::rootSqlPath()) || is_file(self::basePath() . '/database/schema.sql'));
+        $checks[] = self::check('Schema de instalação disponível (database/schema.sql)', is_file(self::schemaSqlPath()));
         return $checks;
     }
 
@@ -234,7 +234,7 @@ class Installer
 
     private static function importSchema(PDO $pdo, callable $log): void
     {
-        $schemaFile = is_file(self::rootSqlPath()) ? self::rootSqlPath() : self::basePath() . '/database/schema.sql';
+        $schemaFile = self::schemaSqlPath();
         $sql = (string)file_get_contents($schemaFile);
         if (trim($sql) === '') {
             throw new RuntimeException('Arquivo SQL de instalação está vazio.');
@@ -356,8 +356,9 @@ class Installer
         return self::storagePath() . '/install.done';
     }
 
-    private static function rootSqlPath(): string
+    /** Fonte ÚNICA da estrutura inicial (Segurança 3.5A: o dump legado recrutamento.sql foi removido e nunca é lido, mesmo se reaparecer). */
+    private static function schemaSqlPath(): string
     {
-        return self::basePath() . '/recrutamento.sql';
+        return self::basePath() . '/database/schema.sql';
     }
 }

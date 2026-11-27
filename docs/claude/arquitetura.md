@@ -56,8 +56,7 @@ app/
   views/                   # Templates PHP puro (sem engine), admin/ e home/
   config/                  # config.php (produção), local.php (opcional), build.php
 database/
-  schema.sql               # Schema "canônico" declarado (14 tabelas)
-  recrutamento.sql          # Dump com dados reais de recrutamento (ver riscos-conhecidos.md)
+  schema.sql               # Base de instalação (19 tabelas + etapas iniciais do pipeline; ÚNICA fonte do instalador)
   migrations/               # Migrations incrementais datadas, cada uma com rollback
 assets/                     # Fontes JS/CSS versionadas (compiladas para public/assets)
 public/                     # Document root real do deploy (index.php, assets, uploads)
@@ -189,12 +188,12 @@ Controller
 - Acesso 100% via `Database::conn()`, singleton `PDO` com `ATTR_EMULATE_PREPARES => false` e
   `ATTR_ERRMODE => EXCEPTION`. 100% prepared statements — nenhuma concatenação de input do usuário
   em SQL encontrada em auditoria.
-- **Não existe fonte única de verdade de schema.** Coexistem: `database/schema.sql` (14 tabelas,
-  "de instalação"); `database/recrutamento.sql` + `recrutamento.sql` (raiz) — dump real de
-  produção com PII, priorizado pelo instalador; 18+ migrations incrementais; `SchemaManager::ensure()`
-  e vários `ensure*Schema()` nos models, que alteram tabelas em runtime na primeira chamada.
-  Resultado: ~35 tabelas ao todo, sem tabela de controle de migrations aplicadas. **Antes de
-  assumir que uma coluna não existe, verifique nos três lugares.**
+- **Schema em duas fontes (Segurança 3.5A, 2026-11-27).** `database/schema.sql` é a BASE de instalação (estrutura sem dados de
+  pessoas + as 6 etapas iniciais do pipeline) e a única fonte lida pelo `Installer` e pelo `scripts/setup_full.php`; sobre ela
+  aplicam-se as migrations incrementais (sem tabela de controle de migrations aplicadas) e os `SchemaManager::ensure()`/
+  `ensure*Schema()` dos models em runtime. Os dumps `recrutamento.sql` (raiz e `database/`) foram REMOVIDOS. Homologado em
+  `tests/php/integration_schema_instalacao.php`: instalação nova + todas as migrations = mesma estrutura (tabelas, colunas, FKs) da
+  base antiga do dump. **Antes de assumir que uma coluna não existe, verifique nas duas fontes.**
 - Tabela hub: `colaboradores` (FK obrigatória para `cargos`, opcional para `empresas`/`setores`;
   ganhou `metadados_id` opcional na integração com o METADADOS, ver `roadmap-tecnico.md`).
 - Estrutura Organizacional em transição para o METADADOS (Fases 5.1A/5.2, ver `roadmap-tecnico.md`):
@@ -212,11 +211,8 @@ Controller
 - Campos sensíveis (justificativas/contexto salarial em `solicitacoes_vaga` e
   `movimentacoes_pessoal`) são colunas `*_encrypted` via `Cipher` (AES-256-CBC), descriptografadas
   na leitura.
-- **Instalador web** (`install.php` + `app/core/Installer.php`) prioriza os dumps de
-  `recrutamento.sql` sobre `database/schema.sql` quando ambos existem — contém dados reais de
-  produção. Cuidado ao rodar contra ambiente que não deveria receber esses dados.
-- Existem **dois arquivos idênticos** de dump de recrutamento (`database/recrutamento.sql` e
-  `recrutamento.sql` na raiz) — editar um não propaga para o outro.
+- **Instalador web** (`install.php` + `app/core/Installer.php`): desabilitado por padrão (Segurança 3.4) e, quando habilitado, importa
+  SOMENTE `database/schema.sql` — nunca um dump, mesmo que um arquivo `recrutamento.sql` reapareça na raiz (Segurança 3.5A).
 - `dist/` contém saída de build já gerada (provavelmente por `scripts/deploy_quick.ps1`) — não é
   código-fonte, não edite dentro dele; edite a fonte e regere o build.
 

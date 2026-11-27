@@ -3,7 +3,7 @@
 /**
  * Integração — Segurança 3.4: saneamento de arquivos sensíveis e proteção do instalador no próprio PHP.
  *   A. repositório: planilha real e relatórios de importação fora do Git; .gitignore impede planilhas em assets/ e public/assets/;
- *      dumps sem os INSERTs de dados pessoais, ainda importáveis (banco TEMPORÁRIO isolado, apagado no fim) e com os dados organizacionais;
+ *      dumps legados removidos (Segurança 3.5A; a homologação da instalação está em integration_schema_instalacao.php);
  *   B. importador: sem --file não importa nada (sem fallback); arquivo inexistente = erro; CSV FICTÍCIO explícito em --validate-only funciona;
  *   C. instalador: regra pura (desabilitado por padrão, chave forte obrigatória, instalado = bloqueado) e HTTP real SEM Apache
  *      (php -S, sem .htaccess): /install.php e /public/install.php negados por padrão; habilitado, POST sem/errado chave negado.
@@ -45,36 +45,9 @@ $ignore = (string)file_get_contents($raiz . '/.gitignore');
 foreach (['/assets/*.xlsx', '/assets/*.csv', '/public/assets/*.xlsx', 'storage/imports/*.json'] as $regra) {
     $check(str_contains($ignore, $regra), "(gitignore) contém {$regra}");
 }
-$dump = (string)file_get_contents($raiz . '/recrutamento.sql');
-$check($dump === (string)file_get_contents($raiz . '/database/recrutamento.sql'), '(dump) as duas cópias do dump continuam idênticas');
-foreach (['candidaturas', 'candidatura_historico', 'pipeline_movements', 'indicacao_pagamento_auditoria', 'auditoria_usuarios', 'colaboradores'] as $t) {
-    $check(!str_contains($dump, "INSERT INTO `{$t}`") && str_contains($dump, "CREATE TABLE `{$t}`"), "(dump) {$t}: estrutura mantida, dados pessoais removidos");
-}
-$check(preg_match("/'\\d{3}\\.\\d{3}\\.\\d{3}-\\d{2}'|'[1-9]\\d{10}'/", $dump) === 0, '(dump) nenhum CPF');
-$check(preg_match("/'\\(?\\d{2}\\)?\\s?9\\d{4}-?\\d{4}'/", $dump) === 0, '(dump) nenhum telefone');
-preg_match_all("/'[^'@\\s]+@[^'@\\s]+\\.[a-z]{2,}'/i", $dump, $emails);
-$check(array_map(static fn($e) => trim($e, "'"), $emails[0]) === ['admin.saneado@exemplo.invalid'], '(dump) único e-mail = conta fictícia saneada (.invalid)');
-$check(preg_match("/'\\d{1,3}(\\.\\d{1,3}){3}'/", $dump) === 0, '(dump) nenhum endereço IP');
-
-// importação real num banco TEMPORÁRIO isolado (CREATE DATABASE/USE do dump são neutralizados na cópia em memória)
-$cfgDb = Config::app()['database'];
-$dsnServidor = preg_replace('/dbname=[^;]*;?/', '', (string)$cfgDb['dsn']);
-$banco = 'zz34_dump_' . bin2hex(random_bytes(4));
-try {
-    $srv = new PDO($dsnServidor, (string)$cfgDb['user'], (string)$cfgDb['pass'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
-    $srv->exec("CREATE DATABASE `{$banco}` CHARACTER SET utf8mb4");
-    $srv->exec("USE `{$banco}`");
-    $sql = preg_replace('/^(CREATE DATABASE|USE )[^\n]*\n/m', '', $dump);
-    $srv->exec($sql);
-    $q = static fn(string $s) => $srv->query($s)->fetchColumn();
-    $tabelas = (int)$q("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = '{$banco}'");
-    $check($tabelas >= 13 && (int)$q("SELECT COUNT(*) FROM `{$banco}`.pipeline_stages") === 6 && (int)$q("SELECT COUNT(*) FROM `{$banco}`.cargos") > 0, "(dump) importa num banco isolado: {$tabelas} tabelas, etapas do pipeline e cargos presentes (instalação preservada)");
-    $check((int)$q("SELECT COUNT(*) FROM `{$banco}`.candidaturas") === 0 && (int)$q("SELECT COUNT(*) FROM `{$banco}`.colaboradores") === 0 && (int)$q("SELECT COUNT(*) FROM `{$banco}`.auditoria_usuarios") === 0, '(dump) tabelas pessoais importam vazias');
-    $check(!password_verify('', (string)$q("SELECT senha_hash FROM `{$banco}`.usuarios WHERE id = 1")), '(dump) conta id 1 continua sem senha utilizável');
-} finally {
-    if (isset($srv)) {
-        $srv->exec("DROP DATABASE IF EXISTS `{$banco}`");
-    }
+// Dumps legados: na 3.4 foram saneados; na 3.5A foram REMOVIDOS (a instalação usa só database/schema.sql — ver integration_schema_instalacao.php).
+foreach (['recrutamento.sql', 'database/recrutamento.sql'] as $arq) {
+    $check(!is_file($raiz . '/' . $arq) && strpos($git(['ls-files', $arq]), $arq) === false, "(dump) {$arq}: fora do repositório");
 }
 
 // ---- B. importador -------------------------------------------------------------------------------------------------------------------

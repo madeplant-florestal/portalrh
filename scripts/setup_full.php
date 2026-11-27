@@ -17,11 +17,8 @@ try {
     // 3. Connect to DB
     $pdo->exec("USE `$dbname`");
 
-    // 4. Import root SQL when available
-    $schemaFile = __DIR__ . '/../recrutamento.sql';
-    if (!file_exists($schemaFile)) {
-        $schemaFile = __DIR__ . '/../database/schema.sql';
-    }
+    // 4. Estrutura inicial: SOMENTE database/schema.sql (Segurança 3.5A — o dump legado recrutamento.sql foi removido e nunca é lido)
+    $schemaFile = __DIR__ . '/../database/schema.sql';
     if (file_exists($schemaFile)) {
         $sql = file_get_contents($schemaFile);
         $pdo->exec($sql);

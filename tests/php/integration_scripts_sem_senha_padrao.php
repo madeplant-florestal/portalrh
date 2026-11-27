@@ -110,14 +110,12 @@ try {
         $check(($cfg['security']['supervisor_password'] ?? null) === '', "(config) {$arq}: sem senha de Supervisor versionada");
     }
 
-    // ---- dumps --------------------------------------------------------------------------------------------------------------------
+    // ---- dumps legados removidos (Segurança 3.5A) e schema sem contas ------------------------------------------------------------
     foreach (['recrutamento.sql', 'database/recrutamento.sql'] as $arq) {
-        $sql = (string)file_get_contents($raiz . '/' . $arq);
-        $check(!preg_match('/\$2[aby]\$\d\d\$/', $sql), "(dump) {$arq}: nenhum hash bcrypt");
-        $ok = preg_match("/INSERT INTO `usuarios` VALUES \\(1,'[^']*','([^']*)','([^']*)'/", $sql, $m) === 1;
-        $check($ok && str_ends_with($m[1], '.invalid') && password_get_info($m[2])['algo'] === null, "(dump) {$arq}: linha id 1 preservada com e-mail fictício e senha_hash inutilizável");
-        $check($ok && !password_verify('', $m[2]) && !password_verify($m[2], $m[2]), "(dump) {$arq}: nenhuma senha autentica a conta do dump");
+        $check(!is_file($raiz . '/' . $arq), "(dump) {$arq}: removido do repositório");
     }
+    $schema = (string)file_get_contents($raiz . '/database/schema.sql');
+    $check(!preg_match('/\$2[aby]\$\d\d\$/', $schema) && !preg_match('/INSERT\s+(IGNORE\s+)?INTO\s+`?usuarios`?/i', $schema), '(schema) database/schema.sql sem hash de senha e sem conta de usuário');
     echo "\nSCRIPTS_SEM_SENHA_PADRAO_OK\n";
 } finally {
     foreach ($emails as $e) {

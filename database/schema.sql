@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS candidaturas (
   vaga_id INT NOT NULL,
   nome VARCHAR(120) NOT NULL,
   email VARCHAR(120) NOT NULL,
-  telefone VARCHAR(11) NOT NULL,
+  telefone VARCHAR(40) NOT NULL,
   cpf VARCHAR(11) NOT NULL UNIQUE,
   cargo_pretendido VARCHAR(120) NOT NULL,
   experiencia TEXT NOT NULL,
@@ -130,7 +130,7 @@ CREATE TABLE IF NOT EXISTS indicacao_pagamento_auditoria (
   data_nova DATE NOT NULL,
   motivo VARCHAR(255) NOT NULL,
   usuario_id INT NOT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_ind_pag_cand FOREIGN KEY (candidatura_id) REFERENCES candidaturas(id) ON DELETE CASCADE,
   CONSTRAINT fk_ind_pag_user FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -214,3 +214,76 @@ CREATE TABLE IF NOT EXISTS colaboradores (
 
 -- Usuário admin padrão (ajuste e remova em produção)
 -- UPDATE este bloco após criação para definir senha com bcrypt em PHP.
+
+-- ---------------------------------------------------------------------------------------------------------------------------------------
+-- Segurança 3.5A: tabelas que só existiam no dump legado (recrutamento.sql, removido). Estrutura BASE — a mesma sobre a qual as migrations
+-- de database/migrations/ (ex.: 2026-06-12-pipeline-recrutamento-kanban.sql) aplicam suas alterações. Sem dados de pessoas.
+-- `candidaturas.stage_id`/`observacoes` e a FK fk_cand_stage continuam criadas em tempo de execução por Candidatura (precisam desta tabela).
+-- ---------------------------------------------------------------------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS pipeline_stages (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  nome VARCHAR(50) NOT NULL,
+  ordem INT NOT NULL DEFAULT 0,
+  cor VARCHAR(7) DEFAULT '#cccccc',
+  created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Etapas iniciais do pipeline (dado de referência; as migrations reorganizam/ampliam pelo NOME). Idempotente.
+INSERT IGNORE INTO pipeline_stages (id, nome, ordem, cor) VALUES
+  (1, 'Novo', 1, '#3b82f6'),
+  (2, 'Triagem', 2, '#f59e0b'),
+  (3, 'Entrevista', 3, '#8b5cf6'),
+  (4, 'Proposta', 4, '#10b981'),
+  (5, 'Contratado', 5, '#059669'),
+  (6, 'Rejeitado', 6, '#ef4444');
+
+CREATE TABLE IF NOT EXISTS pipeline_movements (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  candidatura_id INT NOT NULL,
+  stage_anterior_id INT NULL,
+  stage_novo_id INT NOT NULL,
+  usuario_id INT NULL,
+  created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+  KEY fk_mov_cand (candidatura_id),
+  KEY fk_mov_stage_ant (stage_anterior_id),
+  KEY fk_mov_stage_new (stage_novo_id),
+  KEY fk_mov_user (usuario_id),
+  CONSTRAINT fk_mov_cand FOREIGN KEY (candidatura_id) REFERENCES candidaturas(id) ON DELETE CASCADE,
+  CONSTRAINT fk_mov_stage_ant FOREIGN KEY (stage_anterior_id) REFERENCES pipeline_stages(id) ON DELETE SET NULL,
+  CONSTRAINT fk_mov_stage_new FOREIGN KEY (stage_novo_id) REFERENCES pipeline_stages(id) ON DELETE CASCADE,
+  CONSTRAINT fk_mov_user FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS notas_recrutador (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  candidatura_id INT NOT NULL,
+  usuario_id INT NOT NULL,
+  nota TEXT NOT NULL,
+  created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+  KEY fk_nota_cand (candidatura_id),
+  KEY fk_nota_user (usuario_id),
+  CONSTRAINT fk_nota_cand FOREIGN KEY (candidatura_id) REFERENCES candidaturas(id) ON DELETE CASCADE,
+  CONSTRAINT fk_nota_user FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS requisitos (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  vaga_id INT NOT NULL,
+  descricao VARCHAR(255) NOT NULL,
+  obrigatorio TINYINT(1) DEFAULT 1,
+  created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+  KEY fk_req_vaga (vaga_id),
+  CONSTRAINT fk_req_vaga FOREIGN KEY (vaga_id) REFERENCES vagas(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Mesma definição criada em tempo de execução por Beneficio/SolicitacaoVaga (CREATE TABLE IF NOT EXISTS) — sem divergência.
+CREATE TABLE IF NOT EXISTS beneficios (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  nome VARCHAR(120) NOT NULL,
+  descricao TEXT NULL,
+  parceiro VARCHAR(120) NULL,
+  logo_path VARCHAR(255) NULL,
+  ativo TINYINT(1) NOT NULL DEFAULT 1,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

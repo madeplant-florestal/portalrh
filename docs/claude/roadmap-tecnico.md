@@ -20,7 +20,7 @@ no espelho) — leia a seção dedicada abaixo para detalhes e para o que **aind
 dentro dessa integração.
 
 **Decisão técnica futura, ainda em aberto** (exige conversa dedicada antes de agir): consolidação
-definitiva de `schema.sql`/`recrutamento.sql`/migrations em uma única fonte; migração do restante
+definitiva de `schema.sql`/migrations em uma única fonte (o dump `recrutamento.sql` já foi removido na Segurança 3.5A); migração do restante
 dos models legados para Repository/Service (sem prazo, módulo a módulo); aplicação dos 4 vínculos
 seguros liberados pelo saneamento e saneamento dos 2 `CONFLITO`/24 `SEM_CORRESPONDENCIA`
 remanescentes; migração de telas legadas para a nova fonte e descontinuação do cadastro duplicado;
@@ -39,7 +39,7 @@ naquele módulo.
 Trabalho recente em normalizar dados de `colaboradores` (migrations `2026-06-23` e `2026-06-25`):
 campos `codigo`, `cpf`, `data_inicio_cargo`, `ativo` foram alvo de backfill determinístico e
 atômico com auditoria. A causa raiz (múltiplas fontes de schema, ver `arquitetura.md`) permanece;
-qualquer trabalho futuro de consolidação de `schema.sql`/`recrutamento.sql`/migrations deve ser
+qualquer trabalho futuro de consolidação de `schema.sql`/migrations (dump removido na Segurança 3.5A) deve ser
 tratado como mudança de infraestrutura de dados, com aprovação isolada (ver `checklists.md`).
 
 ## Importação de colaboradores via XLSX

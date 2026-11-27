@@ -11,6 +11,7 @@
   <?php endif; ?>
   <title>RH Madeplant</title>
   <link rel="stylesheet" href="<?= $base ?>/assets/tailwind.css?v=<?= urlencode(Config::assetVersion('assets/tailwind.css')) ?>">
+  <link rel="icon" type="image/svg+xml" href="<?= $base ?>/assets/favicon.svg?v=<?= urlencode(Config::assetVersion('assets/favicon.svg')) ?>">
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     body { font-family: 'Montserrat', system-ui, -apple-system, sans-serif; }

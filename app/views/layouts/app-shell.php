@@ -26,6 +26,7 @@ $tituloPagina = trim((string)($tituloPagina ?? '')) ?: ui_titulo_pagina();
   <meta name="csrf-token" content="<?= Security::e(Security::csrfToken()) ?>">
   <title><?= Security::e($tituloPagina !== '' ? $tituloPagina . ' — Portal RH' : 'Portal RH') ?></title>
   <link rel="stylesheet" href="<?= $base ?>/assets/tailwind.css?v=<?= urlencode(Config::assetVersion('assets/tailwind.css')) ?>">
+  <link rel="icon" type="image/svg+xml" href="<?= $base ?>/assets/favicon.svg?v=<?= urlencode(Config::assetVersion('assets/favicon.svg')) ?>">
   <script src="<?= $base ?>/assets/phone-utils.js?v=<?= urlencode(Config::assetVersion('assets/phone-utils.js')) ?>" defer></script>
   <script src="<?= $base ?>/assets/admin.js?v=<?= urlencode(Config::assetVersion('assets/admin.js')) ?>" defer></script>
 <?php foreach (ui_script_pagina() as $scriptPagina): ?>

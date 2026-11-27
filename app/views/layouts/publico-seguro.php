@@ -13,6 +13,7 @@
   <meta name="referrer" content="no-referrer">
   <title><?= Security::e((string)($titulo ?? 'Entrevista de Desligamento — Madeplant')) ?></title>
   <link rel="stylesheet" href="<?= Security::e((string)($base ?? '')) ?>/assets/tailwind.css?v=<?= urlencode(Config::assetVersion('assets/tailwind.css')) ?>">
+  <link rel="icon" type="image/svg+xml" href="<?= Security::e((string)($base ?? '')) ?>/assets/favicon.svg?v=<?= urlencode(Config::assetVersion('assets/favicon.svg')) ?>">
 </head>
 <body class="min-h-screen bg-[#F7F6F1] font-sans text-[#2B2E22] antialiased">
   <main>

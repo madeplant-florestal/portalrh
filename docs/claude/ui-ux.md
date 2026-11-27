@@ -426,3 +426,12 @@ descrevê-lo como o shell único e `PortalNavegacaoService` como a fonte oficial
 **Suíte PHP oficial:** baseline mantida em **96/98**, mesmas duas falhas pré-existentes e sem relação
 (`integration_dashboard_colaboradores_service.php`, `integration_setores_empresa.php`) — nenhuma terceira falha introduzida
 pela limpeza.
+
+## Favicon oficial (2026-11-27)
+
+Fonte única: `assets/favicon.svg` (SVG oficial, só elementos de desenho). Publicado em `public/assets/favicon.svg` como CÓPIA IDÊNTICA — mesma
+convenção dos demais assets (`assets/` e `public/assets/` versionados), para responder em `/assets/favicon.svg` tanto com a raiz web no
+repositório quanto em `public/`. Ao trocar o desenho, substituir os DOIS arquivos com o mesmo conteúdo — `tests/php/integration_favicon.php`
+falha se divergirem. Declarado nos três layouts (`app-shell.php`, `main.php`, `publico-seguro.php`) com
+`<link rel="icon" type="image/svg+xml" href="<base>/assets/favicon.svg?v=<Config::assetVersion>">` (cache renovado a cada nova versão do
+arquivo publicado). A CSP das páginas públicas com token (`img-src 'self'`) já permite o ícone.

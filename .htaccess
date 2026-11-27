@@ -1,4 +1,28 @@
-RewriteEngine On
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteCond %{REQUEST_FILENAME} !-d
-RewriteRule ^ index.php [QSA,L]
+# Raiz publicada = raiz do repositório (deploy Git da hospedagem). Primeiro BLOQUEIA o que é interno — inclusive arquivos e diretórios que
+# existem fisicamente —, depois encaminha o resto ao front controller. Ver docs/claude/riscos-conhecidos.md (proteção de arquivos internos).
+Options -Indexes
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  # 1. Arquivos/diretórios ocultos (.git, .env, .gitignore, .cpanel.yml, .serena, .claude, .dbg, .htaccess...), exceto .well-known (ACME/TLS)
+  RewriteRule (^|/)\.(?!well-known(/|$)) - [F,L]
+
+  # 2. Diretórios internos (código, testes, documentação, dependências, dados) — nada aqui é servido diretamente
+  RewriteRule ^(app|database|scripts|storage|tests|docs|vendor|node_modules)(/|$) - [F,L,NC]
+
+  # 3. Dumps, configuração, documentação, planilhas, logs, backups e temporários — em qualquer pasta
+  RewriteRule \.(sql|sqlite|db|md|lock|yml|yaml|ini|env|log|ndjson|bak|old|orig|save|swp|tmp|dist|ps1|sh|bat|cmd|xlsx|xls|csv)$ - [F,L,NC]
+
+  # 4. Arquivos de build/ferramentas da raiz e o roteador do servidor embutido do PHP (só desenvolvimento)
+  RewriteRule ^(composer\.json|package\.json|package-lock\.json|playwright\.config\.js|postcss\.config\.js|tailwind\.config\.js|router\.php)$ - [F,L,NC]
+
+  # 5. Instalador web: o Portal já está instalado e a trava (storage/install.done) não existe na hospedagem — aberto, um POST anônimo
+  #    sobrescreveria a configuração e criaria administrador. Para uma reinstalação futura, remover esta regra (e a de public/.htaccess).
+  RewriteRule ^install\.php$ - [F,L,NC]
+
+  # Front controller (rotas da aplicação)
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^ index.php [QSA,L]
+</IfModule>

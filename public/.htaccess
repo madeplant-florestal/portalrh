@@ -1,5 +1,7 @@
 <IfModule mod_rewrite.c>
   RewriteEngine On
+  # Instalador web bloqueado (Portal já instalado) — mesma regra do .htaccess da raiz; remover só para uma reinstalação planejada
+  RewriteRule ^install\.php$ - [F,L,NC]
   # Roteamento para front controller
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d

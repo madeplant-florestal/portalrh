@@ -306,3 +306,30 @@ Identificados na auditoria arquitetural de 2026-07-09, documentados aqui para n�
      o `supervisor_email` versionado é um placeholder — avaliar removê-la (mudança de regra, requer aprovação). Viewer por setor em `EscopoSetorial` e os módulos
      abertos ao Viewer por role (Movimentações, Cadastros, hub de Avaliações) NÃO foram alterados. `user_name` da sessão continua o do login (exibição, sem efeito
      de autorização). Admin/RH que trocam o próprio perfil não existem (bloqueado), então nenhum ator perde a sessão por mudança da própria autoridade.
+19. **Proteção de arquivos internos contra acesso público (2026-11-27) — CORRIGIDO no .htaccess; decisões pendentes abaixo.**
+   - **Evidência:** a raiz publicada em produção é a RAIZ DO REPOSITÓRIO (deploy Git da hospedagem): `/public/assets/tailwind.css` e `/composer.json`
+     respondiam 200. O `.htaccess` da raiz só encaminhava ao front controller; bloqueios existiam apenas em `app/`, `database/`, `scripts/`, `storage/`
+     (`.htaccess` próprios). `.git/*` e `*.sql` já davam 403 por regra da HOSPEDAGEM (não da aplicação).
+   - **Confirmado exposto em produção (200, só status consultado, conteúdo NÃO aberto):** `.cpanel.yml`, `.gitignore`, `.serena/project.yml`, `.dbg/*.ndjson`
+     (logs de depuração), `composer.json/.lock`, `package.json`, `playwright.config.js`, `tailwind.config.js`, `deploy.ps1`, `CLAUDE.md`, `README.md` e
+     demais `.md`, `docs/`, `vendor/` (ex.: `installed.json`), arquivos estáticos de `tests/` e **`assets/colaboradores.xlsx`** (versionado desde 2026-06-26,
+     entrada do `scripts/import_colaboradores_xlsx.php` — provável PLANILHA COM DADOS PESSOAIS de colaboradores, baixável publicamente).
+   - **Potencial alto (não executado em produção de propósito):** scripts PHP de `tests/php/` executáveis pela web (sem `.htaccess`, raiz sem bloqueio de
+     `.php`) — vários criam/apagam usuários e dados de teste no banco; reproduzido só localmente (Apache, banco de desenvolvimento): `run_all.php` é
+     executado e aborta na linha 22 por falta de `$argv`, mas testes de integração individuais não dependem de `$argv`.
+   - **Instalador ABERTO (crítico, confirmado):** `/install.php` e `/public/install.php` respondiam 200 — a trava `storage/install.done` não existe na hospedagem
+     e `INSTALLER_KEY` é opcional; um POST anônimo com `allow_overwrite_config=1` sobrescreveria a configuração (inclusive `local.php`) e criaria administrador.
+     Bloqueado com aprovação do Fabio (2026-11-27).
+   - **Correção:** `.htaccess` da raiz — `Options -Indexes` e, ANTES do front controller, `[F]` para: ocultos (`.*`, exceto `.well-known`), diretórios internos
+     (`app|database|scripts|storage|tests|docs|vendor|node_modules`), extensões de dump/config/doc/planilha/log/backup/temporário
+     (`sql|sqlite|db|md|lock|yml|yaml|ini|env|log|ndjson|bak|old|orig|save|swp|tmp|dist|ps1|sh|bat|cmd|xlsx|xls|csv`), arquivos de build da raiz e
+     `router.php`, e `install.php`. `public/.htaccess` (tem `RewriteEngine` próprio, não herda a raiz): `install.php` bloqueado. Permanecem servidos:
+     `/assets/*` (CSS, JS, imagens, `favicon.svg`), `/public/assets/*`, `/uploads/logos/*`, rotas da aplicação, APIs públicas, páginas com token e downloads
+     por endpoint (todos passam pelo `index.php`). `logs.php` mantido (falha fechada: 403 sem `logging.viewer_key`).
+   - **Testes:** `tests/php/unit_htaccess_protecao.php` (regras reais aplicadas com PCRE a caminhos negados/servidos; ordem antes do front controller) e
+     validação HTTP real em Apache 2.4 local com a raiz no repositório: 64/64 (todos os internos 403/404, todos os permitidos servidos).
+   - **Decisões pendentes:** (1) `assets/colaboradores.xlsx` — confirmar o conteúdo e, se tiver dados pessoais, removê-lo do repositório (o script de
+     importação lê o arquivo do disco; pode receber o caminho por argumento) e tratar o histórico do Git; considerar que pode ter sido baixado enquanto
+     esteve público. (2) Criar `storage/install.done` na hospedagem (trava nativa do instalador) e/ou remover `install.php` do deploy. (3) `.cpanel.yml`
+     (outra conta cPanel; limpeza destrutiva) — remover ou corrigir. (4) `.dbg/` e `.serena/`, `.claude/` versionados — avaliar remoção do repositório.
+     (5) O bloqueio de `.git`/`.sql` na produção também dependia da hospedagem; agora a aplicação garante por conta própria.
